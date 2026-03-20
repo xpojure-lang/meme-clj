@@ -5,19 +5,7 @@
 [![License](https://img.shields.io/github/license/beme-lang/beme-clj)](LICENSE)
 
 ```
-;; one-liner
-defn begin stars [owner repo] :stargazers_count(fetch-json(str("https://api.github.com/repos/" owner "/" repo))) end
-
-;; medium — begin/end for short blocks
-
-defn begin stars [owner repo]
-  let([url  str("https://api.github.com/repos/" owner "/" repo)
-       data fetch-json(url)]
-    :stargazers_count(data))
-end
-
 ;; full — begin/end for structure, parens for one-liners
-
 defn begin stars [owner repo]
 
   let begin
@@ -25,10 +13,10 @@ defn begin stars [owner repo]
       url  str("https://api.github.com/repos/" owner "/" repo)
       resp slurp(url)
       data json/read-str(resp :key-fn keyword)
+      count :stargazers_count(data)
     ]
 
-    println(str(owner "/" repo ": " :stargazers_count(data) " stars"))
-    :stargazers_count(data)
+    println(str(owner "/" repo ": " count " ⭐"))
   end
 end
 ```
