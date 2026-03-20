@@ -13,18 +13,28 @@ defn begin greet [name]
   println(str("Hello, " name "!"))
 end
 
-;; full beme — structure through indentation and begin/end
+;; full beme — begin/end all the way down
 defn
 begin transform-accounts [accounts]
-  let([
+  let
+  begin [
     active filter(:active accounts)
-    balanced ->>(active
-      map(fn([a] update(a :balance *(:balance(a) 1.05))))
-      remove(fn([a] neg?(:balance(a)))))
+    balanced ->>
+    begin active
+      map begin fn begin [a]
+        update(a :balance *(:balance(a) 1.05))
+      end end
+      remove begin fn begin [a]
+        neg?(:balance(a))
+      end end
+    end
   ]
-    reduce(fn([acc {:keys [id balance]}]
-      assoc(acc id {:balance balance :status :processed}))
-    {} balanced))
+    reduce
+    begin fn begin [acc {:keys [id balance]}]
+      assoc(acc id {:balance balance :status :processed})
+    end
+    {} balanced end
+  end
 end
 ```
 
