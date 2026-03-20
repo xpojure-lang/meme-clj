@@ -27,14 +27,15 @@ begin
       ->>
       begin
         active
-        map begin fn([a] update(a :balance *(:balance(a) 1.05))) end
-        remove begin fn([a] neg?(:balance(a))) end
+        map(fn([a] update(a :balance *(:balance(a) 1.05))))
+        remove(fn([a] neg?(:balance(a))))
       end
     ]
 
     reduce
     begin
       fn([acc {:keys [id balance]}] assoc(acc id {:balance balance :status :processed}))
+
       {} balanced
     end
   end
