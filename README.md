@@ -13,7 +13,7 @@ defn begin greet [name]
   println(str("Hello, " name "!"))
 end
 
-;; full beme — begin/end all the way down
+;; full beme — begin/end for structure, parens for one-liners
 defn
 begin
   transform-accounts [accounts]
@@ -27,32 +27,14 @@ begin
       ->>
       begin
         active
-
-        map
-        begin
-          fn
-          begin [a]
-            update(a :balance *(:balance(a) 1.05))
-          end
-        end
-
-        remove
-        begin
-          fn
-          begin [a]
-            neg?(:balance(a))
-          end
-        end
+        map begin fn([a] update(a :balance *(:balance(a) 1.05))) end
+        remove begin fn([a] neg?(:balance(a))) end
       end
     ]
 
     reduce
     begin
-      fn
-      begin [acc {:keys [id balance]}]
-        assoc(acc id {:balance balance :status :processed})
-      end
-
+      fn([acc {:keys [id balance]}] assoc(acc id {:balance balance :status :processed}))
       {} balanced
     end
   end
