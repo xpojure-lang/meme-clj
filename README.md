@@ -20,8 +20,7 @@ end
 
 defn begin stars [owner repo]
 
-  let
-  begin
+  let begin
     [
       url  str("https://api.github.com/repos/" owner "/" repo)
       resp slurp(url)
