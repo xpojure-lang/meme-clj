@@ -15,25 +15,46 @@ end
 
 ;; full beme — begin/end all the way down
 defn
-begin transform-accounts [accounts]
+begin
+  transform-accounts [accounts]
+
   let
-  begin [
-    active filter(:active accounts)
-    balanced ->>
-    begin active
-      map begin fn begin [a]
-        update(a :balance *(:balance(a) 1.05))
-      end end
-      remove begin fn begin [a]
-        neg?(:balance(a))
-      end end
-    end
-  ]
+  begin
+    [
+      active filter(:active accounts)
+
+      balanced
+      ->>
+      begin
+        active
+
+        map
+        begin
+          fn
+          begin [a]
+            update(a :balance *(:balance(a) 1.05))
+          end
+        end
+
+        remove
+        begin
+          fn
+          begin [a]
+            neg?(:balance(a))
+          end
+        end
+      end
+    ]
+
     reduce
-    begin fn begin [acc {:keys [id balance]}]
-      assoc(acc id {:balance balance :status :processed})
+    begin
+      fn
+      begin [acc {:keys [id balance]}]
+        assoc(acc id {:balance balance :status :processed})
+      end
+
+      {} balanced
     end
-    {} balanced end
   end
 end
 ```
