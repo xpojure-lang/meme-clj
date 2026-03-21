@@ -2,7 +2,8 @@
 .nrepl-port
 target/
 cljs-test-runner-out/
-.clj-kondo/.cache/
+.clj-kondo/
+.lsp/
 *.class
 *.jar
 .DS_Store
