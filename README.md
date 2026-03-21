@@ -47,14 +47,16 @@ cd beme-clj
 Run a `.beme` file:
 
 ```bash
-$ bb beme-run hello.beme
+$ bb beme-run hello.beme        # Babashka
+$ clj -M:beme-run hello.beme    # Clojure JVM
 Hello, world!
 ```
 
 Interactive REPL:
 
 ```bash
-$ bb beme
+$ bb beme                        # Babashka
+$ clj -M:beme                    # Clojure JVM
 beme=> +(1 2)
 3
 beme=> map(inc [1 2 3])
