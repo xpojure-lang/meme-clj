@@ -12,6 +12,8 @@
          :exec-fn cognitect.test-runner.api/test}
   :beme {:main-opts ["-e" "(require '[beme.repl]) (beme.repl/start)"]}
   :beme-run {:main-opts ["-m" "beme.run"]}
+  :beme-to {:main-opts ["-m" "beme.transpile" "to"]}
+  :beme-from {:main-opts ["-m" "beme.transpile" "from"]}
   :cljs-test {:extra-paths ["test"]
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}}
