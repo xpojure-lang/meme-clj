@@ -95,15 +95,6 @@ defn(greet [name] println(str("Hello, " name)))
 
 Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
-## Testing
-
-```bash
-bb test-beme           # Babashka example + fixture tests
-clojure -X:test        # JVM unit tests
-bb test-cljs           # ClojureScript tests (needs Node.js)
-bb test-all            # All three suites
-```
-
 ## Documentation
 
 - [Language Reference](doc/language-reference.md) — complete syntax guide
