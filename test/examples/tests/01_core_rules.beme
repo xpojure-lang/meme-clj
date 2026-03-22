@@ -1,4 +1,4 @@
-; Core rules — the two translations that define mme
+; Core rules — the two translations that define beme
 
 ;; Rule 1: Call — f(x y) => (f x y)
 
