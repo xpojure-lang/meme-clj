@@ -75,6 +75,23 @@
 ;; raw ReferenceError instead of a helpful beme error.
 ;; ---------------------------------------------------------------------------
 
+;; ---------------------------------------------------------------------------
+;; B10: #=() read-eval in opaque forms.
+;; Bug: host-read and host-read-with-opts called clojure.core/read-string
+;; without binding *read-eval* to false, so #=() inside syntax-quote,
+;; namespaced maps, or reader conditionals executed at read time.
+;; Fix: bind *read-eval* false in both host-read and host-read-with-opts.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest read-eval-blocked-in-opaque-forms
+  (testing "#=() blocked in syntax-quote"
+    (is (thrown? Exception (core/beme->forms "`(#=(+ 1 2))"))))
+  (testing "#=() blocked in namespaced map"
+    (is (thrown? Exception (core/beme->forms "#:ns{:k #=(+ 1 2)}"))))
+  (testing "#=() blocked in reader conditional"
+    (is (thrown? Exception (core/beme->forms "#?(:clj #=(+ 1 2))"))))))
+
 #?(:cljs
 (deftest tagged-literal-cljs-error
   (testing "#uuid on CLJS throws beme error, not ReferenceError"
