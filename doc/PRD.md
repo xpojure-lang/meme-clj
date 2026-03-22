@@ -128,25 +128,39 @@ ClojureScript without modification.
 | RE2 | Multi-line input: wait for balanced brackets and parens | Done |
 | RE3 | Run via `bb beme` | Done |
 
+### CLI
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| C1 | `beme run <file>` — run a .beme file | Done |
+| C2 | `beme repl` — start interactive REPL | Done |
+| C3 | `beme convert <file\|dir>` — convert between .beme and .clj (by extension) | Done |
+| C4 | `beme format <file\|dir>` — normalize .beme files via pprint (in-place or stdout) | Done |
+
+Note: Requirement IDs are not sequential — gaps (R2–R4, R11–R12, R14,
+P2–P4, P10) are requirements that were merged into other IDs or removed
+during design iteration. IDs are stable references and are not renumbered.
 
 ## Architecture
 
 ```
 .beme text ──→ tokenizer ──→ grouper ──→ parser ──→ Clojure forms ──→ eval
                (scan)        (group)     (parse)          │
-                                            │             ▼
-                                         resolve   printer ──→ .beme text
+                  │              │          │              ▼
+                  └──── source ──┘       resolve   printer ──→ .beme text
+                   (shared line/col                 pprint ──→ .beme text
+                    → offset contract)
 ```
 
-The reader is a three-stage pipeline (composed by `beme.pipeline`):
-1. **Scan** (`beme.tokenizer`) — character stream → flat token vector. Opaque
+The reader is a three-stage pipeline (composed by `beme.alpha.pipeline`):
+1. **Scan** (`beme.alpha.scan.tokenizer`) — character stream → flat token vector. Opaque
    regions emit marker tokens rather than capturing raw text directly.
-2. **Group** (`beme.grouper`) — collapses marker tokens + balanced delimiters
+2. **Group** (`beme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters
    into single composite `-raw` tokens. Bracket matching is trivial because
    strings, chars, and comments are already individual tokens.
-3. **Parse** (`beme.reader`) — recursive-descent parser, tokens → Clojure
+3. **Parse** (`beme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure
    forms. Value resolution (numbers, strings, chars, regex, opaque forms) is
-   delegated to `beme.resolve`. Volatile position counter for portability.
+   delegated to `beme.alpha.parse.resolve`. Volatile position counter for portability.
    No intermediate AST — forms are emitted as standard Clojure data.
 
 The printer pattern-matches on form structure to reverse the transformation.
@@ -154,7 +168,7 @@ It detects special forms and produces their beme syntax equivalents.
 
 `#` dispatch forms (`#?`, `#?@`, `#:ns{}`, tagged literals) and syntax-quote
 (`` ` ``) are opaque — the tokenizer emits markers, the grouper captures
-the balanced region, and `beme.resolve` delegates to Clojure's reader.
+the balanced region, and `beme.alpha.parse.resolve` delegates to Clojure's reader.
 
 
 ## Known limitations
@@ -176,7 +190,6 @@ the balanced region, and `beme.resolve` delegates to Clojure's reader.
 
 ## Future work
 
-- CLI for Clojure-to-beme conversion: `bb beme convert file.clj` (core function `clj->beme` exists in `beme.core`)
 - Error recovery: partial parsing for editor integration. This would require
   the parser to accumulate errors into a vector rather than throwing, return
   partial ASTs with error nodes, and add try/catch wrappers in `parse-form`

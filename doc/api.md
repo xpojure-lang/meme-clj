@@ -1,6 +1,8 @@
 # beme API Reference
 
-## beme.core
+All namespaces live under `beme.alpha` to signal that the API is pre-1.0 and may change. When the API stabilizes, namespaces will move to `beme`.
+
+## beme.alpha.core
 
 The public API for reading and printing beme syntax, organized in three tracks:
 
@@ -19,8 +21,8 @@ clj str  ──→ clj->beme ──→ beme str
 #### beme->forms
 
 ```clojure
-(beme.core/beme->forms s)
-(beme.core/beme->forms s opts)
+(beme.alpha.core/beme->forms s)
+(beme.alpha.core/beme->forms s opts)
 ```
 
 Read a beme source string. Returns a vector of Clojure forms. All platforms.
@@ -39,7 +41,7 @@ Options:
 #### forms->beme
 
 ```clojure
-(beme.core/forms->beme forms)
+(beme.alpha.core/forms->beme forms)
 ```
 
 Print a sequence of Clojure forms as beme text. All platforms.
@@ -54,7 +56,7 @@ Print a sequence of Clojure forms as beme text. All platforms.
 #### forms->clj
 
 ```clojure
-(beme.core/forms->clj forms)
+(beme.alpha.core/forms->clj forms)
 ```
 
 Print Clojure forms as a Clojure source string. All platforms.
@@ -67,7 +69,7 @@ Print Clojure forms as a Clojure source string. All platforms.
 #### clj->forms
 
 ```clojure
-(beme.core/clj->forms clj-src)
+(beme.alpha.core/clj->forms clj-src)
 ```
 
 Read a Clojure source string, return a vector of forms. JVM/Babashka only.
@@ -77,12 +79,31 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 ;=> [(defn f [x] (+ x 1))]
 ```
 
+### Pretty-printing
+
+#### pprint-beme
+
+```clojure
+(beme.alpha.core/pprint-beme forms)
+(beme.alpha.core/pprint-beme forms opts)
+```
+
+Pretty-print Clojure forms as multi-line, indented beme text. Uses `begin`/`end` for forms that exceed the line width. Preserves comments from `:ws` metadata (attached by the pipeline's scan stage). All platforms.
+
+Options:
+- `:width` — target line width (default: 80)
+
+```clojure
+(pprint-beme ['(defn greet [name] (println (str "Hello " name)))])
+;=> "defn begin greet [name]\n  println(str(\"Hello \" name))\nend"
+```
+
 ### Text-to-text track
 
 #### beme->clj
 
 ```clojure
-(beme.core/beme->clj beme-src)
+(beme.alpha.core/beme->clj beme-src)
 ```
 
 Convert beme source string to Clojure source string. All platforms. Equivalent to `(forms->clj (beme->forms beme-src))`.
@@ -95,7 +116,7 @@ Convert beme source string to Clojure source string. All platforms. Equivalent t
 #### clj->beme
 
 ```clojure
-(beme.core/clj->beme clj-src)
+(beme.alpha.core/clj->beme clj-src)
 ```
 
 Convert a Clojure source string to beme source string. JVM/Babashka only. Equivalent to `(forms->beme (clj->forms clj-src))`.
@@ -108,8 +129,8 @@ Convert a Clojure source string to beme source string. JVM/Babashka only. Equiva
 ### run-pipeline
 
 ```clojure
-(beme.core/run-pipeline source)
-(beme.core/run-pipeline source opts)
+(beme.alpha.core/run-pipeline source)
+(beme.alpha.core/run-pipeline source opts)
 ```
 
 Run the full pipeline: source → scan → group → parse. Returns a context map with intermediate state. All platforms. Useful for tooling that needs access to raw tokens, grouped tokens, or parsed forms.
@@ -130,19 +151,19 @@ Run the full pipeline: source → scan → group → parse. Returns a context ma
 - `clj-string->beme` — use `clj->beme`
 
 
-## beme.reader
+## beme.alpha.parse.reader
 
 Low-level reader API.
 
 ### read-beme-string
 
 ```clojure
-(beme.reader/read-beme-string s)
-(beme.reader/read-beme-string s opts)
+(beme.alpha.parse.reader/read-beme-string s)
+(beme.alpha.parse.reader/read-beme-string s opts)
 ```
 
 Read beme source string and return a vector of Clojure forms.
-The underlying implementation; `beme.core/beme->forms` delegates to this.
+The underlying implementation; `beme.alpha.core/beme->forms` delegates to this.
 
 Options:
 - `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time.
@@ -150,25 +171,25 @@ Options:
 ### read-beme-string-from-tokens
 
 ```clojure
-(beme.reader/read-beme-string-from-tokens tokens)
-(beme.reader/read-beme-string-from-tokens tokens opts source)
+(beme.alpha.parse.reader/read-beme-string-from-tokens tokens)
+(beme.alpha.parse.reader/read-beme-string-from-tokens tokens opts source)
 ```
 
-Parse pre-tokenized, pre-grouped tokens into Clojure forms. Used by `beme.pipeline/parse`. Most callers should use `read-beme-string` instead.
+Parse pre-tokenized, pre-grouped tokens into Clojure forms. Used by `beme.alpha.pipeline/parse`. Most callers should use `read-beme-string` instead.
 
-- `tokens` — a grouped token vector (output of `beme.grouper/group-tokens`)
+- `tokens` — a grouped token vector (output of `beme.alpha.scan.grouper/group-tokens`)
 - `opts` — same options as `read-beme-string` (e.g., `:resolve-keyword`)
 - `source` — original source text for error context (optional)
 
 
-## beme.printer
+## beme.alpha.emit.printer
 
 Low-level printer API.
 
 ### print-form
 
 ```clojure
-(beme.printer/print-form form)
+(beme.alpha.emit.printer/print-form form)
 ```
 
 Print a single Clojure form as beme text.
@@ -187,18 +208,44 @@ Print a single Clojure form as beme text.
 ### print-beme-string
 
 ```clojure
-(beme.printer/print-beme-string forms)
+(beme.alpha.emit.printer/print-beme-string forms)
 ```
 
 Print a sequence of Clojure forms as beme text, separated by blank lines.
 
 
-## beme.repl
+## beme.alpha.emit.pprint
+
+Low-level pretty-printer API.
+
+### pprint-form
+
+```clojure
+(beme.alpha.emit.pprint/pprint-form form)
+(beme.alpha.emit.pprint/pprint-form form opts)
+```
+
+Pretty-print a single Clojure form as beme text. Width-aware — uses `begin`/`end` for forms that don't fit on one line. Preserves comments from `:ws` metadata.
+
+Options:
+- `:width` — target line width (default: 80)
+
+### pprint-forms
+
+```clojure
+(beme.alpha.emit.pprint/pprint-forms forms)
+(beme.alpha.emit.pprint/pprint-forms forms opts)
+```
+
+Pretty-print a sequence of Clojure forms as beme text, separated by blank lines. Preserves comments from `:ws` metadata, including trailing comments after the last form.
+
+
+## beme.alpha.runtime.repl
 
 ### input-state
 
 ```clojure
-(beme.repl/input-state s)
+(beme.alpha.runtime.repl/input-state s)
 ```
 
 Returns the parse state of a beme input string: `:complete` (parsed successfully), `:incomplete` (unclosed delimiter — keep reading), or `:invalid` (malformed, non-recoverable error). Used internally by the REPL for multi-line input handling; also useful for editor integration.
@@ -212,8 +259,8 @@ Returns the parse state of a beme input string: `:complete` (parsed successfully
 ### start
 
 ```clojure
-(beme.repl/start)
-(beme.repl/start opts)
+(beme.alpha.runtime.repl/start)
+(beme.alpha.runtime.repl/start opts)
 ```
 
 Start the beme REPL. Reads beme syntax, evaluates as Clojure, prints results.
@@ -235,16 +282,16 @@ user=> map(inc [1 2 3])
 The prompt shows the current namespace (e.g., `user=>` on JVM/Babashka, `beme=>` on ClojureScript).
 
 
-## beme.run
+## beme.alpha.runtime.run
 
 Run `.beme` files or beme source strings.
 
 ### run-string
 
 ```clojure
-(beme.run/run-string s)
-(beme.run/run-string s eval-fn)
-(beme.run/run-string s opts)
+(beme.alpha.runtime.run/run-string s)
+(beme.alpha.runtime.run/run-string s eval-fn)
+(beme.alpha.runtime.run/run-string s opts)
 ```
 
 Read beme source string, eval each form, return the last result. The second argument can be an eval function (backward compatible) or an opts map.
@@ -261,34 +308,34 @@ Options (when passing a map):
 ### run-file
 
 ```clojure
-(beme.run/run-file path)
-(beme.run/run-file path eval-fn)
-(beme.run/run-file path opts)
+(beme.alpha.runtime.run/run-file path)
+(beme.alpha.runtime.run/run-file path eval-fn)
+(beme.alpha.runtime.run/run-file path opts)
 ```
 
 Read and eval a `.beme` file. Returns the last result. Uses `slurp` internally (JVM/Babashka only). Second argument follows same convention as `run-string`.
 
 ```clojure
-(run-file "examples/tests/01_core_rules.beme")
+(run-file "test/examples/tests/01_core_rules.beme")
 ```
 
 
-## beme.pipeline
+## beme.alpha.pipeline
 
 Explicit pipeline composition. Each stage is a `ctx → ctx` function operating on a shared context map with keys `:source`, `:opts`, `:raw-tokens`, `:tokens`, `:forms`.
 
 ### scan
 
 ```clojure
-(beme.pipeline/scan ctx)
+(beme.alpha.pipeline/scan ctx)
 ```
 
-Tokenize source text into flat tokens. Reads `:source` from ctx, assocs `:raw-tokens`.
+Tokenize source text into flat tokens with whitespace attachment. Reads `:source` from ctx, assocs `:raw-tokens`. Each token carries a `:ws` key with the leading whitespace and comments between it and the previous token. Trailing whitespace (after the last token) is stored as `:trailing-ws` metadata on the token vector. This is how the pretty-printer preserves comments.
 
 ### group
 
 ```clojure
-(beme.pipeline/group ctx)
+(beme.alpha.pipeline/group ctx)
 ```
 
 Collapse opaque regions (reader conditionals, namespaced maps, syntax-quote brackets) from flat tokens into composite tokens. Reads `:raw-tokens` and `:source` from ctx, assocs `:tokens`.
@@ -296,7 +343,7 @@ Collapse opaque regions (reader conditionals, namespaced maps, syntax-quote brac
 ### parse
 
 ```clojure
-(beme.pipeline/parse ctx)
+(beme.alpha.pipeline/parse ctx)
 ```
 
 Parse grouped tokens into Clojure forms. Reads `:tokens`, `:opts`, `:source` from ctx, assocs `:forms`.
@@ -304,27 +351,27 @@ Parse grouped tokens into Clojure forms. Reads `:tokens`, `:opts`, `:source` fro
 ### run
 
 ```clojure
-(beme.pipeline/run source)
-(beme.pipeline/run source opts)
+(beme.alpha.pipeline/run source)
+(beme.alpha.pipeline/run source opts)
 ```
 
 Run the full pipeline: `scan → group → parse`. Returns the complete context map.
 
 ```clojure
-(beme.pipeline/run "+(1 2)")
+(beme.alpha.pipeline/run "+(1 2)")
 ;=> {:source "+(1 2)", :opts nil,
 ;    :raw-tokens [...], :tokens [...], :forms [(+ 1 2)]}
 ```
 
 
-## beme.grouper
+## beme.alpha.scan.grouper
 
 Token grouping stage. Collapses opaque-region marker tokens into single composite tokens.
 
 ### group-tokens
 
 ```clojure
-(beme.grouper/group-tokens tokens source)
+(beme.alpha.scan.grouper/group-tokens tokens source)
 ```
 
 Process a flat token vector, collapsing opaque regions into single tokens. Marker tokens (`:reader-cond-start`, `:namespaced-map-start`, `:syntax-quote-start`) followed by balanced delimiters are collapsed into the corresponding `-raw` composite tokens (`:reader-cond-raw`, `:namespaced-map-raw`, `:syntax-quote-raw`).
@@ -332,7 +379,39 @@ Process a flat token vector, collapsing opaque regions into single tokens. Marke
 `source` is the original source text, used for reconstructing raw values via source-range extraction.
 
 
-## beme.resolve
+## beme.alpha.scan.source
+
+Source-position utilities shared across pipeline stages. The tokenizer and grouper must agree on how `(line, col)` maps to character offsets — this namespace is that shared definition.
+
+### line-col->offset
+
+```clojure
+(beme.alpha.scan.source/line-col->offset source line col)
+```
+
+Convert 1-indexed line and column to a 0-indexed character offset in `source`. Used by `attach-whitespace` (tokenizer) and `extract-source-range` (grouper) to locate token positions in the original source string. Returns the source length if the position is past the end.
+
+
+## beme.alpha.runtime.cli
+
+Unified CLI for beme. Implemented in beme syntax (`cli.beme`), loaded by a `.clj` shim. JVM/Babashka only.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `beme run <file>` | Run a `.beme` file |
+| `beme repl` | Start the beme REPL |
+| `beme convert <file\|dir>` | Convert between `.beme` and `.clj` (direction detected from extension) |
+| `beme format <file\|dir>` | Format `.beme` files via pprint (in-place by default, `--stdout` to print) |
+| `beme version` | Print version |
+
+All file commands accept directories (processed recursively) and multiple paths. `convert` and `format` accept `--stdout` to print to stdout instead of writing files.
+
+Entry point: `-main` dispatches via `babashka.cli`. For Clojure JVM, use `-T:beme` (e.g., `clojure -T:beme run :file '"hello.beme"'`).
+
+
+## beme.alpha.parse.resolve
 
 Value resolution. Converts raw token text to Clojure values. Centralizes all host reader delegation (`read-string` calls) with consistent error wrapping and location info.
 
@@ -341,19 +420,19 @@ Value resolution. Converts raw token text to Clojure values. Centralizes all hos
 All resolvers take the raw token text and a `loc` map (`{:line N :col M}`) for error reporting:
 
 ```clojure
-(beme.resolve/resolve-number raw loc)        ;; "42" → 42
-(beme.resolve/resolve-string raw loc)        ;; "\"hi\"" → "hi"
-(beme.resolve/resolve-char raw loc)          ;; "\\newline" → \newline
-(beme.resolve/resolve-regex raw loc)         ;; "#\"\\d+\"" → #"\d+"
-(beme.resolve/resolve-syntax-quote raw loc)  ;; JVM: host read-string. CLJS: error.
-(beme.resolve/resolve-namespaced-map raw loc);; JVM: host read-string. CLJS: error.
-(beme.resolve/resolve-reader-cond raw loc)   ;; JVM: read with {:read-cond :preserve}. CLJS: error.
+(beme.alpha.parse.resolve/resolve-number raw loc)        ;; "42" → 42
+(beme.alpha.parse.resolve/resolve-string raw loc)        ;; "\"hi\"" → "hi"
+(beme.alpha.parse.resolve/resolve-char raw loc)          ;; "\\newline" → \newline
+(beme.alpha.parse.resolve/resolve-regex raw loc)         ;; "#\"\\d+\"" → #"\d+"
+(beme.alpha.parse.resolve/resolve-syntax-quote raw loc)  ;; JVM: host read-string. CLJS: error.
+(beme.alpha.parse.resolve/resolve-namespaced-map raw loc);; JVM: host read-string. CLJS: error.
+(beme.alpha.parse.resolve/resolve-reader-cond raw loc)   ;; JVM: read with {:read-cond :preserve}. CLJS: error.
 ```
 
 ### resolve-auto-keyword
 
 ```clojure
-(beme.resolve/resolve-auto-keyword raw loc resolve-fn)
+(beme.alpha.parse.resolve/resolve-auto-keyword raw loc resolve-fn)
 ```
 
 Resolve an auto-resolve keyword (`::foo`). If `resolve-fn` is provided, resolves at read time. Otherwise, defers to eval time via `(read-string "::foo")`.
@@ -361,7 +440,7 @@ Resolve an auto-resolve keyword (`::foo`). If `resolve-fn` is provided, resolves
 ### resolve-tagged-literal
 
 ```clojure
-(beme.resolve/resolve-tagged-literal tag data loc)
+(beme.alpha.parse.resolve/resolve-tagged-literal tag data loc)
 ```
 
 Resolve a tagged literal. JVM: produces a `TaggedLiteral` object via `clojure.core/tagged-literal`. CLJS: throws an error.
@@ -380,7 +459,7 @@ Common errors:
 
 ```clojure
 (try
-  (beme.core/beme->forms "foo(")
+  (beme.alpha.core/beme->forms "foo(")
   (catch Exception e
     (ex-data e)))
 ;=> {:line 1, :col 4}
@@ -388,14 +467,14 @@ Common errors:
 
 Error recovery is not supported — the reader stops at the first error. This is documented as future work in the PRD.
 
-## beme.errors
+## beme.alpha.errors
 
 Error infrastructure used by the tokenizer and reader. Portable (.cljc).
 
 ### source-context
 
 ```clojure
-(beme.errors/source-context source line)
+(beme.alpha.errors/source-context source line)
 ```
 
 Extract the source line at a 1-indexed line number from `source` (a string). Returns the line text, or `nil` if out of range.
@@ -403,7 +482,7 @@ Extract the source line at a 1-indexed line number from `source` (a string). Ret
 ### beme-error
 
 ```clojure
-(beme.errors/beme-error message opts)
+(beme.alpha.errors/beme-error message opts)
 ```
 
 Throw `ex-info` with a consistent error structure. `opts` is a map with:
@@ -416,7 +495,7 @@ All tokenizer and reader errors go through this function.
 ### format-error
 
 ```clojure
-(beme.errors/format-error exception source)
+(beme.alpha.errors/format-error exception source)
 ```
 
 Format an exception for display. Produces a multi-line string with:

@@ -1,36 +1,10 @@
 {:paths ["src" "test"]
- :tasks {beme {:doc "Start beme REPL"
-              :task (do (require '[beme.repl])
-                        ((resolve 'beme.repl/start)))}
-         beme-run {:doc "Run a .beme file: bb beme-run <file.beme>"
-                  :task (do (require '[beme.run] '[beme.errors])
-                            (let [f (first *command-line-args*)]
-                              (when-not f
-                                (println "Usage: bb beme-run <file.beme>")
-                                (System/exit 1))
-                              (try
-                                ((resolve 'beme.run/run-file) f)
-                                (catch Exception e
-                                  (let [src (try (slurp f) (catch Exception _ nil))]
-                                    (println ((resolve 'beme.errors/format-error) e src)))
-                                  (System/exit 1)))))}
-         beme-to {:doc "Transpile .beme to Clojure: bb beme-to <file.beme>"
-                 :task (do (require '[beme.core])
-                           (let [f (first *command-line-args*)]
-                             (when-not f
-                               (println "Usage: bb beme-to <file.beme>")
-                               (System/exit 1))
-                             (println ((resolve 'beme.core/beme->clj) (slurp f)))))}
-         beme-from {:doc "Transpile .clj to beme: bb beme-from <file.clj>"
-                   :task (do (require '[beme.core])
-                             (let [f (first *command-line-args*)]
-                               (when-not f
-                                 (println "Usage: bb beme-from <file.clj>")
-                                 (System/exit 1))
-                               (println ((resolve 'beme.core/clj->beme) (slurp f)))))}
+ :tasks {beme {:doc "beme CLI: run, repl, to, from, version"
+              :task (do (require '[beme.alpha.runtime.cli])
+                        (apply (resolve 'beme.alpha.runtime.cli/-main) *command-line-args*))}
          test-beme {:doc "Run all .beme tests (eval + fixture)"
-                   :task (do (require '[beme.test-runner])
-                             (let [fails ((resolve 'beme.test-runner/run-all-beme-tests))]
+                   :task (do (require '[beme.alpha.test-runner])
+                             (let [fails ((resolve 'beme.alpha.test-runner/run-all-beme-tests))]
                                (System/exit (if (zero? fails) 0 1))))}
          test-cljs {:doc "Run ClojureScript tests under Node.js"
                     :task (try

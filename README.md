@@ -49,41 +49,34 @@ git clone https://github.com/beme-lang/beme-clj.git
 cd beme-clj
 ```
 
+All namespaces live under `beme.alpha` to signal that the API is pre-1.0 and may change. When the API stabilizes, namespaces will move to `beme`.
+
 ## Getting Started
 
 Run a `.beme` file:
 
 ```bash
-$ bb beme-run hello.beme        # Babashka
-$ clj -M:beme-run hello.beme    # Clojure JVM
+$ bb beme run hello.beme                                # Babashka
+$ clojure -T:beme run :file '"hello.beme"'              # Clojure JVM
 Hello, world!
 ```
 
 Interactive REPL:
 
 ```bash
-$ bb beme                        # Babashka
-$ clj -M:beme                    # Clojure JVM
+$ bb beme repl                                          # Babashka
 beme=> +(1 2)
 3
 beme=> map(inc [1 2 3])
 (2 3 4)
 ```
 
-Transpile beme to Clojure:
+Convert between beme and Clojure (direction detected from extension):
 
 ```bash
-$ bb beme-to hello.beme           # Babashka
-$ clj -M:beme-to hello.beme       # Clojure JVM
-(defn greet [name] (println (str "Hello, " name)))
-```
-
-Transpile Clojure to beme:
-
-```bash
-$ bb beme-from hello.clj           # Babashka
-$ clj -M:beme-from hello.clj      # Clojure JVM
-defn(greet [name] println(str("Hello, " name)))
+$ bb beme convert hello.beme                            # .beme → Clojure
+$ bb beme convert hello.clj                             # .clj → beme
+$ clojure -T:beme convert :file '"hello.beme"'          # Clojure JVM
 ```
 
 Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).

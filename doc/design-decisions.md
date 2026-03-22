@@ -22,12 +22,12 @@ Everything else is Clojure.
 
 The reader pipeline is split into three explicit stages:
 
-1. **Scan** (`beme.tokenizer`) — character scanning → flat token vector.
+1. **Scan** (`beme.alpha.scan.tokenizer`) — character scanning → flat token vector.
    Opaque regions emit marker tokens (`:reader-cond-start`, etc.) rather
    than capturing raw text inline.
-2. **Group** (`beme.grouper`) — collapses marker tokens + balanced delimiters
+2. **Group** (`beme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters
    into single composite `-raw` tokens.
-3. **Parse** (`beme.reader`) — recursive-descent parser → Clojure forms.
+3. **Parse** (`beme.alpha.parse.reader`) — recursive-descent parser → Clojure forms.
 
 The original design captured opaque regions (reader conditionals, namespaced
 maps, syntax-quote with brackets) inline during tokenization via
@@ -41,16 +41,16 @@ tokens, so `\)` inside a string is just a `:string` token, not a closing
 paren. The three-stage split also makes each stage independently testable
 and the pipeline extensible.
 
-`beme.pipeline` composes the stages as `ctx → ctx` functions, threading a
+`beme.alpha.pipeline` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:raw-tokens`, `:tokens`, `:forms`. This makes
-intermediate state visible to tooling via `beme.core/run-pipeline`.
+intermediate state visible to tooling via `beme.alpha.core/run-pipeline`.
 
 
-## Centralized host reader delegation (beme.resolve)
+## Centralized host reader delegation (beme.alpha.parse.resolve)
 
 All `read-string` calls — for numbers, strings, chars, regex, syntax-quote,
 namespaced maps, reader conditionals, auto-resolve keywords, and tagged
-literals — are centralized in `beme.resolve`. Previously these were
+literals — are centralized in `beme.alpha.parse.resolve`. Previously these were
 scattered across the parser with inconsistent error handling.
 
 Centralization provides:
@@ -114,6 +114,23 @@ with "Bare parentheses not allowed." The only exception is `'(...)`, the
 quoted-list form, where `'` acts as a prefix allowing bare parens.
 This was a deliberate design choice: every `(...)` must have a head,
 making the call rule uniform and eliminating ambiguity.
+
+
+## Spacing irrelevance is required by begin/end
+
+Spacing between a head and its opening delimiter is irrelevant — this
+is not a stylistic preference but a structural requirement. Rule 2's
+`begin`/`end` delimiters are textual tokens, so there is always at
+least a space between the head and `begin`: `f begin x end`. If the
+reader required adjacency (no whitespace before `(`), `begin`/`end`
+could not work at all — the head would never be adjacent to the
+delimiter.
+
+The two rules are coupled: once textual delimiters exist, spacing
+*must* be irrelevant for both `(` and `begin`. And since bare `()`
+is rejected (every `(` requires a head), spacing irrelevance
+introduces no ambiguity — there is no valid beme program where
+`f (x)` could mean anything other than `(f x)`.
 
 
 ## `#` dispatch forms are opaque
@@ -268,7 +285,24 @@ This prevents stack overflow from deeply nested or malicious input.
 default stack sizes.
 
 
-## Centralized error infrastructure (beme.errors)
+## Shared source-position contract (beme.alpha.scan.source)
+
+The tokenizer records `(line, col)` on each token. The grouper later
+needs to map those positions back to character offsets in the source
+string — to extract raw text for opaque regions (reader conditionals,
+namespaced maps, syntax-quote). If the two stages disagree on how
+`(line, col)` translates to an offset, the extracted text is wrong:
+off-by-one truncation, stray characters, or outright garbled output.
+
+`beme.alpha.scan.source/line-col->offset` is the single definition both
+stages share. The tokenizer uses it in `attach-whitespace`; the grouper
+uses it in `extract-source-range`. Because it's one function in one
+namespace, the mapping can't diverge. The alternative — each stage
+carrying its own offset logic — was the source of a previous bug where
+whitespace attachment and source extraction disagreed after a newline.
+
+
+## Centralized error infrastructure (beme.alpha.errors)
 
 All error throw sites go through `beme-error`, which constructs `ex-info`
 with a consistent structure: `:line`, `:col` (1-indexed), optional
