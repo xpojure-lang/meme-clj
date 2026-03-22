@@ -166,4 +166,5 @@ clojure-lsp is configured via the `.claude-plugin/` directory for Claude Code in
 - `::keyword` — auto-resolve keywords are opaque (deferred to Clojure's reader)
 - Threading macros (`->`, `->>`) are just calls per Rule 1
 - `f begin x y end` — textual call delimiters, equivalent to `f(x y)`
+- `'(...)` uses Clojure S-expression syntax inside — `'(f (g x))` is `(quote (f (g x)))`, not a call
 - `[]` is always data; use `list(1 2 3)` for list literals

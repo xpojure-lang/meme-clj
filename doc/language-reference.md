@@ -326,7 +326,7 @@ All of these work exactly as in Clojure:
 - Destructuring in all binding positions
 - Commas are whitespace
 - Line comments: `; comment`
-- Quoted lists: `'(x y z)` — the only case where bare `(...)` is allowed. Quoted lists containing sublists with non-callable heads (numbers, strings, booleans, nil) fall back to Clojure S-expression output via `pr-str`, since beme has no syntax for bare lists with those heads
+- Quoted lists: `'(x y z)` — uses Clojure S-expression syntax inside. `'(f (g x))` produces `(quote (f (g x)))`. Inside `'(...)`, parentheses create lists (no Rule 1 calls), so all Clojure forms are quotable. This is the only context where bare `(...)` is valid
 
 
 ## What's Different from Clojure
@@ -335,10 +335,16 @@ All of these work exactly as in Clojure:
 |---------|-----|-------|
 | `(f x y)` | `f(x y)` | Parens follow the callable |
 | `(f x y)` | `f begin x y end` | Textual delimiters, equivalent to parens |
-| `'(1 2 3)` | `'(1 2 3)` | Quote syntax is identical |
+| `'(f (g x))` | `'(f (g x))` | Quote uses S-expression syntax inside |
 
 
 ## Design Boundaries
+
+- **Quote uses Clojure syntax inside.** `'(f (g x))` produces `(quote (f (g x)))`.
+  Inside `'(...)`, parentheses create lists — Rule 1 is suspended. This means
+  all Clojure forms are quotable, including lists with non-callable heads like
+  `'((1 2) (3 4))`. Outside `'(...)`, quote on non-lists works normally: `'foo`,
+  `'42`, `':kw`.
 
 - **Backtick is opaque.** Syntax-quote (`` ` ``) and its body are raw Clojure,
   passed to Clojure's reader. Macro templates use S-expressions inside backtick;

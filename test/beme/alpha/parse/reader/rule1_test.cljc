@@ -220,10 +220,10 @@
   (is (= '[(quote ())] (r/read-beme-string "'()"))))
 
 (deftest quote-nested-list
-  (testing "inside quoted list, symbol still eats paren"
-    (is (= '[(quote ((a b c)))] (r/read-beme-string "'(a (b c))"))))
-  (testing "to get two forms inside quote, avoid symbol before ("
-    (is (= '[(quote (1 (b c)))] (r/read-beme-string "'(1 b(c))")))))
+  (testing "inside quoted list, Clojure S-expression syntax — parens create lists"
+    (is (= '[(quote (a (b c)))] (r/read-beme-string "'(a (b c))"))))
+  (testing "adjacent paren after symbol is NOT a call inside quote"
+    (is (= '[(quote (1 b (c)))] (r/read-beme-string "'(1 b(c))")))))
 
 (deftest quote-symbol-not-list
   (is (= '[(quote x)] (r/read-beme-string "'x"))))

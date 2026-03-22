@@ -9,6 +9,11 @@
 
 (declare print-form)
 
+;; When true, lists print in Clojure S-expression style: (f x y)
+;; instead of beme call style: f(x y). Set by the quote handler
+;; so that '(...) contains Clojure syntax. Also used by pprint.
+(def ^:dynamic *clj-mode* false)
+
 ;; ---------------------------------------------------------------------------
 ;; Print helpers
 ;; ---------------------------------------------------------------------------
@@ -108,86 +113,60 @@
     (forms/deferred-auto-keyword? form)
     (forms/deferred-auto-keyword-raw form)
 
-    ;; empty list — must print as quoted to preserve identity (bare () is invalid beme)
+    ;; empty list — in beme mode, print as '() (bare () is invalid beme);
+    ;; in clj-mode (inside quoted lists), print as ()
     (and (seq? form) (empty? form))
-    "'()"
+    (if *clj-mode* "()" "'()")
 
     ;; sequences — calls and reader sugar
     (seq? form)
-    (let [head (first form)]
-      (cond
-        (anon-fn-shorthand? form)
-        (str "#(" (print-form (nth form 2)) ")")
+    (if *clj-mode*
+      ;; In clj-mode (inside quoted lists), print as S-expressions
+      (str "(" (str/join " " (map print-form form)) ")")
+      (let [head (first form)]
+        (cond
+          (anon-fn-shorthand? form)
+          (str "#(" (print-form (nth form 2)) ")")
 
-        ;; @deref
-        (= head 'clojure.core/deref) (str "@" (print-form (second form)))
+          ;; @deref
+          (= head 'clojure.core/deref) (str "@" (print-form (second form)))
 
-        ;; 'quote — quoted lists use bare parens: '(a b c)
-        ;; But only when all inner sublists have valid call heads (symbol,
-        ;; keyword, vector, set, map). Otherwise fall back to quote(...)
-        ;; because the reader can't reconstruct e.g. (1 2 3) from 1(2 3)
-        ;; inside '(...) — numbers/strings/booleans/nil don't trigger maybe-call.
-        (= head 'quote)
-        (let [inner (second form)]
-          (cond
-            ;; Non-list: 'foo, '42, ':kw — always safe
-            (not (seq? inner))
-            (str "'" (print-form inner))
+          ;; 'quote — quoted lists use Clojure S-expression syntax inside.
+          ;; Activates *clj-mode* so nested lists print as (f x) not f(x).
+          (= head 'quote)
+          (let [inner (second form)]
+            (if (not (seq? inner))
+              (str "'" (print-form inner))
+              (binding [*clj-mode* true]
+                (str "'(" (str/join " " (map print-form inner)) ")"))))
 
-            ;; Quoted list where all sublists (recursively) have valid call
-            ;; heads — safe to use '(...) sugar since Rule 1 reconstructs them.
-            ;; Must check nested sublists too: (quote ((a (1 2)) b)) has a
-            ;; callable direct child (a ...) but (1 2) inside it does not.
-            (every? (fn all-callable? [x]
-                      (if (not (seq? x))
-                        true
-                        (let [h (first x)]
-                          (and (or (symbol? h) (keyword? h) (vector? h)
-                                   (set? h) (map? h))
-                               (every? all-callable? (rest x))))))
-                    inner)
-            (str "'(" (print-args inner) ")")
+          ;; #'var
+          (= head 'var) (str "#'" (print-form (second form)))
 
-            ;; Quoted list containing sublists with non-callable heads
-            ;; (number, string, boolean, nil, or list). beme has no
-            ;; syntax for bare lists with non-callable heads — (1 2 3)
-            ;; cannot be written without quote or list(). This is an
-            ;; inherent limitation of M-expression syntax.
-            :else
-            (throw (ex-info
-                     (str "Cannot print quoted list in beme — contains sublists with "
-                          "non-callable heads (number, string, boolean, nil, or list). "
-                          "beme's Rule 1 requires list heads to be symbols, keywords, "
-                          "vectors, sets, or maps. Form: " (pr-str form))
-                     {:form form}))))
+          ;; call: (f args...) → f(args...) when head is a symbol
+          (symbol? head)
+          (str (print-form head) "(" (print-args (rest form)) ")")
 
-        ;; #'var
-        (= head 'var) (str "#'" (print-form (second form)))
+          ;; keyword-headed list: (:require [bar]) → :require([bar])
+          (keyword? head)
+          (str (print-form head) "(" (print-args (rest form)) ")")
 
-        ;; call: (f args...) → f(args...) when head is a symbol
-        (symbol? head)
-        (str (print-form head) "(" (print-args (rest form)) ")")
+          ;; vector-headed list: ([params] body) → [params](body)
+          (vector? head)
+          (str (print-form head) "(" (print-args (rest form)) ")")
 
-        ;; keyword-headed list: (:require [bar]) → :require([bar])
-        (keyword? head)
-        (str (print-form head) "(" (print-args (rest form)) ")")
+          ;; set-headed list: (#{:a :b} x) → #{:a :b}(x)
+          (set? head)
+          (str (print-form head) "(" (print-args (rest form)) ")")
 
-        ;; vector-headed list: ([params] body) → [params](body)
-        (vector? head)
-        (str (print-form head) "(" (print-args (rest form)) ")")
+          ;; map-headed list: ({:a 1} :a) → {:a 1}(:a)
+          (map? head)
+          (str (print-form head) "(" (print-args (rest form)) ")")
 
-        ;; set-headed list: (#{:a :b} x) → #{:a :b}(x)
-        (set? head)
-        (str (print-form head) "(" (print-args (rest form)) ")")
-
-        ;; map-headed list: ({:a 1} :a) → {:a 1}(:a)
-        (map? head)
-        (str (print-form head) "(" (print-args (rest form)) ")")
-
-        ;; any other head — reader conditionals, tagged literals, etc.
-        ;; may be valid call heads via maybe-call on opaque forms
-        :else
-        (str (print-form head) "(" (print-args (rest form)) ")")))
+          ;; any other head — reader conditionals, tagged literals, etc.
+          ;; may be valid call heads via maybe-call on opaque forms
+          :else
+          (str (print-form head) "(" (print-args (rest form)) ")"))))
 
     ;; vector
     (vector? form)

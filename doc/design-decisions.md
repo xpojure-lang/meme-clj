@@ -110,10 +110,11 @@ applies to symbols (`f(x)`), keywords (`:require([bar])`), and
 vectors (`[x](body)` for multi-arity clauses like `([x] body)`).
 
 Bare `(...)` without a preceding head is an error — the reader rejects it
-with "Bare parentheses not allowed." The only exception is `'(...)`, the
-quoted-list form, where `'` acts as a prefix allowing bare parens.
-This was a deliberate design choice: every `(...)` must have a head,
-making the call rule uniform and eliminating ambiguity.
+with "Bare parentheses not allowed." The two exceptions are `'(...)` (quoted
+list) and nested parens inside `'(...)`, where the reader switches to Clojure
+S-expression mode so that `'(f (g x))` produces `(quote (f (g x)))`.
+Outside these quote contexts, every `(...)` must have a head, making the
+call rule uniform and eliminating ambiguity.
 
 
 ## Spacing irrelevance is required by begin/end
@@ -165,6 +166,26 @@ your own code. Use `list(1 2 3)` to construct a list.
 However, some macro APIs expect quoted arguments (e.g. `list('if test then else)`).
 Quote passes through for those cases. The printer preserves quote only when the
 source Clojure had it — it never synthesizes quote.
+
+## Quote uses Clojure syntax inside
+
+Inside `'(...)`, the reader switches to Clojure S-expression mode: bare
+parentheses create lists, and symbols do not trigger Rule 1 calls. This
+means `'(f (g x))` produces `(quote (f (g x)))` — two elements, `f` and
+the list `(g x)`.
+
+This is essential for:
+- **Macros**: `list('if test then else)` — the `'if` is a symbol quote
+  (no change), but `'((f x) (g y))` now works for any list structure.
+- **Data**: Quoted lists with non-callable heads like `'((1 2) (3 4))`
+  are valid — no special cases or error paths.
+- **Roundtrip**: The printer emits `'(...)` with S-expression syntax
+  inside, and the reader reconstructs the same forms. Previously, quoted
+  lists with non-callable-headed sublists could not be printed.
+
+The mode is scoped: it activates on `'(` and deactivates at the matching
+`)`. Quote on non-list forms (`'foo`, `'42`) is unchanged. Backtick
+`` ` `` is unaffected — it was already opaque.
 
 
 ## Commas are whitespace
