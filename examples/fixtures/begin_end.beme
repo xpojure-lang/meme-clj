@@ -1,0 +1,4 @@
+foo begin x y end
+bar begin baz(1) end
+f begin end
+defn begin greet [name] str("Hello " name) end

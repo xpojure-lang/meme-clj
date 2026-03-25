@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-jvm:
+    name: JVM Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeLaGuardo/setup-clojure@13.3
+        with:
+          cli: latest
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.clojure/.cpcache
+          key: clj-${{ hashFiles('deps.edn') }}
+          restore-keys: clj-
+      - run: clojure -X:test
+
+  test-babashka:
+    name: Babashka Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeLaGuardo/setup-clojure@13.3
+        with:
+          bb: latest
+      - run: bb test-beme
+
+  test-cljs:
+    name: ClojureScript Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: DeLaGuardo/setup-clojure@13.3
+        with:
+          cli: latest
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.clojure/.cpcache
+          key: cljs-${{ hashFiles('deps.edn') }}
+          restore-keys: cljs-
+      - run: clojure -M:cljs-test

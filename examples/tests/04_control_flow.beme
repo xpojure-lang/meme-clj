@@ -1,0 +1,82 @@
+; Control flow
+
+;; if — call form
+assert(=(if(>(5 0) "positive" "negative") "positive"))
+assert(=(if(>(0 5) "positive" "negative") "negative"))
+
+;; if — two args (no else)
+assert(=(if(true "yes") "yes"))
+assert(=(if(false "yes") nil))
+
+;; when — single body
+assert(=(when(true "yes") "yes"))
+assert(=(when(false "yes") nil))
+
+;; when — multiple args in call
+def(log atom([]))
+when(true swap!(log conj :a) swap!(log conj :b))
+assert(=(@log [:a :b]))
+
+;; when — multi-body in call
+def(log2 atom([]))
+when(true
+  swap!(log2 conj :first)
+  swap!(log2 conj :second))
+assert(=(@log2 [:first :second]))
+
+;; when — false condition skips body
+def(log3 atom([]))
+when(false
+  swap!(log3 conj :nope))
+assert(=(@log3 []))
+
+;; cond
+defn(classify [x]
+  cond(
+    >(x 0)  "positive"
+    ==(x 0) "zero"
+    :else   "negative"))
+assert(=(classify(5) "positive"))
+assert(=(classify(0) "zero"))
+assert(=(classify(-3) "negative"))
+
+;; case
+defn(describe [x]
+  case(x
+    1 "one"
+    2 "two"
+    3 "three"
+    "other"))
+assert(=(describe(1) "one"))
+assert(=(describe(2) "two"))
+assert(=(describe(99) "other"))
+
+;; case with keywords
+defn(status-label [s]
+  case(s
+    :ok      "success"
+    :error   "failure"
+    "unknown"))
+assert(=(status-label(:ok) "success"))
+assert(=(status-label(:missing) "unknown"))
+
+;; threading — -> (thread-first)
+def(m ->({}
+  assoc(:a 1)
+  assoc(:b 2)
+  assoc(:c 3)))
+assert(=(m {:a 1 :b 2 :c 3}))
+
+;; threading — ->> (thread-last)
+def(total ->>(range(10)
+  filter(even?)
+  map(fn([x] *(x x)))
+  reduce(+)))
+assert(=(total 120))
+
+;; threading with keyword calls
+def(accounts [{:name "Alice" :balance 100 :active true}
+                {:name "Bob" :balance 200 :active false}
+                {:name "Carol" :balance 300 :active true}])
+def(active-total ->>(accounts filter(:active) map(:balance) reduce(+)))
+assert(=(active-total 400))

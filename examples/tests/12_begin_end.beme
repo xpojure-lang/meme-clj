@@ -1,0 +1,40 @@
+; begin/end — textual call delimiters equivalent to ()
+
+; basic call
+assert(= begin +(1 2) 3 end)
+
+; equivalent to parenthesized call
+def(a +(1 2))
+def(b + begin 1 2 end)
+assert(=(a b))
+
+; zero arity
+defn(noop [] nil)
+assert(=(noop() noop begin end))
+
+; nested begin/end
+assert(=(+(1 *(2 3)) + begin 1 * begin 2 3 end end))
+
+; mixed parens and begin/end
+assert(=(str("a" str("b" "c")) str begin "a" str("b" "c") end))
+
+; begin/end with keyword head
+def(m {:name "Alice" :age 30})
+assert(=(:name(m) :name begin m end))
+
+; begin/end with vector head (multi-arity)
+defn(f [x] begin +(x 1) end [x y] begin +(x y) end)
+assert(=(f(3) 4))
+assert(=(f(3 5) 8))
+
+; real-world patterns
+defn(greet [name] begin str("Hello " name) end)
+assert(=(greet("world") "Hello world"))
+
+let begin [x 10, y 20]
+  assert(=(+(x y) 30))
+end
+
+; standalone begin/end are symbols when not preceded by a call head
+assert(=(symbol?(quote(begin)) true))
+assert(=(symbol?(quote(end)) true))

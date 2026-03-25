@@ -1,0 +1,19 @@
+{:paths ["src"]
+ :deps {}
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {io.github.cognitect-labs/test-runner
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}
+                      clj-kondo/clj-kondo
+                      {:mvn/version "2026.01.19"}
+                      org.clojure/test.check
+                      {:mvn/version "1.1.1"}}
+         :main-opts ["-m" "cognitect.test-runner"]
+         :exec-fn cognitect.test-runner.api/test}
+  :cljs-test {:extra-paths ["test"]
+              :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
+                           olical/cljs-test-runner {:mvn/version "3.8.1"}}
+              :main-opts ["-m" "cljs-test-runner.main"
+                          "-d" "test"
+                          "-r" ".*-test$"
+                          "-x" "node"]}}}

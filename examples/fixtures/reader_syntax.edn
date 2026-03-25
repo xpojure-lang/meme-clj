@@ -1,0 +1,7 @@
+[(quote foo)
+ (quote (a b c))
+ (var inc)
+ (clojure.core/deref state)
+ x
+ y
+ bar]

@@ -1,0 +1,11 @@
+; Opaque forms — passed through to Clojure's reader
+
+;; #:ns{} namespaced maps
+def(user #:user{:name "Andriy" :age 45})
+assert(=(:user/name(user) "Andriy"))
+assert(=(:user/age(user) 45))
+
+;; #:ns{} preserves already-qualified keys
+def(mixed #:user{:name "Andriy" :other/id 42})
+assert(=(:user/name(mixed) "Andriy"))
+assert(=(:other/id(mixed) 42))

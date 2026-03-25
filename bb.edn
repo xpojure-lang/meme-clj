@@ -1,0 +1,31 @@
+{:paths ["src" "test"]
+ :tasks {beme {:doc "Start beme REPL"
+              :task (do (require '[beme.repl])
+                        ((resolve 'beme.repl/start)))}
+         beme-run {:doc "Run a .beme file: bb beme-run <file.beme>"
+                  :task (do (require '[beme.run] '[beme.errors])
+                            (let [f (first *command-line-args*)]
+                              (when-not f
+                                (println "Usage: bb beme-run <file.beme>")
+                                (System/exit 1))
+                              (try
+                                ((resolve 'beme.run/run-file) f)
+                                (catch Exception e
+                                  (let [src (try (slurp f) (catch Exception _ nil))]
+                                    (println ((resolve 'beme.errors/format-error) e src)))
+                                  (System/exit 1)))))}
+         test-beme {:doc "Run all .beme tests (eval + fixture)"
+                   :task (do (require '[beme.test-runner])
+                             (let [fails ((resolve 'beme.test-runner/run-all-beme-tests))]
+                               (System/exit (if (zero? fails) 0 1))))}
+         test-cljs {:doc "Run ClojureScript tests under Node.js"
+                    :task (try
+                            (shell "clojure" "-M:cljs-test")
+                            (finally
+                              (babashka.fs/delete-tree "cljs-test-runner-out")))}
+         test-all {:doc "Run all test suites (Babashka + JVM + ClojureScript)"
+                   :task (do (shell "bb" "test-beme")
+                             (println)
+                             (shell "clojure" "-X:test")
+                             (println)
+                             (run 'test-cljs))}}}

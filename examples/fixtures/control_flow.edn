@@ -1,0 +1,8 @@
+[(if (> x 0) "positive" "negative")
+ (if (> x 0) "positive")
+ (when (> x 0) (println "positive"))
+ (when (> x 0) (println "positive") (do-something x))
+ (cond (> x 0) "positive" (== x 0) "zero" :else "negative")
+ (case x 1 "one" 2 "two" "other")
+ (-> x inc str)
+ (->> xs (filter even?) (map inc))]

@@ -1,0 +1,31 @@
+; Java interop
+
+;; .method — instance method call
+assert(=(.toUpperCase("hello") "HELLO"))
+assert(=(.length("hello") 5))
+
+;; .method — multi-arg
+assert(=(.contains("hello world" "world") true))
+assert(=(.replace("foo bar" "foo" "baz") "baz bar"))
+
+;; Class/staticMethod
+assert(=(Math/abs(-42) 42))
+assert(=(Math/max(3 7) 7))
+
+;; Class/FIELD — static field
+assert(>(Math/PI 3.14))
+assert(<(Math/PI 3.15))
+
+;; .-field — field access
+; (tested via interop fixture; runtime field access needs a record/object)
+
+;; Constructor.
+def(sb StringBuilder.("hello"))
+assert(=(.toString(sb) "hello"))
+
+;; chained interop
+assert(=(.toUpperCase(.trim(" hello ")) "HELLO"))
+
+;; interop + keyword call
+def(data {:name .toUpperCase("world")})
+assert(=(:name(data) "WORLD"))

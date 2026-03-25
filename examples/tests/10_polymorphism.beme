@@ -1,0 +1,44 @@
+; Polymorphism — defmulti, defmethod, defprotocol, defrecord
+
+;; defmulti + defmethod
+defmulti(area :shape)
+
+defmethod(area :circle [{:keys [radius]}]
+  *(Math/PI *(radius radius)))
+
+defmethod(area :rect [{:keys [w h]}]
+  *(w h))
+
+assert(=(area({:shape :rect :w 3 :h 4}) 12))
+
+def(circle-area area({:shape :circle :radius 1}))
+assert(>(circle-area 3.14))
+assert(<(circle-area 3.15))
+
+;; defmethod with multi-expression body
+defmethod(area :triangle [{:keys [base height]}]
+  let([half /(height 2)]
+    *(base half)))
+assert(=(area({:shape :triangle :base 6 :height 4}) 12))
+
+;; defmethod with :default dispatch
+defmethod(area :default [shape]
+  0)
+assert(=(area({:shape :unknown}) 0))
+
+;; defprotocol — define an interface with method signatures
+defprotocol(Describable
+  describe([this])
+  label([this]))
+
+;; defrecord implementing protocol
+defrecord(Dog [name breed]
+  Describable
+  describe([this]
+    str("Dog: " :name(this) " (" :breed(this) ")"))
+  label([this]
+    :name(this)))
+
+def(rex ->Dog("Rex" "Shepherd"))
+assert(=(label(rex) "Rex"))
+assert(=(describe(rex) "Dog: Rex (Shepherd)"))

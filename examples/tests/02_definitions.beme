@@ -1,0 +1,56 @@
+; Definitions — forms that bind names
+
+;; def
+def(x 42)
+assert(=(x 42))
+
+def(y +(1 2))
+assert(=(y 3))
+
+;; defn — single arity
+defn(double [x]
+  *(x 2))
+assert(=(double(5) 10))
+
+;; defn — with let body
+defn(greet [name]
+  let([msg str("Hello " name "!")] msg))
+assert(=(greet("world") "Hello world!"))
+
+;; defn — with docstring
+defn(add "Adds two numbers" [a b]
+  +(a b))
+assert(=(add(3 4) 7))
+
+;; defn — multi-arity (vector-as-head syntax)
+defn(inc-by
+  [x](inc-by(x 1))
+  [x n](+(x n)))
+assert(=(inc-by(5) 6))
+assert(=(inc-by(5 10) 15))
+
+;; defn- (private)
+defn-(helper [x]
+  +(x 10))
+assert(=(helper(5) 15))
+
+;; fn — anonymous
+def(square fn([x] *(x x)))
+assert(=(square(7) 49))
+
+;; fn — inline in call
+assert(=(map(fn([x] +(x 10)) [1 2 3]) [11 12 13]))
+
+;; fn — named (for recursion / stack traces)
+def(fib fn(fib-impl [n]
+  if(<=(n 1) n +(fib-impl(-(n 1)) fib-impl(-(n 2))))))
+assert(=(fib(0) 0))
+assert(=(fib(1) 1))
+assert(=(fib(6) 8))
+
+;; fn — with multi-expression body
+def(process fn([items]
+  let([filtered filter(odd? items)]
+    let([mapped map(fn([x] *(x 2)) filtered)]
+      vec(mapped)))))
+assert(=(process([1 2 3 4 5]) [2 6 10]))
