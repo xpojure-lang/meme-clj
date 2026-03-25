@@ -23,32 +23,26 @@ begin
     [
       active filter(:active accounts)
 
-      balanced
-      ->>
+      balanced ->>
       begin
         active
-        map
-        begin
-          fn
-          begin [a]
+        map begin
+          fn begin [a]
             update(a :balance *(:balance(a) 1.05))
           end
         end
-        remove
-        begin
-          fn
-          begin [a]
+        remove begin
+          fn begin [a]
             neg?(:balance(a))
           end
         end
       end
     ]
 
-    reduce
-    begin
-      fn([acc {:keys [id balance]}]
-        assoc(acc id {:balance balance :status :processed}))
-
+    reduce begin
+      fn begin [acc {:keys [id balance]}]
+        assoc(acc id {:balance balance :status :processed})
+      end
       {} balanced
     end
   end
