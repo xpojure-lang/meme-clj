@@ -5,51 +5,33 @@
 [![License](https://img.shields.io/github/license/beme-lang/beme-clj)](LICENSE)
 
 ```
-;; conservative — parens, just move the head outside
-defn(greet [name] str("Hello, " name "!"))
+;; one-liner
+defn(stars [owner repo] :stargazers_count(fetch-json(str("https://api.github.com/repos/" owner "/" repo))))
 
-;; begin/end — word delimiters instead of parens
+;; medium — begin/end for short blocks
 
-defn begin greet [name]
-  println(str("Hello, " name "!"))
+defn begin stars [owner repo]
+  let([url  str("https://api.github.com/repos/" owner "/" repo)
+       data fetch-json(url)]
+    :stargazers_count(data))
 end
 
-;; full beme — begin/end for structure, parens for one-liners
+;; full — begin/end for structure, parens for one-liners
 
 defn
 begin
-  transform-accounts [accounts]
+  stars [owner repo]
 
   let
   begin
     [
-      active filter(:active accounts)
-
-      balanced
-      ->>
-      begin
-        active
-
-        map begin
-          fn begin [a]
-            update(a :balance *(:balance(a) 1.05))
-          end
-        end
-
-        remove begin
-          fn begin [a]
-            neg?(:balance(a))
-          end
-        end
-      end
+      url  str("https://api.github.com/repos/" owner "/" repo)
+      resp slurp(url)
+      data json/read-str(resp :key-fn keyword)
     ]
 
-    reduce begin
-      fn begin [acc {:keys [id balance]}]
-        assoc(acc id {:balance balance :status :processed})
-      end
-      {} balanced
-    end
+    println(str(owner "/" repo ": " :stargazers_count(data) " stars"))
+    :stargazers_count(data)
   end
 end
 ```
