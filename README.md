@@ -27,6 +27,22 @@ Two rules. Everything else is Clojure.
 
 **Rule 2** (optional) — `begin`/`end` instead of parens: `f begin x y end` => `(f x y)`
 
+## Getting Started
+
+```bash
+bb beme                # Start the REPL
+bb beme-run file.beme  # Run a .beme file
+```
+
+```
+beme=> +(1 2)
+3
+beme=> map(inc [1 2 3])
+(2 3 4)
+```
+
+Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
+
 ## begin/end
 
 When nesting gets deep or a block has many lines, replace parens with words:
@@ -202,22 +218,6 @@ defn(summarize [accounts]
 ```
 
 </details>
-
-## Getting Started
-
-```bash
-bb beme                # Start the REPL
-bb beme-run file.beme  # Run a .beme file
-```
-
-```
-beme=> +(1 2)
-3
-beme=> map(inc [1 2 3])
-(2 3 4)
-```
-
-Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
 ## Testing
 
