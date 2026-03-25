@@ -63,18 +63,30 @@ beme=> map(inc [1 2 3])
 
 Transpile beme to Clojure:
 
-```clojure
-(require '[beme.core :refer [beme->clj]])
+```bash
+$ clj -Sdeps '{:deps {io.github.beme-lang/beme-clj {:git/tag "v0.1.0" :git/sha "2a890a4"}}}' \
+      -e '(require (quote [beme.core :refer [beme->clj]])) (println (beme->clj "defn(greet [name] println(str(\"Hello, \" name)))"))'
+(defn greet [name] (println (str "Hello, " name)))
+```
 
+```clojure
+;; or from a REPL
+(require '[beme.core :refer [beme->clj]])
 (beme->clj "defn(greet [name] println(str(\"Hello, \" name)))")
 ;=> "(defn greet [name] (println (str \"Hello, \" name)))"
 ```
 
-Transpile Clojure to beme (JVM/Babashka only):
+Transpile Clojure to beme:
+
+```bash
+$ clj -Sdeps '{:deps {io.github.beme-lang/beme-clj {:git/tag "v0.1.0" :git/sha "2a890a4"}}}' \
+      -e '(require (quote [beme.core :refer [clj->beme]])) (println (clj->beme "(defn greet [name] (println (str \"Hello, \" name)))"))'
+defn(greet [name] println(str("Hello, " name)))
+```
 
 ```clojure
+;; or from a REPL (JVM/Babashka only)
 (require '[beme.core :refer [clj->beme]])
-
 (clj->beme "(defn greet [name] (println (str \"Hello, \" name)))")
 ;=> "defn(greet [name] println(str(\"Hello, \" name)))"
 ```
