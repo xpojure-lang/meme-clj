@@ -44,16 +44,39 @@ cd beme-clj
 
 ## Getting Started
 
+Run a `.beme` file:
+
 ```bash
-bb beme                # Start the REPL
-bb beme-run file.beme  # Run a .beme file
+$ bb beme-run hello.beme
+Hello, world!
 ```
 
-```
+Interactive REPL:
+
+```bash
+$ bb beme
 beme=> +(1 2)
 3
 beme=> map(inc [1 2 3])
 (2 3 4)
+```
+
+Transpile beme to Clojure:
+
+```clojure
+(require '[beme.core :refer [beme->clj]])
+
+(beme->clj "defn(greet [name] println(str(\"Hello, \" name)))")
+;=> "(defn greet [name] (println (str \"Hello, \" name)))"
+```
+
+Transpile Clojure to beme (JVM/Babashka only):
+
+```clojure
+(require '[beme.core :refer [clj->beme]])
+
+(clj->beme "(defn greet [name] (println (str \"Hello, \" name)))")
+;=> "defn(greet [name] println(str(\"Hello, \" name)))"
 ```
 
 Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
