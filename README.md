@@ -32,7 +32,7 @@ Two rules. Everything else is Clojure.
 Add to `deps.edn`:
 
 ```clojure
-io.github.beme-lang/beme-clj {:git/tag "v0.1.0" :git/sha "5c8487b"}
+io.github.beme-lang/beme-clj {:git/tag "v0.1.0" :git/sha "2a890a4"}
 ```
 
 Or clone and use directly:
