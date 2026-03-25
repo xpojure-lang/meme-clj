@@ -25,7 +25,7 @@ Two rules. Everything else is Clojure.
 
 **Rule 1** — head outside the parens: `f(x y)` => `(f x y)`
 
-**Rule 2** — `begin`/`end` instead of parens: `f begin x y end` => `(f x y)`
+**Rule 2** (optional) — `begin`/`end` instead of parens: `f begin x y end` => `(f x y)`
 
 ## begin/end
 
