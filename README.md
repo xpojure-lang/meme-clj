@@ -6,60 +6,110 @@
 
 ```
 ;; beme                                     ;; Clojure
+
 defn(greet [name]                           (defn greet [name]
   println(str("Hello, " name "!")))           (println (str "Hello, " name "!")))
+
+defn begin greet [name]                     (defn greet [name]
+  println(str("Hello, " name "!"))            (println (str "Hello, " name "!"))
+  println("done")                             (println "done"))
+end
 
 ->>(accounts                                (->> accounts
   filter(:active)                              (filter :active)
   map(:balance)                                (map :balance)
   reduce(+))                                   (reduce +))
-
-let([x 1, y +(x 1)]                        (let [x 1, y (+ x 1)]
-  *(x y))                                     (* x y))
 ```
 
 Two rules. Everything else is Clojure.
 
-## The Rules
+**Rule 1** — head outside the parens: `f(x y)` => `(f x y)`
 
-**Rule 1** — the head of a call goes outside the parens:
+**Rule 2** — `begin`/`end` instead of parens: `f begin x y end` => `(f x y)`
 
-```
-f(x y)                        => (f x y)
-```
+## begin/end
 
-**Rule 2** — `begin`/`end` as textual delimiters:
+When nesting gets deep or a block has many lines, replace parens with words:
 
 ```
-f begin x y end               => (f x y)
+;; parens — compact
+defn(greet [name] println(str("Hello, " name "!")))
+
+;; begin/end — when you want room to breathe
+defn begin greet [name]
+  println(str("Hello, " name "!"))
+end
+
+;; mix freely
+try begin
+  ->>(accounts
+    filter(:active)
+    map(fn([a] update(a :balance *(:balance(a) 1.05))))
+    reduce(+ 0))
+  catch(Exception e
+    log/error("Failed:" e)
+    default-value)
+  finally(
+    cleanup())
+end
+
+;; multi-line definitions
+defn begin transform-accounts [accounts]
+  let([
+    active filter(:active accounts)
+    balanced ->>(active
+      map(fn([a] update(a :balance *(:balance(a) 1.05))))
+      remove(fn([a] neg?(:balance(a)))))
+  ]
+    reduce(fn([acc {:keys [id balance]}]
+      assoc(acc id {:balance balance
+                    :status :processed
+                    :updated-at inst-ms(java.util.Date.())}))
+    {} balanced))
+end
+
+;; protocols
+defprotocol begin Drawable
+  draw([this canvas])
+  bounds([this])
+end
+
+defrecord begin Circle [center radius]
+  Drawable
+  draw([this canvas] render-circle(canvas center radius))
+  bounds([this]
+    {:x -(:x(center) radius)
+     :y -(:y(center) radius)})
+end
 ```
 
-That's it. No new semantics — just syntax.
+`begin`/`end` and `()` are interchangeable — use whichever reads better.
 
-## In Action
+## M-expressions
 
 ```
-;; Definitions
+;; everything is a call
 def(x 42)
 defn(greet [name] str("Hello, " name "!"))
+let([x 1, y +(x 1)] *(x y))
+if(>(x 0) "positive" "negative")
 
-;; Multi-arity
+;; multi-arity
 defn(greet
   [name](greet(name "!"))
   [name punct](println(str("Hello " name punct))))
 
-;; Bindings & destructuring
+;; destructuring
 let([{:keys [id name]} person]
   println(id name))
 
-;; Threading
+;; threading — just calls
 ->>(accounts
   filter(:active)
-  map(fn([a] update(a :balance *(:balance(a) 1.05))))
-  remove(fn([a] neg?(:balance(a))))
-  reduce(+ 0))
+  map(:balance)
+  reduce(+))
 
-;; Control flow
+;; control flow
 cond(
   >(x 0)   "positive"
   ==(x 0)  "zero"
@@ -70,16 +120,7 @@ loop([i 0, acc []]
     acc
     recur(inc(i) conj(acc i))))
 
-;; Error handling
-try(
-  dangerous-operation()
-  catch(Exception e
-    log/error("Failed:" e)
-    default-value)
-  finally(
-    cleanup()))
-
-;; Namespace
+;; namespace
 ns(my.app
   :require(
     [clojure.string :as str]
@@ -92,36 +133,14 @@ ns(my.app
 Math/abs(-1)
 java.util.Date.()
 
-;; Protocols
-defprotocol(Drawable
-  draw([this canvas])
-  bounds([this]))
-
-defrecord(Circle [center radius]
-  Drawable
-  draw([this canvas] render-circle(canvas center radius))
-  bounds([this]
-    {:x -(:x(center) radius)
-     :y -(:y(center) radius)}))
-
-;; Concurrency
+;; concurrency
 def(state atom({:count 0}))
 swap!(state update(:count inc))
 @state
-
-;; Begin/end for multi-line blocks
-defn begin greet [name]
-  println(str("Hello " name))
-end
 ```
 
-All data literals, reader syntax (`@`, `^`, `#'`, `#_`, `#{}`, `#""`, `#?()`, `#:ns{}`),
-destructuring, and commas-as-whitespace work exactly as in Clojure.
-
-## No Quoting
-
-In Clojure, `'()` exists because `()` is both a call and a list.
-In beme, `()` is always a call. `[]` is always data.
+All data literals, reader syntax, destructuring, and commas-as-whitespace
+work exactly as in Clojure. `()` is always a call. `[]` is always data.
 Need a list? `list(1 2 3)`.
 
 ## Full Example
@@ -191,10 +210,6 @@ bb beme                # Start the REPL
 bb beme-run file.beme  # Run a .beme file
 ```
 
-Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
-
-## REPL
-
 ```
 beme=> +(1 2)
 3
@@ -202,7 +217,7 @@ beme=> map(inc [1 2 3])
 (2 3 4)
 ```
 
-Multi-line input continues until balanced.
+Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
 ## Testing
 
@@ -219,7 +234,7 @@ bb test-all            # All three suites
 .beme file -> tokenizer -> grouper -> parser -> Clojure forms -> eval
 ```
 
-The reader and printer are pure functions (`.cljc`), portable across JVM, Babashka, and ClojureScript. No runtime dependency. beme is a reader, not a language.
+Pure-function reader and printer (`.cljc`), portable across JVM, Babashka, and ClojureScript. No runtime dependency. beme is a reader, not a language.
 
 ## Why
 
