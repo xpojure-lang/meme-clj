@@ -14,7 +14,8 @@ defn begin greet [name]
 end
 
 ;; full beme — structure through indentation and begin/end
-defn begin transform-accounts [accounts]
+defn
+begin transform-accounts [accounts]
   let([
     active filter(:active accounts)
     balanced ->>(active
