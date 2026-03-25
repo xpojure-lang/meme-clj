@@ -5,20 +5,26 @@
 [![License](https://img.shields.io/github/license/beme-lang/beme-clj)](LICENSE)
 
 ```
-;; beme                                     ;; Clojure
+;; conservative — parens, just move the head outside
+defn(greet [name] println(str("Hello, " name "!")))
 
-defn(greet [name]                           (defn greet [name]
-  println(str("Hello, " name "!")))           (println (str "Hello, " name "!")))
-
-defn begin greet [name]                     (defn greet [name]
-  println(str("Hello, " name "!"))            (println (str "Hello, " name "!"))
-  println("done")                             (println "done"))
+;; begin/end — word delimiters instead of parens
+defn begin greet [name]
+  println(str("Hello, " name "!"))
 end
 
-->>(accounts                                (->> accounts
-  filter(:active)                              (filter :active)
-  map(:balance)                                (map :balance)
-  reduce(+))                                   (reduce +))
+;; full beme — structure through indentation and begin/end
+defn begin transform-accounts [accounts]
+  let([
+    active filter(:active accounts)
+    balanced ->>(active
+      map(fn([a] update(a :balance *(:balance(a) 1.05))))
+      remove(fn([a] neg?(:balance(a)))))
+  ]
+    reduce(fn([acc {:keys [id balance]}]
+      assoc(acc id {:balance balance :status :processed}))
+    {} balanced))
+end
 ```
 
 Two rules. Everything else is Clojure.
