@@ -9,11 +9,13 @@
 defn(greet [name] str("Hello, " name "!"))
 
 ;; begin/end — word delimiters instead of parens
+
 defn begin greet [name]
   println(str("Hello, " name "!"))
 end
 
 ;; full beme — begin/end for structure, parens for one-liners
+
 defn
 begin
   transform-accounts [accounts]
@@ -23,14 +25,17 @@ begin
     [
       active filter(:active accounts)
 
-      balanced ->>
+      balanced
+      ->>
       begin
         active
+
         map begin
           fn begin [a]
             update(a :balance *(:balance(a) 1.05))
           end
         end
+
         remove begin
           fn begin [a]
             neg?(:balance(a))
