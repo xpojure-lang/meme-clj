@@ -102,14 +102,6 @@ Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 - [Design Decisions](doc/design-decisions.md) — rationale behind each choice
 - [Product Requirements](doc/PRD.md) — requirements and known limitations
 
-## Architecture
-
-```
-.beme file -> tokenizer -> grouper -> parser -> Clojure forms -> eval
-```
-
-Pure-function reader and printer (`.cljc`), portable across JVM, Babashka, and ClojureScript. No runtime dependency. beme is a reader, not a language.
-
 ## Why
 
 M-expressions were McCarthy's original intended syntax for Lisp (1960).
