@@ -14,6 +14,20 @@
                                   (let [src (try (slurp f) (catch Exception _ nil))]
                                     (println ((resolve 'beme.errors/format-error) e src)))
                                   (System/exit 1)))))}
+         beme-to {:doc "Transpile .beme to Clojure: bb beme-to <file.beme>"
+                 :task (do (require '[beme.core])
+                           (let [f (first *command-line-args*)]
+                             (when-not f
+                               (println "Usage: bb beme-to <file.beme>")
+                               (System/exit 1))
+                             (println ((resolve 'beme.core/beme->clj) (slurp f)))))}
+         beme-from {:doc "Transpile .clj to beme: bb beme-from <file.clj>"
+                   :task (do (require '[beme.core])
+                             (let [f (first *command-line-args*)]
+                               (when-not f
+                                 (println "Usage: bb beme-from <file.clj>")
+                                 (System/exit 1))
+                               (println ((resolve 'beme.core/clj->beme) (slurp f)))))}
          test-beme {:doc "Run all .beme tests (eval + fixture)"
                    :task (do (require '[beme.test-runner])
                              (let [fails ((resolve 'beme.test-runner/run-all-beme-tests))]
