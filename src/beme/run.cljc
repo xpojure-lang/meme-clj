@@ -49,3 +49,16 @@
                           :cljs (throw (ex-info "run-file requires slurp — not available in ClojureScript" {}))) path)))
   ([path eval-fn-or-opts] (run-string (#?(:clj slurp
                                           :cljs (throw (ex-info "run-file requires slurp — not available in ClojureScript" {}))) path) eval-fn-or-opts)))
+
+#?(:clj
+(defn -main [& args]
+  (let [f (first args)]
+    (when-not f
+      (println "Usage: clj -M:beme-run <file.beme>")
+      (System/exit 1))
+    (try
+      (run-file f)
+      (catch Exception e
+        (let [src (try (slurp f) (catch Exception _ nil))]
+          (println ((requiring-resolve 'beme.errors/format-error) e src)))
+        (System/exit 1))))))
