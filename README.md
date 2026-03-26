@@ -39,7 +39,7 @@ Everything else is Clojure.
 Add to `deps.edn`:
 
 ```clojure
-io.github.beme-lang/beme-clj {:git/tag "v0.1.0" :git/sha "2a890a4"}
+io.github.beme-lang/beme-clj {:git/tag "v0.3.0" :git/sha "f04ca08"}
 ```
 
 Or clone and use directly:
