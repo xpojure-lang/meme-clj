@@ -268,7 +268,14 @@ defn begin -main
           file+stdout
         end
         {:cmds ["version"] :fn fn([_] version(nil))}
-        {:cmds [] :fn fn([_] help(nil))}
+        {:cmds [] :fn fn([{:keys [args]}]
+                          when begin seq(args)
+                            binding([*out* *err*]
+                              println(str("Unknown command: " first(args))))
+                            println()
+                          end
+                          help(nil)
+                          when(seq(args) System/exit(1)))}
       ]
       args
     end
