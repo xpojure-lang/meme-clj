@@ -4,13 +4,13 @@
             [beme.alpha.emit.printer :as p]))
 
 (defn- roundtrip-forms
-  "Parse mm string, get forms. Then print forms back to mm and re-parse.
+  "Parse beme string, get forms. Then print forms back to beme and re-parse.
    The re-parsed forms should equal the original forms."
-  [mm-src]
-  (let [forms1 (core/beme->forms mm-src)
-        mm-text (p/print-beme-string forms1)
-        forms2 (core/beme->forms mm-text)]
-    [forms1 forms2 mm-text]))
+  [beme-src]
+  (let [forms1 (core/beme->forms beme-src)
+        beme-text (p/print-beme-string forms1)
+        forms2 (core/beme->forms beme-text)]
+    [forms1 forms2 beme-text]))
 
 ;; ---------------------------------------------------------------------------
 ;; Rule 1: Call
@@ -489,9 +489,9 @@
     (let [[f1 f2 _] (roundtrip-forms "42N")]
       (is (= f1 f2))))
   (testing "BigDecimal"
-    (let [[f1 f2 mm] (roundtrip-forms "1.5M")]
+    (let [[f1 f2 printed] (roundtrip-forms "1.5M")]
       (is (= f1 f2))
-      (is (= "1.5M" mm))))))
+      (is (= "1.5M" printed))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Deep nesting stress tests

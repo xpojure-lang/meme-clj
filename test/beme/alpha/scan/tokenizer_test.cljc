@@ -100,7 +100,7 @@
         first-tok (first tokens)]
     (is (= :open-anon-fn (:type first-tok)))
     (is (= "#(" (:value first-tok)))
-    ;; Contents are tokenized as normal mme tokens
+    ;; Contents are tokenized as normal beme tokens
     (is (= :symbol (:type (second tokens))))
     (is (= "inc" (:value (second tokens))))))
 
