@@ -450,7 +450,20 @@
       (is (= f1 f2))))
   (testing "string with tab and backslash"
     (let [[f1 f2 _] (roundtrip-forms "\"a\\tb\\\\c\"")]
-      (is (= f1 f2)))))
+      (is (= f1 f2))))
+  (testing "string with carriage return escape"
+    (let [[f1 f2 _] (roundtrip-forms "\"a\\rb\"")]
+      (is (= f1 f2))))
+  (testing "string with backspace escape"
+    (let [[f1 f2 _] (roundtrip-forms "\"a\\bb\"")]
+      (is (= f1 f2))))
+  (testing "string with formfeed escape"
+    (let [[f1 f2 _] (roundtrip-forms "\"a\\fb\"")]
+      (is (= f1 f2))))
+  (testing "string with unicode escape"
+    (let [[f1 f2 _] (roundtrip-forms "\"\\u0041\"")]
+      (is (= f1 f2))
+      (is (= ["A"] f1)))))
 
 (deftest roundtrip-deftype
   (let [[f1 f2 _] (roundtrip-forms "deftype(Point [x y])")]
@@ -509,8 +522,23 @@
       (is (= f1 f2)))))
 
 (deftest roundtrip-unicode-symbols
-  (testing "Unicode symbol roundtrips"
+  (testing "Greek letters as call"
     (let [[f1 f2 _] (roundtrip-forms "\u03b1(\u03b2 \u03b3)")]
+      (is (= f1 f2))))
+  (testing "CJK characters as symbol"
+    (let [[f1 f2 _] (roundtrip-forms "\u6570\u636e")]
+      (is (= f1 f2))))
+  (testing "CJK characters as call head"
+    (let [[f1 f2 _] (roundtrip-forms "\u6570\u636e(x)")]
+      (is (= f1 f2))))
+  (testing "Arabic characters as symbol"
+    (let [[f1 f2 _] (roundtrip-forms "\u0628\u064a\u0627\u0646\u0627\u062a")]
+      (is (= f1 f2))))
+  (testing "Emoji as symbol"
+    (let [[f1 f2 _] (roundtrip-forms "\uD83C\uDF89")]
+      (is (= f1 f2))))
+  (testing "Emoji as call head"
+    (let [[f1 f2 _] (roundtrip-forms "\uD83C\uDF89(x)")]
       (is (= f1 f2)))))
 
 ;; ---------------------------------------------------------------------------
@@ -642,6 +670,19 @@
     (is (= 'deftype (first form1)))
     (is (= 'Point (second form1)))
     (is (= f1 f2))))
+
+(deftest roundtrip-chained-metadata
+  (testing "^:private ^:dynamic x roundtrips with merged metadata"
+    (let [[f1 f2 _] (roundtrip-forms "^:private ^:dynamic x")]
+      (is (= f1 f2))
+      (is (true? (:private (meta (first f1)))))
+      (is (true? (:dynamic (meta (first f1)))))))
+  (testing "^:private ^:dynamic ^String x — triple chain"
+    (let [[f1 f2 _] (roundtrip-forms "^:private ^:dynamic ^String x")]
+      (is (= f1 f2))
+      (is (true? (:private (meta (first f1)))))
+      (is (true? (:dynamic (meta (first f1)))))
+      (is (= 'String (:tag (meta (first f1))))))))
 
 (deftest roundtrip-some-threading
   (testing "some-> roundtrips"

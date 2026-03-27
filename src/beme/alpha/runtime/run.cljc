@@ -1,6 +1,6 @@
 (ns beme.alpha.runtime.run
   "Run .beme files: read, eval, return last result."
-  (:require [beme.alpha.parse.reader :as reader]
+  (:require [beme.alpha.pipeline :as pipeline]
             [clojure.string :as str]))
 
 (defn- strip-shebang
@@ -40,7 +40,7 @@
                         :cljs (throw (ex-info "run-string requires :eval option in ClojureScript" {}))))
          reader-opts (default-reader-opts opts)
          src (strip-shebang s)
-         forms (reader/read-beme-string src reader-opts)]
+         forms (:forms (pipeline/run src reader-opts))]
      (reduce (fn [_ form] (eval-fn form)) nil forms))))
 
 (defn run-file

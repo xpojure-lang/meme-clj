@@ -38,6 +38,24 @@
     (is (= 'x result))
     (is (= 'String (:tag (meta result))))))
 
+(deftest parse-chained-metadata
+  (testing "two keyword metadata merge"
+    (let [result (first (r/read-beme-string "^:private ^:dynamic x"))]
+      (is (= 'x result))
+      (is (true? (:private (meta result))))
+      (is (true? (:dynamic (meta result))))))
+  (testing "keyword + type tag merge"
+    (let [result (first (r/read-beme-string "^:private ^String x"))]
+      (is (= 'x result))
+      (is (true? (:private (meta result))))
+      (is (= 'String (:tag (meta result))))))
+  (testing "three chained metadata"
+    (let [result (first (r/read-beme-string "^:private ^:dynamic ^String x"))]
+      (is (= 'x result))
+      (is (true? (:private (meta result))))
+      (is (true? (:dynamic (meta result))))
+      (is (= 'String (:tag (meta result)))))))
+
 (deftest parse-var-quote
   (let [result (first (r/read-beme-string "#'foo"))]
     (is (= 'var (first result)))

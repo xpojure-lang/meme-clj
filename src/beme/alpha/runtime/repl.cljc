@@ -1,6 +1,6 @@
 (ns beme.alpha.runtime.repl
   "beme REPL: read beme, eval as Clojure, print result."
-  (:require [beme.alpha.parse.reader :as reader]
+  (:require [beme.alpha.pipeline :as pipeline]
             [beme.alpha.errors :as errors]
             [clojure.string :as str]))
 
@@ -11,7 +11,7 @@
    :invalid    — malformed literal or other non-recoverable error"
   [s]
   (try
-    (reader/read-beme-string s)
+    (pipeline/run s)
     :complete
     (catch #?(:clj Exception :cljs :default) e
       (if (:incomplete (ex-data e))
@@ -75,7 +75,7 @@
              (recur)
              (do
                (try
-                 (let [forms (reader/read-beme-string input reader-opts)]
+                 (let [forms (:forms (pipeline/run input reader-opts))]
                    (doseq [form forms]
                      (let [result (eval-fn form)]
                        (prn result))))

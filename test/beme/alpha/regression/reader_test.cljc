@@ -80,7 +80,13 @@
   (testing "Bug: #_ as only form in begin/end block"
     (is (= '[(f)] (r/read-beme-string "f begin #_1 end"))))
   (testing "Bug: multiple #_ before end in begin/end block"
-    (is (= '[(f 3)] (r/read-beme-string "f begin #_1 #_2 3 end")))))
+    (is (= '[(f 3)] (r/read-beme-string "f begin #_1 #_2 3 end"))))
+  (testing "Bug: #_ #_ double-discard inside begin/end"
+    (is (= '[(f c)] (r/read-beme-string "f begin #_ #_ a b c end"))))
+  (testing "#_ #_ in middle of begin/end body"
+    (is (= '[(f x y)] (r/read-beme-string "f begin x #_ #_ a b y end"))))
+  (testing "#_ #_ discards everything in begin/end body"
+    (is (= '[(f)] (r/read-beme-string "f begin #_ #_ a b end")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: discard-sentinel must not leak into :meta or :tagged-literal.

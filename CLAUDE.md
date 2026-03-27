@@ -63,6 +63,7 @@ The pipeline has three stages (composed by `beme.alpha.pipeline`):
 ### Key namespaces
 
 - `beme.alpha.errors` (.cljc) — Error infrastructure: `beme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Used by tokenizer, grouper, reader, and REPL. Portable.
+- `beme.alpha.forms` (.cljc) — Shared form-level predicates and constructors. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding). Portable.
 - `beme.alpha.scan.source` (.cljc) — Source-position utilities shared across pipeline stages. `line-col->offset` (the shared definition of how (line, col) maps to character offset — tokenizer and grouper must agree for the pipeline to be correct). Portable.
 - `beme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for opaque regions. Portable.
 - `beme.alpha.scan.grouper` (.cljc) — Token grouping: collapses opaque-region markers + balanced delimiters into single composite `-raw` tokens. Operates on already-tokenized input where bracket matching is trivial. Portable.
@@ -81,7 +82,7 @@ The pipeline has three stages (composed by `beme.alpha.pipeline`):
 
 | Tier | Modules | Platforms |
 |------|---------|-----------|
-| Core translation | tokenizer, grouper, reader, resolve, printer, pprint, pipeline, core, errors, source | JVM, Babashka, ClojureScript |
+| Core translation | tokenizer, grouper, reader, resolve, printer, pprint, pipeline, core, errors, forms, source | JVM, Babashka, ClojureScript |
 | Runtime | repl, run | JVM, Babashka (CLJS possible with injected eval) |
 | Test infra | test-runner, dogfood-test | JVM only |
 

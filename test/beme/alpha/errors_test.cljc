@@ -148,3 +148,17 @@
     (let [e (ex-info "error" {:hint "Try this instead"})
           result (errors/format-error e)]
       (is (re-find #"Hint: Try this instead" result)))))
+
+(deftest format-error-crlf-line-endings
+  (testing "CRLF source displays correct context line and caret"
+    (let [e (ex-info "bad token" {:line 3 :col 5})
+          source "line one\r\nline two\r\n    bad-token here"
+          result (errors/format-error e source)]
+      (is (re-find #"bad token" result))
+      (is (re-find #"3 \|" result) "line 3 shown in gutter")
+      (is (re-find #"bad-token here" result) "correct context line extracted")))
+  (testing "CRLF source — line 1 error"
+    (let [e (ex-info "error" {:line 1 :col 1})
+          source "first\r\nsecond\r\nthird"
+          result (errors/format-error e source)]
+      (is (re-find #"first" result)))))

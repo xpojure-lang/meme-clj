@@ -1,6 +1,7 @@
 (ns beme.alpha.emit.printer
   "beme printer: Clojure forms → beme text."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [beme.alpha.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
 ;; Forward declaration
@@ -103,14 +104,9 @@
     ;; boolean
     (boolean? form) (str form)
 
-    ;; opaque read-string forms: (clojure.core/read-string "::foo") → ::foo
-    ;; Only JVM/Babashka produces these — CLJS errors on unresolved :: keywords
-    (and (seq? form)
-         (= 2 (count form))
-         (= 'clojure.core/read-string (first form))
-         (let [s (second form)]
-           (and (string? s) (str/starts-with? s "::"))))
-    (second form)
+    ;; Deferred auto-resolve keywords: (clojure.core/read-string "::foo") → ::foo
+    (forms/deferred-auto-keyword? form)
+    (forms/deferred-auto-keyword-raw form)
 
     ;; empty list — must print as quoted to preserve identity (bare () is invalid beme)
     (and (seq? form) (empty? form))
@@ -156,10 +152,14 @@
             ;; (number, string, boolean, nil, or list). beme has no
             ;; syntax for bare lists with non-callable heads — (1 2 3)
             ;; cannot be written without quote or list(). This is an
-            ;; inherent limitation. Fall back to Clojure S-expression
-            ;; via pr-str rather than emitting broken beme like 1(2 3).
+            ;; inherent limitation of M-expression syntax.
             :else
-            (pr-str form)))
+            (throw (ex-info
+                     (str "Cannot print quoted list in beme — contains sublists with "
+                          "non-callable heads (number, string, boolean, nil, or list). "
+                          "beme's Rule 1 requires list heads to be symbols, keywords, "
+                          "vectors, sets, or maps. Form: " (pr-str form))
+                     {:form form}))))
 
         ;; #'var
         (= head 'var) (str "#'" (print-form (second form)))

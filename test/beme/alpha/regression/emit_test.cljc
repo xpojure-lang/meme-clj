@@ -88,26 +88,22 @@
           printed (p/print-form form)]
       (is (= "'(1 2 3)" printed))
       (is (= form (first (r/read-beme-string printed))))))
-  (testing "number-headed sublist falls back to pr-str, not broken 1(2 3)"
-    (let [form (list 'quote (list (list 1 2 3)))
-          printed (p/print-form form)]
-      (is (not (str/includes? printed "1(2 3)"))
-          "must not emit broken beme syntax")))
-  (testing "string-headed sublist falls back to pr-str"
-    (let [form (list 'quote (list (list "hello" 1)))
-          printed (p/print-form form)]
-      (is (not (str/includes? printed "\"hello\"("))
-          "must not emit broken beme syntax")))
-  (testing "nil-headed sublist falls back to pr-str"
-    (let [form (list 'quote (list (list nil 1)))
-          printed (p/print-form form)]
-      (is (not (str/includes? printed "nil("))
-          "must not emit broken beme syntax")))
-  (testing "mixed: safe elements + non-callable sublist falls back"
-    (let [form (list 'quote (list 'x (list 1 2) 'y))
-          printed (p/print-form form)]
-      (is (not (str/includes? printed "1(2"))
-          "must not emit broken beme syntax"))))
+  (testing "number-headed sublist throws instead of silently emitting broken beme"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"non-callable heads"
+          (p/print-form (list 'quote (list (list 1 2 3)))))))
+  (testing "string-headed sublist throws"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"non-callable heads"
+          (p/print-form (list 'quote (list (list "hello" 1)))))))
+  (testing "nil-headed sublist throws"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"non-callable heads"
+          (p/print-form (list 'quote (list (list nil 1)))))))
+  (testing "mixed: safe elements + non-callable sublist throws"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"non-callable heads"
+          (p/print-form (list 'quote (list 'x (list 1 2) 'y)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted list shorthand checked only direct children.
@@ -117,12 +113,10 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest quoted-list-nested-non-callable-head
-  (testing "quoted list with nested non-callable head falls back to pr-str"
-    (let [form '(quote ((a (1 2)) b))
-          printed (p/print-form form)]
-      (is (not (str/starts-with? printed "'("))
-          "must not use '(...) shorthand — nested (1 2) has non-callable head")
-      (is (some? printed))))
+  (testing "quoted list with nested non-callable head throws"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"non-callable heads"
+          (p/print-form '(quote ((a (1 2)) b))))))
   (testing "quoted list with all-callable nested sublists uses shorthand"
     (let [form '(quote ((a (b c)) d))
           printed (p/print-form form)]

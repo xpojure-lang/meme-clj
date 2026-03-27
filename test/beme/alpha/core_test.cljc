@@ -197,6 +197,21 @@
   (testing "nil source throws instead of silently returning empty"
     (is (thrown? #?(:clj Exception :cljs :default) (core/run-pipeline nil)))))
 
+(deftest run-pipeline-empty-source
+  (testing "empty string produces empty vectors, not nil"
+    (let [ctx (core/run-pipeline "")]
+      (is (= [] (:forms ctx)))
+      (is (= [] (:tokens ctx)))
+      (is (= [] (:raw-tokens ctx)))
+      (is (vector? (:forms ctx)))
+      (is (vector? (:tokens ctx)))
+      (is (vector? (:raw-tokens ctx)))))
+  (testing "whitespace-only source produces empty vectors"
+    (let [ctx (core/run-pipeline "   \n  ")]
+      (is (= [] (:forms ctx)))
+      (is (= [] (:tokens ctx)))
+      (is (= [] (:raw-tokens ctx))))))
+
 (deftest run-pipeline-whitespace-test
   (testing "raw-tokens carry :ws from pipeline"
     (let [ctx (core/run-pipeline "  foo(x)")]

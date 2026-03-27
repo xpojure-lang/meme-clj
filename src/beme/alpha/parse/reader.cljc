@@ -529,8 +529,12 @@
              (recur forms)
              (recur (conj forms form)))))))))
 
-(defn read-beme-string
-  "Read beme source string and return a sequence of Clojure forms.
+(defn ^:deprecated read-beme-string
+  "Deprecated: use beme.alpha.pipeline/run or beme.alpha.core/beme->forms.
+   This function bypasses the pipeline, so callers miss whitespace metadata
+   and any future pipeline stages. Kept for backward compatibility.
+
+   Read beme source string and return a sequence of Clojure forms.
    opts map:
      :resolve-keyword — fn that resolves auto-resolve keyword strings (\"::foo\")
                         to keywords at read time. When absent, :: keywords are
