@@ -31,8 +31,8 @@
 (def ^:private ^:const max-depth 512)
 
 (defn- make-parser
-  ([tokens] {:tokens tokens :pos (volatile! 0) :depth (volatile! 0)})
-  ([tokens opts] {:tokens tokens :pos (volatile! 0) :depth (volatile! 0) :opts opts}))
+  ([tokens] {:tokens tokens :pos (volatile! 0) :depth (volatile! 0) :clj-mode (volatile! false)})
+  ([tokens opts] {:tokens tokens :pos (volatile! 0) :depth (volatile! 0) :opts opts :clj-mode (volatile! false)}))
 
 (defn- peof? [{:keys [tokens pos]}]
   (>= @pos (count tokens)))
@@ -288,12 +288,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- maybe-call
-  "If next token is ( or begin, parse call args and wrap — spacing is irrelevant."
+  "If next token is ( or begin, parse call args and wrap — spacing is irrelevant.
+   In clj-mode (inside quoted lists), never forms calls — returns head as-is."
   [p head]
-  (if (call-opener? (ppeek p))
-    (let [args (parse-call-args p)]
-      (apply list head args))
-    head))
+  (if @(:clj-mode p)
+    head
+    (if (call-opener? (ppeek p))
+      (let [args (parse-call-args p)]
+        (apply list head args))
+      head)))
 
 (defn- parse-form-base
   "Parse a single beme form."
@@ -343,9 +346,14 @@
           (resolve/resolve-regex (:value tok) (select-keys tok [:line :col])))
 
       :open-paren
-      (errors/beme-error
-        "Bare parentheses not allowed — every (...) needs a head: symbol, keyword, or vector. Write f(x) not (f x)."
-        (select-keys tok [:line :col]))
+      (if @(:clj-mode p)
+        ;; In clj-mode (inside quoted lists), bare parens create lists
+        (let [loc (select-keys tok [:line :col])]
+          (padvance! p)
+          (apply list (parse-forms-until p :close-paren loc)))
+        (errors/beme-error
+          "Bare parentheses not allowed — every (...) needs a head: symbol, keyword, or vector. Write f(x) not (f x)."
+          (select-keys tok [:line :col])))
 
       :open-bracket (maybe-call p (parse-vector p))
       :open-brace (maybe-call p (parse-map p))
@@ -381,10 +389,18 @@
       :quote
       (do (padvance! p)
           (if (tok-type? (ppeek p) :open-paren)
-            ;; '(a b c) — quoted list: allow bare parens after quote
-            (let [paren-loc (select-keys (ppeek p) [:line :col])]
+            ;; '(...) — Clojure S-expression syntax inside quoted lists.
+            ;; Activates clj-mode: bare parens create lists, symbols don't
+            ;; trigger Rule 1 calls. This matches Clojure's quote semantics.
+            (let [paren-loc (select-keys (ppeek p) [:line :col])
+                  prev-mode @(:clj-mode p)]
               (padvance! p)
-              (list 'quote (apply list (parse-forms-until p :close-paren paren-loc))))
+              (vreset! (:clj-mode p) true)
+              (let [forms (try
+                            (parse-forms-until p :close-paren paren-loc)
+                            (finally
+                              (vreset! (:clj-mode p) prev-mode)))]
+                (list 'quote (apply list forms))))
             (let [inner (parse-form p)]
               (when (discard-sentinel? inner)
                 (errors/beme-error "Quote target was discarded by #_ — nothing to quote"

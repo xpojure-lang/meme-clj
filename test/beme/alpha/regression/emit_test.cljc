@@ -76,34 +76,42 @@
 ;; Fix: '(...) sugar only when all inner sublists have callable heads.
 ;; ---------------------------------------------------------------------------
 
-(deftest quoted-list-with-non-callable-headed-sublists
-  (testing "symbol-headed sublists inside quote roundtrip via '(...) sugar"
+(deftest quoted-list-with-clj-syntax-inside
+  (testing "sublists inside quote print as S-expressions"
     (let [form '(quote (f (g x)))
           printed (p/print-form form)
           reread (first (r/read-beme-string printed))]
-      (is (= "'(f g(x))" printed))
+      (is (= "'(f (g x))" printed))
       (is (= form reread))))
   (testing "all-atoms quoted list still uses '(...) sugar"
     (let [form '(quote (1 2 3))
           printed (p/print-form form)]
       (is (= "'(1 2 3)" printed))
       (is (= form (first (r/read-beme-string printed))))))
-  (testing "number-headed sublist throws instead of silently emitting broken beme"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-          #"non-callable heads"
-          (p/print-form (list 'quote (list (list 1 2 3)))))))
-  (testing "string-headed sublist throws"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-          #"non-callable heads"
-          (p/print-form (list 'quote (list (list "hello" 1)))))))
-  (testing "nil-headed sublist throws"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-          #"non-callable heads"
-          (p/print-form (list 'quote (list (list nil 1)))))))
-  (testing "mixed: safe elements + non-callable sublist throws"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-          #"non-callable heads"
-          (p/print-form (list 'quote (list 'x (list 1 2) 'y)))))))
+  (testing "number-headed sublist now prints and roundtrips"
+    (let [form (list 'quote (list (list 1 2 3)))
+          printed (p/print-form form)
+          reread (first (r/read-beme-string printed))]
+      (is (= "'((1 2 3))" printed))
+      (is (= form reread))))
+  (testing "string-headed sublist roundtrips"
+    (let [form (list 'quote (list (list "hello" 1)))
+          printed (p/print-form form)
+          reread (first (r/read-beme-string printed))]
+      (is (= "'((\"hello\" 1))" printed))
+      (is (= form reread))))
+  (testing "nil-headed sublist roundtrips"
+    (let [form (list 'quote (list (list nil 1)))
+          printed (p/print-form form)
+          reread (first (r/read-beme-string printed))]
+      (is (= "'((nil 1))" printed))
+      (is (= form reread))))
+  (testing "mixed elements with non-callable sublist roundtrips"
+    (let [form (list 'quote (list 'x (list 1 2) 'y))
+          printed (p/print-form form)
+          reread (first (r/read-beme-string printed))]
+      (is (= "'(x (1 2) y)" printed))
+      (is (= form reread)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted list shorthand checked only direct children.
@@ -112,17 +120,18 @@
 ;; Fix: recursive check of all nested sublists.
 ;; ---------------------------------------------------------------------------
 
-(deftest quoted-list-nested-non-callable-head
-  (testing "quoted list with nested non-callable head throws"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-          #"non-callable heads"
-          (p/print-form '(quote ((a (1 2)) b))))))
-  (testing "quoted list with all-callable nested sublists uses shorthand"
+(deftest quoted-list-nested-sublists-roundtrip
+  (testing "nested non-callable head now prints and roundtrips"
+    (let [form '(quote ((a (1 2)) b))
+          printed (p/print-form form)
+          reread (first (r/read-beme-string printed))]
+      (is (= "'((a (1 2)) b)" printed))
+      (is (= form reread))))
+  (testing "all-callable nested sublists also roundtrip"
     (let [form '(quote ((a (b c)) d))
           printed (p/print-form form)]
-      (is (str/starts-with? printed "'(")
-          "all nested sublists have symbol heads — shorthand is safe")))
-  (testing "all-callable nested sublists roundtrip"
+      (is (str/starts-with? printed "'("))))
+  (testing "deeply nested sublists roundtrip"
     (let [form '(quote ((a (b c)) d))
           printed (p/print-form form)
           read-back (first (r/read-beme-string printed))]

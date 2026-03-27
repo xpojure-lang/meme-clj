@@ -190,13 +190,65 @@
 ;; Main dispatch
 ;; ---------------------------------------------------------------------------
 
+;; ---------------------------------------------------------------------------
+;; Clj-mode support (for content inside quoted lists)
+;; ---------------------------------------------------------------------------
+
+(defn- pp-clj-list
+  "Pretty-print a list in Clojure S-expression style (for inside quoted lists)."
+  [form col width]
+  (let [flat-str (binding [printer/*clj-mode* true] (flat form))]
+    (if (<= (+ col (count flat-str)) width)
+      flat-str
+      (let [inner-col (+ col indent-step)
+            inner-indent (indent-str inner-col)]
+        (binding [printer/*clj-mode* true]
+          (let [pp-elems (map #(pp % inner-col width) form)]
+            (str "(" (first pp-elems)
+                 (when (next pp-elems)
+                   (apply str (map #(str "\n" inner-indent %) (rest pp-elems))))
+                 ")")))))))
+
+(defn- pp-quoted-list
+  "Pretty-print (quote (list...)) with '(...) syntax and S-expression inside."
+  [form col width]
+  (let [inner (second form)]
+    (binding [printer/*clj-mode* true]
+      (let [flat-str (str "'(" (str/join " " (map flat inner)) ")")]
+        (if (<= (+ col (count flat-str)) width)
+          flat-str
+          (let [inner-col (+ col 2)
+                inner-indent (indent-str inner-col)
+                pp-elems (map #(pp % inner-col width) inner)]
+            (str "'(" (first pp-elems)
+                 (when (next pp-elems)
+                   (apply str (map #(str "\n" inner-indent %) (rest pp-elems))))
+                 ")")))))))
+
+;; ---------------------------------------------------------------------------
+;; Main dispatch
+;; ---------------------------------------------------------------------------
+
 (defn- pp
   "Pretty-print a form at the given column and width."
   [form col width]
   (let [comments (form-comments form)
         indent (indent-str col)
         formatted (cond
-                    ;; Calls — the main case
+                    ;; Quote with list inner — use '(...) with S-expression inside
+                    (and (call? form) (= 'quote (first form))
+                         (seq? (second form)))
+                    (pp-quoted-list form col width)
+
+                    ;; Lists in clj-mode — S-expression style
+                    (and (call? form) printer/*clj-mode*)
+                    (pp-clj-list form col width)
+
+                    ;; Empty list in clj-mode
+                    (and (seq? form) (empty? form) printer/*clj-mode*)
+                    "()"
+
+                    ;; Calls — the main case (beme mode)
                     (call? form)
                     (pp-call-smart form col width)
 
