@@ -94,22 +94,3 @@
   ([source] (pipeline/run source))
   ([source opts] (pipeline/run source opts)))
 
-;; ---------------------------------------------------------------------------
-;; Deprecated aliases (backward compatibility)
-;; ---------------------------------------------------------------------------
-
-(defn ^:deprecated read-beme-string
-  "Deprecated: use beme->forms."
-  ([s] (beme->forms s))
-  ([s opts] (beme->forms s opts)))
-
-(defn ^:deprecated print-beme-string
-  "Deprecated: use forms->beme."
-  [forms]
-  (forms->beme forms))
-
-(defn ^:deprecated clj-string->beme
-  "Deprecated: use clj->beme."
-  [clj-src]
-  #?(:clj (clj->beme clj-src)
-     :cljs (throw (ex-info "clj-string->beme is JVM only" {}))))

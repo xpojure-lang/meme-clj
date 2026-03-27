@@ -2,8 +2,6 @@
   "beme reader: recursive-descent parser.
    Transforms beme tokens into Clojure forms."
   (:require [clojure.string :as str]
-            [beme.alpha.scan.tokenizer :as tokenizer]
-            [beme.alpha.scan.grouper :as grouper]
             [beme.alpha.errors :as errors]
             [beme.alpha.parse.resolve :as resolve]))
 
@@ -13,7 +11,7 @@
 ;; - Use `discard-sentinel?` to check — never use `identical?` directly
 ;; - MUST be filtered by every caller of `parse-form` that collects forms:
 ;;   1. `parse-forms-until` — filters in its accumulation loop
-;;   2. `read-beme-string`  — filters in its top-level loop
+;;   2. `read-beme-string-from-tokens` — filters in its top-level loop
 ;;   3. Any new callsite of `parse-form` must handle this sentinel
 ;; - The `:open-anon-fn` handler rejects it (single-expression body cannot be discarded)
 (def ^:private discard-sentinel #?(:clj (Object.) :cljs #js {}))
@@ -530,7 +528,7 @@
 
 (defn read-beme-string-from-tokens
   "Parse pre-tokenized, pre-grouped tokens into Clojure forms.
-   Used by the pipeline; most callers should use read-beme-string instead."
+   Used by the pipeline; most callers should use beme.alpha.core/beme->forms instead."
   ([tokens] (read-beme-string-from-tokens tokens nil nil))
   ([tokens opts] (read-beme-string-from-tokens tokens opts nil))
   ([tokens opts _source]
@@ -544,19 +542,3 @@
            (if (discard-sentinel? form)
              (recur forms)
              (recur (conj forms form)))))))))
-
-(defn ^:deprecated read-beme-string
-  "Deprecated: use beme.alpha.pipeline/run or beme.alpha.core/beme->forms.
-   This function bypasses the pipeline, so callers miss whitespace metadata
-   and any future pipeline stages. Kept for backward compatibility.
-
-   Read beme source string and return a sequence of Clojure forms.
-   opts map:
-     :resolve-keyword — fn that resolves auto-resolve keyword strings (\"::foo\")
-                        to keywords at read time. When absent, :: keywords are
-                        deferred to eval time via (read-string \"::foo\")."
-  ([s] (read-beme-string s nil))
-  ([s opts]
-   (let [raw (tokenizer/tokenize s)
-         tokens (-> (tokenizer/attach-whitespace raw s) (grouper/group-tokens s))]
-     (read-beme-string-from-tokens tokens opts s))))

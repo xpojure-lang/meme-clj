@@ -1,6 +1,6 @@
 (ns beme.alpha.test-runner
   "Run .beme tests: eval-based and fixture-based."
-  (:require [beme.alpha.parse.reader :as reader]
+  (:require [beme.alpha.core :as core]
             [beme.alpha.runtime.run :as run]
             [beme.alpha.errors :as errors]
             [clojure.edn :as edn]
@@ -102,7 +102,7 @@
                             (let [beme-src (slurp (str f))]
                               (try
                                 (let [edn-src (slurp (str edn-file))
-                                      actual (reader/read-beme-string beme-src)
+                                      actual (core/beme->forms beme-src)
                                       ;; Convention: .edn fixture files contain exactly one top-level
                                       ;; vector wrapping all expected forms. edn/read-string reads only
                                       ;; the first form, so multiple top-level forms would be silently

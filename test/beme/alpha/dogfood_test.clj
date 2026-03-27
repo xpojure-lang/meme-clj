@@ -4,7 +4,7 @@
    - Per-form roundtrip with precise failure accounting
    - clj-kondo var-definition comparison for semantic equivalence"
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.emit.printer :as p]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -42,7 +42,7 @@
   [form]
   (try
     (let [beme-text (p/print-form form)
-          forms2 (r/read-beme-string beme-text)]
+          forms2 (core/beme->forms beme-text)]
       {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
     (catch Exception e
       {:error (.getMessage e)})))
@@ -155,7 +155,7 @@
   [path]
   (let [forms (read-clj-forms path)
         beme-text (p/print-beme-string forms)
-        roundtripped (r/read-beme-string beme-text)
+        roundtripped (core/beme->forms beme-text)
         tmp (java.io.File/createTempFile "dogfood" ".clj")]
     (spit tmp (str/join "\n\n" (map pr-str roundtripped)))
     tmp))

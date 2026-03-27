@@ -285,17 +285,17 @@
                                (let [name (read-symbol-str sc)]
                                  (conj! tokens (tok-at sc :number (str "##" name) loc))
                                  (recur)))
-                ;; B8: # followed by digit — clear error instead of empty tagged literal
+                ;; B8/B9: # followed by non-tag char — clear error instead of empty tagged literal
                 :else (if (nil? nxt)
                         (do (sadvance! sc)
                             (errors/beme-error "Unexpected # at end of input — expected a dispatch form like #{}, #\"\", #', #_, or a tagged literal" loc))
-                        (if (digit? nxt)
-                          (do (sadvance! sc)
-                              (errors/beme-error (str "Invalid dispatch: #" nxt " — # must be followed by {, \", ', _, ?, :, or a tag name") loc))
+                        (if (symbol-start? nxt)
                           (do (sadvance! sc)
                               (let [tag (read-symbol-str sc)]
                                 (conj! tokens (tok-at sc :tagged-literal (str "#" tag) loc))
-                                (recur)))))))
+                                (recur)))
+                          (do (sadvance! sc)
+                              (errors/beme-error (str "Invalid dispatch: #" nxt " — # must be followed by {, \", ', _, ?, :, or a tag name") loc))))))
 
             (= ch \@) (do (sadvance! sc) (conj! tokens (tok-at sc :deref "@" loc)) (recur))
             (= ch \^) (do (sadvance! sc) (conj! tokens (tok-at sc :meta "^" loc)) (recur))

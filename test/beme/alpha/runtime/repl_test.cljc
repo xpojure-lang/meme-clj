@@ -2,7 +2,7 @@
   "Tests for beme.alpha.runtime.repl input-state logic and read-input multi-line accumulation.
    input-state determines when the REPL has received complete, incomplete, or invalid input."
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as reader]
+            [beme.alpha.core :as core]
             [beme.alpha.runtime.repl]))
 
 ;; Access private fns via var on JVM/Babashka.
@@ -66,7 +66,7 @@
 (deftest incomplete-errors-carry-ex-data-key
   (testing "EOF errors have :incomplete true in ex-data"
     (doseq [input ["+(1 2" "[1 2 3" "{:a 1" "\"unterminated"]]
-      (let [e (try (reader/read-beme-string input)
+      (let [e (try (core/beme->forms input)
                    nil
                    (catch Exception e e))]
         (is (some? e) (str "expected error for: " input))
@@ -74,7 +74,7 @@
             (str "expected :incomplete in ex-data for: " input)))))
   (testing "non-EOF errors do NOT have :incomplete in ex-data"
     (doseq [input [")" "~x"]]
-      (let [e (try (reader/read-beme-string input)
+      (let [e (try (core/beme->forms input)
                    nil
                    (catch Exception e e))]
         (is (some? e) (str "expected error for: " input))

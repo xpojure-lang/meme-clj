@@ -1,7 +1,7 @@
 (ns beme.alpha.emit.pprint-test
   (:require [clojure.test :refer [deftest is testing]]
             [beme.alpha.emit.pprint :as pprint]
-            [beme.alpha.parse.reader :as r]))
+            [beme.alpha.core :as core]))
 
 ;; ---------------------------------------------------------------------------
 ;; Flat output — forms that fit within width
@@ -154,7 +154,7 @@
            ["fn"          '(fn [x y] (+ x y))]]]
     (testing (str label " pprint roundtrip")
       (let [pp (pprint/pprint-form form {:width 40})
-            re-parsed (r/read-beme-string pp)]
+            re-parsed (core/beme->forms pp)]
         (is (= [form] re-parsed)
             (str label " failed:\n" pp))))))
 
@@ -165,7 +165,7 @@
                                  (if (even? item) (* item 2) item))]
                     (reduce + 0 result)))
           pp (pprint/pprint-form form {:width 40})
-          re-parsed (r/read-beme-string pp)]
+          re-parsed (core/beme->forms pp)]
       (is (= [form] re-parsed))
       (is (re-find #"begin" pp) "should use begin/end at this width"))))
 
@@ -173,7 +173,7 @@
   (testing "pprint-forms output re-parses to same forms"
     (let [forms ['(ns my.app) '(def x 42) '(defn f [x] (+ x 1))]
           pp (pprint/pprint-forms forms {:width 40})
-          re-parsed (r/read-beme-string pp)]
+          re-parsed (core/beme->forms pp)]
       (is (= forms re-parsed)))))
 
 (deftest pprint-exact-indentation

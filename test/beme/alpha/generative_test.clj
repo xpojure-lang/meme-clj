@@ -12,7 +12,7 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.emit.printer :as p]))
 
 ;; ---------------------------------------------------------------------------
@@ -202,7 +202,7 @@
 (defn roundtrip-ok? [form]
   (try
     (let [printed (p/print-beme-string [form])
-          read-back (r/read-beme-string printed)]
+          read-back (core/beme->forms printed)]
       (= [form] read-back))
     (catch Exception e
       (println "Roundtrip failed for form:" (pr-str form))
@@ -256,7 +256,7 @@
                                 sym gen-simple-symbol]
                          (with-meta sym {kw true}))]
     (let [printed (p/print-beme-string [form])
-          read-back (first (r/read-beme-string printed))]
+          read-back (first (core/beme->forms printed))]
       (and (= form read-back)
            (= (meta form) (dissoc (meta read-back) :ws))))))
 
@@ -289,7 +289,7 @@
   (prop/for-all [form gen-form]
     (try
       (let [printed (p/print-beme-string [form])]
-        (r/read-beme-string printed)
+        (core/beme->forms printed)
         true)
       (catch Exception _ false))))
 
@@ -304,8 +304,8 @@
       (let [;; Print form normally, then print with #_ discard before it
             printed (p/print-beme-string [form])
             discard-printed (str "#_" (p/print-beme-string [discard-form]) " " printed)
-            read-normal (r/read-beme-string printed)
-            read-discard (r/read-beme-string discard-printed)]
+            read-normal (core/beme->forms printed)
+            read-discard (core/beme->forms discard-printed)]
         (= read-normal read-discard))
       (catch Exception _ false))))
 
@@ -324,7 +324,7 @@
 (defspec prop-syntax-quote-parses 200
   (prop/for-all [beme-str gen-syntax-quote-beme]
     (try
-      (r/read-beme-string beme-str)
+      (core/beme->forms beme-str)
       true
       (catch Exception _ false))))
 
@@ -339,7 +339,7 @@
 (defspec prop-syntax-quote-with-unquote-parses 200
   (prop/for-all [beme-str gen-syntax-quote-with-unquote]
     (try
-      (r/read-beme-string beme-str)
+      (core/beme->forms beme-str)
       true
       (catch Exception _ false))))
 
@@ -360,7 +360,7 @@
   (prop/for-all [form gen-anon-fn-form]
     (try
       (let [printed (p/print-form form)
-            read-back (first (r/read-beme-string printed))]
+            read-back (first (core/beme->forms printed))]
         (= form read-back))
       (catch Exception e
         (println "Anon fn roundtrip failed for:" (pr-str form))

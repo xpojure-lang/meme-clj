@@ -2,7 +2,7 @@
   "Parser tests for error handling: error cases, rejected forms,
    error messages with source locations, and CLJS-specific errors."
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.scan.tokenizer :as tokenizer]
             [beme.alpha.scan.grouper :as grouper]))
 
@@ -15,20 +15,20 @@
 
 (deftest parse-unterminated-string
   (is (thrown? #?(:clj Exception :cljs js/Error)
-              (r/read-beme-string "\"unterminated"))))
+              (core/beme->forms "\"unterminated"))))
 
 (deftest parse-mismatched-paren
   (is (thrown? #?(:clj Exception :cljs js/Error)
-              (r/read-beme-string "foo(bar"))))
+              (core/beme->forms "foo(bar"))))
 
 (deftest parse-unexpected-close-paren
   (is (thrown? #?(:clj Exception :cljs js/Error)
-              (r/read-beme-string ")"))))
+              (core/beme->forms ")"))))
 
 (deftest parse-odd-count-map
   (is (thrown? #?(:clj Exception :cljs js/Error)
-              (r/read-beme-string "{:a 1 :b}")))
-  (let [e (try (r/read-beme-string "{:a 1 :b}")
+              (core/beme->forms "{:a 1 :b}")))
+  (let [e (try (core/beme->forms "{:a 1 :b}")
                nil
                (catch #?(:clj Exception :cljs js/Error) e e))]
     (is (some? (:line (ex-data e))))
@@ -37,13 +37,13 @@
 (deftest parse-mismatched-bracket-types
   (testing "closing paren where bracket expected"
     (is (thrown? #?(:clj Exception :cljs js/Error)
-                (r/read-beme-string "[1 2)"))))
+                (core/beme->forms "[1 2)"))))
   (testing "closing bracket where brace expected"
     (is (thrown? #?(:clj Exception :cljs js/Error)
-                (r/read-beme-string "{:a 1]"))))
+                (core/beme->forms "{:a 1]"))))
   (testing "closing bracket where paren expected in call"
     (is (thrown? #?(:clj Exception :cljs js/Error)
-                (r/read-beme-string "foo(1 2]")))))
+                (core/beme->forms "foo(1 2]")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Syntax-quote is opaque passthrough (JVM), rejected on CLJS.
@@ -53,19 +53,19 @@
 #?(:clj
 (deftest parse-syntax-quote-passthrough
   (testing "`foo passes through to Clojure's reader"
-    (is (some? (first (r/read-beme-string "`foo")))))
+    (is (some? (first (core/beme->forms "`foo")))))
   (testing "`(if test then else) passes through"
-    (is (some? (first (r/read-beme-string "`(if test then else)")))))))
+    (is (some? (first (core/beme->forms "`(if test then else)")))))))
 
 #?(:cljs
 (deftest parse-syntax-quote-rejected-cljs
-  (is (thrown? js/Error (r/read-beme-string "`foo")))))
+  (is (thrown? js/Error (core/beme->forms "`foo")))))
 
 (deftest parse-unquote-outside-syntax-quote
-  (is (thrown? #?(:clj Exception :cljs js/Error) (r/read-beme-string "~x"))))
+  (is (thrown? #?(:clj Exception :cljs js/Error) (core/beme->forms "~x"))))
 
 (deftest parse-unquote-splicing-outside-syntax-quote
-  (is (thrown? #?(:clj Exception :cljs js/Error) (r/read-beme-string "~@xs"))))
+  (is (thrown? #?(:clj Exception :cljs js/Error) (core/beme->forms "~@xs"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Error messages include source location and are human-readable
@@ -73,27 +73,27 @@
 
 (deftest error-messages-include-location
   (testing "unterminated string includes location"
-    (let [e (try (r/read-beme-string "\"unclosed")
+    (let [e (try (core/beme->forms "\"unclosed")
                  nil
                  (catch #?(:clj Exception :cljs js/Error) e e))]
       (is (some? e))
       (is (some? (:line (ex-data e))))
       (is (some? (:col (ex-data e))))))
   (testing "unmatched paren includes error"
-    (let [e (try (r/read-beme-string "foo(1 2")
+    (let [e (try (core/beme->forms "foo(1 2")
                  nil
                  (catch #?(:clj Exception :cljs js/Error) e e))]
       (is (some? e))
       (is (re-find #"(?i)eof|expected" (ex-message e)))))
   (testing "unexpected token includes location"
-    (let [e (try (r/read-beme-string ")")
+    (let [e (try (core/beme->forms ")")
                  nil
                  (catch #?(:clj Exception :cljs js/Error) e e))]
       (is (some? e))
       (is (= 1 (:line (ex-data e))))
       (is (= 1 (:col (ex-data e))))))
   (testing "error on second line has location"
-    (let [e (try (r/read-beme-string "foo()\n\"unclosed")
+    (let [e (try (core/beme->forms "foo()\n\"unclosed")
                  nil
                  (catch #?(:clj Exception :cljs js/Error) e e))]
       (is (some? e))
@@ -111,10 +111,10 @@
       (is (= 1 (count tokens)))
       (is (= :reader-cond-raw (:type (first tokens)))))
     (is (thrown-with-msg? js/Error #"Reader conditionals"
-                          (r/read-beme-string "#?(:clj 1 :cljs 2)"))))
+                          (core/beme->forms "#?(:clj 1 :cljs 2)"))))
   (testing "namespaced map gives beme-specific error on CLJS"
     (let [tokens (tokenize "#:user{:name \"x\"}")]
       (is (= 1 (count tokens)))
       (is (= :namespaced-map-raw (:type (first tokens)))))
     (is (thrown-with-msg? js/Error #"Namespaced maps"
-                          (r/read-beme-string "#:user{:name \"x\"}"))))))
+                          (core/beme->forms "#:user{:name \"x\"}"))))))

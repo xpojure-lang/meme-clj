@@ -144,29 +144,9 @@ Run the full pipeline: source → scan → group → parse. Returns a context ma
 ;    :forms [(foo 1 2)]}
 ```
 
-### Deprecated aliases
-
-- `read-beme-string` — use `beme->forms`
-- `print-beme-string` — use `forms->beme`
-- `clj-string->beme` — use `clj->beme`
-
-
 ## beme.alpha.parse.reader
 
 Low-level reader API.
-
-### read-beme-string
-
-```clojure
-(beme.alpha.parse.reader/read-beme-string s)
-(beme.alpha.parse.reader/read-beme-string s opts)
-```
-
-Read beme source string and return a vector of Clojure forms.
-The underlying implementation; `beme.alpha.core/beme->forms` delegates to this.
-
-Options:
-- `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time.
 
 ### read-beme-string-from-tokens
 
@@ -175,10 +155,10 @@ Options:
 (beme.alpha.parse.reader/read-beme-string-from-tokens tokens opts source)
 ```
 
-Parse pre-tokenized, pre-grouped tokens into Clojure forms. Used by `beme.alpha.pipeline/parse`. Most callers should use `read-beme-string` instead.
+Parse pre-tokenized, pre-grouped tokens into Clojure forms. Used by `beme.alpha.pipeline/parse`. Most callers should use `beme.alpha.core/beme->forms` instead.
 
 - `tokens` — a grouped token vector (output of `beme.alpha.scan.grouper/group-tokens`)
-- `opts` — same options as `read-beme-string` (e.g., `:resolve-keyword`)
+- `opts` — same options as `beme->forms` (e.g., `:resolve-keyword`)
 - `source` — original source text for error context (optional)
 
 

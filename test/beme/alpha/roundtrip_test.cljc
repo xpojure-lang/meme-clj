@@ -1,15 +1,15 @@
 (ns beme.alpha.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.emit.printer :as p]))
 
 (defn- roundtrip-forms
   "Parse mm string, get forms. Then print forms back to mm and re-parse.
    The re-parsed forms should equal the original forms."
   [mm-src]
-  (let [forms1 (r/read-beme-string mm-src)
+  (let [forms1 (core/beme->forms mm-src)
         mm-text (p/print-beme-string forms1)
-        forms2 (r/read-beme-string mm-text)]
+        forms2 (core/beme->forms mm-text)]
     [forms1 forms2 mm-text]))
 
 ;; ---------------------------------------------------------------------------
@@ -202,17 +202,17 @@
 
 (deftest roundtrip-named-chars
   (testing "\\newline roundtrips"
-    (is (= [\newline] (r/read-beme-string (p/print-beme-string [\newline])))))
+    (is (= [\newline] (core/beme->forms (p/print-beme-string [\newline])))))
   (testing "\\space roundtrips"
-    (is (= [\space] (r/read-beme-string (p/print-beme-string [\space])))))
+    (is (= [\space] (core/beme->forms (p/print-beme-string [\space])))))
   (testing "\\tab roundtrips"
-    (is (= [\tab] (r/read-beme-string (p/print-beme-string [\tab])))))
+    (is (= [\tab] (core/beme->forms (p/print-beme-string [\tab])))))
   (testing "\\return roundtrips"
-    (is (= [\return] (r/read-beme-string (p/print-beme-string [\return])))))
+    (is (= [\return] (core/beme->forms (p/print-beme-string [\return])))))
   (testing "\\backspace roundtrips"
-    (is (= [\backspace] (r/read-beme-string (p/print-beme-string [\backspace])))))
+    (is (= [\backspace] (core/beme->forms (p/print-beme-string [\backspace])))))
   (testing "\\formfeed roundtrips"
-    (is (= [\formfeed] (r/read-beme-string (p/print-beme-string [\formfeed]))))))
+    (is (= [\formfeed] (core/beme->forms (p/print-beme-string [\formfeed]))))))
 
 (deftest roundtrip-regex
   ;; Regex patterns don't support equality, so compare by pattern string

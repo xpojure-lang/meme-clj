@@ -3,7 +3,7 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.emit.printer :as p]
             [beme.alpha.emit.pprint :as pprint]))
 
@@ -17,13 +17,13 @@
   (testing "'(1 2 3) roundtrips"
     (let [form '(quote (1 2 3))
           printed (p/print-form form)
-          read-back (first (r/read-beme-string printed))]
+          read-back (first (core/beme->forms printed))]
       (is (= "'(1 2 3)" printed))
       (is (= form read-back))))
   (testing "'(a b c) roundtrips"
     (let [form '(quote (a b c))
           printed (p/print-form form)
-          read-back (first (r/read-beme-string printed))]
+          read-back (first (core/beme->forms printed))]
       (is (= "'(a b c)" printed))
       (is (= form read-back))))
   (testing "quoted empty list"
@@ -38,7 +38,7 @@
   (testing "empty list prints as '()"
     (is (= "'()" (p/print-form ()))))
   (testing "printed empty list re-reads correctly"
-    (is (= '(quote ()) (first (r/read-beme-string "'()"))))))
+    (is (= '(quote ()) (first (core/beme->forms "'()"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; B4: #() printer drops surplus % params.
@@ -51,7 +51,7 @@
           printed (p/print-form form)]
       (is (not (str/starts-with? printed "#("))
           "surplus params must not emit #() shorthand")
-      (is (= form (first (r/read-beme-string printed)))
+      (is (= form (first (core/beme->forms printed)))
           "roundtrip must preserve arity")))
   (testing "fn with matching % params still uses #() shorthand"
     (let [form '(fn [%1 %2] (+ %1 %2))
@@ -63,7 +63,7 @@
           printed (p/print-form form)]
       (is (not (str/starts-with? printed "#("))
           "body references %1 but params is [] — #() would change arity")
-      (is (= form (first (r/read-beme-string printed)))
+      (is (= form (first (core/beme->forms printed)))
           "roundtrip must preserve zero arity")))
   (testing "zero-param fn without %N in body still uses #() shorthand"
     (let [form '(fn [] (rand))
@@ -80,36 +80,36 @@
   (testing "sublists inside quote print as S-expressions"
     (let [form '(quote (f (g x)))
           printed (p/print-form form)
-          reread (first (r/read-beme-string printed))]
+          reread (first (core/beme->forms printed))]
       (is (= "'(f (g x))" printed))
       (is (= form reread))))
   (testing "all-atoms quoted list still uses '(...) sugar"
     (let [form '(quote (1 2 3))
           printed (p/print-form form)]
       (is (= "'(1 2 3)" printed))
-      (is (= form (first (r/read-beme-string printed))))))
+      (is (= form (first (core/beme->forms printed))))))
   (testing "number-headed sublist now prints and roundtrips"
     (let [form (list 'quote (list (list 1 2 3)))
           printed (p/print-form form)
-          reread (first (r/read-beme-string printed))]
+          reread (first (core/beme->forms printed))]
       (is (= "'((1 2 3))" printed))
       (is (= form reread))))
   (testing "string-headed sublist roundtrips"
     (let [form (list 'quote (list (list "hello" 1)))
           printed (p/print-form form)
-          reread (first (r/read-beme-string printed))]
+          reread (first (core/beme->forms printed))]
       (is (= "'((\"hello\" 1))" printed))
       (is (= form reread))))
   (testing "nil-headed sublist roundtrips"
     (let [form (list 'quote (list (list nil 1)))
           printed (p/print-form form)
-          reread (first (r/read-beme-string printed))]
+          reread (first (core/beme->forms printed))]
       (is (= "'((nil 1))" printed))
       (is (= form reread))))
   (testing "mixed elements with non-callable sublist roundtrips"
     (let [form (list 'quote (list 'x (list 1 2) 'y))
           printed (p/print-form form)
-          reread (first (r/read-beme-string printed))]
+          reread (first (core/beme->forms printed))]
       (is (= "'(x (1 2) y)" printed))
       (is (= form reread)))))
 
@@ -124,7 +124,7 @@
   (testing "nested non-callable head now prints and roundtrips"
     (let [form '(quote ((a (1 2)) b))
           printed (p/print-form form)
-          reread (first (r/read-beme-string printed))]
+          reread (first (core/beme->forms printed))]
       (is (= "'((a (1 2)) b)" printed))
       (is (= form reread))))
   (testing "all-callable nested sublists also roundtrip"
@@ -134,7 +134,7 @@
   (testing "deeply nested sublists roundtrip"
     (let [form '(quote ((a (b c)) d))
           printed (p/print-form form)
-          read-back (first (r/read-beme-string printed))]
+          read-back (first (core/beme->forms printed))]
       (is (= form read-back)))))
 
 ;; ---------------------------------------------------------------------------

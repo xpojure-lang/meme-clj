@@ -2,7 +2,7 @@
   "Integration tests: complex, multi-feature beme examples.
    Unit-level parser tests live in reader_test.cljc."
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as r]))
+            [beme.alpha.core :as core]))
 
 ;; ---------------------------------------------------------------------------
 ;; Full integration example — everything is a call
@@ -34,7 +34,7 @@ defn(summarize [accounts]
     processed))")
 
 (deftest full-readme-example-parses
-  (let [forms (r/read-beme-string full-example)]
+  (let [forms (core/beme->forms full-example)]
     ;; Should produce 3 top-level forms: ns, defn, defn
     (is (= 3 (count forms)))
 

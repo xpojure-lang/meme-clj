@@ -2,7 +2,7 @@
   "Scar tissue: tokenizer and grouper regression tests.
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.emit.printer :as p]
             [beme.alpha.scan.tokenizer :as tokenizer]
             [beme.alpha.scan.grouper :as grouper]))
@@ -17,11 +17,11 @@
 #?(:clj
 (deftest syntax-quote-passthrough
   (testing "backtick on symbol produces a form"
-    (is (seq? (first (r/read-beme-string "`foo")))))
+    (is (seq? (first (core/beme->forms "`foo")))))
   (testing "backtick on list produces a seq"
-    (is (seq? (first (r/read-beme-string "`(a b c)")))))
+    (is (seq? (first (core/beme->forms "`(a b c)")))))
   (testing "backtick nested inside a call works"
-    (let [form (first (r/read-beme-string "foo(`bar)"))]
+    (let [form (first (core/beme->forms "foo(`bar)"))]
       (is (seq? form))
       (is (= 'foo (first form)))))))
 
@@ -32,21 +32,21 @@
 
 (deftest signed-number-vs-operator
   (testing "-1 standalone is negative number"
-    (is (= [-1] (r/read-beme-string "-1"))))
+    (is (= [-1] (core/beme->forms "-1"))))
   (testing "-(1 2 3) is a call to - with three args"
-    (is (= '[(- 1 2 3)] (r/read-beme-string "-(1 2 3)"))))
+    (is (= '[(- 1 2 3)] (core/beme->forms "-(1 2 3)"))))
   (testing "+1 standalone is positive number"
-    (is (= [1] (r/read-beme-string "+1"))))
+    (is (= [1] (core/beme->forms "+1"))))
   (testing "+(1 2) is a call to +"
-    (is (= '[(+ 1 2)] (r/read-beme-string "+(1 2)"))))
+    (is (= '[(+ 1 2)] (core/beme->forms "+(1 2)"))))
   (testing "-1 inside a call is negative number"
-    (is (= '[(foo -1 2)] (r/read-beme-string "foo(-1 2)"))))
+    (is (= '[(foo -1 2)] (core/beme->forms "foo(-1 2)"))))
   (testing "- as argument (with space) is symbol"
-    (is (= '[(map - [1 2 3])] (r/read-beme-string "map(- [1 2 3])"))))
+    (is (= '[(map - [1 2 3])] (core/beme->forms "map(- [1 2 3])"))))
   (testing "-> is a symbol, not sign + >"
-    (is (= '-> (first (r/read-beme-string "->")))))
+    (is (= '-> (first (core/beme->forms "->")))))
   (testing "->> is a symbol, not sign + >>"
-    (is (= '->> (first (r/read-beme-string "->>"))))))
+    (is (= '->> (first (core/beme->forms "->>"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Comments inside opaque forms (#?, #:ns{}) must not confuse depth tracking.
@@ -94,8 +94,8 @@
       (is (= :namespaced-map-raw (:type (first tokens))))))
   #?(:clj
   (testing "#? with bracket char literals parses correctly on JVM"
-    (is (reader-conditional? (first (r/read-beme-string "#?(:clj \\) :cljs nil)"))))
-    (is (reader-conditional? (first (r/read-beme-string "#?(:clj \\( :cljs nil)")))))))
+    (is (reader-conditional? (first (core/beme->forms "#?(:clj \\) :cljs nil)"))))
+    (is (reader-conditional? (first (core/beme->forms "#?(:clj \\( :cljs nil)")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: `~(expr) produced truncated token and confusing "Bare parentheses"
@@ -105,10 +105,10 @@
 #?(:clj
 (deftest syntax-quote-unquote-forms
   (testing "`~(expr) parses as single form"
-    (let [form (first (r/read-beme-string "`~(foo bar)"))]
+    (let [form (first (core/beme->forms "`~(foo bar)"))]
       (is (some? form))))
   (testing "`~symbol still works"
-    (is (symbol? (first (r/read-beme-string "`~foo")))))
+    (is (symbol? (first (core/beme->forms "`~foo")))))
   (testing "`~(expr) tokenizes as single token"
     (let [tokens (tokenize "`~(foo bar)")]
       (is (= 1 (count tokens)))
@@ -126,7 +126,7 @@
   (testing "bare # at EOF gives clear error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unexpected #"
-                          (r/read-beme-string "#")))))
+                          (core/beme->forms "#")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: reader conditionals (#?, #?@) are opaque.
@@ -140,9 +140,9 @@
       (is (= :reader-cond-raw (:type (first tokens))))
       (is (= "#?()" (:value (first tokens))))))
   (testing "#?() empty — round-trips through read → print → re-read"
-    (let [forms1 (r/read-beme-string "#?()")
+    (let [forms1 (core/beme->forms "#?()")
           printed (p/print-beme-string forms1)
-          forms2 (r/read-beme-string printed)]
+          forms2 (core/beme->forms printed)]
       (is (= "#?()" printed))
       (is (= forms1 forms2))))
   (testing "#?(:clj x :cljs y) basic — pass through as single token"
@@ -150,14 +150,14 @@
       (is (= 1 (count tokens)))
       (is (= :reader-cond-raw (:type (first tokens))))))
   (testing "#?(:clj x :cljs y) basic — round-trips"
-    (let [forms1 (r/read-beme-string "#?(:clj x :cljs y)")
+    (let [forms1 (core/beme->forms "#?(:clj x :cljs y)")
           printed (p/print-beme-string forms1)
-          forms2 (r/read-beme-string printed)]
+          forms2 (core/beme->forms printed)]
       (is (= forms1 forms2))))
   (testing "#?@(:clj [1 2]) splice variant — round-trips"
-    (let [forms1 (r/read-beme-string "#?@(:clj [1 2] :cljs [3 4])")
+    (let [forms1 (core/beme->forms "#?@(:clj [1 2] :cljs [3 4])")
           printed (p/print-beme-string forms1)
-          forms2 (r/read-beme-string printed)]
+          forms2 (core/beme->forms printed)]
       (is (= forms1 forms2))))))
 
 ;; ---------------------------------------------------------------------------
@@ -169,13 +169,13 @@
 #?(:clj
 (deftest radix-numbers-high-bases
   (testing "36rZ — base-36 with letter beyond hex range"
-    (is (= 35 (first (r/read-beme-string "36rZ")))))
+    (is (= 35 (first (core/beme->forms "36rZ")))))
   (testing "16rFF — hex via radix notation"
-    (is (= 255 (first (r/read-beme-string "16rFF")))))
+    (is (= 255 (first (core/beme->forms "16rFF")))))
   (testing "2r1010 — binary"
-    (is (= 10 (first (r/read-beme-string "2r1010")))))
+    (is (= 10 (first (core/beme->forms "2r1010")))))
   (testing "36rHelloWorld — large base-36 number"
-    (is (= 1767707668033969 (first (r/read-beme-string "36rHelloWorld")))))))
+    (is (= 1767707668033969 (first (core/beme->forms "36rHelloWorld")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: backslash terminates symbol — foo\a is symbol + char literal.
@@ -192,7 +192,7 @@
       (is (= "\\a" (:value (second tokens))))))
   #?(:clj
   (testing "[foo\\a] reads as two-element vector"
-    (is (= '[[foo \a]] (r/read-beme-string "[foo\\a]"))))))
+    (is (= '[[foo \a]] (core/beme->forms "[foo\\a]"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; B2: syntax-quote + unquote + string literal.
@@ -207,7 +207,7 @@
       (is (= 1 (count tokens)))
       (is (= :syntax-quote-raw (:type (first tokens))))))
   (testing "`~\"foo\" reads successfully"
-    (is (some? (r/read-beme-string "`~\"foo\""))))))
+    (is (some? (core/beme->forms "`~\"foo\""))))))
 
 ;; ---------------------------------------------------------------------------
 ;; B3: \uXXXX and \oXXX char literals.
@@ -227,7 +227,7 @@
       (is (= "\\o101" (:value (first tokens))))))
   #?(:clj
   (testing "\\u0041 roundtrips to char A"
-    (is (= [\A] (r/read-beme-string "\\u0041"))))))
+    (is (= [\A] (core/beme->forms "\\u0041"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: \u00g1 tokenized as \u00 + g1 instead of erroring.
@@ -238,15 +238,15 @@
   (testing "\\u00g1 — non-hex digit errors at tokenizer level"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
           #"expected 4 hex digits"
-          (r/read-beme-string "\\u00g1"))))
+          (core/beme->forms "\\u00g1"))))
   (testing "\\uXYZW — non-hex immediately after \\u"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
           #"expected 4 hex digits"
-          (r/read-beme-string "\\uXYZW"))))
+          (core/beme->forms "\\uXYZW"))))
   (testing "\\og — no octal digits after \\o"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
           #"expected octal digits"
-          (r/read-beme-string "\\og"))))
+          (core/beme->forms "\\og"))))
   (testing "valid \\u0041 still works"
     (is (= 1 (count (tokenize "\\u0041"))))
     (is (= :char (:type (first (tokenize "\\u0041"))))))
@@ -261,7 +261,7 @@
 
 (deftest backslash-eof-incomplete
   (testing "bare \\ at EOF signals :incomplete for REPL continuation"
-    (let [ex (try (r/read-beme-string "\\")
+    (let [ex (try (core/beme->forms "\\")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (:incomplete (ex-data ex))))))
@@ -273,7 +273,7 @@
 
 (deftest backtick-eof-incomplete
   (testing "lone backtick signals :incomplete"
-    (let [ex (try (r/read-beme-string "`")
+    (let [ex (try (core/beme->forms "`")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (:incomplete (ex-data ex))))))
 
@@ -285,10 +285,26 @@
 (deftest hash-digit-error
   (testing "#3 throws clear error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid dispatch: #3"
-          (r/read-beme-string "#3"))))
+          (core/beme->forms "#3"))))
   (testing "#0 throws clear error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid dispatch: #0"
-          (r/read-beme-string "#0")))))
+          (core/beme->forms "#0")))))
+
+;; ---------------------------------------------------------------------------
+;; B9: # followed by non-symbol char (], ), ~, @, ^, \, ;, }, `).
+;; Bug: read-symbol-str returned "", producing :tagged-literal "#" with
+;; empty tag. Downstream errors were confusing (e.g. "Unexpected )" instead
+;; of "Invalid dispatch: #)").
+;; Fix: check symbol-start? before entering tagged-literal path.
+;; ---------------------------------------------------------------------------
+
+(deftest hash-non-symbol-char-error
+  (doseq [[input desc] [["#)" "#)"] ["#]" "#]"] ["#~" "#~"]
+                         ["#@" "#@"] ["#^" "#^"] ["#}" "#}"]
+                         ["#`" "#`"] ["#;" "#;"]]]
+    (testing (str desc " throws clear Invalid dispatch error")
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid dispatch"
+            (core/beme->forms input))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: #() inside opaque regions desynchronized the grouper's bracket depth
@@ -302,7 +318,7 @@
       (is (= :reader-cond-raw (:type (first tokens))))))
   #?(:clj
   (testing "#?(:clj #(inc %) :cljs identity) parses without error"
-    (is (some? (r/read-beme-string "#?(:clj #(inc %) :cljs identity)")))))
+    (is (some? (core/beme->forms "#?(:clj #(inc %) :cljs identity)")))))
   (testing "#?@(:clj [#(+ %1 %2)] :cljs [identity]) tokenizes as single token"
     (let [tokens (tokenize "#?@(:clj [#(+ %1 %2)] :cljs [identity])")]
       (is (= 1 (count tokens)))
@@ -315,7 +331,7 @@
       (is (= 1 (count tokens)))
       (is (= :syntax-quote-raw (:type (first tokens))))))
   (testing "`(#(inc %)) parses without error"
-    (is (some? (r/read-beme-string "`(#(inc %))"))))))
+    (is (some? (core/beme->forms "`(#(inc %))"))))))
 
 #?(:clj
 (deftest anon-fn-inside-namespaced-map
@@ -324,7 +340,7 @@
       (is (= 1 (count tokens)))
       (is (= :namespaced-map-raw (:type (first tokens))))))
   (testing "#:user{:f #(inc %)} parses without error"
-    (is (some? (r/read-beme-string "#:user{:f #(inc %)}"))))))
+    (is (some? (core/beme->forms "#:user{:f #(inc %)}"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: unclosed opaque forms returned :invalid instead of :incomplete.
@@ -333,34 +349,34 @@
 
 (deftest unclosed-opaque-forms-are-incomplete
   (testing "unclosed #?( is :incomplete for REPL continuation"
-    (let [e (try (r/read-beme-string "#?(")
+    (let [e (try (core/beme->forms "#?(")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
   (testing "unclosed #:ns{ is :incomplete"
-    (let [e (try (r/read-beme-string "#:ns{")
+    (let [e (try (core/beme->forms "#:ns{")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
   #?(:clj
   (testing "unclosed `( is :incomplete"
-    (let [e (try (r/read-beme-string "`(")
+    (let [e (try (core/beme->forms "`(")
                  nil
                  (catch Exception e e))]
       (is (some? e))
       (is (:incomplete (ex-data e))))))
   (testing "unclosed #?(:clj is :incomplete"
-    (let [e (try (r/read-beme-string "#?(:clj")
+    (let [e (try (core/beme->forms "#?(:clj")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
   (testing "complete opaque forms still work"
-    #?(:clj (is (some? (r/read-beme-string "#?(:clj 1)"))))
-    #?(:clj (is (some? (r/read-beme-string "#:ns{:a 1}"))))
-    #?(:clj (is (some? (r/read-beme-string "`(a b)"))))))
+    #?(:clj (is (some? (core/beme->forms "#?(:clj 1)"))))
+    #?(:clj (is (some? (core/beme->forms "#:ns{:a 1}"))))
+    #?(:clj (is (some? (core/beme->forms "`(a b)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: read-symbol-str allowed multiple slashes.
@@ -401,7 +417,7 @@
       (is (= "`\\newline" (:value (first tokens))))))
   #?(:clj
   (testing "`\\a parses without error on JVM"
-    (is (some? (r/read-beme-string "`\\a"))))))
+    (is (some? (core/beme->forms "`\\a"))))))
 
 (deftest syntax-quote-string-literal
   (testing "`\"foo\" tokenizes as single :syntax-quote-raw token"
@@ -411,7 +427,7 @@
       (is (= "`\"foo\"" (:value (first tokens))))))
   #?(:clj
   (testing "`\"foo\" parses without error on JVM"
-    (is (some? (r/read-beme-string "`\"foo\""))))))
+    (is (some? (core/beme->forms "`\"foo\""))))))
 
 (deftest syntax-quote-unquote-char-literal
   (testing "`~\\a tokenizes as single :syntax-quote-raw token"
@@ -424,7 +440,7 @@
       (is (= :syntax-quote-raw (:type (first tokens))))))
   #?(:clj
   (testing "`~\\a parses without error on JVM"
-    (is (some? (r/read-beme-string "`~\\a"))))))
+    (is (some? (core/beme->forms "`~\\a"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: ##Inf, ##-Inf, ##NaN silently misparsed as tagged literals.
@@ -461,20 +477,20 @@
 #?(:clj
 (deftest symbolic-value-parsing
   (testing "##Inf parses to positive infinity"
-    (is (= ##Inf (first (r/read-beme-string "##Inf")))))
+    (is (= ##Inf (first (core/beme->forms "##Inf")))))
   (testing "##-Inf parses to negative infinity"
-    (is (= ##-Inf (first (r/read-beme-string "##-Inf")))))
+    (is (= ##-Inf (first (core/beme->forms "##-Inf")))))
   (testing "##NaN parses to NaN"
-    (is (Double/isNaN (first (r/read-beme-string "##NaN")))))
+    (is (Double/isNaN (first (core/beme->forms "##NaN")))))
   (testing "##Inf roundtrips through print → re-read"
-    (let [forms (r/read-beme-string "##Inf")
+    (let [forms (core/beme->forms "##Inf")
           printed (p/print-beme-string forms)
-          re-read (r/read-beme-string printed)]
+          re-read (core/beme->forms printed)]
       (is (= "##Inf" printed))
       (is (= forms re-read))))
   (testing "##-Inf roundtrips"
-    (let [forms (r/read-beme-string "##-Inf")
+    (let [forms (core/beme->forms "##-Inf")
           printed (p/print-beme-string forms)]
       (is (= "##-Inf" printed))))
   (testing "##NaN prints as ##NaN"
-    (is (= "##NaN" (p/print-beme-string (r/read-beme-string "##NaN")))))))
+    (is (= "##NaN" (p/print-beme-string (core/beme->forms "##NaN")))))))

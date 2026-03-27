@@ -4,7 +4,7 @@
    the pipeline refactoring. If any of these break, the refactor changed
    observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
-            [beme.alpha.parse.reader :as r]
+            [beme.alpha.core :as core]
             [beme.alpha.scan.tokenizer :as tokenizer]
             [beme.alpha.scan.grouper :as grouper]))
 
@@ -24,7 +24,7 @@
   (mapv tok-summary (tokenize s)))
 
 (defn- forms-for [s]
-  (r/read-beme-string s))
+  (core/beme->forms s))
 
 ;; ---------------------------------------------------------------------------
 ;; Token snapshots — exact type/value/line/col for representative inputs

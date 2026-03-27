@@ -4,7 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [beme.alpha.errors]
-            [beme.alpha.parse.reader :as r]))
+            [beme.alpha.core :as core]))
 
 ;; ---------------------------------------------------------------------------
 ;; B5/B6: source-context nil/empty guards.
@@ -40,7 +40,7 @@
 #?(:clj
 (deftest read-string-errors-include-location
   (testing "malformed number includes location"
-    (let [e (try (r/read-beme-string "1/")
+    (let [e (try (core/beme->forms "1/")
                  nil
                  (catch Exception e e))]
       (is (some? e))
@@ -48,7 +48,7 @@
       (is (= 1 (:col (ex-data e))))
       (is (re-find #"Invalid number" (ex-message e)))))
   (testing "malformed regex includes location"
-    (let [e (try (r/read-beme-string "#\"[unclosed\"")
+    (let [e (try (core/beme->forms "#\"[unclosed\"")
                  nil
                  (catch Exception e e))]
       (is (some? e))
@@ -62,7 +62,7 @@
 #?(:clj
 (deftest opaque-form-errors-include-location
   (testing "malformed namespaced map has :line/:col in ex-data"
-    (let [ex (try (r/read-beme-string "#:ns{:a}")
+    (let [ex (try (core/beme->forms "#:ns{:a}")
                   (catch Exception e e))]
       (is (instance? clojure.lang.ExceptionInfo ex))
       (is (:line (ex-data ex)))
@@ -79,4 +79,4 @@
 (deftest tagged-literal-cljs-error
   (testing "#uuid on CLJS throws beme error, not ReferenceError"
     (is (thrown-with-msg? js/Error #"not supported in ClojureScript"
-          (r/read-beme-string "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))))))
+          (core/beme->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))))))

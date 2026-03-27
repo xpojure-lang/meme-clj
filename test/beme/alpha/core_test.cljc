@@ -89,23 +89,7 @@
                   {:resolve-keyword #(clojure.core/read-string %)})]
       (is (= [:user/foo] forms))))))
 
-;; ---------------------------------------------------------------------------
-;; Deprecated aliases (backward compatibility)
-;; ---------------------------------------------------------------------------
 
-(deftest read-beme-string-test
-  (testing "deprecated alias works"
-    (is (= '[(+ 1 2)] (core/read-beme-string "+(1 2)")))))
-
-(deftest print-beme-string-test
-  (testing "deprecated alias works"
-    (is (= "+(1 2)" (core/print-beme-string ['(+ 1 2)])))))
-
-#?(:clj
-(deftest clj-string->beme-test
-  (testing "deprecated alias works"
-    (is (= "defn(f [x] +(x 1))"
-           (core/clj-string->beme "(defn f [x] (+ x 1))"))))))
 
 #?(:clj
 (deftest clj->forms-empty
