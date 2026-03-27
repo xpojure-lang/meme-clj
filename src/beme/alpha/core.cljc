@@ -9,7 +9,6 @@
    Pipeline:
      beme.alpha.pipeline/run — full ctx->ctx pipeline with intermediate state"
   (:require [clojure.string :as str]
-            [beme.alpha.parse.reader :as reader]
             [beme.alpha.emit.printer :as printer]
             [beme.alpha.emit.pprint :as pprint]
             [beme.alpha.pipeline :as pipeline]))
@@ -26,8 +25,8 @@
                         without it, since cljs.reader cannot resolve :: correctly).
    Note: returns only parsed forms. Use run-pipeline when you need
    access to intermediate pipeline state (raw tokens, grouped tokens)."
-  ([s] (reader/read-beme-string s))
-  ([s opts] (reader/read-beme-string s opts)))
+  ([s] (:forms (pipeline/run s)))
+  ([s opts] (:forms (pipeline/run s opts))))
 
 (defn forms->beme
   "Print Clojure forms as beme source string (single-line per form)."
