@@ -1,0 +1,411 @@
+(ns beme.alpha.scan.tokenizer
+  "beme tokenizer: character scanning and token production.
+   Transforms beme source text into a flat vector of typed tokens."
+  (:require [beme.alpha.errors :as errors]
+            [beme.alpha.scan.source :as source]))
+
+;; ---------------------------------------------------------------------------
+;; Character predicates
+;; ---------------------------------------------------------------------------
+
+(defn- whitespace? [ch]
+  (and ch (or (= ch \space) (= ch \tab) (= ch \newline) (= ch \return) (= ch \,))))
+
+(defn- char-code [ch]
+  #?(:clj (int ch) :cljs (.charCodeAt ch 0)))
+
+(defn- digit? [ch]
+  (and ch (let [c (char-code ch)] (and (>= c 48) (<= c 57)))))
+
+(defn- hex-digit? [ch]
+  (and ch (let [c (char-code ch)]
+            (or (and (>= c 48) (<= c 57))      ; 0-9
+                (and (>= c 65) (<= c 70))      ; A-F
+                (and (>= c 97) (<= c 102)))))) ; a-f
+
+(defn- octal-digit? [ch]
+  (and ch (let [c (char-code ch)] (and (>= c 48) (<= c 55))))) ; 0-7
+
+(defn- symbol-start? [ch]
+  (and ch
+       (not (whitespace? ch))
+       (not (digit? ch))
+       (not (#{\( \) \[ \] \{ \} \" \; \@ \^ \` \~ \\} ch))))
+
+(defn- symbol-char? [ch]
+  (and ch
+       (not (whitespace? ch))
+       (not (#{\( \) \[ \] \{ \} \" \; \@ \^ \` \~ \\} ch))))
+
+;; ---------------------------------------------------------------------------
+;; Scanner (character-level)
+;; ---------------------------------------------------------------------------
+
+(defn- make-scanner [s]
+  {:src s :len (count s) :pos (volatile! 0) :line (volatile! 1) :col (volatile! 1)})
+
+(defn- seof? [{:keys [pos len]}] (>= @pos len))
+
+(defn- speek
+  ([sc] (speek sc 0))
+  ([{:keys [src pos len]} offset]
+   (let [i (+ @pos offset)]
+     (when (< i len) (nth src i)))))
+
+(defn- sadvance!
+  "Advance scanner by one character, returning the consumed char.
+   Callers MUST check (seof? sc) before calling — no bounds check is performed."
+  [{:keys [pos line col src]}]
+  (let [ch (nth src @pos)]
+    (if (= ch \newline)
+      (do (vswap! line inc) (vreset! col 1))
+      (vswap! col inc))
+    (vswap! pos inc)
+    ch))
+
+(defn- sloc [{:keys [line col]}] {:line @line :col @col})
+
+;; Portable string builder — StringBuilder on JVM/Babashka, JS array on ClojureScript
+(defn- make-sb
+  ([] #?(:clj (StringBuilder.) :cljs #js []))
+  ([s] #?(:clj (StringBuilder. ^String s) :cljs (let [a #js []] (.push a s) a))))
+
+(defn- sb-append! [sb x]
+  #?(:clj (.append ^StringBuilder sb x) :cljs (.push sb (str x)))
+  sb)
+
+(defn- sb-str [sb]
+  #?(:clj (str sb) :cljs (.join sb "")))
+
+(defn- read-while [sc pred]
+  (let [sb (make-sb)]
+    (loop []
+      (when-not (seof? sc)
+        (let [ch (speek sc)]
+          (when (pred ch)
+            (sadvance! sc)
+            (sb-append! sb ch)
+            (recur)))))
+    (sb-str sb)))
+
+;; ---------------------------------------------------------------------------
+;; Tokenizer helpers
+;; ---------------------------------------------------------------------------
+
+(defn- consume-string-body!
+  "Consume a string body from scanner into sb, handling escape sequences.
+   Expects the opening quote already consumed. Reads until closing quote.
+   error-msg is used if EOF is reached before the closing quote."
+  [sc sb loc error-msg]
+  (loop []
+    (when (seof? sc)
+      (errors/beme-error error-msg (assoc loc :incomplete true)))
+    (let [ch (sadvance! sc)]
+      (sb-append! sb ch)
+      (cond
+        (= ch \") nil
+        (= ch \\) (do (when-not (seof? sc) (sb-append! sb (sadvance! sc)))
+                      (recur))
+        :else (recur)))))
+
+(defn- read-string-literal [sc]
+  (let [loc (sloc sc)
+        _ (sadvance! sc)
+        sb (make-sb "\"")]
+    (consume-string-body! sc sb loc "Unterminated string — missing closing \"")
+    (sb-str sb)))
+
+(defn- read-regex-body [sc]
+  (let [loc (sloc sc)
+        _ (sadvance! sc) ; opening "
+        sb (make-sb "#\"")]
+    (consume-string-body! sc sb loc "Unterminated regex — missing closing \"")
+    (sb-str sb)))
+
+(defn- letter? [ch]
+  (and ch
+       (let [c (char-code ch)]
+         (or (and (>= c 97) (<= c 122))    ;; a-z
+             (and (>= c 65) (<= c 90))))))  ;; A-Z
+
+(defn- read-char-extra
+  "After the first char of a character literal, consume additional chars
+   for named chars (\\newline), unicode escapes (\\uXXXX), or octal (\\oXXX)."
+  [sc sb ch loc]
+  (cond
+    ;; \uXXXX — Unicode hex escape: exactly 4 hex digits required
+    (= ch \u)
+    (let [consumed (loop [n 0]
+                     (if (and (< n 4) (not (seof? sc)) (hex-digit? (speek sc)))
+                       (do (sb-append! sb (sadvance! sc)) (recur (inc n)))
+                       n))]
+      (when (and (< consumed 4) (not (seof? sc))
+                 (not (whitespace? (speek sc)))
+                 (not (#{\( \) \[ \] \{ \} \;} (speek sc))))
+        (errors/beme-error
+          (str "Invalid unicode escape: expected 4 hex digits after \\u, got " consumed)
+          loc)))
+    ;; \oXXX — octal escape: up to 3 octal digits required, at least 1
+    (= ch \o)
+    (let [consumed (loop [n 0]
+                     (if (and (< n 3) (not (seof? sc)) (octal-digit? (speek sc)))
+                       (do (sb-append! sb (sadvance! sc)) (recur (inc n)))
+                       n))]
+      (when (and (zero? consumed) (not (seof? sc))
+                 (not (whitespace? (speek sc)))
+                 (not (#{\( \) \[ \] \{ \} \;} (speek sc))))
+        (errors/beme-error
+          (str "Invalid octal escape: expected octal digits after \\o")
+          loc)))
+    ;; named chars: \newline, \space, etc.
+    (letter? ch)
+    (loop []
+      (when (and (not (seof? sc)) (letter? (speek sc)))
+        (sb-append! sb (sadvance! sc))
+        (recur)))))
+
+(defn- read-char-literal [sc]
+  (let [loc (sloc sc)]
+    (sadvance! sc) ; backslash
+    (let [sb (make-sb "\\")]
+      (if (seof? sc)
+        (errors/beme-error "Unterminated character literal — expected a character after \\"
+                           (assoc loc :incomplete true))
+        (let [ch (sadvance! sc)]
+          (sb-append! sb ch)
+          (read-char-extra sc sb ch loc)))
+      (sb-str sb))))
+
+(defn- read-number [sc]
+  (let [sb (make-sb)]
+    (loop []
+      (when-not (seof? sc)
+        (let [ch (speek sc)]
+          (when (or (digit? ch)
+                     (letter? ch)
+                     (#{\. \/ \+ \-} ch))
+            (sadvance! sc)
+            (sb-append! sb ch)
+            (recur)))))
+    (sb-str sb)))
+
+(defn- read-symbol-str
+  "Read a symbol string."
+  [sc]
+  (let [sb (make-sb)]
+    (loop [saw-slash false]
+      (when-not (seof? sc)
+        (let [ch (speek sc)]
+          (cond
+            ;; / in symbol (namespace qualifier) — allow once
+            (and (= ch \/) (not saw-slash))
+            (do (sadvance! sc) (sb-append! sb ch) (recur true))
+
+            ;; second / terminates the symbol — stop before consuming it
+            (= ch \/) nil
+
+            (symbol-char? ch)
+            (do (sadvance! sc) (sb-append! sb ch) (recur saw-slash))
+
+            :else nil))))
+    (sb-str sb)))
+
+;; ---------------------------------------------------------------------------
+;; Tokenizer
+;; ---------------------------------------------------------------------------
+
+(defn- tok
+  ([type value loc]
+   {:type type :value value :line (:line loc) :col (:col loc)})
+  ([type value loc end-loc]
+   {:type type :value value :line (:line loc) :col (:col loc)
+    :end-line (:line end-loc) :end-col (:col end-loc)}))
+
+(defn- tok-at
+  "Create a token with end position from current scanner state.
+   Call this AFTER consuming the token's characters.
+   :end-col is exclusive (one past the last character) — sloc returns
+   the scanner's next position after consumption."
+  [sc type value start-loc]
+  (tok type value start-loc (sloc sc)))
+
+(defn tokenize
+  "Tokenize beme source string into a vector of tokens."
+  [s]
+  (let [sc (make-scanner s)
+        tokens (transient [])]
+    (loop []
+      (if (seof? sc)
+        (persistent! tokens)
+        (let [loc (sloc sc)
+              ch (speek sc)]
+          (cond
+            (whitespace? ch)
+            (do (sadvance! sc) (recur))
+
+            (= ch \;)
+            (do (read-while sc #(not= % \newline)) (recur))
+
+            (= ch \")
+            (do (conj! tokens (tok-at sc :string (read-string-literal sc) loc)) (recur))
+
+            (= ch \\)
+            (do (conj! tokens (tok-at sc :char (read-char-literal sc) loc)) (recur))
+
+            ;; # dispatch
+            (= ch \#)
+            (let [nxt (speek sc 1)]
+              (cond
+                (= nxt \{) (do (sadvance! sc) (sadvance! sc)
+                               (conj! tokens (tok-at sc :open-set "#{" loc)) (recur))
+                (= nxt \() (do (sadvance! sc) (sadvance! sc) ; consume #(
+                               (conj! tokens (tok-at sc :open-anon-fn "#(" loc))
+                               (recur))
+                (= nxt \") (do (sadvance! sc)
+                               (conj! tokens (tok-at sc :regex (read-regex-body sc) loc)) (recur))
+                (= nxt \') (do (sadvance! sc) (sadvance! sc)
+                               (conj! tokens (tok-at sc :var-quote "#'" loc)) (recur))
+                (= nxt \_) (do (sadvance! sc) (sadvance! sc)
+                               (conj! tokens (tok-at sc :discard "#_" loc)) (recur))
+                (= nxt \?) (do (sadvance! sc) (sadvance! sc) ; consume #?
+                               (let [splice? (and (not (seof? sc)) (= (speek sc) \@))
+                                     _ (when splice? (sadvance! sc))
+                                     prefix (if splice? "#?@" "#?")]
+                                 (conj! tokens (tok-at sc :reader-cond-start prefix loc)))
+                               (recur))
+                (= nxt \:) (do (sadvance! sc) (sadvance! sc)
+                               (let [ns-name (read-symbol-str sc)
+                                     prefix (str "#:" ns-name)]
+                                 (conj! tokens (tok-at sc :namespaced-map-start prefix loc))
+                                 (recur)))
+                ;; B8: # followed by digit — clear error instead of empty tagged literal
+                :else (if (nil? nxt)
+                        (do (sadvance! sc)
+                            (errors/beme-error "Unexpected # at end of input — expected a dispatch form like #{}, #\"\", #', #_, or a tagged literal" loc))
+                        (if (digit? nxt)
+                          (do (sadvance! sc)
+                              (errors/beme-error (str "Invalid dispatch: #" nxt " — # must be followed by {, \", ', _, ?, :, or a tag name") loc))
+                          (do (sadvance! sc)
+                              (let [tag (read-symbol-str sc)]
+                                (conj! tokens (tok-at sc :tagged-literal (str "#" tag) loc))
+                                (recur)))))))
+
+            (= ch \@) (do (sadvance! sc) (conj! tokens (tok-at sc :deref "@" loc)) (recur))
+            (= ch \^) (do (sadvance! sc) (conj! tokens (tok-at sc :meta "^" loc)) (recur))
+            (= ch \') (do (sadvance! sc) (conj! tokens (tok-at sc :quote "'" loc)) (recur))
+            ;; ` ~ ~@ — macro syntax, opaque pass-through to Clojure's reader
+            (= ch \`) (do (sadvance! sc)
+                          (let [nxt (speek sc)]
+                            (cond
+                              ;; `(...), `[...], `{...} — marker for grouper
+                              (and nxt (#{\( \[ \{} nxt))
+                              (conj! tokens (tok-at sc :syntax-quote-start "`" loc))
+                              ;; `~form, `~@form — syntax-quote of unquote
+                              (and nxt (= nxt \~))
+                              (do (sadvance! sc) ; consume ~
+                                  (let [splice? (and (not (seof? sc)) (= (speek sc) \@))
+                                        _ (when splice? (sadvance! sc))
+                                        tilde-prefix (if splice? "~@" "~")
+                                        next-ch (speek sc)]
+                                    (cond
+                                      ;; `~(...) or `~@(...) — marker for grouper
+                                      (and next-ch (#{\( \[ \{} next-ch))
+                                      (conj! tokens (tok-at sc :syntax-quote-start (str "`" tilde-prefix) loc))
+                                      ;; B2: `~"string" — single token, no grouper needed
+                                      (and next-ch (= next-ch \"))
+                                      (let [s (read-string-literal sc)]
+                                        (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix s) loc)))
+                                      ;; `~symbol — single token, no grouper needed
+                                      next-ch
+                                      (let [sym (read-symbol-str sc)]
+                                        (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix sym) loc)))
+                                      :else
+                                      (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix) loc)))))
+                              ;; `symbol — namespace-resolve, single token
+                              nxt
+                              (let [sym-str (read-symbol-str sc)]
+                                (conj! tokens (tok-at sc :syntax-quote-raw (str "`" sym-str) loc)))
+                              :else
+                              ;; B7: backtick at EOF — mark as :incomplete for REPL continuation
+                              (errors/beme-error "Unexpected end of input after ` — expected a form to syntax-quote"
+                                                 (assoc loc :incomplete true))))
+                          (recur))
+            (= ch \~) (do (sadvance! sc)
+                          (if (and (not (seof? sc)) (= (speek sc) \@))
+                            (do (sadvance! sc) (conj! tokens (tok-at sc :unquote-splicing "~@" loc)))
+                            (conj! tokens (tok-at sc :unquote "~" loc)))
+                          (recur))
+
+            (= ch \() (do (sadvance! sc) (conj! tokens (tok-at sc :open-paren "(" loc)) (recur))
+            (= ch \)) (do (sadvance! sc) (conj! tokens (tok-at sc :close-paren ")" loc)) (recur))
+            (= ch \[) (do (sadvance! sc) (conj! tokens (tok-at sc :open-bracket "[" loc)) (recur))
+            (= ch \]) (do (sadvance! sc) (conj! tokens (tok-at sc :close-bracket "]" loc)) (recur))
+            (= ch \{) (do (sadvance! sc) (conj! tokens (tok-at sc :open-brace "{" loc)) (recur))
+            (= ch \}) (do (sadvance! sc) (conj! tokens (tok-at sc :close-brace "}" loc)) (recur))
+
+            ;; keyword
+            (= ch \:)
+            (do (sadvance! sc)
+                (let [auto? (and (not (seof? sc)) (= (speek sc) \:))
+                      _ (when auto? (sadvance! sc))
+                      kw-name (read-symbol-str sc)
+                      value (str (if auto? "::" ":") kw-name)]
+                  (conj! tokens (tok-at sc :keyword value loc))
+                  (recur)))
+
+            ;; number (unsigned)
+            (digit? ch)
+            (do (conj! tokens (tok-at sc :number (read-number sc) loc)) (recur))
+
+            ;; signed number: sign immediately followed by digit (no space) = negative number.
+            ;; sign followed by ( or space = symbol/operator (falls through to symbol branch).
+            ;; Whitespace is already consumed above, so (speek sc 1) is the adjacent character.
+            (and (or (= ch \-) (= ch \+))
+                 (digit? (speek sc 1)))
+            (do (let [sign (sadvance! sc)
+                      num (read-number sc)]
+                  (conj! tokens (tok-at sc :number (str sign num) loc))
+                  (recur)))
+
+            ;; symbol (includes operators like +, -, ->, ->>, >=, etc.)
+            (symbol-start? ch)
+            (let [sym (read-symbol-str sc)]
+              (conj! tokens (tok-at sc :symbol sym loc))
+              (recur))
+
+            :else
+            (errors/beme-error (str "Unexpected character: " ch) loc)))))))
+
+;; ---------------------------------------------------------------------------
+;; Whitespace attachment
+;; ---------------------------------------------------------------------------
+
+(def ^:private line-col->offset source/line-col->offset)
+
+(defn attach-whitespace
+  "Attach leading whitespace/comments to each token as :ws.
+   Computes the gap between consecutive tokens in the source string.
+   Trailing whitespace (after last token) is stored as :trailing-ws
+   metadata on the returned vector."
+  [tokens source]
+  (if (empty? tokens)
+    (if (seq source)
+      (with-meta [] {:trailing-ws source})
+      [])
+    (let [n (count tokens)
+          src-len (count source)]
+      (loop [i 0 prev-end 0 out (transient [])]
+        (if (>= i n)
+          (let [result (persistent! out)
+                trailing (when (< prev-end src-len) (subs source prev-end))]
+            (if trailing
+              (with-meta result {:trailing-ws trailing})
+              result))
+          (let [tok (nth tokens i)
+                tok-start (line-col->offset source (:line tok) (:col tok))
+                ws (when (< prev-end tok-start) (subs source prev-end tok-start))
+                tok' (if ws (assoc tok :ws ws) tok)
+                tok-end (if (and (:end-line tok) (:end-col tok))
+                          (line-col->offset source (:end-line tok) (:end-col tok))
+                          (+ tok-start (count (:value tok))))]
+            (recur (inc i) tok-end (conj! out tok'))))))))

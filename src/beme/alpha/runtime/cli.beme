@@ -1,0 +1,276 @@
+; beme CLI — the first beme component implemented in beme itself.
+; Loaded by cli.clj shim for JVM/bb require support.
+ns begin beme.alpha.runtime.cli
+  "Unified CLI. Functions accept a map — works with both clj -T and bb."
+  :require begin
+    [beme.alpha.core :as core]
+    [beme.alpha.errors :as errors]
+    [beme.alpha.runtime.run :as beme-run]
+    [beme.alpha.runtime.repl :as repl]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+  end
+end
+
+;; ---------------------------------------------------------------------------
+;; File helpers
+;; ---------------------------------------------------------------------------
+defn- begin detect-direction
+  [path]
+  when begin path
+    cond begin
+      str/ends-with?(path ".beme")
+      :to-clj
+      re-find(#"\.clj[cdsx]?$" path)
+      :to-beme
+    end
+  end
+end
+
+defn- begin output-path
+  [path]
+  case begin detect-direction(path)
+    :to-clj
+    str/replace(path #"\.beme$" ".clj")
+    :to-beme
+    str/replace(path #"\.clj[cdsx]?$" ".beme")
+  end
+end
+
+defn- begin find-files
+  [dir pred]
+  let begin
+    [root io/file(dir)]
+    ->>(file-seq(root) filter(fn([f] .isFile(f))) map(str) filter(pred) sort)
+  end
+end
+
+defn- begin expand-inputs
+  [inputs pred]
+  mapcat begin
+    fn([path] if(.isDirectory(io/file(path)) find-files(path pred) [path]))
+    inputs
+  end
+end
+
+;; ---------------------------------------------------------------------------
+;; File processor helpers
+;; ---------------------------------------------------------------------------
+defn- begin process-file-to-stdout
+  [transform path]
+  try begin
+    println(transform(path))
+    catch begin Exception e
+      let begin
+        [src try(slurp(path) catch(Exception _ nil))]
+        binding([*out* *err*] println(errors/format-error(e src)))
+      end
+      System/exit(1)
+    end
+  end
+end
+
+defn- begin process-file-to-disk
+  [transform output-fn verb path]
+  let begin
+    [out if(output-fn output-fn(path) path)]
+    try begin
+      let begin
+        [result transform(path)]
+        spit(out str(result "\n"))
+        if(=(path out) println(str(verb " " path)) println(str(path " → " out)))
+        :ok
+      end
+      catch(Exception e println(str(path " ERROR: " .getMessage(e))) :fail)
+    end
+  end
+end
+
+defn- begin process-files
+  [{:keys [inputs pred transform output-fn stdout verb]}]
+  let begin
+    [expanded expand-inputs(inputs pred)]
+    when(empty?(expanded) println("No matching files found.") System/exit(1))
+    if begin stdout
+      doseq([path expanded] process-file-to-stdout(transform path))
+      let begin
+        [
+          results
+          doall begin
+            map begin
+              fn([p] process-file-to-disk(transform output-fn verb p))
+              expanded
+            end
+          end
+          total
+          count(results)
+          failed
+          count(filter(fn([r] =(:fail r)) results))
+        ]
+        println()
+        println begin
+          str begin
+            total
+            " file(s), "
+            -(total failed)
+            " "
+            verb
+            when(pos?(failed) str(", " failed " failed"))
+          end
+        end
+        when(pos?(failed) System/exit(1))
+      end
+    end
+  end
+end
+
+;; ---------------------------------------------------------------------------
+;; Commands — accept a map, work with both -T and babashka.cli
+;; ---------------------------------------------------------------------------
+defn begin run
+  [{:keys [file]}]
+  when-not(file println("Usage: beme run <file.beme>") System/exit(1))
+  try begin
+    beme-run/run-file(file)
+    catch begin Exception e
+      let begin
+        [src try(slurp(file) catch(Exception _ nil))]
+        println(errors/format-error(e src))
+      end
+      System/exit(1)
+    end
+  end
+end
+
+defn(repl [_] repl/start())
+
+defn begin convert
+  [{:keys [file files stdout]}]
+  let begin
+    [inputs or(files when(file [file]))]
+    when begin empty?(inputs)
+      println("Usage: beme convert <file|dir> [file...]")
+      println("  Writes sibling files (.beme↔.clj) by default")
+      println("  --stdout  print to stdout instead")
+      System/exit(1)
+    end
+    process-files begin
+      {
+        :inputs inputs
+        :pred comp(boolean detect-direction)
+        :transform fn begin
+                     [path]
+                     let begin
+                       [direction detect-direction(path)]
+                       when-not begin direction
+                         throw begin
+                           ex-info(str("Cannot detect direction: " path) {})
+                         end
+                       end
+                       let begin
+                         [src slurp(path)]
+                         case begin direction
+                           :to-clj
+                           core/beme->clj(src)
+                           :to-beme
+                           core/clj->beme(src)
+                         end
+                       end
+                     end
+                   end
+        :output-fn output-path
+        :stdout stdout
+        :verb "converted"
+      }
+    end
+  end
+end
+
+defn begin format-cmd
+  [{:keys [file files stdout]}]
+  let begin
+    [inputs or(files when(file [file]))]
+    when begin empty?(inputs)
+      println("Usage: beme format <file|dir> [file...]")
+      println("  Formats .beme files in-place by default")
+      println("  --stdout  print to stdout instead")
+      System/exit(1)
+    end
+    process-files begin
+      {
+        :inputs inputs
+        :pred fn([p] str/ends-with?(p ".beme"))
+        :transform fn begin
+                     [path]
+                     let begin
+                       [src slurp(path)]
+                       core/pprint-beme(core/beme->forms(src))
+                     end
+                   end
+        :output-fn nil
+        :stdout stdout
+        :verb "formatted"
+      }
+    end
+  end
+end
+
+defn(version [_] println("beme 0.3.0-alpha"))
+
+defn begin help
+  [_]
+  println("beme — M-expressions for Clojure")
+  println()
+  println("Commands:")
+  println("  beme run <file>            Run a .beme file")
+  println("  beme repl                  Start the beme REPL")
+  println begin
+    "  beme convert <file|dir>    Convert between beme and Clojure (by extension)"
+  end
+  println("  beme format <file|dir>     Format .beme files (normalize syntax)")
+  println("  beme version               Print version")
+end
+
+;; ---------------------------------------------------------------------------
+;; bb entry point — babashka.cli loaded dynamically so this file works on JVM too
+;; ---------------------------------------------------------------------------
+defn- begin collect-file-args
+  [{:keys [opts args]}]
+  let begin
+    [all into(if(:file(opts) [:file(opts)] []) args)]
+    cond-> begin if(=(1 count(all)) {:file first(all)} {:files all})
+      :stdout(opts)
+      assoc(:stdout true)
+    end
+  end
+end
+
+defn begin -main
+  [& args]
+  require('babashka.cli)
+  let begin
+    [
+      dispatch
+      resolve('babashka.cli/dispatch)
+      file+stdout
+      {:args->opts [:file] :spec {:stdout {:coerce :boolean}}}
+    ]
+    dispatch begin
+      [
+        {:cmds ["run"] :fn fn([{:keys [opts]}] run(opts)) :args->opts [:file]}
+        {:cmds ["repl"] :fn fn([_] repl(nil))}
+        merge begin
+          {:cmds ["convert"] :fn fn([m] convert(collect-file-args(m)))}
+          file+stdout
+        end
+        merge begin
+          {:cmds ["format"] :fn fn([m] format-cmd(collect-file-args(m)))}
+          file+stdout
+        end
+        {:cmds ["version"] :fn fn([_] version(nil))}
+        {:cmds [] :fn fn([_] help(nil))}
+      ]
+      args
+    end
+  end
+end

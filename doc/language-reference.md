@@ -334,6 +334,7 @@ All of these work exactly as in Clojure:
 | Clojure | beme | Notes |
 |---------|-----|-------|
 | `(f x y)` | `f(x y)` | Parens follow the callable |
+| `(f x y)` | `f begin x y end` | Textual delimiters, equivalent to parens |
 | `'(1 2 3)` | `'(1 2 3)` | Quote syntax is identical |
 
 
