@@ -12,9 +12,11 @@
 
 (defn- host-read
   "Read a raw string via the host platform's reader, wrapping errors
-   with beme location info."
+   with beme location info. Binds *read-eval* to false on JVM to prevent
+   #=() read-eval execution in opaque forms."
   [raw loc error-prefix]
-  (try (#?(:clj clojure.core/read-string :cljs cljs.reader/read-string) raw)
+  (try #?(:clj  (binding [*read-eval* false] (clojure.core/read-string raw))
+          :cljs (cljs.reader/read-string raw))
        (catch #?(:clj Exception :cljs :default) e
          (let [cause-msg (#?(:clj ex-message :cljs .-message) e)
                detail (if cause-msg (str error-prefix " " raw " — " cause-msg)
@@ -23,9 +25,10 @@
 
 #?(:clj
 (defn- host-read-with-opts
-  "Read a raw string via the host platform's reader with options (JVM only)."
+  "Read a raw string via the host platform's reader with options (JVM only).
+   Binds *read-eval* to false to prevent #=() read-eval execution."
   [read-opts raw loc error-prefix]
-  (try (clojure.core/read-string read-opts raw)
+  (try (binding [*read-eval* false] (clojure.core/read-string read-opts raw))
        (catch Exception e
          (let [cause-msg (ex-message e)
                detail (if cause-msg (str error-prefix " " raw " — " cause-msg)
