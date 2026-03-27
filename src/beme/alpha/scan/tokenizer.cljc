@@ -278,6 +278,11 @@
                                      prefix (str "#:" ns-name)]
                                  (conj! tokens (tok-at sc :namespaced-map-start prefix loc))
                                  (recur)))
+                ;; ##Inf, ##-Inf, ##NaN — symbolic numeric values
+                (= nxt \#) (do (sadvance! sc) (sadvance! sc)
+                               (let [name (read-symbol-str sc)]
+                                 (conj! tokens (tok-at sc :number (str "##" name) loc))
+                                 (recur)))
                 ;; B8: # followed by digit — clear error instead of empty tagged literal
                 :else (if (nil? nxt)
                         (do (sadvance! sc)

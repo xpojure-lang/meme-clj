@@ -208,10 +208,18 @@
                   (str \\ n)
                   (str \\ form)))])
 
-    ;; number — preserve BigDecimal M and BigInt N suffixes
+    ;; number — preserve BigDecimal M and BigInt N suffixes, symbolic values
     #?@(:clj [(decimal? form) (str form "M")
               (instance? clojure.lang.BigInt form) (str form "N")
               (instance? java.math.BigInteger form) (str form "N")])
+    (and (number? form)
+         #?(:clj (Double/isNaN (double form))
+            :cljs (js/isNaN form)))
+    "##NaN"
+    (and (number? form)
+         #?(:clj (Double/isInfinite (double form))
+            :cljs (and (not (js/isFinite form)) (not (js/isNaN form)))))
+    (if (pos? (double form)) "##Inf" "##-Inf")
     (number? form) (str form)
 
     ;; tagged literal (JVM only — resolved at read time in ClojureScript)

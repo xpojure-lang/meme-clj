@@ -425,3 +425,56 @@
   #?(:clj
   (testing "`~\\a parses without error on JVM"
     (is (some? (r/read-beme-string "`~\\a"))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: ##Inf, ##-Inf, ##NaN silently misparsed as tagged literals.
+;; The tokenizer's # dispatch fell through to tagged-literal for ##,
+;; and # was not excluded from symbol-char?, so read-symbol-str consumed
+;; #Inf as a tag name, producing a broken tagged-literal token that ate
+;; the next form.
+;; Fix: dedicated (= nxt \#) branch emits :number token; # excluded
+;; from symbol-start? and symbol-char?.
+;; ---------------------------------------------------------------------------
+
+(deftest symbolic-value-tokenization
+  (testing "##Inf tokenizes as :number"
+    (let [tokens (tokenize "##Inf")]
+      (is (= 1 (count tokens)))
+      (is (= :number (:type (first tokens))))
+      (is (= "##Inf" (:value (first tokens))))))
+  (testing "##-Inf tokenizes as :number"
+    (let [tokens (tokenize "##-Inf")]
+      (is (= 1 (count tokens)))
+      (is (= :number (:type (first tokens))))
+      (is (= "##-Inf" (:value (first tokens))))))
+  (testing "##NaN tokenizes as :number"
+    (let [tokens (tokenize "##NaN")]
+      (is (= 1 (count tokens)))
+      (is (= :number (:type (first tokens))))
+      (is (= "##NaN" (:value (first tokens))))))
+  (testing "##Inf does not eat following form"
+    (let [tokens (tokenize "##Inf 42")]
+      (is (= 2 (count tokens)))
+      (is (= "##Inf" (:value (first tokens))))
+      (is (= "42" (:value (second tokens)))))))
+
+#?(:clj
+(deftest symbolic-value-parsing
+  (testing "##Inf parses to positive infinity"
+    (is (= ##Inf (first (r/read-beme-string "##Inf")))))
+  (testing "##-Inf parses to negative infinity"
+    (is (= ##-Inf (first (r/read-beme-string "##-Inf")))))
+  (testing "##NaN parses to NaN"
+    (is (Double/isNaN (first (r/read-beme-string "##NaN")))))
+  (testing "##Inf roundtrips through print → re-read"
+    (let [forms (r/read-beme-string "##Inf")
+          printed (p/print-beme-string forms)
+          re-read (r/read-beme-string printed)]
+      (is (= "##Inf" printed))
+      (is (= forms re-read))))
+  (testing "##-Inf roundtrips"
+    (let [forms (r/read-beme-string "##-Inf")
+          printed (p/print-beme-string forms)]
+      (is (= "##-Inf" printed))))
+  (testing "##NaN prints as ##NaN"
+    (is (= "##NaN" (p/print-beme-string (r/read-beme-string "##NaN")))))))
