@@ -45,32 +45,37 @@
 
 (defn- extract-source-range
   "Extract the source text spanning from the first token's start position
-   to the last token's end position. Prefers :end-line/:end-col when
-   available; falls back to start + value length."
+   to the last token's end position. Uses :offset/:end-offset directly (O(1))
+   when available; falls back to line-col->offset."
   [tokens source]
   (let [first-tok (first tokens)
         last-tok (peek tokens)
-        start (line-col->offset source (:line first-tok) (:col first-tok))
-        end (if (and (:end-line last-tok) (:end-col last-tok))
-              (line-col->offset source (:end-line last-tok) (:end-col last-tok))
-              (+ (line-col->offset source (:line last-tok) (:col last-tok))
-                 (count (:value last-tok))))]
+        start (or (:offset first-tok)
+                  (line-col->offset source (:line first-tok) (:col first-tok)))
+        end (or (:end-offset last-tok)
+                (if (and (:end-line last-tok) (:end-col last-tok))
+                  (line-col->offset source (:end-line last-tok) (:end-col last-tok))
+                  (+ (or (:offset last-tok)
+                         (line-col->offset source (:line last-tok) (:col last-tok)))
+                     (count (:value last-tok)))))]
     (if (<= end (count source))
       (subs source start end)
       ;; Fallback: concatenate token values (lossy — drops inter-token whitespace).
-      ;; This can't trigger in normal operation: line/col offsets from the tokenizer
-      ;; always land within source bounds. Defensive only; prefer degraded output
+      ;; This can't trigger in normal operation: offsets from the tokenizer always
+      ;; land within source bounds. Defensive only; prefer degraded output
       ;; (host reader will error with location) over crashing here.
       (apply str (map :value tokens)))))
 
 (defn- end-loc
   "End position of the last token in a balanced group.
-   Returns {:end-line l :end-col c} using the token's own :end-line/:end-col
-   when available, falling back to :line/:col + value length as an approximation."
+   Returns {:end-line l :end-col c :end-offset o} using the token's own
+   end fields when available, falling back to start + value length."
   [last-tok]
   (if (and (:end-line last-tok) (:end-col last-tok))
-    {:end-line (:end-line last-tok) :end-col (:end-col last-tok)}
-    {:end-line (:line last-tok) :end-col (+ (:col last-tok) (count (:value last-tok)))}))
+    (cond-> {:end-line (:end-line last-tok) :end-col (:end-col last-tok)}
+      (:end-offset last-tok) (assoc :end-offset (:end-offset last-tok)))
+    (cond-> {:end-line (:line last-tok) :end-col (+ (:col last-tok) (count (:value last-tok)))}
+      (:offset last-tok) (assoc :end-offset (+ (:offset last-tok) (count (:value last-tok)))))))
 
 (defn- check-balanced!
   "Throw :incomplete error if collect-balanced-tokens returned nil

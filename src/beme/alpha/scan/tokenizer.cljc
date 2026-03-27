@@ -63,7 +63,7 @@
     (vswap! pos inc)
     ch))
 
-(defn- sloc [{:keys [line col]}] {:line @line :col @col})
+(defn- sloc [{:keys [line col pos]}] {:line @line :col @col :offset @pos})
 
 ;; Portable string builder — StringBuilder on JVM/Babashka, JS array on ClojureScript
 (defn- make-sb
@@ -216,10 +216,12 @@
 
 (defn- tok
   ([type value loc]
-   {:type type :value value :line (:line loc) :col (:col loc)})
+   {:type type :value value :line (:line loc) :col (:col loc)
+    :offset (:offset loc)})
   ([type value loc end-loc]
    {:type type :value value :line (:line loc) :col (:col loc)
-    :end-line (:line end-loc) :end-col (:col end-loc)}))
+    :end-line (:line end-loc) :end-col (:col end-loc)
+    :offset (:offset loc) :end-offset (:offset end-loc)}))
 
 (defn- tok-at
   "Create a token with end position from current scanner state.
@@ -418,11 +420,15 @@
             (if trailing
               (with-meta result {:trailing-ws trailing})
               result))
+          ;; Use :offset/:end-offset directly (O(1)) when available,
+          ;; fall back to line-col->offset for tokens without offsets.
           (let [tok (nth tokens i)
-                tok-start (line-col->offset source (:line tok) (:col tok))
+                tok-start (or (:offset tok)
+                              (line-col->offset source (:line tok) (:col tok)))
                 ws (when (< prev-end tok-start) (subs source prev-end tok-start))
                 tok' (if ws (assoc tok :ws ws) tok)
-                tok-end (if (and (:end-line tok) (:end-col tok))
-                          (line-col->offset source (:end-line tok) (:end-col tok))
-                          (+ tok-start (count (:value tok))))]
+                tok-end (or (:end-offset tok)
+                            (if (and (:end-line tok) (:end-col tok))
+                              (line-col->offset source (:end-line tok) (:end-col tok))
+                              (+ tok-start (count (:value tok)))))]
             (recur (inc i) tok-end (conj! out tok'))))))))
