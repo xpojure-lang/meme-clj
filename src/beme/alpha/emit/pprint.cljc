@@ -290,7 +290,13 @@
                     ;; Everything else — flat (primitives, empty list, etc.)
                     :else (flat form))]
     (if comments
-      (str (str/join "\n" comments) "\n" indent formatted)
+      ;; First comment line: no indent (caller provides it via join/concat).
+      ;; Subsequent comment lines: indent to current column.
+      ;; All lines: strip original whitespace — pprint re-indents.
+      (let [stripped (map str/triml comments)
+            indented (cons (first stripped)
+                           (map #(str indent %) (rest stripped)))]
+        (str (str/join "\n" indented) "\n" indent formatted))
       formatted)))
 
 ;; ---------------------------------------------------------------------------

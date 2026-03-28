@@ -223,3 +223,34 @@
     (let [form (with-meta [1 2 3] {:tag 'ints})
           result (pprint/pprint-form form {:width 10})]
       (is (re-find #"^\^ints" result)))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: comment lines from :ws metadata emitted at column 0 inside nested
+;; begin/end blocks. Second+ comment lines had no indent; original whitespace
+;; was preserved instead of re-indented to the current pprint column.
+;; ---------------------------------------------------------------------------
+
+(deftest pprint-comment-indentation-in-nested-blocks
+  (testing "single comment indented to match body"
+    (let [baz (with-meta '(baz) {:ws "; single\n"})
+          form (list 'foo '(bar) baz)
+          result (pprint/pprint-form form {:width 10})
+          lines (str/split-lines result)]
+      (is (= "  ; single" (nth lines 2)))))
+  (testing "multiple comment lines all indented"
+    (let [baz (with-meta '(baz) {:ws "; line 1\n; line 2\n"})
+          form (list 'foo '(bar) baz)
+          result (pprint/pprint-form form {:width 10})
+          lines (str/split-lines result)]
+      (is (= "  ; line 1" (nth lines 2)))
+      (is (= "  ; line 2" (nth lines 3)))))
+  (testing "original whitespace stripped and re-indented"
+    (let [baz (with-meta '(baz) {:ws "    ; deep\n"})
+          form (list 'foo '(bar) baz)
+          result (pprint/pprint-form form {:width 10})
+          lines (str/split-lines result)]
+      (is (= "  ; deep" (nth lines 2)))))
+  (testing "top-level comments unchanged"
+    (let [form (with-meta '(foo x) {:ws "; top\n"})
+          result (pprint/pprint-form form)]
+      (is (str/starts-with? result "; top\n")))))
