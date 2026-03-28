@@ -35,7 +35,8 @@
 
 (defn- max-percent-n
   "Find the max numbered %N param index referenced in a form body.
-   Returns max N found (0 if none). Ignores %& (rest params)."
+   Returns max N found (0 if none). Ignores %& (rest params).
+   Skips nested (fn ...) bodies — their % params are scoped to the inner fn."
   [form]
   (cond
     (symbol? form)
@@ -45,6 +46,7 @@
         #?(:clj (Long/parseLong (subs n 1))
            :cljs (js/parseInt (subs n 1) 10))
         0))
+    (and (seq? form) (= 'fn (first form))) 0
     (seq? form) (reduce max 0 (map max-percent-n form))
     (vector? form) (reduce max 0 (map max-percent-n form))
     (map? form) (reduce max 0 (mapcat (fn [[k v]] [(max-percent-n k) (max-percent-n v)]) form))

@@ -72,6 +72,25 @@
           "no % params in body — #() shorthand is safe"))))
 
 ;; ---------------------------------------------------------------------------
+;; Bug: max-percent-n recursed into nested fn bodies, so
+;; (fn [%1] (fn [%1] %1)) was printed as #(#(%1)) — the outer fn
+;; incorrectly detected %1 from the inner fn's body and used #() shorthand.
+;; Reader re-read this as (fn [] (fn [%1] %1)) — arity lost.
+;; Fix: skip (fn ...) forms in max-percent-n, mirroring find-percent-params.
+;; ---------------------------------------------------------------------------
+
+(deftest anon-fn-nested-fn-not-counted
+  (testing "(fn [%1] (fn [%1] %1)) — outer must not use #() shorthand"
+    (let [form '(fn [%1] (fn [%1] %1))
+          printed (p/print-form form)]
+      (is (not (str/starts-with? printed "#("))
+          "outer fn should not emit #() — its %1 is in inner fn scope")
+      (is (= form (first (core/beme->forms printed)))
+          "roundtrip must preserve outer arity")))
+  (testing "(fn [%1] (inc %1)) — non-nested still uses #()"
+    (is (= "#(inc(%1))" (p/print-form '(fn [%1] (inc %1)))))))
+
+;; ---------------------------------------------------------------------------
 ;; Bug: quoted list with non-callable-headed sublists produced broken output.
 ;; Fix: '(...) sugar only when all inner sublists have callable heads.
 ;; ---------------------------------------------------------------------------
