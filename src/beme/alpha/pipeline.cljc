@@ -26,6 +26,10 @@
   [ctx]
   (when-not (:raw-tokens ctx)
     (throw (ex-info "Pipeline :raw-tokens missing — run scan before group" {})))
+  (when-not (string? (:source ctx))
+    (throw (ex-info (str "Pipeline :source must be a string, got "
+                         (if (nil? (:source ctx)) "nil" (type (:source ctx))))
+                    {})))
   (assoc ctx :tokens (grouper/group-tokens (:raw-tokens ctx) (:source ctx))))
 
 (defn parse

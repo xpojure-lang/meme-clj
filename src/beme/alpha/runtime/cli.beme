@@ -129,13 +129,13 @@ end
 ;; ---------------------------------------------------------------------------
 defn begin run
   [{:keys [file]}]
-  when-not(file println("Usage: beme run <file.beme>") System/exit(1))
+  when-not(file binding([*out* *err*] println("Usage: beme run <file.beme>")) System/exit(1))
   try begin
     beme-run/run-file(file)
     catch begin Exception e
       let begin
         [src try(slurp(file) catch(Exception _ nil))]
-        println(errors/format-error(e src))
+        binding([*out* *err*] println(errors/format-error(e src)))
       end
       System/exit(1)
     end

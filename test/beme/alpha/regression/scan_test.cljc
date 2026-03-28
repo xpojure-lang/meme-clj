@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [beme.alpha.core :as core]
             [beme.alpha.emit.printer :as p]
+            [beme.alpha.pipeline :as pipeline]
             [beme.alpha.scan.tokenizer :as tokenizer]
             [beme.alpha.scan.grouper :as grouper]))
 
@@ -523,3 +524,20 @@
       (is (= "##-Inf" printed))))
   (testing "##NaN prints as ##NaN"
     (is (= "##NaN" (p/print-beme-string (core/beme->forms "##NaN")))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: pipeline/group crashed with NPE when :source was absent from context.
+;; The grouper needs :source for extract-source-range on opaque regions, but
+;; the group stage only validated :raw-tokens, not :source.
+;; Fix: added (string? (:source ctx)) guard to pipeline/group.
+;; ---------------------------------------------------------------------------
+
+(deftest group-requires-source
+  (testing "group with nil :source throws clear pipeline error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Pipeline :source"
+          (pipeline/group {:raw-tokens []}))))
+  (testing "group with non-string :source throws clear pipeline error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Pipeline :source"
+          (pipeline/group {:raw-tokens [] :source 42})))))

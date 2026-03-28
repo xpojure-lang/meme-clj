@@ -4,7 +4,9 @@
    character offsets — this namespace is that shared definition.")
 
 (defn line-col->offset
-  "Convert 1-indexed line/col to a 0-indexed character offset in source."
+  "Convert 1-indexed line/col to a 0-indexed character offset in source.
+   Returns (count source) if the target position is past the end of source.
+   Callers that use the result for slicing should verify the offset is in bounds."
   [source line col]
   (let [n (count source)]
     (loop [i 0 cur-line 1 cur-col 1]

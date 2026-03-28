@@ -9,4 +9,10 @@
 (let [r (io/resource "beme/alpha/runtime/cli.beme")]
   (when-not r
     (throw (ex-info "cli.beme not found on classpath — check that src/ is in :paths" {})))
-  (beme-run/run-string (slurp r)))
+  (let [src (slurp r)]
+    (try
+      (beme-run/run-string src)
+      (catch Exception e
+        (binding [*out* *err*]
+          (println ((requiring-resolve 'beme.alpha.errors/format-error) e src)))
+        (throw (ex-info "Failed to load cli.beme" {} e))))))

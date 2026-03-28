@@ -34,6 +34,15 @@
         {:state :incomplete}
         {:state :invalid :error e}))))
 
+(defn- print-error
+  "Print an error to stderr (JVM) or stdout (CLJS)."
+  [e input]
+  (let [msg (if (ex-message e)
+              (errors/format-error e input)
+              (str "Error: " (pr-str e)))]
+    #?(:clj  (binding [*out* *err*] (println msg))
+       :cljs (println msg))))
+
 (defn- read-input
   "Read potentially multi-line input. Continues reading if brackets/parens are unbalanced.
    Returns malformed input immediately so the eval loop can report the error.
@@ -100,14 +109,9 @@
                      (let [result (eval-fn form)]
                        (prn result)))
                    (catch #?(:clj Throwable :cljs :default) e
-                     (if (ex-message e)
-                       (println (errors/format-error e (:input parsed)))
-                       (println (str "Error: " (pr-str e))))))
+                     (print-error e (:input parsed))))
                  (recur))
 
              (:error parsed)
-             (do (let [e (:error parsed)]
-                   (if (ex-message e)
-                     (println (errors/format-error e (:input parsed)))
-                     (println (str "Error: " (pr-str e)))))
+             (do (print-error (:error parsed) (:input parsed))
                  (recur)))))))))
