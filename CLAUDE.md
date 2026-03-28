@@ -95,7 +95,7 @@ The pipeline has three stages (composed by `beme.alpha.pipeline`):
 
 ## Testing conventions
 
-- Every bug fix or behavioral change must include a **scar tissue test** — a regression test in `test/beme/alpha/regression_test.cljc` that prevents the specific issue from recurring.
+- Every bug fix or behavioral change must include a **scar tissue test** — a regression test in the appropriate `test/beme/alpha/regression/*_test.cljc` file that prevents the specific issue from recurring.
 - Roundtrip tests (read → print → re-read) go in `test/beme/alpha/roundtrip_test.cljc`.
 - `.beme` example files in `test/examples/tests/` are eval-based (self-asserting). Numeric prefixes (`01_`, `02_`, ...) control execution order — the test runner sorts alphabetically, so fundamentals (core rules, definitions) run before features that build on them. New files should continue the numbering sequence.
 - Fixture pairs in `test/examples/fixtures/` compare parsed output against `.edn` expected forms.
@@ -119,7 +119,7 @@ The pipeline has three stages (composed by `beme.alpha.pipeline`):
 | `roundtrip_test` | Read → print → re-read identity. Structural invariant tests. |
 | `regression/scan_test` | Scar tissue: tokenizer and grouper bugs (opaque form depth, char/string in syntax-quote, symbol parsing, EOF handling) |
 | `regression/reader_test` | Scar tissue: parser bugs (discard sentinel, depth limits, head types, spacing, duplicates, metadata) |
-| `regression/emit_test` | Scar tissue: printer and pprint bugs (quoted lists, #() arity, empty list, map column, width) |
+| `regression/emit_test` | Scar tissue: printer and pprint bugs (regex escaping, reader-sugar pprint, deferred auto-keywords, metadata, comments, width) |
 | `regression/errors_test` | Scar tissue: error infrastructure and resolve error-wrapping bugs (source-context, gutter width, CLJS guards) |
 | `core_test` | Public API surface (`beme->forms`, `forms->beme`, `pprint-beme`, etc.) |
 | `runtime/repl_test` | REPL infrastructure (`input-state`, `read-input`) |
@@ -143,8 +143,8 @@ clojure-lsp (with clj-kondo) provides useful static analysis for development, te
 - **Diagnostics (clj-kondo)**: Catches unused requires, unresolved symbols, unused bindings. Known noise to ignore:
   - `tokenizer.cljc` "unused value" warnings — these are `case` branch return values, not bugs.
   - `generative_test.clj` "unresolved symbol" errors — macro-generated `deftest` names from `defspec`.
-  - `repl_test.cljc` unused CLJS requires — expected in `.cljc` reader conditionals.
-  - `repl.cljc` "unused public var `start`" — entry point called from bb.edn, not from Clojure source.
+  - `.cljc` files with `#?` reader conditionals — clj-kondo analyzes one platform branch and flags requires/vars used only in the other branch as unused. Affects `resolve.cljc`, `repl_test.cljc`, `errors_test.cljc`, `dispatch_test.cljc`, `scan_test.cljc`.
+  - `repl.cljc` "unused public var `start`" / `test_runner.clj` "unused public var `run-all-beme-tests`" — entry points called externally (bb.edn, CLI), not from Clojure source.
 
 clojure-lsp is configured via the `.claude-plugin/` directory for Claude Code integration. Requires `clojure-lsp` on PATH (`brew install clojure-lsp/brew/clojure-lsp`).
 
