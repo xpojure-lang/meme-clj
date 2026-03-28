@@ -105,6 +105,39 @@
   (testing "normal Clojure still reads fine"
     (is (= '[(+ 1 2)] (core/clj->forms "(+ 1 2)"))))))
 
+;; ---------------------------------------------------------------------------
+;; Scanner vs display line model: CRLF bridge in format-error.
+;; The scanner line model (line-col->offset) treats \r as a regular column.
+;; The display model (source-context via str/split-lines) strips \r from
+;; \r\n pairs. format-error bridges these — caret must not overrun the
+;; displayed line when scanner col exceeds display line length.
+;; ---------------------------------------------------------------------------
+
+(deftest format-error-crlf-caret-clamp
+  (testing "caret clamped to display line length on CRLF source"
+    ;; Scanner sees line 1 as [f o o \r] (4 cols), but display shows "foo" (3 chars).
+    ;; A col pointing at \r (col 4) should not produce a caret past "foo".
+    (let [e (ex-info "bad" {:line 1 :col 4})
+          source "foo\r\nbar"
+          result (beme.alpha.errors/format-error e source)]
+      (is (re-find #"foo" result))
+      ;; Caret at col 4 is clamped to col 4 (inc display-len=3+1=4), which is
+      ;; one past "foo" — acceptable for exclusive end position
+      (is (re-find #"\^" result))))
+  (testing "span underline clamped on CRLF source"
+    ;; end-col 5 would overrun "foo" (3 chars) — should be clamped
+    (let [e (ex-info "bad" {:line 1 :col 3 :end-col 5})
+          source "foo\r\nbar"
+          result (beme.alpha.errors/format-error e source)]
+      (is (re-find #"foo" result))
+      ;; Span from col 3 to clamped end-col 4: single ~ or ^
+      (is (re-find #"\| +[~^]" result))))
+  (testing "normal LF source unaffected by clamp"
+    (let [e (ex-info "bad" {:line 1 :col 1 :end-col 4})
+          source "foo\nbar"
+          result (beme.alpha.errors/format-error e source)]
+      (is (re-find #"~~~" result)))))
+
 #?(:cljs
 (deftest tagged-literal-cljs-error
   (testing "#uuid on CLJS throws beme error, not ReferenceError"

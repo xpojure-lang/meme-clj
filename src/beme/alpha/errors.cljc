@@ -5,7 +5,11 @@
   (:require [clojure.string :as str]))
 
 (defn source-context
-  "Extract the source line at the given 1-indexed line number.
+  "Extract the source line at the given 1-indexed line number for display.
+   Uses str/split-lines which splits on \\n and \\r\\n (stripping \\r from
+   CRLF pairs). This is the *display* line model — it may differ from the
+   scanner line model (beme.alpha.scan.source/line-col->offset) which treats
+   \\r as a regular character. The difference only matters for CRLF sources.
    Returns nil if source is nil/blank, line is nil, or line is out of range."
   [source line]
   (when (and source line (not (str/blank? source)))
@@ -58,6 +62,12 @@
   "Format an exception for display, optionally with source context.
    Shows multi-line context with line numbers, span underlines, and
    secondary locations when available in ex-data.
+
+   This function bridges two line models: :line/:col in ex-data come from
+   the scanner (where \\r occupies a column), while the display line comes
+   from source-context (which uses str/split-lines, stripping \\r from CRLF
+   pairs). For CRLF sources the display line may be shorter than the scanner
+   col implies — span-underline clamps to avoid overrunning the display.
    Returns a string suitable for printing."
   ([e] (format-error e nil))
   ([e source]
@@ -83,16 +93,23 @@
      (when context-line
        (vswap! parts conj (str "\n" (line-number-gutter line gutter-w) context-line))
        (when (and col (pos? col))
-         (vswap! parts conj (str "\n" (blank-gutter gutter-w)
-                                 (span-underline col end-col)))))
+         ;; Clamp col/end-col to display line length — the scanner line model
+         ;; may count chars (e.g. \r in CRLF) that the display line omits.
+         (let [display-len (count context-line)
+               clamped-col (min col (inc display-len))
+               clamped-end (when end-col (min end-col (inc display-len)))]
+           (vswap! parts conj (str "\n" (blank-gutter gutter-w)
+                                   (span-underline clamped-col clamped-end))))))
      ;; Secondary locations
      (when (seq secondary)
        (doseq [{s-line :line s-col :col s-label :label} secondary]
          (when-let [ctx (and source s-line (source-context source s-line))]
            (vswap! parts conj (str "\n" (line-number-gutter s-line gutter-w) ctx))
            (when (and s-col (pos? s-col))
-             (vswap! parts conj (str "\n" (blank-gutter gutter-w)
-                                     (apply str (repeat (dec s-col) " ")) "^ " s-label))))))
+             ;; Clamp secondary col to display line length (same bridge as primary)
+             (let [clamped (min s-col (inc (count ctx)))]
+               (vswap! parts conj (str "\n" (blank-gutter gutter-w)
+                                       (apply str (repeat (dec clamped) " ")) "^ " s-label)))))))
      ;; Hint
      (when hint
        (vswap! parts conj (str "\nHint: " hint)))
