@@ -24,11 +24,15 @@
   "Collapse opaque regions (reader conditionals, namespaced maps,
    syntax-quote brackets) from flat tokens into composite tokens."
   [ctx]
+  (when-not (:raw-tokens ctx)
+    (throw (ex-info "Pipeline :raw-tokens missing — run scan before group" {})))
   (assoc ctx :tokens (grouper/group-tokens (:raw-tokens ctx) (:source ctx))))
 
 (defn parse
   "Parse grouped tokens into Clojure forms."
   [ctx]
+  (when-not (:tokens ctx)
+    (throw (ex-info "Pipeline :tokens missing — run group before parse" {})))
   (assoc ctx :forms (reader/read-beme-string-from-tokens
                       (:tokens ctx) (:opts ctx) (:source ctx))))
 
