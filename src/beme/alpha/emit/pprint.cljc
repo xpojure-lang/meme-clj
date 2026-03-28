@@ -218,7 +218,8 @@
       (let [flat-str (str "'(" (str/join " " (map flat inner)) ")")]
         (if (<= (+ col (count flat-str)) width)
           flat-str
-          (let [inner-col (+ col 2)
+          (let [quote-paren-len (count "'(")
+                inner-col (+ col quote-paren-len)
                 inner-indent (indent-str inner-col)
                 pp-elems (map #(pp % inner-col width) inner)]
             (str "'(" (first pp-elems)

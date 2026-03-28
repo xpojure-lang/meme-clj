@@ -194,6 +194,9 @@
 (defn- char-code* [ch]
   #?(:clj (int ch) :cljs (.charCodeAt ch 0)))
 
+(def ^:private code-0* (char-code* \0))
+(def ^:private code-9* (char-code* \9))
+
 (defn- percent-param-type
   "If sym is a % parameter symbol, return its type: :bare, :rest, or the integer N."
   [sym]
@@ -204,7 +207,7 @@
         (= n "%&") :rest
         (and (str/starts-with? n "%")
              (> (count n) 1)
-             (every? #(let [c (char-code* %)] (and (>= c 48) (<= c 57))) (seq (subs n 1))))
+             (every? #(let [c (char-code* %)] (and (>= c code-0*) (<= c code-9*))) (seq (subs n 1))))
         (#?(:clj Long/parseLong :cljs #(js/parseInt % 10)) (subs n 1))
         :else nil))))
 
@@ -518,11 +521,11 @@
    from the token as metadata on the resulting form."
   [p]
   (let [ws (:ws (ppeek p))
-        d (vswap! (:depth p) inc)]
+        depth (vswap! (:depth p) inc)]
     (try
-      (when (> d max-depth)
+      (when (> depth max-depth)
         (errors/beme-error (str "Maximum nesting depth (" max-depth ") exceeded — input is too deeply nested")
-                           (merge {:depth d} (when-let [tok (ppeek p)]
+                           (merge {:depth depth} (when-let [tok (ppeek p)]
                                                (select-keys tok [:line :col])))))
       (let [form (parse-form-base p)]
         (attach-ws (parse-call-chain p form) ws))

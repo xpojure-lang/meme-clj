@@ -50,7 +50,8 @@
 
 (defn resolve-regex [raw loc]
   #?(:clj (host-read raw loc "Invalid regex")
-     :cljs (try (js/RegExp. (subs raw 2 (dec (count raw))))
+     :cljs (try (let [regex-delim-len (count "#\"")]
+                  (js/RegExp. (subs raw regex-delim-len (dec (count raw)))))
                 (catch :default e
                   (let [cause-msg (.-message e)
                         detail (if cause-msg

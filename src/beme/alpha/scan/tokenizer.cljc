@@ -14,17 +14,28 @@
 (defn- char-code [ch]
   #?(:clj (int ch) :cljs (.charCodeAt ch 0)))
 
+;; Named character-code constants — replace magic ASCII numbers
+(def ^:private code-0 (char-code \0))
+(def ^:private code-7 (char-code \7))
+(def ^:private code-9 (char-code \9))
+(def ^:private code-A (char-code \A))
+(def ^:private code-F (char-code \F))
+(def ^:private code-Z (char-code \Z))
+(def ^:private code-a (char-code \a))
+(def ^:private code-f (char-code \f))
+(def ^:private code-z (char-code \z))
+
 (defn- digit? [ch]
-  (and ch (let [c (char-code ch)] (and (>= c 48) (<= c 57)))))
+  (and ch (let [c (char-code ch)] (and (>= c code-0) (<= c code-9)))))
 
 (defn- hex-digit? [ch]
   (and ch (let [c (char-code ch)]
-            (or (and (>= c 48) (<= c 57))      ; 0-9
-                (and (>= c 65) (<= c 70))      ; A-F
-                (and (>= c 97) (<= c 102)))))) ; a-f
+            (or (and (>= c code-0) (<= c code-9))
+                (and (>= c code-A) (<= c code-F))
+                (and (>= c code-a) (<= c code-f))))))
 
 (defn- octal-digit? [ch]
-  (and ch (let [c (char-code ch)] (and (>= c 48) (<= c 55))))) ; 0-7
+  (and ch (let [c (char-code ch)] (and (>= c code-0) (<= c code-7)))))
 
 (defn- symbol-start? [ch]
   (and ch
@@ -125,8 +136,8 @@
 (defn- letter? [ch]
   (and ch
        (let [c (char-code ch)]
-         (or (and (>= c 97) (<= c 122))    ;; a-z
-             (and (>= c 65) (<= c 90))))))  ;; A-Z
+         (or (and (>= c code-a) (<= c code-z))
+             (and (>= c code-A) (<= c code-Z))))))
 
 (defn- read-char-extra
   "After the first char of a character literal, consume additional chars
