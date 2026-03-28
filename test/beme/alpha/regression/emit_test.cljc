@@ -282,6 +282,34 @@
 ;; Fix: check deferred-auto-keyword? before call? in pp, mirroring printer.
 ;; ---------------------------------------------------------------------------
 
+;; ---------------------------------------------------------------------------
+;; Bug: regex patterns containing " printed unescaped — #"a"b" instead of
+;; #"a\"b". Tokenizer terminated at the first unescaped ", breaking roundtrip.
+;; Fix: escape unescaped quotes in .pattern output.
+;; ---------------------------------------------------------------------------
+
+(deftest regex-quote-in-pattern-escaped
+  (testing "regex from beme source with \\\" roundtrips"
+    (let [forms (core/beme->forms "#\"a\\\"b\"")
+          printed (p/print-beme-string forms)
+          forms2 (core/beme->forms printed)]
+      (is (= (.pattern ^java.util.regex.Pattern (first forms))
+             (.pattern ^java.util.regex.Pattern (first forms2))))))
+  #?(:clj
+  (testing "programmatic regex with bare \" produces parseable output"
+    (let [r (re-pattern "a\"b")
+          printed (p/print-form r)]
+      (is (re-find #"^#\"" printed))
+      (is (some? (core/beme->forms printed)))
+      (is (= (re-find r "a\"b")
+             (re-find (first (core/beme->forms printed)) "a\"b"))))))
+  (testing "no double-escaping of already-escaped quotes"
+    (let [forms (core/beme->forms "#\"x\\\"y\"")
+          printed (p/print-beme-string forms)
+          forms2 (core/beme->forms printed)]
+      (is (= (.pattern ^java.util.regex.Pattern (first forms))
+             (.pattern ^java.util.regex.Pattern (first forms2)))))))
+
 #?(:clj
 (deftest pprint-deferred-auto-keyword-not-corrupted
   (testing "::foo preserved at narrow width"
