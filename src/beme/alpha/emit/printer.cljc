@@ -198,10 +198,12 @@
     ;; string
     (string? form) (pr-str form)
 
-    ;; regex — escape unescaped quotes in the pattern
+    ;; regex — escape bare quotes in the pattern.
+    ;; Match escape sequences (\.) atomically so \\" is parsed as
+    ;; (escaped-backslash)(bare-quote), not (backslash)(escaped-quote).
     (instance? #?(:clj java.util.regex.Pattern :cljs js/RegExp) form)
     (let [raw #?(:clj (.pattern ^java.util.regex.Pattern form) :cljs (.-source form))]
-      (str "#\"" (str/replace raw #"(?<!\\)\"" "\\\\\"") "\""))
+      (str "#\"" (str/replace raw #"\\.|\"" (fn [m] (if (= m "\"") "\\\"" m))) "\""))
 
     ;; char (JVM/Babashka only — ClojureScript has no char type)
     #?@(:clj [(char? form)

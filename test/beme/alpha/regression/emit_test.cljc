@@ -308,7 +308,16 @@
           printed (p/print-beme-string forms)
           forms2 (core/beme->forms printed)]
       (is (= (.pattern ^java.util.regex.Pattern (first forms))
-             (.pattern ^java.util.regex.Pattern (first forms2)))))))
+             (.pattern ^java.util.regex.Pattern (first forms2))))))
+  #?(:clj
+  (testing "even backslashes before quote: \\\\ + \" not misidentified as escaped quote"
+    (let [r (re-pattern "a\\\\\"b")
+          printed (p/print-form r)
+          forms (core/beme->forms printed)]
+      (is (some? forms) "printed regex should parse without error")
+      (is (= (re-find r "a\\\"b")
+             (re-find (first forms) "a\\\"b"))
+          "regex behavior should be preserved")))))
 
 #?(:clj
 (deftest pprint-deferred-auto-keyword-not-corrupted
