@@ -72,17 +72,15 @@ end
 
 defn- begin process-file-to-disk
   [transform output-fn verb path]
-  let begin
-    [out if(output-fn output-fn(path) path)]
-    try begin
-      let begin
-        [result transform(path)]
-        spit(out str(result "\n"))
-        if(=(path out) println(str(verb " " path)) println(str(path " → " out)))
-        :ok
-      end
-      catch(Exception e println(str(path " ERROR: " .getMessage(e))) :fail)
+  try begin
+    let begin
+      [out if(output-fn output-fn(path) path)
+       result transform(path)]
+      spit(out str(result "\n"))
+      if(=(path out) println(str(verb " " path)) println(str(path " → " out)))
+      :ok
     end
+    catch(Exception e println(str(path " ERROR: " .getMessage(e))) :fail)
   end
 end
 
