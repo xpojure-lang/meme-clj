@@ -293,8 +293,10 @@
     (let [forms (core/beme->forms "#\"a\\\"b\"")
           printed (p/print-beme-string forms)
           forms2 (core/beme->forms printed)]
-      (is (= (.pattern ^java.util.regex.Pattern (first forms))
-             (.pattern ^java.util.regex.Pattern (first forms2))))))
+      (is (= #?(:clj (.pattern ^java.util.regex.Pattern (first forms))
+                :cljs (.-source (first forms)))
+             #?(:clj (.pattern ^java.util.regex.Pattern (first forms2))
+                :cljs (.-source (first forms2)))))))
   #?(:clj
   (testing "programmatic regex with bare \" produces parseable output"
     (let [r (re-pattern "a\"b")
@@ -307,8 +309,10 @@
     (let [forms (core/beme->forms "#\"x\\\"y\"")
           printed (p/print-beme-string forms)
           forms2 (core/beme->forms printed)]
-      (is (= (.pattern ^java.util.regex.Pattern (first forms))
-             (.pattern ^java.util.regex.Pattern (first forms2))))))
+      (is (= #?(:clj (.pattern ^java.util.regex.Pattern (first forms))
+                :cljs (.-source (first forms)))
+             #?(:clj (.pattern ^java.util.regex.Pattern (first forms2))
+                :cljs (.-source (first forms2)))))))
   #?(:clj
   (testing "even backslashes before quote: \\\\ + \" not misidentified as escaped quote"
     (let [r (re-pattern "a\\\\\"b")

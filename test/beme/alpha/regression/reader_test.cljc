@@ -403,3 +403,23 @@
       (is (= form re-read))))
   (testing "chaining does not happen inside quoted lists"
     (is (= '[(quote (a (b) (c d)))] (core/beme->forms "'(a(b) (c d))")))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: reader accepted source text as third argument to
+;; read-beme-string-from-tokens but discarded it (_source). Parse errors
+;; never carried :source-context in ex-data, even when source was available.
+;; Fix: store source in parser state, inject into all beme-error calls.
+;; ---------------------------------------------------------------------------
+
+(deftest reader-errors-include-source-context
+  (testing "parse error carries :source-context in ex-data"
+    (let [src "foo(bar"
+          e (try (core/beme->forms src) nil
+                 (catch #?(:clj Exception :cljs :default) e e))]
+      (is (some? e))
+      (is (some? (:source-context (ex-data e))))))
+  (testing "bare paren error carries :source-context"
+    (let [src "(oops)"
+          e (try (core/beme->forms src) nil
+                 (catch #?(:clj Exception :cljs :default) e e))]
+      (is (some? (:source-context (ex-data e)))))))

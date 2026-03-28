@@ -23,7 +23,8 @@
 (def symbol-suffix-chars "abcdefghijklmnopqrstuvwxyz0123456789-?!*")
 
 (def reserved-symbols #{'fn 'quote 'var 'clojure.core/deref
-                         'nil 'true 'false})
+                         'nil 'true 'false
+                         'begin 'end})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))

@@ -29,8 +29,11 @@
 (def ^:private ^:const max-depth 512)
 
 (defn- make-parser
-  ([tokens] {:tokens tokens :pos (volatile! 0) :depth (volatile! 0) :clj-mode (volatile! false)})
-  ([tokens opts] {:tokens tokens :pos (volatile! 0) :depth (volatile! 0) :opts opts :clj-mode (volatile! false)}))
+  ([tokens] (make-parser tokens nil nil))
+  ([tokens opts] (make-parser tokens opts nil))
+  ([tokens opts source]
+   {:tokens tokens :pos (volatile! 0) :depth (volatile! 0)
+    :opts opts :clj-mode (volatile! false) :source source}))
 
 (defn- peof? [{:keys [tokens pos]}]
   (>= @pos (count tokens)))
@@ -50,6 +53,12 @@
     (if (and (>= i 0) (< i (count tokens)))
       (select-keys (nth tokens i) [:line :col])
       {})))
+
+(defn- error-data
+  "Merge source into error data map so beme-error can attach :source-context."
+  [p data]
+  (cond-> data
+    (:source p) (assoc :source (:source p))))
 
 (def ^:private token-name
   "Human-readable names for token types."
@@ -131,9 +140,9 @@
                closer (get closer-name end-type (name end-type))]
            (errors/beme-error
              (str "Unclosed " ctx " — expected " closer " but reached end of input")
-             (cond-> (assoc (plast-loc p) :incomplete true)
-               open-loc (assoc :secondary [{:line (:line open-loc) :col (:col open-loc) :label "opened here"}])
-               open-loc (assoc :hint (str "Add " (get token-name end-type (name end-type)) " to close this " ctx))))))
+             (error-data p (cond-> (assoc (plast-loc p) :incomplete true)
+                             open-loc (assoc :secondary [{:line (:line open-loc) :col (:col open-loc) :label "opened here"}])
+                             open-loc (assoc :hint (str "Add " (get token-name end-type (name end-type)) " to close this " ctx)))))))
        (let [tok (ppeek p)]
          (if (end-pred tok)
            (do (padvance! p) forms)
@@ -153,11 +162,11 @@
     (let [forms (parse-forms-until p :close-brace loc)]
       (when (odd? (count forms))
         (errors/beme-error (str "Map literal requires an even number of forms, but got " (count forms))
-                           (assoc loc :hint "Maps need key-value pairs — check for a missing key or value")))
+                           (error-data p (assoc loc :hint "Maps need key-value pairs — check for a missing key or value"))))
       (let [m (apply array-map forms)]
         (when (not= (count m) (/ (count forms) 2))
           (errors/beme-error "Duplicate key in map literal"
-                             loc))
+                             (error-data p loc)))
         m))))
 
 (defn- parse-set [p]
@@ -167,7 +176,7 @@
           s (set forms)]
       (when (not= (count s) (count forms))
         (errors/beme-error "Duplicate element in set literal"
-                           loc))
+                           (error-data p loc)))
       s)))
 
 ;; ---------------------------------------------------------------------------
@@ -295,7 +304,7 @@
   [p]
   (let [tok (ppeek p)]
     (when-not tok
-      (errors/beme-error "Unexpected end of input — expected a form" (assoc (plast-loc p) :incomplete true)))
+      (errors/beme-error "Unexpected end of input — expected a form" (error-data p (assoc (plast-loc p) :incomplete true))))
     (case (:type tok)
       :symbol
       (let [s (:value tok)]
@@ -345,7 +354,7 @@
           (apply list (parse-forms-until p :close-paren loc)))
         (errors/beme-error
           "Bare parentheses not allowed — every (...) needs a head: symbol, keyword, or vector. Write f(x) not (f x)."
-          (select-keys tok [:line :col])))
+          (error-data p (select-keys tok [:line :col]))))
 
       :open-bracket (maybe-call p (parse-vector p))
       :open-brace (maybe-call p (parse-map p))
@@ -356,7 +365,7 @@
           (let [inner (parse-form p)]
             (when (discard-sentinel? inner)
               (errors/beme-error "Deref target was discarded by #_ — nothing to dereference"
-                                (select-keys tok [:line :col])))
+                                (error-data p (select-keys tok [:line :col]))))
             (list 'clojure.core/deref inner)))
 
       :meta
@@ -364,11 +373,11 @@
           (let [m (parse-form p)
                 _ (when (discard-sentinel? m)
                     (errors/beme-error "Metadata value was discarded by #_ — nothing to attach as metadata"
-                                      (select-keys tok [:line :col])))
+                                      (error-data p (select-keys tok [:line :col]))))
                 target (parse-form p)
                 _ (when (discard-sentinel? target)
                     (errors/beme-error "Metadata target was discarded by #_ — nothing to attach metadata to"
-                                      (select-keys tok [:line :col])))]
+                                      (error-data p (select-keys tok [:line :col]))))]
             (vary-meta target merge (cond
                                         (keyword? m) {m true}
                                         (symbol? m)  {:tag m}
@@ -376,7 +385,7 @@
                                         :else
                                         (errors/beme-error
                                           (str "Metadata must be a keyword, symbol, or map — got " (pr-str m))
-                                          (select-keys tok [:line :col]))))))
+                                          (error-data p (select-keys tok [:line :col])))))))
 
       :quote
       (do (padvance! p)
@@ -396,7 +405,7 @@
             (let [inner (parse-form p)]
               (when (discard-sentinel? inner)
                 (errors/beme-error "Quote target was discarded by #_ — nothing to quote"
-                                  (select-keys tok [:line :col])))
+                                  (error-data p (select-keys tok [:line :col]))))
               (list 'quote inner))))
 
       :syntax-quote-raw
@@ -407,18 +416,18 @@
 
       :unquote
       (errors/beme-error "Unquote (~) outside syntax-quote — ~ only has meaning inside `"
-                         (select-keys tok [:line :col]))
+                         (error-data p (select-keys tok [:line :col])))
 
       :unquote-splicing
       (errors/beme-error "Unquote-splicing (~@) outside syntax-quote — ~@ only has meaning inside `"
-                         (select-keys tok [:line :col]))
+                         (error-data p (select-keys tok [:line :col])))
 
       :var-quote
       (do (padvance! p)
           (let [inner (parse-form p)]
             (when (discard-sentinel? inner)
               (errors/beme-error "Var-quote target was discarded by #_ — nothing to reference"
-                                (select-keys tok [:line :col])))
+                                (error-data p (select-keys tok [:line :col]))))
             (list 'var inner)))
 
       :discard
@@ -432,7 +441,7 @@
       (do (padvance! p)
           (when (peof? p)
             (errors/beme-error "Missing form after #_ — expected a form to discard"
-                               (assoc (select-keys tok [:line :col]) :incomplete true)))
+                               (error-data p (assoc (select-keys tok [:line :col]) :incomplete true))))
           (parse-form p) ; parse and discard
           (let [nxt (ppeek p)]
             (if (or (nil? nxt)
@@ -447,7 +456,7 @@
         (let [data (parse-form p)]
           (when (discard-sentinel? data)
             (errors/beme-error (str "Tagged literal #" tag " value was discarded by #_ — tagged literal requires a value")
-                               (select-keys tok [:line :col])))
+                               (error-data p (select-keys tok [:line :col]))))
           (resolve/resolve-tagged-literal tag data (select-keys tok [:line :col]))))
 
       :namespaced-map-raw
@@ -462,21 +471,21 @@
           (let [body (parse-form p)
                 _ (when (discard-sentinel? body)
                     (errors/beme-error "#() body was discarded — #() requires a non-discarded expression"
-                                      (select-keys tok [:line :col])))
+                                      (error-data p (select-keys tok [:line :col]))))
                 nxt (ppeek p)]
             (cond
               (nil? nxt)
               (errors/beme-error "Unterminated #() — expected closing )"
-                                (assoc (select-keys tok [:line :col]) :incomplete true))
+                                (error-data p (assoc (select-keys tok [:line :col]) :incomplete true)))
 
               (not (tok-type? nxt :close-paren))
               (errors/beme-error "#() body must be a single expression — use fn(args...) for multiple expressions"
-                                (select-keys nxt [:line :col])))
+                                (error-data p (select-keys nxt [:line :col]))))
             (padvance! p)
             (let [params (find-percent-params body)
                   _ (when (contains? params 0)
                       (errors/beme-error "%0 is not a valid parameter — use %1 or % for the first argument"
-                                         (select-keys tok [:line :col])))
+                                         (error-data p (select-keys tok [:line :col]))))
                   param-vec (build-anon-fn-params params)
                   body' (normalize-bare-percent body)]
               (list 'fn param-vec body'))))
@@ -489,7 +498,7 @@
 
       ;; default
       (errors/beme-error (str "Unexpected " (describe-token tok))
-                         (select-keys tok [:line :col])))))
+                         (error-data p (select-keys tok [:line :col]))))))
 
 (defn- metadatable?
   "Can this value carry Clojure metadata?"
@@ -525,8 +534,8 @@
     (try
       (when (> depth max-depth)
         (errors/beme-error (str "Maximum nesting depth (" max-depth ") exceeded — input is too deeply nested")
-                           (merge {:depth depth} (when-let [tok (ppeek p)]
-                                               (select-keys tok [:line :col])))))
+                           (error-data p (merge {:depth depth} (when-let [tok (ppeek p)]
+                                                                 (select-keys tok [:line :col]))))))
       (let [form (parse-form-base p)]
         (attach-ws (parse-call-chain p form) ws))
       (finally
@@ -541,8 +550,8 @@
    Used by the pipeline; most callers should use beme.alpha.core/beme->forms instead."
   ([tokens] (read-beme-string-from-tokens tokens nil nil))
   ([tokens opts] (read-beme-string-from-tokens tokens opts nil))
-  ([tokens opts _source]
-   (let [p (make-parser tokens opts)
+  ([tokens opts source]
+   (let [p (make-parser tokens opts source)
          trailing (:trailing-ws (meta tokens))]
      (loop [forms []]
        (if (peof? p)
