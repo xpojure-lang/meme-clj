@@ -105,7 +105,7 @@
                    ;; capture prompt output; we want the return value
                    nil)
           input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["+(1 2)"])))]
+                  (read-input "=> " (mock-read-line ["+(1 2)"]) nil))]
       (is (= "+(1 2)" input))))))
 
 #?(:clj
@@ -113,41 +113,41 @@
   (testing "unbalanced input accumulates until balanced"
     (let [input (binding [*out* (java.io.StringWriter.)]
                   (read-input "=> " (mock-read-line ["defn(f [x]"
-                                                     "  +(x 1))"])))]
+                                                     "  +(x 1))"]) nil))]
       (is (= "defn(f [x]\n  +(x 1))" input))))))
 
 #?(:clj
 (deftest read-input-eof
   (testing "nil from read-line-fn on first call returns nil"
     (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line [])))]
+                  (read-input "=> " (mock-read-line []) nil))]
       (is (nil? input))))
   (testing "nil after partial unbalanced input returns nil"
     (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["+(1 2"])))]
+                  (read-input "=> " (mock-read-line ["+(1 2"]) nil))]
       (is (nil? input))))))
 
 #?(:clj
 (deftest read-input-discard-only
   (testing "discard-only input is complete and returns immediately"
     (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["#_foo"])))]
+                  (read-input "=> " (mock-read-line ["#_foo"]) nil))]
       (is (= "#_foo" input))))))
 
 #?(:clj
 (deftest read-input-malformed-returns-immediately
   (testing "malformed input returns immediately, not infinite continuation — Bug 3"
     (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["1/"])))]
+                  (read-input "=> " (mock-read-line ["1/"]) nil))]
       (is (= "1/" input))))
   (testing ") alone returns immediately"
     (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line [")"])))]
+                  (read-input "=> " (mock-read-line [")"]) nil))]
       (is (= ")" input))))))
 
 #?(:clj
 (deftest read-input-blank-first-line
   (testing "blank first line returns empty string immediately, not continuation"
     (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line [""])))]
+                  (read-input "=> " (mock-read-line [""]) nil))]
       (is (= "" input))))))

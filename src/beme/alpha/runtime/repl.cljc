@@ -8,21 +8,24 @@
   "Returns :complete, :incomplete, or :invalid for the given input string.
    :complete   — parsed successfully
    :incomplete — unclosed delimiter (EOF-related error), keep reading
-   :invalid    — malformed literal or other non-recoverable error"
-  [s]
-  (try
-    (pipeline/run s)
-    :complete
-    (catch #?(:clj Exception :cljs :default) e
-      (if (:incomplete (ex-data e))
-        :incomplete
-        :invalid))))
+   :invalid    — malformed literal or other non-recoverable error
+   opts are the same reader opts passed to pipeline/run (e.g. :resolve-keyword)
+   so that the completeness check uses the same reader configuration as eval."
+  ([s] (input-state s nil))
+  ([s opts]
+   (try
+     (pipeline/run s opts)
+     :complete
+     (catch #?(:clj Exception :cljs :default) e
+       (if (:incomplete (ex-data e))
+         :incomplete
+         :invalid)))))
 
 (defn- read-input
   "Read potentially multi-line input. Continues reading if brackets/parens are unbalanced.
    Returns malformed input immediately so the eval loop can report the error.
    Returns empty string for blank first line (so outer loop can skip it cleanly)."
-  [prompt read-line-fn]
+  [prompt read-line-fn reader-opts]
   (print prompt)
   (flush)
   (loop [lines []]
@@ -38,7 +41,7 @@
             ""
 
             :else
-            (case (input-state input)
+            (case (input-state input reader-opts)
               :complete   input
               :invalid    input
               :incomplete (do (print "  .. ")
@@ -69,7 +72,7 @@
      (loop []
        (let [prompt #?(:clj (str (ns-name *ns*) "=> ")
                        :cljs "beme=> ")
-             input (read-input prompt read-line-fn)]
+             input (read-input prompt read-line-fn reader-opts)]
          (when input
            (if (str/blank? input)
              (recur)
