@@ -62,9 +62,9 @@ The pipeline has three stages (composed by `beme.alpha.pipeline`):
 
 ### Key namespaces
 
-- `beme.alpha.errors` (.cljc) — Error infrastructure: `beme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Used by tokenizer, grouper, reader, and REPL. Portable.
+- `beme.alpha.errors` (.cljc) — Error infrastructure: `beme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Used by tokenizer, grouper, reader, and REPL. Portable.
 - `beme.alpha.forms` (.cljc) — Shared form-level predicates and constructors. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding). Portable.
-- `beme.alpha.scan.source` (.cljc) — Source-position utilities shared across pipeline stages. `line-col->offset` (the shared definition of how (line, col) maps to character offset — tokenizer and grouper must agree for the pipeline to be correct). Portable.
+- `beme.alpha.scan.source` (.cljc) — Scanner-level source-position utilities. `line-col->offset` uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). Tokenizer and grouper must agree with this model. Note: the scanner and display line models diverge for CRLF sources — see `format-error` for how the bridge is handled. Portable.
 - `beme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for opaque regions. Portable.
 - `beme.alpha.scan.grouper` (.cljc) — Token grouping: collapses opaque-region markers + balanced delimiters into single composite `-raw` tokens. Operates on already-tokenized input where bracket matching is trivial. Portable.
 - `beme.alpha.parse.reader` (.cljc) — Recursive-descent parser (grouped tokens → Clojure forms). Delegates value resolution to `beme.alpha.parse.resolve`. Portable.
