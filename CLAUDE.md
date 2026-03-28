@@ -14,7 +14,7 @@ Everything else (data literals, reader syntax, destructuring, commas-as-whitespa
 ## Build & Test
 
 ```bash
-# Unit tests (JVM Clojure)
+# Unit tests (JVM Clojure) — CI uses -J-Xss4m for deep recursion tests
 clojure -X:test
 
 # .beme example tests (Babashka) — runs test/examples/tests/*.beme
@@ -43,6 +43,14 @@ bb beme format file.beme --stdout  # print to stdout
 ```
 
 No external dependencies. Only requires Clojure or Babashka. ClojureScript tests require Node.js.
+
+```bash
+# Build JAR
+clojure -T:build jar
+
+# Deploy to Clojars
+clojure -T:build deploy
+```
 
 ## Architecture
 
