@@ -17,13 +17,14 @@
 (defn- read-clj-forms
   "Read all Clojure forms from a .cljc file using Clojure's reader."
   [path]
-  (let [rdr (java.io.PushbackReader. (io/reader path))]
-    (loop [forms []]
-      (let [form (try (read {:read-cond :preserve :eof ::eof} rdr)
-                      (catch Exception _ {::error true}))]
-        (if (= form ::eof)
-          forms
-          (recur (conj forms form)))))))
+  (binding [*read-eval* false]
+    (let [rdr (java.io.PushbackReader. (io/reader path))]
+      (loop [forms []]
+        (let [form (try (read {:read-cond :preserve :eof ::eof} rdr)
+                        (catch Exception _ {::error true}))]
+          (if (= form ::eof)
+            forms
+            (recur (conj forms form))))))))
 
 (defn- form-name
   "Extract a readable name for a form."

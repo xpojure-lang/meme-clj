@@ -92,6 +92,19 @@
   (testing "#=() blocked in reader conditional"
     (is (thrown? Exception (core/beme->forms "#?(:clj #=(+ 1 2))"))))))
 
+;; ---------------------------------------------------------------------------
+;; S1: clj->forms executed #=() at read time — no *read-eval* binding.
+;; Every other host-reader call bound *read-eval* false, but clj->forms
+;; and dogfood_test/read-clj-forms did not.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest read-eval-blocked-in-clj->forms
+  (testing "#=() blocked in clj->forms"
+    (is (thrown? Exception (core/clj->forms "#=(+ 1 2)"))))
+  (testing "normal Clojure still reads fine"
+    (is (= '[(+ 1 2)] (core/clj->forms "(+ 1 2)"))))))
+
 #?(:cljs
 (deftest tagged-literal-cljs-error
   (testing "#uuid on CLJS throws beme error, not ReferenceError"

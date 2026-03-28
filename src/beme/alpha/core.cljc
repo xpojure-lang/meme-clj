@@ -56,15 +56,16 @@
   "Read Clojure source string, return a vector of forms.
    JVM/Babashka only — Clojure's reader is needed for full form support."
   [clj-src]
-  (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))]
-    (loop [forms []]
-      (let [form (try
-                   (read {:read-cond :preserve :eof eof-sentinel} rdr)
-                   (catch Exception e
-                     (throw (ex-info (str "Clojure read error: " (ex-message e)) {} e))))]
-        (if (identical? form eof-sentinel)
-          forms
-          (recur (conj forms form))))))))
+  (binding [*read-eval* false]
+    (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))]
+      (loop [forms []]
+        (let [form (try
+                     (read {:read-cond :preserve :eof eof-sentinel} rdr)
+                     (catch Exception e
+                       (throw (ex-info (str "Clojure read error: " (ex-message e)) {} e))))]
+          (if (identical? form eof-sentinel)
+            forms
+            (recur (conj forms form)))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Text-to-text track (compositions)
