@@ -213,7 +213,7 @@ defn begin format-cmd
   end
 end
 
-defn(version [_] println("beme 0.3.0-alpha"))
+defn(version [_] println("beme 0.4.0-alpha"))
 
 defn begin help
   [_]
