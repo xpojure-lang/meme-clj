@@ -2,6 +2,7 @@
   "Pretty-printer: Clojure forms → idiomatic multi-line beme text.
    Width-aware — uses begin/end for forms that don't fit on one line."
   (:require [beme.alpha.emit.printer :as printer]
+            [beme.alpha.forms :as forms]
             [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
@@ -264,6 +265,12 @@
                           prefix-len (inc (count prefix))
                           inner (pp stripped (+ col prefix-len) width)]
                       (str prefix " " inner))
+
+                    ;; Deferred auto-resolve keywords — must check before call?
+                    ;; since the deferred form (clojure.core/read-string "::foo")
+                    ;; satisfies call? but should emit ::foo, not a call.
+                    (forms/deferred-auto-keyword? form)
+                    (forms/deferred-auto-keyword-raw form)
 
                     ;; Quote with list inner — use '(...) with S-expression inside
                     (and (call? form) (= 'quote (first form))

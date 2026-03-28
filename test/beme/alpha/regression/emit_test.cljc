@@ -254,3 +254,29 @@
     (let [form (with-meta '(foo x) {:ws "; top\n"})
           result (pprint/pprint-form form)]
       (is (str/starts-with? result "; top\n")))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: pprint rendered deferred :: keywords as clojure.core/read-string(...)
+;; when the form didn't fit flat. pp's cond dispatched call? before checking
+;; deferred-auto-keyword?, so (clojure.core/read-string "::foo") was treated
+;; as a call. beme format would permanently corrupt :: keywords in .beme files.
+;; Fix: check deferred-auto-keyword? before call? in pp, mirroring printer.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest pprint-deferred-auto-keyword-not-corrupted
+  (testing "::foo preserved at narrow width"
+    (is (= "::foo"
+           (pprint/pprint-form '(clojure.core/read-string "::foo") {:width 4}))))
+  (testing "::keyword preserved when nested deeply"
+    (let [result (pprint/pprint-form
+                   (list 'def 'x '(clojure.core/read-string "::long-keyword"))
+                   {:width 20})]
+      (is (re-find #"::long-keyword" result))
+      (is (not (re-find #"clojure.core/read-string" result)))))
+  (testing ":: keyword roundtrips through pprint"
+    (let [src "def(x ::my-key)"
+          forms (core/beme->forms src)
+          pprinted (pprint/pprint-forms forms {:width 10})
+          re-read (core/beme->forms pprinted)]
+      (is (= forms re-read))))))
