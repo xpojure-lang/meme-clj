@@ -104,5 +104,5 @@
   [tag data loc]
   #?(:clj (tagged-literal tag data)
      :cljs (errors/beme-error
-             (str "Tagged literals (#" tag ") are not supported in ClojureScript beme reader. Use .cljc files with Clojure/Babashka instead.")
+             (str "Tagged literals (#" tag ") are not supported in ClojureScript beme reader. Use .cljc files with Clojure/Babashka instead. Raw form: #" tag " " (pr-str data))
              loc)))

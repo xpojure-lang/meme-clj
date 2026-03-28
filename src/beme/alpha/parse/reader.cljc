@@ -110,15 +110,6 @@
       (str n " " (:value tok))
       n)))
 
-(defn- pexpect! [p typ]
-  (let [tok (ppeek p)]
-    (if (and tok (= (:type tok) typ))
-      (do (padvance! p) tok)
-      (errors/beme-error (str "Expected " (get closer-name typ (get token-name typ (name typ)))
-                              " but got "
-                              (if tok (describe-token tok) "end of input"))
-                         (if tok (select-keys tok [:line :col]) {})))))
-
 (defn- tok-type? [tok typ]
   (and tok (= (:type tok) typ)))
 
@@ -478,7 +469,7 @@
               (not (tok-type? nxt :close-paren))
               (errors/beme-error "#() body must be a single expression — use fn(args...) for multiple expressions"
                                 (select-keys nxt [:line :col])))
-            (pexpect! p :close-paren)
+            (padvance! p)
             (let [params (find-percent-params body)
                   _ (when (contains? params 0)
                       (errors/beme-error "%0 is not a valid parameter — use %1 or % for the first argument"

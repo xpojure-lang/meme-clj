@@ -258,10 +258,11 @@
   [form col width]
   (let [comments (form-comments form)
         indent (indent-str col)
+        meta-info (pp-meta-prefix form)
         formatted (cond
                     ;; Metadata prefix — emit before the form, recurse on stripped
-                    (pp-meta-prefix form)
-                    (let [{:keys [prefix stripped]} (pp-meta-prefix form)
+                    meta-info
+                    (let [{:keys [prefix stripped]} meta-info
                           prefix-len (inc (count prefix))
                           inner (pp stripped (+ col prefix-len) width)]
                       (str prefix " " inner))
@@ -276,6 +277,18 @@
                     (and (call? form) (= 'quote (first form))
                          (seq? (second form)))
                     (pp-quoted-list form col width)
+
+                    ;; Quote with non-seq inner — always 'x (atomic, no multi-line)
+                    (and (call? form) (= 'quote (first form)))
+                    (str "'" (flat (second form)))
+
+                    ;; @deref — preserve sugar, recurse on inner
+                    (and (call? form) (= 'clojure.core/deref (first form)))
+                    (str "@" (pp (second form) (inc col) width))
+
+                    ;; #'var — preserve sugar (inner is always a symbol)
+                    (and (call? form) (= 'var (first form)))
+                    (str "#'" (flat (second form)))
 
                     ;; Lists in clj-mode — S-expression style
                     (and (call? form) printer/*clj-mode*)

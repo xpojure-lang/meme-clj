@@ -18,10 +18,7 @@
    at eval time, not the caller's namespace at read time.
    Passes through all other reader opts unchanged."
   [opts]
-  (let [rk (:resolve-keyword opts)
-        reader-opts (dissoc opts :eval)]
-    (cond-> reader-opts
-      rk (assoc :resolve-keyword rk))))
+  (dissoc opts :eval))
 
 (defn run-string
   "Read beme source string, eval each form, return the last result.

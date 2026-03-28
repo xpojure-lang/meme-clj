@@ -160,7 +160,7 @@
                  (not (whitespace? (speek sc)))
                  (not (#{\( \) \[ \] \{ \} \;} (speek sc))))
         (errors/beme-error
-          (str "Invalid octal escape: expected octal digits after \\o")
+          "Invalid octal escape: expected octal digits after \\o"
           loc)))
     ;; named chars: \newline, \space, etc.
     (letter? ch)
@@ -386,10 +386,10 @@
             ;; Whitespace is already consumed above, so (speek sc 1) is the adjacent character.
             (and (or (= ch \-) (= ch \+))
                  (digit? (speek sc 1)))
-            (do (let [sign (sadvance! sc)
-                      num (read-number sc)]
-                  (conj! tokens (tok-at sc :number (str sign num) loc))
-                  (recur)))
+            (let [sign (sadvance! sc)
+                  num (read-number sc)]
+              (conj! tokens (tok-at sc :number (str sign num) loc))
+              (recur))
 
             ;; symbol (includes operators like +, -, ->, ->>, >=, etc.)
             (symbol-start? ch)

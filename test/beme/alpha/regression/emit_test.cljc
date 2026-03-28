@@ -327,3 +327,43 @@
           pprinted (pprint/pprint-forms forms {:width 10})
           re-read (core/beme->forms pprinted)]
       (is (= forms re-read))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: pprint lost reader-sugar notation (@, #', ') when forms exceeded
+;; width. pp-call-smart emitted clojure.core/deref begin...end instead of
+;; @inner, var begin...end instead of #'sym, quote begin...end instead of
+;; 'sym. Output was valid beme (begin/end roundtrips) but unidiomatic.
+;; Fix: add explicit dispatch for deref, var, quote-non-seq before call?.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest pprint-preserves-deref-sugar
+  (testing "@atom preserved at narrow width"
+    (let [form (list 'clojure.core/deref 'my-very-long-atom-name)
+          result (pprint/pprint-form form {:width 10})]
+      (is (str/starts-with? result "@"))
+      (is (not (str/includes? result "clojure.core/deref")))
+      (is (= (list form) (core/beme->forms result)))))
+  (testing "@(complex expr) preserves sugar and recurses"
+    (let [form (list 'clojure.core/deref (list 'reset! 'state 'val))
+          result (pprint/pprint-form form {:width 10})]
+      (is (str/starts-with? result "@"))
+      (is (= (list form) (core/beme->forms result)))))))
+
+#?(:clj
+(deftest pprint-preserves-var-sugar
+  (testing "#'sym preserved at narrow width"
+    (let [form (list 'var 'some.ns/my-var)
+          result (pprint/pprint-form form {:width 5})]
+      (is (str/starts-with? result "#'"))
+      (is (not (str/includes? result "var begin")))
+      (is (= (list form) (core/beme->forms result)))))))
+
+#?(:clj
+(deftest pprint-preserves-quote-sugar
+  (testing "'sym preserved at narrow width"
+    (let [form (list 'quote 'my-long-symbol-name)
+          result (pprint/pprint-form form {:width 5})]
+      (is (str/starts-with? result "'"))
+      (is (not (str/includes? result "quote begin")))
+      (is (= (list form) (core/beme->forms result)))))))
