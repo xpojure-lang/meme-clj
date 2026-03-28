@@ -100,54 +100,56 @@
 
 #?(:clj
 (deftest read-input-single-line
-  (testing "balanced single-line input returns immediately"
-    (let [result (with-out-str
-                   ;; capture prompt output; we want the return value
-                   nil)
-          input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["+(1 2)"]) nil))]
-      (is (= "+(1 2)" input))))))
+  (testing "balanced single-line input returns immediately with cached forms"
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line ["+(1 2)"]) nil))]
+      (is (= "+(1 2)" (:input result)))
+      (is (= '[(+ 1 2)] (:forms result)))))))
 
 #?(:clj
 (deftest read-input-multi-line
   (testing "unbalanced input accumulates until balanced"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["defn(f [x]"
-                                                     "  +(x 1))"]) nil))]
-      (is (= "defn(f [x]\n  +(x 1))" input))))))
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line ["defn(f [x]"
+                                                      "  +(x 1))"]) nil))]
+      (is (= "defn(f [x]\n  +(x 1))" (:input result)))
+      (is (some? (:forms result)))))))
 
 #?(:clj
 (deftest read-input-eof
   (testing "nil from read-line-fn on first call returns nil"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line []) nil))]
-      (is (nil? input))))
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line []) nil))]
+      (is (nil? result))))
   (testing "nil after partial unbalanced input returns nil"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["+(1 2"]) nil))]
-      (is (nil? input))))))
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line ["+(1 2"]) nil))]
+      (is (nil? result))))))
 
 #?(:clj
 (deftest read-input-discard-only
   (testing "discard-only input is complete and returns immediately"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["#_foo"]) nil))]
-      (is (= "#_foo" input))))))
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line ["#_foo"]) nil))]
+      (is (= "#_foo" (:input result)))
+      (is (= [] (:forms result)))))))
 
 #?(:clj
 (deftest read-input-malformed-returns-immediately
-  (testing "malformed input returns immediately, not infinite continuation — Bug 3"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line ["1/"]) nil))]
-      (is (= "1/" input))))
-  (testing ") alone returns immediately"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line [")"]) nil))]
-      (is (= ")" input))))))
+  (testing "malformed input returns immediately with :error — Bug 3"
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line ["1/"]) nil))]
+      (is (= "1/" (:input result)))
+      (is (some? (:error result)))))
+  (testing ") alone returns immediately with :error"
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line [")"]) nil))]
+      (is (= ")" (:input result)))
+      (is (some? (:error result)))))))
 
 #?(:clj
 (deftest read-input-blank-first-line
   (testing "blank first line returns empty string immediately, not continuation"
-    (let [input (binding [*out* (java.io.StringWriter.)]
-                  (read-input "=> " (mock-read-line [""]) nil))]
-      (is (= "" input))))))
+    (let [result (binding [*out* (java.io.StringWriter.)]
+                   (read-input "=> " (mock-read-line [""]) nil))]
+      (is (= "" result))))))

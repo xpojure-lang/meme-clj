@@ -21,10 +21,26 @@
          :incomplete
          :invalid)))))
 
+(defn- try-parse
+  "Try to parse input. Returns {:state :complete :forms [...]} on success,
+   {:state :incomplete} for unbalanced input, or {:state :invalid :error e}
+   for malformed input. Single parse — no re-parsing needed."
+  [s opts]
+  (try
+    (let [result (pipeline/run s opts)]
+      {:state :complete :forms (:forms result)})
+    (catch #?(:clj Exception :cljs :default) e
+      (if (:incomplete (ex-data e))
+        {:state :incomplete}
+        {:state :invalid :error e}))))
+
 (defn- read-input
   "Read potentially multi-line input. Continues reading if brackets/parens are unbalanced.
    Returns malformed input immediately so the eval loop can report the error.
-   Returns empty string for blank first line (so outer loop can skip it cleanly)."
+   Returns empty string for blank first line (so outer loop can skip it cleanly).
+   On :complete, returns {:input s :forms [...]} with cached parse result.
+   On :invalid, returns {:input s :error e}.
+   Returns nil on EOF, \"\" on blank first line."
   [prompt read-line-fn reader-opts]
   (print prompt)
   (flush)
@@ -41,12 +57,13 @@
             ""
 
             :else
-            (case (input-state input reader-opts)
-              :complete   input
-              :invalid    input
-              :incomplete (do (print "  .. ")
-                              (flush)
-                              (recur all-lines)))))))))
+            (let [{:keys [state forms error]} (try-parse input reader-opts)]
+              (case state
+                :complete   {:input input :forms forms}
+                :invalid    {:input input :error error}
+                :incomplete (do (print "  .. ")
+                                (flush)
+                                (recur all-lines))))))))))
 
 (defn start
   "Start the beme REPL. Reads beme syntax, evals as Clojure, prints results.
@@ -72,18 +89,25 @@
      (loop []
        (let [prompt #?(:clj (str (ns-name *ns*) "=> ")
                        :cljs "beme=> ")
-             input (read-input prompt read-line-fn reader-opts)]
-         (when input
-           (if (str/blank? input)
-             (recur)
-             (do
-               (try
-                 (let [forms (:forms (pipeline/run input reader-opts))]
-                   (doseq [form forms]
+             parsed (read-input prompt read-line-fn reader-opts)]
+         (when parsed
+           (cond
+             (string? parsed) (recur) ;; blank line
+
+             (:forms parsed)
+             (do (try
+                   (doseq [form (:forms parsed)]
                      (let [result (eval-fn form)]
-                       (prn result))))
-                 (catch #?(:clj Throwable :cljs :default) e
+                       (prn result)))
+                   (catch #?(:clj Throwable :cljs :default) e
+                     (if (ex-message e)
+                       (println (errors/format-error e (:input parsed)))
+                       (println (str "Error: " (pr-str e))))))
+                 (recur))
+
+             (:error parsed)
+             (do (let [e (:error parsed)]
                    (if (ex-message e)
-                     (println (errors/format-error e input))
-                     (println (str "Error: " (pr-str e))))))
-               (recur)))))))))
+                     (println (errors/format-error e (:input parsed)))
+                     (println (str "Error: " (pr-str e)))))
+                 (recur)))))))))
