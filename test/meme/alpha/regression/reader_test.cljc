@@ -147,7 +147,7 @@
       (is (= ['f '(x)] clj-forms) "Clojure reads f(x) as two forms")))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: spacing between head and ( is irrelevant.
+;; Scar tissue: spacing between head and ( is significant (adjacency required).
 ;; ---------------------------------------------------------------------------
 
 (deftest spacing-significant-for-calls

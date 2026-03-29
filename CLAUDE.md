@@ -59,7 +59,7 @@ clojure -T:build deploy
 
 The pipeline has three stages (composed by `meme.alpha.pipeline`):
 1. **Scan** (`meme.alpha.scan.tokenizer`) — characters → flat token vector. Compound forms emit marker tokens.
-2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters into composite tokens. Bracket matching is trivial because strings/chars/comments are already individual tokens.
+2. **Group** (`meme.alpha.scan.grouper`) — pass-through stage (all forms are now parsed natively; retained for pipeline symmetry).
 3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure forms. Value resolution delegated to `meme.alpha.parse.resolve`.
 
 - The reader is a **pure function** from meme text to Clojure forms. No runtime dependency. No `read-string` delegation — everything is parsed natively.
@@ -73,8 +73,8 @@ The pipeline has three stages (composed by `meme.alpha.pipeline`):
 - `meme.alpha.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Used by tokenizer, grouper, reader, and REPL. Portable.
 - `meme.alpha.forms` (.cljc) — Shared form-level predicates and constructors. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding). Portable.
 - `meme.alpha.scan.source` (.cljc) — Scanner-level source-position utilities. `line-col->offset` uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). Tokenizer and grouper must agree with this model. Note: the scanner and display line models diverge for CRLF sources — see `format-error` for how the bridge is handled. Portable.
-- `meme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for opaque regions. Portable.
-- `meme.alpha.scan.grouper` (.cljc) — Token grouping: collapses opaque-region markers + balanced delimiters into single composite `-raw` tokens. Operates on already-tokenized input where bracket matching is trivial. Portable.
+- `meme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for compound forms. Portable.
+- `meme.alpha.scan.grouper` (.cljc) — Pass-through stage (all forms are now parsed natively). Retained for pipeline symmetry. Portable.
 - `meme.alpha.parse.reader` (.cljc) — Recursive-descent parser (grouped tokens → Clojure forms). Delegates value resolution to `meme.alpha.parse.resolve`. Portable.
 - `meme.alpha.parse.resolve` (.cljc) — Value resolution: converts raw token text to Clojure values. Centralizes all host reader delegation (`read-string` calls) with consistent error wrapping. Handles platform asymmetries (JVM vs CLJS). Portable.
 - `meme.alpha.emit.printer` (.cljc) — Pattern-matches on Clojure form structure to produce meme text. Portable.
@@ -114,7 +114,7 @@ The pipeline has three stages (composed by `meme.alpha.pipeline`):
 | File | What belongs here |
 |------|-------------------|
 | `scan/tokenizer_test` | Tokenizer behavior in isolation (token types, column tracking) |
-| `scan/grouper_test` | Grouper: opaque region collapsing, bracket depth |
+| `scan/grouper_test` | Grouper: pass-through behavior, marker token handling |
 | `scan/source_test` | Source-position contract: `line-col->offset` |
 | `parse/reader/rule1_test` | Rule 1 (call syntax): head type x spacing x arity matrix |
 | `parse/reader/calls_test` | All Clojure forms as calls: def, defn, fn, let, loop, for, if, when, cond, try, threading, ns, protocols, records, multimethods, concurrency, "everything is a call" |
@@ -126,7 +126,7 @@ The pipeline has three stages (composed by `meme.alpha.pipeline`):
 | `emit/printer_test` | Printer: Clojure forms → meme text. Individual form cases. |
 | `emit/pprint_test` | Pretty-printer: width-aware formatting, multi-line layout, comments |
 | `roundtrip_test` | Read → print → re-read identity. Structural invariant tests. |
-| `regression/scan_test` | Scar tissue: tokenizer and grouper bugs (opaque form depth, char/string in syntax-quote, symbol parsing, EOF handling) |
+| `regression/scan_test` | Scar tissue: tokenizer and grouper bugs (bracket depth, char/string in syntax-quote, symbol parsing, EOF handling) |
 | `regression/reader_test` | Scar tissue: parser bugs (discard sentinel, depth limits, head types, spacing, duplicates, metadata) |
 | `regression/emit_test` | Scar tissue: printer and pprint bugs (regex escaping, reader-sugar pprint, deferred auto-keywords, metadata, comments, width) |
 | `regression/errors_test` | Scar tissue: error infrastructure and resolve error-wrapping bugs (source-context, gutter width, CLJS guards) |

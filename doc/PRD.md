@@ -93,20 +93,20 @@ ClojureScript without modification.
 | R13 | Parse `ns(...)` with `:require` and `:import` | Done |
 | R15 | Parse all Clojure data literals unchanged | Done |
 | R16 | Parse Clojure reader macros (`@`, `^`, `#'`, `#_`, `'`) | Done |
-| R17 | Parse `#?()` reader conditionals natively (no read-string) | In progress |
+| R17 | Parse `#?()` reader conditionals natively (no read-string) | Done |
 | R18 | Parse `defprotocol(...)`, `defrecord(...)`, `deftype(...)`, `reify(...)`, `defmulti(...)`, `defmethod(...)` | Done |
 | R19 | Parse Java interop: `.method()`, `Class/static()`, `.-field()` | Done |
 | R20 | Commas are whitespace | Done |
 | R21 | Line/column tracking for error messages | Done |
 | R22 | Portable `.cljc` — core reader/printer run on JVM, ClojureScript, Babashka | Done |
 | R23 | Signed numbers: `-1` is number, `-(1 2)` is call to `-` | Done |
-| R24 | `#:ns{...}` namespaced maps parsed natively (no read-string) | In progress |
+| R24 | `#:ns{...}` namespaced maps parsed natively (no read-string) | Done |
 | R25 | `#()` uses meme syntax inside, `%` params → `fn` form | Done |
 | R26 | `run-pipeline` exposes intermediate pipeline state for tooling | Done |
-| R28 | `()` is the empty list (no head required) | In progress |
-| R29 | No S-expression escape hatch — `'(...)` uses meme syntax inside | In progress |
-| R30 | Syntax-quote parsed natively — meme syntax inside `` ` `` | In progress |
-| R31 | Zero `read-string` delegation — all values resolved natively | In progress |
+| R28 | `()` is the empty list (no head required) | Done |
+| R29 | No S-expression escape hatch — `'(...)` uses meme syntax inside | Done |
+| R30 | Syntax-quote parsed natively — meme syntax inside `` ` `` | Done |
+| R31 | Zero `read-string` delegation — all values resolved natively | Done |
 
 ### Printer
 
@@ -155,35 +155,36 @@ during design iteration. IDs are stable references and are not renumbered.
 ```
 
 The reader is a three-stage pipeline (composed by `meme.alpha.pipeline`):
-1. **Scan** (`meme.alpha.scan.tokenizer`) — character stream → flat token vector. Opaque
-   regions emit marker tokens rather than capturing raw text directly.
-2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters
-   into single composite `-raw` tokens. Bracket matching is trivial because
-   strings, chars, and comments are already individual tokens.
+1. **Scan** (`meme.alpha.scan.tokenizer`) — character stream → flat token vector.
+   Compound forms (dispatch, syntax-quote) emit marker tokens.
+2. **Group** (`meme.alpha.scan.grouper`) — pass-through stage (all forms are now
+   parsed natively; the grouper is retained for pipeline symmetry).
 3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure
-   forms. Value resolution (numbers, strings, chars, regex, opaque forms) is
-   delegated to `meme.alpha.parse.resolve`. Volatile position counter for portability.
-   No intermediate AST — forms are emitted as standard Clojure data.
+   forms. Value resolution (numbers, strings, chars, regex, keywords, tagged
+   literals) is delegated to `meme.alpha.parse.resolve`. Volatile position
+   counter for portability. No intermediate AST — forms are emitted as
+   standard Clojure data. No `read-string` delegation.
 
 The printer pattern-matches on form structure to reverse the transformation.
 It detects special forms and produces their meme syntax equivalents.
 
-`#` dispatch forms (`#?`, `#?@`, `#:ns{}`, tagged literals) and syntax-quote
-(`` ` ``) are opaque — the tokenizer emits markers, the grouper captures
-the balanced region, and `meme.alpha.parse.resolve` delegates to Clojure's reader.
+All `#` dispatch forms (`#?`, `#?@`, `#:ns{}`, `#{}`, `#""`, `#'`, `#_`,
+`#()`, tagged literals) and syntax-quote (`` ` ``) are parsed natively with
+meme rules inside. No opaque regions.
 
 
 ## Known limitations
 
-- **Backtick is opaque.** Syntax-quote (`` ` ``) and its body are captured
-  as raw text and passed to Clojure's reader. Macro templates use
-  S-expression syntax inside backtick; meme syntax applies everywhere else.
+- **ClojureScript: some value types unsupported.** Tagged literals
+  (`#uuid`, `#inst`), reader conditionals (`#?`, `#?@`), namespaced
+  maps (`#:ns{}`), char literals, ratio literals, BigInt/BigDecimal
+  are JVM/Babashka only. The core call rule and all standard forms
+  work on ClojureScript.
 
-- **ClojureScript: opaque forms have limited support.** Reader
-  conditionals (`#?`, `#?@`), namespaced maps (`#:ns{}`), tagged
-  literals (`#uuid`, `#inst`), char literals, and ratio literals are
-  JVM/Babashka only. The core call rule and all standard forms work
-  on ClojureScript.
+- **Printer: reader conditionals emit S-expressions.** The printer
+  delegates `ReaderConditional` objects to `pr-str`, which produces
+  S-expression syntax inside `#?(...)` rather than meme syntax.
+  Affects `clj->meme` on files containing `#?` with calls inside.
 
 - **Nesting depth limit.** The parser enforces a maximum nesting depth of
   512 levels. Exceeding this produces a clear error. This prevents stack

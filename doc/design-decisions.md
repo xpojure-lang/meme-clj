@@ -23,10 +23,11 @@ The reader pipeline is split into three explicit stages:
 
 1. **Scan** (`meme.alpha.scan.tokenizer`) — character scanning → flat token vector.
    Compound forms (reader conditionals, namespaced maps, syntax-quote)
-   emit marker tokens rather than capturing raw text inline.
-2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced
-   delimiters into single composite tokens.
+   emit marker tokens.
+2. **Group** (`meme.alpha.scan.grouper`) — pass-through stage (all forms are
+   now parsed natively; retained for pipeline symmetry).
 3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser → Clojure forms.
+   No `read-string` delegation — all values resolved natively.
 
 The three-stage split makes each stage independently testable and the
 pipeline extensible. The grouper operates on already-tokenized input where
@@ -273,19 +274,23 @@ default stack sizes.
 
 ## Shared source-position contract (meme.alpha.scan.source)
 
-The tokenizer records `(line, col)` on each token. The grouper later
+The tokenizer records `(line, col)` on each token. The tokenizer also
 needs to map those positions back to character offsets in the source
-string — to extract raw text for opaque regions (reader conditionals,
-namespaced maps, syntax-quote). If the two stages disagree on how
-`(line, col)` translates to an offset, the extracted text is wrong:
-off-by-one truncation, stray characters, or outright garbled output.
+string for whitespace attachment. If position tracking is inconsistent,
+whitespace metadata is wrong: off-by-one truncation, stray characters,
+or outright garbled output.
 
-`meme.alpha.scan.source/line-col->offset` is the single definition both
-stages share. The tokenizer uses it in `attach-whitespace`; the grouper
-uses it in `extract-source-range`. Because it's one function in one
-namespace, the mapping can't diverge. The alternative — each stage
-carrying its own offset logic — was the source of a previous bug where
-whitespace attachment and source extraction disagreed after a newline.
+`meme.alpha.scan.source/line-col->offset` is the single definition that
+ensures the mapping is consistent. The tokenizer uses it in
+`attach-whitespace`. Because it's one function in one namespace, the
+mapping can't diverge. The alternative — each stage carrying its own
+offset logic — was the source of a previous bug where whitespace
+attachment disagreed after a newline.
+
+Note: the grouper previously used `extract-source-range` to capture raw
+text for opaque regions, but all forms are now parsed natively and the
+grouper is a pass-through. The shared contract remains important for
+the tokenizer's whitespace attachment.
 
 
 ## Centralized error infrastructure (meme.alpha.errors)
