@@ -33,7 +33,7 @@
   ([tokens opts] (make-parser tokens opts nil))
   ([tokens opts source]
    {:tokens tokens :pos (volatile! 0) :depth (volatile! 0)
-    :opts opts :source source}))
+    :opts opts :source source :sq-depth (volatile! 0)}))
 
 (defn- peof? [{:keys [tokens pos]}]
   (>= @pos (count tokens)))
@@ -86,8 +86,7 @@
    :tagged-literal "tagged literal"
    :reader-cond-start "reader conditional"
    :namespaced-map-start "namespaced map prefix"
-   :syntax-quote-raw "syntax-quote"
-   :syntax-quote-start "syntax-quote"})
+   :syntax-quote "syntax-quote"})
 
 (def ^:private closer-name
   "Human-readable descriptions for closing delimiters."
@@ -112,6 +111,113 @@
   (and tok (= (:type tok) typ)))
 
 (declare parse-form parse-form-base)
+
+;; ---------------------------------------------------------------------------
+;; Syntax-quote expansion
+;; ---------------------------------------------------------------------------
+
+;; Marker types for unquote/unquote-splicing inside syntax-quote.
+;; These are recognized by expand-sq during the form walk.
+(defrecord Unquote [form])
+(defrecord UnquoteSplicing [form])
+
+(defn- sq-resolve-symbol
+  "Resolve a symbol for syntax-quote. Uses the resolver from parser opts
+   if available, otherwise returns the symbol as-is (best effort)."
+  [sym opts]
+  (if-let [resolver (:resolve-symbol opts)]
+    (resolver sym)
+    ;; Without a resolver, qualify symbols that have no namespace
+    ;; but look like they could be vars. Leave special forms alone.
+    (if (and (nil? (namespace sym))
+             (not (#{'if 'do 'let 'fn 'var 'quote 'loop 'recur 'throw 'try 'catch
+                     'finally 'def 'new 'set! 'monitor-enter 'monitor-exit
+                     'letfn 'case 'deftype 'reify} sym)))
+      sym ; can't resolve without ns context — leave as-is
+      sym)))
+
+(def ^:private ^:dynamic *gensym-env* nil)
+
+(defn- sq-gensym
+  "Auto-gensym: foo# → foo__NNN__auto__. Same foo# in one syntax-quote
+   resolves to the same gensym."
+  [sym]
+  (let [n (name sym)]
+    (if (str/ends-with? n "#")
+      (let [base (subs n 0 (dec (count n)))]
+        (if-let [existing (get @*gensym-env* sym)]
+          existing
+          (let [gs (symbol (str base "__" (gensym) "__auto__"))]
+            (vswap! *gensym-env* assoc sym gs)
+            gs)))
+      sym)))
+
+(defn- expand-sq
+  "Walk a form parsed inside syntax-quote and produce the expansion.
+   Mirrors Clojure's SyntaxQuoteReader behavior."
+  [form opts]
+  (cond
+    ;; Unquote: ~x → x (the value, not quoted)
+    (instance? Unquote form)
+    (:form form)
+
+    ;; UnquoteSplicing at top level is an error (must be inside a collection)
+    (instance? UnquoteSplicing form)
+    (throw (ex-info "Unquote-splicing (~@) not in collection" {}))
+
+    ;; Symbol — resolve and quote
+    (symbol? form)
+    (list 'quote (sq-gensym (sq-resolve-symbol form opts)))
+
+    ;; List — expand to (seq (concat ...))
+    (seq? form)
+    (if (empty? form)
+      (list 'clojure.core/list)
+      (let [items (map (fn [item]
+                         (cond
+                           (instance? UnquoteSplicing item)
+                           (:form item)
+                           (instance? Unquote item)
+                           (list 'clojure.core/list (:form item))
+                           :else
+                           (list 'clojure.core/list (expand-sq item opts))))
+                       form)]
+        (list 'clojure.core/seq (cons 'clojure.core/concat items))))
+
+    ;; Vector — expand to (vec (concat ...))
+    (vector? form)
+    (let [items (map (fn [item]
+                       (cond
+                         (instance? UnquoteSplicing item)
+                         (:form item)
+                         (instance? Unquote item)
+                         (list 'clojure.core/list (:form item))
+                         :else
+                         (list 'clojure.core/list (expand-sq item opts))))
+                     form)]
+      (list 'clojure.core/apply 'clojure.core/vector (cons 'clojure.core/concat items)))
+
+    ;; Map — expand to (apply hash-map (concat ...))
+    (map? form)
+    (let [items (mapcat (fn [[k v]]
+                          [(list 'clojure.core/list (expand-sq k opts))
+                           (list 'clojure.core/list (expand-sq v opts))])
+                        form)]
+      (list 'clojure.core/apply 'clojure.core/hash-map (cons 'clojure.core/concat items)))
+
+    ;; Set — expand to (apply hash-set (concat ...))
+    (set? form)
+    (let [items (map (fn [item]
+                       (cond
+                         (instance? UnquoteSplicing item)
+                         (:form item)
+                         :else
+                         (list 'clojure.core/list (expand-sq item opts))))
+                     form)]
+      (list 'clojure.core/apply 'clojure.core/hash-set (cons 'clojure.core/concat items)))
+
+    ;; Keyword, number, string, char, nil, boolean — self-quoting
+    :else form))
 
 ;; ---------------------------------------------------------------------------
 ;; Collections
@@ -374,19 +480,39 @@
                                 (error-data p (select-keys tok [:line :col]))))
             (list 'quote inner)))
 
-      :syntax-quote-raw
-      ;; ` forms are opaque — pass through to Clojure's reader
-      (let [raw (:value tok)]
-        (padvance! p)
-        (maybe-call p (resolve/resolve-syntax-quote raw (select-keys tok [:line :col]))))
+      :syntax-quote
+      ;; ` — parse next form with meme rules, then expand
+      (do (padvance! p)
+          (vswap! (:sq-depth p) inc)
+          (let [form (try (parse-form p)
+                          (finally (vswap! (:sq-depth p) dec)))]
+            (when (discard-sentinel? form)
+              (errors/meme-error "Syntax-quote target was discarded by #_ — nothing to syntax-quote"
+                                (error-data p (select-keys tok [:line :col]))))
+            (binding [*gensym-env* (volatile! {})]
+              (maybe-call p (expand-sq form (:opts p))))))
 
       :unquote
-      (errors/meme-error "Unquote (~) outside syntax-quote — ~ only has meaning inside `"
-                         (error-data p (select-keys tok [:line :col])))
+      (if (pos? @(:sq-depth p))
+        (do (padvance! p)
+            (let [inner (parse-form p)]
+              (when (discard-sentinel? inner)
+                (errors/meme-error "Unquote target was discarded by #_"
+                                  (error-data p (select-keys tok [:line :col]))))
+              (->Unquote inner)))
+        (errors/meme-error "Unquote (~) outside syntax-quote — ~ only has meaning inside `"
+                           (error-data p (select-keys tok [:line :col]))))
 
       :unquote-splicing
-      (errors/meme-error "Unquote-splicing (~@) outside syntax-quote — ~@ only has meaning inside `"
-                         (error-data p (select-keys tok [:line :col])))
+      (if (pos? @(:sq-depth p))
+        (do (padvance! p)
+            (let [inner (parse-form p)]
+              (when (discard-sentinel? inner)
+                (errors/meme-error "Unquote-splicing target was discarded by #_"
+                                  (error-data p (select-keys tok [:line :col]))))
+              (->UnquoteSplicing inner)))
+        (errors/meme-error "Unquote-splicing (~@) outside syntax-quote — ~@ only has meaning inside `"
+                           (error-data p (select-keys tok [:line :col]))))
 
       :var-quote
       (do (padvance! p)

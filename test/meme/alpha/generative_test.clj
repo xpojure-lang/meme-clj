@@ -314,12 +314,13 @@
 ;; ===========================================================================
 
 (def gen-syntax-quote-meme
-  "Generate meme strings containing syntax-quote forms."
+  "Generate meme strings containing syntax-quote forms (M-expression style)."
   (gen/let [name gen-simple-symbol
             args (gen/vector gen-simple-symbol 1 3)
-            body-syms (gen/vector gen-simple-symbol 1 4)]
+            body-head gen-simple-symbol
+            body-args (gen/vector gen-simple-symbol 0 3)]
     (str "defmacro(" name " [" (str/join " " (map str args)) "] "
-         "`(" (str/join " " (map str body-syms)) "))")))
+         "`" body-head (when (seq body-args) (str "(" (str/join " " (map str body-args)) ")")) ")")))
 
 (defspec prop-syntax-quote-parses 200
   (prop/for-all [meme-str gen-syntax-quote-meme]
@@ -329,12 +330,12 @@
       (catch Exception _ false))))
 
 (def gen-syntax-quote-with-unquote
-  "Generate meme strings with syntax-quote containing ~ unquotes."
+  "Generate meme strings with syntax-quote containing ~ unquotes (M-expression style)."
   (gen/let [name gen-simple-symbol
             param gen-simple-symbol
             body-head gen-simple-symbol]
     (str "defmacro(" name " [" param "] "
-         "`(" body-head " ~" param "))")))
+         "`" body-head "(~" param "))")))
 
 (defspec prop-syntax-quote-with-unquote-parses 200
   (prop/for-all [meme-str gen-syntax-quote-with-unquote]

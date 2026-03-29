@@ -139,10 +139,10 @@
     (is (= [{:ns/a 1}] (forms-for "#:ns{:a 1}")))))
 
 (deftest token-snapshot-syntax-quote
-  (is (= [{:type :syntax-quote-raw :value "`foo" :line 1 :col 1}]
-         (tokens-for "`foo")))
-  (is (= [{:type :syntax-quote-raw :value "`(a b c)" :line 1 :col 1}]
-         (tokens-for "`(a b c)"))))
+  (testing "` emits :syntax-quote prefix token"
+    (is (= :syntax-quote (:type (first (tokens-for "`foo"))))))
+  (testing "`foo produces quoted symbol form"
+    (is (some? (forms-for "`foo")))))
 
 (deftest token-snapshot-multi-line
   (is (= [{:type :symbol :value "foo" :line 1 :col 1}
@@ -210,18 +210,10 @@
     (is (= [{:user/ch \}}] (forms-for "#:user{:ch \\}}")))))
 
 (deftest token-snapshot-syntax-quote-unquote-form
-  (testing "`~(foo bar) is single token"
-    (is (= [{:type :syntax-quote-raw :value "`~(foo bar)" :line 1 :col 1}]
-           (tokens-for "`~(foo bar)"))))
-  (testing "`~@(foo bar) is single token"
-    (is (= [{:type :syntax-quote-raw :value "`~@(foo bar)" :line 1 :col 1}]
-           (tokens-for "`~@(foo bar)"))))
-  (testing "`~symbol is single token"
-    (is (= [{:type :syntax-quote-raw :value "`~foo" :line 1 :col 1}]
-           (tokens-for "`~foo"))))
-  (testing "`~\"string\" is single token"
-    (is (= [{:type :syntax-quote-raw :value "`~\"foo\"" :line 1 :col 1}]
-           (tokens-for "`~\"foo\"")))))
+  (testing "` followed by ~ produces :syntax-quote then :unquote tokens"
+    (let [tokens (tokens-for "`~foo")]
+      (is (= :syntax-quote (:type (first tokens))))
+      (is (= :unquote (:type (second tokens)))))))
 
 (deftest token-snapshot-complex-call
   (testing "defn with multi-arity"
@@ -386,10 +378,9 @@
     (is (= "x" (:user/name form)))
     (is (= 1 (:user/age form))))))
 
-#?(:clj
 (deftest form-snapshot-syntax-quote
   (is (some? (first (forms-for "`foo"))))
-  (is (some? (first (forms-for "`(a b c)"))))))
+  (is (some? (first (forms-for "`a(b c)")))))
 
 #?(:clj
 (deftest form-snapshot-regex

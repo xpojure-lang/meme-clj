@@ -73,8 +73,8 @@
   (is (= :quote (:type (first (tokenize "'"))))))
 
 (deftest tokenize-syntax-quote
-  (is (= :syntax-quote-raw (:type (first (tokenize "`foo")))))
-  (is (= :syntax-quote-raw (:type (first (tokenize "`(a b c)"))))))
+  (is (= :syntax-quote (:type (first (tokenize "`foo")))))
+  (is (= :syntax-quote (:type (first (tokenize "`(a b c)"))))))
 
 (deftest tokenize-unquote
   (is (= :unquote (:type (first (tokenize "~x")))))

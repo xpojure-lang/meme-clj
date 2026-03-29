@@ -12,19 +12,18 @@
   (-> (tokenizer/tokenize s) (grouper/group-tokens s)))
 
 ;; ---------------------------------------------------------------------------
-;; Syntax-quote is opaque passthrough on JVM. Macros work.
+;; Syntax-quote is parsed natively with meme rules inside.
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
-(deftest syntax-quote-passthrough
-  (testing "backtick on symbol produces a form"
-    (is (seq? (first (core/meme->forms "`foo")))))
-  (testing "backtick on list produces a seq"
-    (is (seq? (first (core/meme->forms "`(a b c)")))))
+(deftest syntax-quote-native
+  (testing "backtick on symbol produces a quoted form"
+    (is (some? (first (core/meme->forms "`foo")))))
+  (testing "backtick on call produces expanded form"
+    (is (seq? (first (core/meme->forms "`a(b c)")))))
   (testing "backtick nested inside a call works"
     (let [form (first (core/meme->forms "foo(`bar)"))]
       (is (seq? form))
-      (is (= 'foo (first form)))))))
+      (is (= 'foo (first form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Signed number tokenization: sign adjacent to digit = number,
@@ -95,21 +94,13 @@
 ;; error. The tokenizer now captures balanced forms after `~.
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
 (deftest syntax-quote-unquote-forms
-  (testing "`~(expr) parses as single form"
-    (let [form (first (core/meme->forms "`~(foo bar)"))]
-      (is (some? form))))
-  (testing "`~symbol still works"
-    (is (symbol? (first (core/meme->forms "`~foo")))))
-  (testing "`~(expr) tokenizes as single token"
-    (let [tokens (tokenize "`~(foo bar)")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))
-  (testing "`~@(expr) tokenizes as single token"
-    (let [tokens (tokenize "`~@(foo bar)")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))))
+  (testing "`~foo returns the symbol foo (unquoted)"
+    (is (= 'foo (first (core/meme->forms "`~foo")))))
+  (testing "` + ~ tokenize as separate prefix tokens"
+    (let [tokens (tokenize "`~foo")]
+      (is (= :syntax-quote (:type (first tokens))))
+      (is (= :unquote (:type (second tokens)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: bare # at EOF emitted empty tagged-literal token with confusing error.
@@ -173,14 +164,12 @@
 ;; producing structurally wrong output.
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
 (deftest syntax-quote-unquote-string
-  (testing "`~\"foo\" tokenizes as single token"
+  (testing "`~\"foo\" starts with :syntax-quote prefix"
     (let [tokens (tokenize "`~\"foo\"")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))
-  (testing "`~\"foo\" reads successfully"
-    (is (some? (core/meme->forms "`~\"foo\""))))))
+      (is (= :syntax-quote (:type (first tokens))))))
+  (testing "`~\"foo\" returns unquoted string"
+    (is (= "foo" (first (core/meme->forms "`~\"foo\""))))))
 
 ;; ---------------------------------------------------------------------------
 ;; B3: \uXXXX and \oXXX char literals.
@@ -324,14 +313,12 @@
     (let [tokens (tokenize "#?@(:clj [#(+(%1 %2))] :cljs [identity])")]
       (is (= :reader-cond-start (:type (first tokens)))))))
 
-#?(:clj
 (deftest anon-fn-inside-syntax-quote
-  (testing "`(#(inc %)) tokenizes as single syntax-quote-raw token"
-    (let [tokens (tokenize "`(#(inc %))")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))
-  (testing "`(#(inc %)) parses without error"
-    (is (some? (core/meme->forms "`(#(inc %))"))))))
+  (testing "` prefix token appears"
+    (let [tokens (tokenize "`#(inc(%))")]
+      (is (= :syntax-quote (:type (first tokens))))))
+  (testing "`#(inc(%)) parses without error"
+    (is (some? (core/meme->forms "`#(inc(%))")))))
 
 #?(:clj
 (deftest anon-fn-inside-namespaced-map
@@ -359,23 +346,18 @@
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
-  #?(:clj
-  (testing "unclosed `( is :incomplete"
-    (let [e (try (core/meme->forms "`(")
-                 nil
-                 (catch Exception e e))]
-      (is (some? e))
-      (is (:incomplete (ex-data e))))))
+  (testing "unclosed `( is an error"
+    (is (thrown? #?(:clj Exception :cljs :default) (core/meme->forms "`("))))
   (testing "unclosed #?(:clj is :incomplete"
     (let [e (try (core/meme->forms "#?(:clj")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
-  (testing "complete opaque forms still work"
-    #?(:clj (is (some? (core/meme->forms "#?(:clj 1)"))))
-    #?(:clj (is (some? (core/meme->forms "#:ns{:a 1}"))))
-    #?(:clj (is (some? (core/meme->forms "`(a b)"))))))
+  (testing "complete forms still work"
+    (is (some? (core/meme->forms "#?(:clj 1)")))
+    (is (some? (core/meme->forms "#:ns{:a 1}")))
+    (is (some? (core/meme->forms "`a(b)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: read-symbol-str allowed multiple slashes.
@@ -404,42 +386,22 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest syntax-quote-char-literal
-  (testing "`\\a tokenizes as single :syntax-quote-raw token"
-    (let [tokens (tokenize "`\\a")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))
-      (is (= "`\\a" (:value (first tokens))))))
-  (testing "`\\newline tokenizes as single token"
-    (let [tokens (tokenize "`\\newline")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))
-      (is (= "`\\newline" (:value (first tokens))))))
-  #?(:clj
-  (testing "`\\a parses without error on JVM"
-    (is (some? (core/meme->forms "`\\a"))))))
+  (testing "`\\a starts with :syntax-quote prefix"
+    (is (= :syntax-quote (:type (first (tokenize "`\\a"))))))
+  (testing "`\\a parses without error"
+    (is (some? (core/meme->forms "`\\a")))))
 
 (deftest syntax-quote-string-literal
-  (testing "`\"foo\" tokenizes as single :syntax-quote-raw token"
-    (let [tokens (tokenize "`\"foo\"")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))
-      (is (= "`\"foo\"" (:value (first tokens))))))
-  #?(:clj
-  (testing "`\"foo\" parses without error on JVM"
-    (is (some? (core/meme->forms "`\"foo\""))))))
+  (testing "`\"foo\" starts with :syntax-quote prefix"
+    (is (= :syntax-quote (:type (first (tokenize "`\"foo\""))))))
+  (testing "`\"foo\" parses without error"
+    (is (some? (core/meme->forms "`\"foo\"")))))
 
 (deftest syntax-quote-unquote-char-literal
-  (testing "`~\\a tokenizes as single :syntax-quote-raw token"
-    (let [tokens (tokenize "`~\\a")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))
-  (testing "`~@\\a tokenizes as single :syntax-quote-raw token"
-    (let [tokens (tokenize "`~@\\a")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))
-  #?(:clj
-  (testing "`~\\a parses without error on JVM"
-    (is (some? (core/meme->forms "`~\\a"))))))
+  (testing "`~\\a starts with :syntax-quote prefix"
+    (is (= :syntax-quote (:type (first (tokenize "`~\\a"))))))
+  (testing "`~\\a parses to char value"
+    (is (= \a (first (core/meme->forms "`~\\a"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: ##Inf, ##-Inf, ##NaN silently misparsed as tagged literals.

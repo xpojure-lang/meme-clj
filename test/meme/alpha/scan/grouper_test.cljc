@@ -42,19 +42,16 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest group-syntax-quote
-  (testing "`(...) collapses to single :syntax-quote-raw token"
-    (let [tokens (group "`(a b c)")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))
-      (is (= "`(a b c)" (:value (first tokens))))))
-  (testing "`[...] vector form"
+  (testing "` passes through as prefix token — not collapsed"
+    (let [tokens (group "`a(b c)")]
+      (is (= :syntax-quote (:type (first tokens))))
+      (is (> (count tokens) 1))))
+  (testing "`[...] vector form passes through"
     (let [tokens (group "`[a b]")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens))))))
-  (testing "`{...} map form"
+      (is (= :syntax-quote (:type (first tokens))))))
+  (testing "`{...} map form passes through"
     (let [tokens (group "`{:a 1}")]
-      (is (= 1 (count tokens)))
-      (is (= :syntax-quote-raw (:type (first tokens)))))))
+      (is (= :syntax-quote (:type (first tokens)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Nested brackets inside opaque regions
@@ -118,7 +115,7 @@
 (deftest group-syntax-quote-start-without-bracket
   (testing "backtick at EOF throws during tokenization (not a grouper path)"
     ;; The tokenizer itself rejects bare ` at EOF with :incomplete error,
-    ;; so the grouper never sees a :syntax-quote-start without a following form.
+    ;; so the grouper never sees a :syntax-quote without a following form.
     (is (thrown? #?(:clj Exception :cljs :default) (tokenizer/tokenize "`")))))
 
 ;; ---------------------------------------------------------------------------

@@ -316,54 +316,12 @@
             (= ch \@) (do (sadvance! sc) (conj! tokens (tok-at sc :deref "@" loc)) (recur))
             (= ch \^) (do (sadvance! sc) (conj! tokens (tok-at sc :meta "^" loc)) (recur))
             (= ch \') (do (sadvance! sc) (conj! tokens (tok-at sc :quote "'" loc)) (recur))
-            ;; ` ~ ~@ — macro syntax, opaque pass-through to Clojure's reader
+            ;; ` — syntax-quote prefix (like ' for quote)
             (= ch \`) (do (sadvance! sc)
-                          (let [nxt (speek sc)]
-                            (cond
-                              ;; `(...), `[...], `{...} — marker for grouper
-                              (and nxt (#{\( \[ \{} nxt))
-                              (conj! tokens (tok-at sc :syntax-quote-start "`" loc))
-                              ;; `~form, `~@form — syntax-quote of unquote
-                              (and nxt (= nxt \~))
-                              (do (sadvance! sc) ; consume ~
-                                  (let [splice? (and (not (seof? sc)) (= (speek sc) \@))
-                                        _ (when splice? (sadvance! sc))
-                                        tilde-prefix (if splice? "~@" "~")
-                                        next-ch (speek sc)]
-                                    (cond
-                                      ;; `~(...) or `~@(...) — marker for grouper
-                                      (and next-ch (#{\( \[ \{} next-ch))
-                                      (conj! tokens (tok-at sc :syntax-quote-start (str "`" tilde-prefix) loc))
-                                      ;; B2: `~"string" — single token, no grouper needed
-                                      (and next-ch (= next-ch \"))
-                                      (let [s (read-string-literal sc)]
-                                        (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix s) loc)))
-                                      ;; `~\char — character literal after unquote
-                                      (and next-ch (= next-ch \\))
-                                      (let [ch-lit (read-char-literal sc)]
-                                        (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix ch-lit) loc)))
-                                      ;; `~symbol — single token, no grouper needed
-                                      next-ch
-                                      (let [sym (read-symbol-str sc)]
-                                        (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix sym) loc)))
-                                      :else
-                                      (conj! tokens (tok-at sc :syntax-quote-raw (str "`" tilde-prefix) loc)))))
-                              ;; `\char — character literal, single token
-                              (and nxt (= nxt \\))
-                              (let [ch-lit (read-char-literal sc)]
-                                (conj! tokens (tok-at sc :syntax-quote-raw (str "`" ch-lit) loc)))
-                              ;; `"string" — string literal, single token
-                              (and nxt (= nxt \"))
-                              (let [s (read-string-literal sc)]
-                                (conj! tokens (tok-at sc :syntax-quote-raw (str "`" s) loc)))
-                              ;; `symbol — namespace-resolve, single token
-                              nxt
-                              (let [sym-str (read-symbol-str sc)]
-                                (conj! tokens (tok-at sc :syntax-quote-raw (str "`" sym-str) loc)))
-                              :else
-                              ;; B7: backtick at EOF — mark as :incomplete for REPL continuation
-                              (errors/meme-error "Unexpected end of input after ` — expected a form to syntax-quote"
-                                                 (assoc loc :incomplete true))))
+                          (if (seof? sc)
+                            (errors/meme-error "Unexpected end of input after ` — expected a form to syntax-quote"
+                                               (assoc loc :incomplete true))
+                            (conj! tokens (tok-at sc :syntax-quote "`" loc)))
                           (recur))
             (= ch \~) (do (sadvance! sc)
                           (if (and (not (seof? sc)) (= (speek sc) \@))

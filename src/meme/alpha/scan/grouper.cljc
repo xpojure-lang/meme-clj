@@ -114,17 +114,9 @@
             :namespaced-map-start
             (recur (inc i) (conj! out tok))
 
-            ;; Syntax-quote with brackets: `(...), `[...], `{...}
-            :syntax-quote-start
-            (let [next-i (inc i)]
-              (if (and (< next-i n) (opening-type? (:type (nth tokens next-i))))
-                (let [end-i (collect-balanced-tokens tokens next-i)
-                      _ (check-balanced! end-i tok)
-                      balanced-toks (subvec tokens next-i end-i)
-                      raw (str (:value tok) (extract-source-range balanced-toks source))
-                      end (end-loc (peek balanced-toks))]
-                  (recur end-i (conj! out (merge tok end {:type :syntax-quote-raw :value raw}))))
-                (recur (inc i) (conj! out tok))))
+            ;; Syntax-quote: ` — pass through as prefix (like ' for quote)
+            :syntax-quote
+            (recur (inc i) (conj! out tok))
 
             ;; All other tokens pass through unchanged
             (recur (inc i) (conj! out tok))))))))

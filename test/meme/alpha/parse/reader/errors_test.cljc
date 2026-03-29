@@ -50,12 +50,11 @@
 ;; Unquote/unquote-splicing outside syntax-quote are always errors.
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
-(deftest parse-syntax-quote-passthrough
-  (testing "`foo passes through to Clojure's reader"
+(deftest parse-syntax-quote-native
+  (testing "`foo produces expanded form"
     (is (some? (first (core/meme->forms "`foo")))))
-  (testing "`(if test then else) passes through"
-    (is (some? (first (core/meme->forms "`(if test then else)")))))))
+  (testing "`if(test then else) produces expanded form"
+    (is (some? (first (core/meme->forms "`if(test then else)"))))))
 
 #?(:cljs
 (deftest parse-syntax-quote-rejected-cljs
