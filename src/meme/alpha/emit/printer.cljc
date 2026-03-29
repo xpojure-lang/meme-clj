@@ -115,6 +115,13 @@
     (and (seq? form) (empty? form))
     "()"
 
+    ;; Non-callable heads: nil, true, false are resolved as literals by the reader,
+    ;; not as symbols — they cannot be call heads in meme syntax.
+    (and (seq? form) (seq form) (contains? #{nil true false} (first form)))
+    (throw (ex-info (str "Cannot print list with " (pr-str (first form))
+                         " as head — not representable in meme syntax")
+                    {:form form}))
+
     ;; sequences — calls and reader sugar
     (seq? form)
     (let [head (first form)]
@@ -197,9 +204,12 @@
     #?@(:clj [(tagged-literal? form)
               (str "#" (.-tag form) " " (print-form (.-form form)))
 
-              ;; reader conditional — opaque passthrough
+              ;; reader conditional — walk inner forms with meme syntax
               (reader-conditional? form)
-              (pr-str form)])
+              (let [prefix (if (.-splicing form) "#?@(" "#?(")
+                    pairs (partition 2 (.-form form))
+                    body (str/join " " (mapcat (fn [[k v]] [(print-form k) (print-form v)]) pairs))]
+                (str prefix body ")"))])
 
     ;; fallback
     :else (pr-str form)))

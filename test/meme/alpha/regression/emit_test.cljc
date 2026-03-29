@@ -331,3 +331,42 @@
       (is (str/starts-with? result "'"))
       (is (not (str/includes? result "quote(")))
       (is (= (list form) (core/meme->forms result)))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: reader-conditional printer emitted S-expressions via pr-str.
+;; Fix: walk inner forms with print-form to emit meme syntax.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest reader-conditional-prints-meme-syntax
+  (testing "reader conditional inner forms use meme syntax"
+    (let [rc (read-string {:read-cond :preserve} "#?(:clj (+ 1 2) :cljs (- 3 4))")
+          printed (p/print-form rc)]
+      (is (= "#?(:clj +(1 2) :cljs -(3 4))" printed))))
+  (testing "#?@ splicing variant"
+    (let [rc (read-string {:read-cond :preserve} "#?@(:clj [1 2] :cljs [3 4])")
+          printed (p/print-form rc)]
+      (is (= "#?@(:clj [1 2] :cljs [3 4])" printed))))
+  (testing "reader conditional with nested calls"
+    (let [rc (read-string {:read-cond :preserve} "#?(:clj (defn foo [x] x))")
+          printed (p/print-form rc)]
+      (is (re-find #"defn\(" printed))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: nil/true/false as call heads produced unparseable meme output.
+;; Fix: throw for non-callable heads.
+;; ---------------------------------------------------------------------------
+
+(deftest non-callable-head-throws
+  (testing "nil as call head"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"not representable"
+          (p/print-form (list nil 1 2)))))
+  (testing "true as call head"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"not representable"
+          (p/print-form (list true 1 2)))))
+  (testing "false as call head"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"not representable"
+          (p/print-form (list false 1 2))))))
