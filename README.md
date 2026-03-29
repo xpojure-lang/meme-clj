@@ -1,4 +1,4 @@
-# meme — M-Expressions with Macro Expansion
+# meme-clj — M-Expressions with Macro Expansion
 
 [![CI](https://github.com/beme-lang/meme-clj/actions/workflows/ci.yml/badge.svg)](https://github.com/beme-lang/meme-clj/actions/workflows/ci.yml)
 [![Clojure](https://img.shields.io/badge/Clojure-JVM%20%7C%20Babashka%20%7C%20ClojureScript-blue?logo=clojure&logoColor=white)](https://clojure.org)
