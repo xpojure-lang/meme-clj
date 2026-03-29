@@ -19,7 +19,7 @@
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}}
               :main-opts ["-m" "cljs-test-runner.main"
-                          "-d" "test"
+                          "-d" "test/meme"
                           "-r" ".*-test$"
                           "-x" "node"]}
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}
