@@ -106,17 +106,9 @@
         (let [tok (nth tokens i)
               typ (:type tok)]
           (case typ
-            ;; Reader conditional: #?(...) or #?@(...)
+            ;; Reader conditional: #?(...) or #?@(...) — pass through for native parsing
             :reader-cond-start
-            (let [next-i (inc i)]
-              (if (and (< next-i n) (opening-type? (:type (nth tokens next-i))))
-                (let [end-i (collect-balanced-tokens tokens next-i)
-                      _ (check-balanced! end-i tok)
-                      balanced-toks (subvec tokens next-i end-i)
-                      raw (str (:value tok) (extract-source-range balanced-toks source))
-                      end (end-loc (peek balanced-toks))]
-                  (recur end-i (conj! out (merge tok end {:type :reader-cond-raw :value raw}))))
-                (recur (inc i) (conj! out tok))))
+            (recur (inc i) (conj! out tok))
 
             ;; Namespaced map: #:ns{...} — pass through for native parsing
             :namespaced-map-start

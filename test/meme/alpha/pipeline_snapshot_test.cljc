@@ -126,11 +126,11 @@
   (is (= [{:type :tagged-literal :value "#inst" :line 1 :col 1}]
          (tokens-for "#inst"))))
 
-(deftest token-snapshot-opaque-reader-cond
-  (is (= [{:type :reader-cond-raw :value "#?(:clj 1)" :line 1 :col 1}]
-         (tokens-for "#?(:clj 1)")))
-  (is (= [{:type :reader-cond-raw :value "#?@(:clj [1])" :line 1 :col 1}]
-         (tokens-for "#?@(:clj [1])"))))
+(deftest token-snapshot-reader-cond
+  (testing "reader cond starts with :reader-cond-start"
+    (is (= :reader-cond-start (:type (first (tokens-for "#?(:clj 1)"))))))
+  (testing "reader cond parses to matching platform value"
+    (is (= [1] (forms-for "#?(:clj 1 :cljs 2)")))))
 
 (deftest token-snapshot-namespaced-map
   (testing "namespaced map tokens start with :namespaced-map-start"
@@ -196,20 +196,13 @@
 ;; Opaque form token snapshots — these are the critical contract for Phase 3
 ;; ---------------------------------------------------------------------------
 
-(deftest token-snapshot-reader-cond-with-comment
-  (testing "#? with comment containing )"
-    (is (= [{:type :reader-cond-raw :value "#?(:clj ; comment with )\n 1)" :line 1 :col 1}]
-           (tokens-for "#?(:clj ; comment with )\n 1)")))))
-
-(deftest token-snapshot-reader-cond-with-char-literal
-  (testing "#? with \\) char literal"
-    (is (= [{:type :reader-cond-raw :value "#?(:clj \\) :cljs \\x)" :line 1 :col 1}]
-           (tokens-for "#?(:clj \\) :cljs \\x)")))))
-
-(deftest token-snapshot-reader-cond-with-string
-  (testing "#? with string containing )"
-    (is (= [{:type :reader-cond-raw :value "#?(:clj \")\" :cljs nil)" :line 1 :col 1}]
-           (tokens-for "#?(:clj \")\" :cljs nil)")))))
+(deftest reader-cond-with-tricky-content
+  (testing "#? with comment containing ) — parses correctly"
+    (is (= [1] (forms-for "#?(:clj ; comment with )\n 1)"))))
+  (testing "#? with char literal \\) — parses matching branch"
+    (is (= [\)] (forms-for "#?(:clj \\) :cljs \\x)"))))
+  (testing "#? with string containing ) — parses matching branch"
+    (is (= [")"] (forms-for "#?(:clj \")\" :cljs nil)")))))
 
 (deftest token-snapshot-namespaced-map-with-char
   (testing "#:ns{} with \\} char literal parses correctly"
@@ -383,10 +376,9 @@
   (let [form (first (forms-for "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
     (is (tagged-literal? form)))))
 
-#?(:clj
 (deftest form-snapshot-reader-conditional
-  (let [form (first (forms-for "#?(:clj 1 :cljs 2)"))]
-    (is (reader-conditional? form)))))
+  (testing "reader conditional returns matching platform value"
+    (is (= 1 (first (forms-for "#?(:clj 1 :cljs 2)"))))))
 
 #?(:clj
 (deftest form-snapshot-namespaced-map

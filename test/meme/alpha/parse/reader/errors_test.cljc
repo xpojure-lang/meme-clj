@@ -109,7 +109,7 @@
   (testing "reader conditional gives meme-specific error on CLJS"
     (let [tokens (tokenize "#?(:clj 1 :cljs 2)")]
       (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens)))))
+      (is (= :reader-cond-start (:type (first tokens)))))
     (is (thrown-with-msg? js/Error #"Reader conditionals"
                           (core/meme->forms "#?(:clj 1 :cljs 2)"))))
   (testing "namespaced map gives meme-specific error on CLJS"

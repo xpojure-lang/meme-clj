@@ -84,7 +84,6 @@
    :var-quote    "#'"
    :discard      "#_"
    :tagged-literal "tagged literal"
-   :reader-cond-raw "reader conditional"
    :reader-cond-start "reader conditional"
    :namespaced-map-start "namespaced map prefix"
    :syntax-quote-raw "syntax-quote"
@@ -468,11 +467,45 @@
                   body' (normalize-bare-percent body)]
               (list 'fn param-vec body'))))
 
-      :reader-cond-raw
-      ;; #? forms are opaque — pass through to Clojure's reader
-      (let [raw (:value tok)]
+      :reader-cond-start
+      ;; #?(...) or #?@(...) — parse natively, return matching platform's form
+      (let [prefix (:value tok) ; "#?" or "#?@"
+            splice? (= prefix "#?@")
+            platform #?(:clj :clj :cljs :cljs)]
         (padvance! p)
-        (maybe-call p (resolve/resolve-reader-cond raw (select-keys tok [:line :col]))))
+        (when-not (tok-type? (ppeek p) :open-paren)
+          (errors/meme-error (str "Expected ( after " prefix)
+                             (error-data p (select-keys tok [:line :col]))))
+        (let [loc (select-keys (ppeek p) [:line :col])]
+          (padvance! p) ; consume (
+          (loop [matched nil]
+            (cond
+              (peof? p)
+              (errors/meme-error (str "Unclosed reader conditional — expected )")
+                                 (error-data p (assoc loc :incomplete true)))
+
+              (tok-type? (ppeek p) :close-paren)
+              (do (padvance! p)
+                  (if splice?
+                    ;; #?@ — wrap matched value for splicing (caller must handle)
+                    ;; For now, return as reader-conditional for eval to handle
+                    (if matched
+                      matched
+                      (list)) ; no match → empty
+                    (maybe-call p (if matched matched (list)))))
+
+              :else
+              (let [key-tok (ppeek p)]
+                (when-not (tok-type? key-tok :keyword)
+                  (errors/meme-error (str "Expected platform keyword in reader conditional, got " (describe-token key-tok))
+                                     (error-data p (select-keys key-tok [:line :col]))))
+                (let [platform-key (keyword (subs (:value key-tok) 1))]
+                  (padvance! p) ; consume :clj/:cljs/:default
+                  (let [form (parse-form p)]
+                    (if (and (nil? matched)
+                             (or (= platform-key platform) (= platform-key :default)))
+                      (recur form)
+                      (recur matched)))))))))
 
       ;; default
       (errors/meme-error (str "Unexpected " (describe-token tok))

@@ -56,12 +56,10 @@
 (deftest comment-inside-reader-conditional
   (testing "#? with ; comment containing ) inside"
     (let [tokens (tokenize "#?(:clj ; comment with )\n 1)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with ; comment containing ] inside"
     (let [tokens (tokenize "#?(:clj ; ] in comment\n x)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#:ns{} with ; comment containing } inside — parses correctly"
     (let [tokens (tokenize "#:user{:name ; } tricky\n \"x\"}")]
       (is (= :namespaced-map-start (:type (first tokens)))))))
@@ -71,30 +69,26 @@
 ;; chars (\), \(, etc.) corrupted the depth counter in opaque forms.
 ;; ---------------------------------------------------------------------------
 
-(deftest char-literal-inside-opaque-form
-  (testing "#? with \\) char literal — tokenizes as single token"
+(deftest char-literal-inside-reader-conditional
+  (testing "#? with \\) char literal — passes through correctly"
     (let [tokens (tokenize "#?(:clj \\) :cljs \\x)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
-  (testing "#? with \\( char literal — tokenizes as single token"
+      (is (= :reader-cond-start (:type (first tokens))))))
+  (testing "#? with \\( char literal — passes through correctly"
     (let [tokens (tokenize "#?(:clj \\( :cljs nil)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with \\[ and \\] char literals"
     (let [tokens (tokenize "#?(:clj [\\[ \\]] :cljs nil)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with \\{ and \\} char literals"
     (let [tokens (tokenize "#?(:clj {\\{ \\}} :cljs nil)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#:ns{} with \\} char literal — parses correctly"
     (let [tokens (tokenize "#:user{:ch \\}}")]
       (is (= :namespaced-map-start (:type (first tokens))))))
   #?(:clj
-  (testing "#? with bracket char literals parses correctly on JVM"
-    (is (reader-conditional? (first (core/meme->forms "#?(:clj \\) :cljs nil)"))))
-    (is (reader-conditional? (first (core/meme->forms "#?(:clj \\( :cljs nil)")))))))
+  (testing "#? with bracket char literals parses to matched value"
+    (is (= \) (first (core/meme->forms "#?(:clj \\) :cljs nil)"))))
+    (is (= \( (first (core/meme->forms "#?(:clj \\( :cljs nil)")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: `~(expr) produced truncated token and confusing "Bare parentheses"
@@ -131,33 +125,13 @@
 ;; Scar tissue: reader conditionals (#?, #?@) are opaque.
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
-(deftest reader-conditional-is-opaque
-  (testing "#?() empty — tokenizes as single raw token"
-    (let [tokens (tokenize "#?()")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))
-      (is (= "#?()" (:value (first tokens))))))
-  (testing "#?() empty — round-trips through read → print → re-read"
-    (let [forms1 (core/meme->forms "#?()")
-          printed (p/print-meme-string forms1)
-          forms2 (core/meme->forms printed)]
-      (is (= "#?()" printed))
-      (is (= forms1 forms2))))
-  (testing "#?(:clj x :cljs y) basic — pass through as single token"
-    (let [tokens (tokenize "#?(:clj x :cljs y)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
-  (testing "#?(:clj x :cljs y) basic — round-trips"
-    (let [forms1 (core/meme->forms "#?(:clj x :cljs y)")
-          printed (p/print-meme-string forms1)
-          forms2 (core/meme->forms printed)]
-      (is (= forms1 forms2))))
-  (testing "#?@(:clj [1 2]) splice variant — round-trips"
-    (let [forms1 (core/meme->forms "#?@(:clj [1 2] :cljs [3 4])")
-          printed (p/print-meme-string forms1)
-          forms2 (core/meme->forms printed)]
-      (is (= forms1 forms2))))))
+(deftest reader-conditional-native-parsing
+  (testing "#?(:clj x :cljs y) returns matching platform value"
+    (is (= '[x] (core/meme->forms "#?(:clj x :cljs y)"))))
+  (testing "#?(:default fallback) uses :default"
+    (is (= '[fallback] (core/meme->forms "#?(:unknown x :default fallback)"))))
+  (testing "#?() empty — returns empty list"
+    (is (= [(list)] (core/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: radix numbers for bases 17–36 need letters G-Z.
@@ -340,17 +314,15 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest anon-fn-inside-reader-conditional
-  (testing "#?(:clj #(inc %) :cljs identity) tokenizes as single token"
-    (let [tokens (tokenize "#?(:clj #(inc %) :cljs identity)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+  (testing "#?(:clj #(inc(%)) :cljs identity) starts with reader-cond-start"
+    (let [tokens (tokenize "#?(:clj #(inc(%)) :cljs identity)")]
+      (is (= :reader-cond-start (:type (first tokens))))))
   #?(:clj
-  (testing "#?(:clj #(inc %) :cljs identity) parses without error"
-    (is (some? (core/meme->forms "#?(:clj #(inc %) :cljs identity)")))))
-  (testing "#?@(:clj [#(+ %1 %2)] :cljs [identity]) tokenizes as single token"
-    (let [tokens (tokenize "#?@(:clj [#(+ %1 %2)] :cljs [identity])")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens)))))))
+  (testing "#?(:clj #(inc(%)) :cljs identity) parses without error"
+    (is (some? (core/meme->forms "#?(:clj #(inc(%)) :cljs identity)")))))
+  (testing "#?@(:clj [#(+(%1 %2))] :cljs [identity]) starts with reader-cond-start"
+    (let [tokens (tokenize "#?@(:clj [#(+(%1 %2))] :cljs [identity])")]
+      (is (= :reader-cond-start (:type (first tokens)))))))
 
 #?(:clj
 (deftest anon-fn-inside-syntax-quote

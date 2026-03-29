@@ -13,20 +13,16 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest group-reader-conditional
-  (testing "#?(...) collapses to single :reader-cond-raw token"
+  (testing "#?(...) passes through — not collapsed"
     (let [tokens (group "#?(:clj 1 :cljs 2)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))
-      (is (= "#?(:clj 1 :cljs 2)" (:value (first tokens))))))
-  (testing "#?@(...) splice variant"
+      (is (= :reader-cond-start (:type (first tokens))))
+      (is (> (count tokens) 1))))
+  (testing "#?@(...) splice variant passes through"
     (let [tokens (group "#?@(:clj [1 2] :cljs [3])")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))
-      (is (= "#?@(:clj [1 2] :cljs [3])" (:value (first tokens))))))
-  (testing "#?() empty"
+      (is (= :reader-cond-start (:type (first tokens))))))
+  (testing "#?() empty passes through"
     (let [tokens (group "#?()")]
-      (is (= 1 (count tokens)))
-      (is (= "#?()" (:value (first tokens)))))))
+      (is (= :reader-cond-start (:type (first tokens)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Namespaced map collapsing
@@ -65,10 +61,9 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest group-nested-brackets
-  (testing "#? with nested parens and brackets"
-    (let [tokens (group "#?(:clj (foo [1 2]) :cljs nil)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+  (testing "#? with nested parens and brackets — passes through"
+    (let [tokens (group "#?(:clj foo([1 2]) :cljs nil)")]
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#:ns{} with nested vector — passes through"
     (let [tokens (group "#:user{:ids [1 2 3]}")]
       (is (= :namespaced-map-start (:type (first tokens)))))))
@@ -83,21 +78,19 @@
       (is (= 5 (count tokens)))
       (is (= [:symbol :open-paren :number :number :close-paren]
              (mapv :type tokens)))))
-  (testing "mixed opaque and plain tokens"
+  (testing "mixed reader-cond and plain tokens"
     (let [tokens (group "foo(#?(:clj 1) bar)")]
-      (is (= 5 (count tokens)))
       (is (= :symbol (:type (first tokens))))
-      (is (= :reader-cond-raw (:type (nth tokens 2)))))))
+      (is (some #(= :reader-cond-start (:type %)) tokens)))))
 
 ;; ---------------------------------------------------------------------------
 ;; #() inside opaque regions (grouper must track bracket depth correctly)
 ;; ---------------------------------------------------------------------------
 
 (deftest group-anon-fn-inside-opaque
-  (testing "#() inside reader conditional"
-    (let [tokens (group "#?(:clj #(inc %) :cljs identity)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
+  (testing "#() inside reader conditional — passes through"
+    (let [tokens (group "#?(:clj #(inc(%)) :cljs identity)")]
+      (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#() inside namespaced map — passes through"
     (let [tokens (group "#:user{:f #(inc %)}")]
       (is (= :namespaced-map-start (:type (first tokens)))))))
@@ -109,8 +102,7 @@
 (deftest group-reader-cond-start-without-bracket
   (testing "#? followed by non-bracket passes through as start token"
     (let [tokens (group "#?foo")]
-      (is (some #(= :reader-cond-start (:type %)) tokens))
-      (is (not (some #(= :reader-cond-raw (:type %)) tokens)))))
+      (is (some #(= :reader-cond-start (:type %)) tokens))))
   (testing "#? at EOF passes through as start token"
     (let [raw (tokenizer/tokenize "#?")
           tokens (grouper/group-tokens raw "#?")]
@@ -133,18 +125,10 @@
 ;; Composite tokens carry correct :end-line/:end-col from the closing delimiter
 ;; ---------------------------------------------------------------------------
 
-(deftest group-composite-end-position
-  (testing "#?(...) end position spans to closing paren"
-    (let [tokens (group "#?(:clj 1)")]
-      (is (= 1 (count tokens)))
-      (is (= 1 (:end-line (first tokens))))
-      (is (= 11 (:end-col (first tokens))))))
-  (testing "#:ns{...} start token has correct position"
-    (let [tokens (group "#:ns{:a 1}")]
-      (is (= :namespaced-map-start (:type (first tokens))))
-      (is (= 1 (:line (first tokens))))))
-  (testing "multi-line #?() end position on correct line"
-    (let [tokens (group "#?(:clj\n  1)")]
-      (is (= 1 (count tokens)))
-      (is (= 2 (:end-line (first tokens))))
-      (is (= 5 (:end-col (first tokens)))))))
+(deftest group-start-token-positions
+  (testing "#? start token"
+    (is (= :reader-cond-start (:type (first (group "#?(:clj 1)"))))))
+  (testing "#:ns start token"
+    (is (= :namespaced-map-start (:type (first (group "#:ns{:a 1}"))))))
+  (testing "multi-line #? start token"
+    (is (= :reader-cond-start (:type (first (group "#?(:clj\n  1)")))))))

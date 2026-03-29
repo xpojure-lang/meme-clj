@@ -175,16 +175,13 @@
          (is (= "x" (:user/name result)))
          (is (= {:city "Kyiv"} (:user/address result)))))))
 
-#?(:clj
-   (deftest parse-reader-conditional
-     (let [result (first (core/meme->forms "#?(:clj 1 :cljs 2)"))]
-       (is (instance? clojure.lang.ReaderConditional result)))))
+(deftest parse-reader-conditional
+  (testing "returns matching platform value"
+    (is (= 1 (first (core/meme->forms "#?(:clj 1 :cljs 2)"))))))
 
-#?(:clj
-   (deftest parse-reader-conditional-splicing
-     (let [result (first (core/meme->forms "#?@(:clj [1 2] :cljs [3 4])"))]
-       (is (instance? clojure.lang.ReaderConditional result))
-       (is (str/includes? (pr-str result) "#?@")))))
+(deftest parse-reader-conditional-splicing
+  (testing "splicing returns matched branch value"
+    (is (= [1 2] (first (core/meme->forms "#?@(:clj [1 2] :cljs [3 4])"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; maybe-call on opaque forms — opaque results can be call heads
@@ -210,15 +207,13 @@
 ;; ---------------------------------------------------------------------------
 
 #?(:cljs
-(deftest cljs-opaque-form-tokenization
-  (testing "tokenizer handles reader conditionals even on CLJS"
+(deftest cljs-form-tokenization
+  (testing "tokenizer handles reader conditionals on CLJS"
     (let [tokens (tokenize "#?(:clj x :cljs y)")]
-      (is (= 1 (count tokens)))
-      (is (= :reader-cond-raw (:type (first tokens))))))
-  (testing "tokenizer handles namespaced maps even on CLJS"
+      (is (= :reader-cond-start (:type (first tokens))))))
+  (testing "tokenizer handles namespaced maps on CLJS"
     (let [tokens (tokenize "#:user{:name \"x\"}")]
-      (is (= 1 (count tokens)))
-      (is (= :namespaced-map-raw (:type (first tokens))))))))
+      (is (= :namespaced-map-start (:type (first tokens))))))))
 
 #?(:cljs
 (deftest cljs-reader-paths
