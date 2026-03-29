@@ -309,7 +309,8 @@
 
 (deftest form-snapshot-quote
   (is (= '[(quote foo)] (forms-for "'foo")))
-  (is (= '[(quote (1 2 3))] (forms-for "'(1 2 3)"))))
+  (is (= '[(quote ())] (forms-for "'()")))
+  (is (= '[(quote (f x))] (forms-for "'f(x)"))))
 
 (deftest form-snapshot-var-quote
   (is (= '[(var foo)] (forms-for "#'foo"))))

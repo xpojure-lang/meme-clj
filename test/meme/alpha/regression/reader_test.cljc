@@ -173,10 +173,8 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"[Bb]are parentheses"
                           (core/meme->forms "(1 2 3)"))))
-  (testing "bare () is an error"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"[Bb]are parentheses"
-                          (core/meme->forms "()"))))
+  (testing "() is the empty list"
+    (is (= [(list)] (core/meme->forms "()"))))
   (testing "bare (x y) at top level is an error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"[Bb]are parentheses"
@@ -386,8 +384,10 @@
           re-read (first (core/meme->forms printed))]
       (is (= "f(x)(y)" printed))
       (is (= form re-read))))
-  (testing "chaining does not happen inside quoted lists"
-    (is (= '[(quote (a (b) (c d)))] (core/meme->forms "'(a(b) (c d))")))))
+  (testing "'foo(x) quotes the entire call"
+    (is (= '[(quote (foo x))] (core/meme->forms "'foo(x)"))))
+  (testing "quote(foo)(x) chains — quote call then chained call"
+    (is (= '[((quote foo) x)] (core/meme->forms "quote(foo)(x)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: reader accepted source text as third argument to

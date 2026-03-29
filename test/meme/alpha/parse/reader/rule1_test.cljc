@@ -189,10 +189,8 @@
 ;; Bare parens rejection
 ;; ===========================================================================
 
-(deftest bare-parens-error-empty
-  (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                        #"[Bb]are parentheses"
-                        (core/meme->forms "()"))))
+(deftest empty-list
+  (is (= [(list)] (core/meme->forms "()"))))
 
 (deftest bare-parens-error-with-content
   (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
@@ -213,17 +211,20 @@
 ;; Quote exception — '(...) is the only bare-paren form
 ;; ===========================================================================
 
-(deftest quote-list-allowed
-  (is (= '[(quote (1 2 3))] (core/meme->forms "'(1 2 3)"))))
-
 (deftest quote-empty-list
   (is (= '[(quote ())] (core/meme->forms "'()"))))
 
-(deftest quote-nested-list
-  (testing "inside quoted list, Clojure S-expression syntax — parens create lists"
-    (is (= '[(quote (a (b c)))] (core/meme->forms "'(a (b c))"))))
-  (testing "adjacent paren after symbol is NOT a call inside quote"
-    (is (= '[(quote (1 b (c)))] (core/meme->forms "'(1 b(c))")))))
+(deftest quote-call-form
+  (testing "'f(x) quotes the call form (f x)"
+    (is (= '[(quote (f x))] (core/meme->forms "'f(x)"))))
+  (testing "'+(1 2) quotes the call form (+ 1 2)"
+    (is (= '[(quote (+ 1 2))] (core/meme->forms "'+(1 2)")))))
+
+(deftest quote-bare-parens-error
+  (testing "'(1 2 3) is quote + bare parens — error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Bb]are parentheses"
+                          (core/meme->forms "'(1 2 3)")))))
 
 (deftest quote-symbol-not-list
   (is (= '[(quote x)] (core/meme->forms "'x"))))

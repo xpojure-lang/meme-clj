@@ -1,8 +1,8 @@
 ; Advanced constructs — #(), condp, letfn, defmacro, some->/some->>
 
 ;; #() anonymous function shorthand
-assert(=(map(#(+(% 10)) [1 2 3]) '(11 12 13)))
-assert(=(map(#(+(%1 %2)) [1 2] [10 20]) '(11 22)))
+assert(=(map(#(+(% 10)) [1 2 3]) list(11 12 13)))
+assert(=(map(#(+(%1 %2)) [1 2] [10 20]) list(11 22)))
 def(square #(*(% %)))
 assert(=(square(5) 25))
 def(r #(rand-int(100)))

@@ -188,42 +188,6 @@
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Clj-mode support (for content inside quoted lists)
-;; ---------------------------------------------------------------------------
-
-(defn- pp-clj-list
-  "Pretty-print a list in Clojure S-expression style (for inside quoted lists)."
-  [form col width]
-  (let [flat-str (binding [printer/*clj-mode* true] (flat form))]
-    (if (<= (+ col (count flat-str)) width)
-      flat-str
-      (let [inner-col (+ col indent-step)
-            inner-indent (indent-str inner-col)]
-        (binding [printer/*clj-mode* true]
-          (let [pp-elems (map #(pp % inner-col width) form)]
-            (str "(" (first pp-elems)
-                 (when (next pp-elems)
-                   (apply str (map #(str "\n" inner-indent %) (rest pp-elems))))
-                 ")")))))))
-
-(defn- pp-quoted-list
-  "Pretty-print (quote (list...)) with '(...) syntax and S-expression inside."
-  [form col width]
-  (let [inner (second form)]
-    (binding [printer/*clj-mode* true]
-      (let [flat-str (str "'(" (str/join " " (map flat inner)) ")")]
-        (if (<= (+ col (count flat-str)) width)
-          flat-str
-          (let [quote-paren-len (count "'(")
-                inner-col (+ col quote-paren-len)
-                inner-indent (indent-str inner-col)
-                pp-elems (map #(pp % inner-col width) inner)]
-            (str "'(" (first pp-elems)
-                 (when (next pp-elems)
-                   (apply str (map #(str "\n" inner-indent %) (rest pp-elems))))
-                 ")")))))))
-
-;; ---------------------------------------------------------------------------
 ;; Main dispatch
 ;; ---------------------------------------------------------------------------
 
@@ -270,14 +234,9 @@
                     (forms/deferred-auto-keyword? form)
                     (forms/deferred-auto-keyword-raw form)
 
-                    ;; Quote with list inner — use '(...) with S-expression inside
-                    (and (call? form) (= 'quote (first form))
-                         (seq? (second form)))
-                    (pp-quoted-list form col width)
-
-                    ;; Quote with non-seq inner — always 'x (atomic, no multi-line)
+                    ;; Quote — prefix sugar
                     (and (call? form) (= 'quote (first form)))
-                    (str "'" (flat (second form)))
+                    (str "'" (pp (second form) (inc col) width))
 
                     ;; @deref — preserve sugar, recurse on inner
                     (and (call? form) (= 'clojure.core/deref (first form)))
@@ -287,15 +246,7 @@
                     (and (call? form) (= 'var (first form)))
                     (str "#'" (flat (second form)))
 
-                    ;; Lists in clj-mode — S-expression style
-                    (and (call? form) printer/*clj-mode*)
-                    (pp-clj-list form col width)
-
-                    ;; Empty list in clj-mode
-                    (and (seq? form) (empty? form) printer/*clj-mode*)
-                    "()"
-
-                    ;; Calls — the main case (meme mode)
+                    ;; Calls — the main case
                     (call? form)
                     (pp-call-smart form col width)
 

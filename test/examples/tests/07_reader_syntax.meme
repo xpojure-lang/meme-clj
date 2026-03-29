@@ -1,9 +1,9 @@
 ; Reader syntax — reader macros
 
 ;; 'quote
-assert(=(first('(a b c)) 'a))
-assert(=(count('(1 2 3)) 3))
 assert(=('foo 'foo))
+assert(=(first(list(1 2 3)) 1))
+assert(= '() ())
 
 ;; #'var-quote
 assert(=(var?(#'inc) true))

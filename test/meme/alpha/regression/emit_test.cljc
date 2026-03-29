@@ -13,32 +13,32 @@
 ;; for (quote (1 2 3)), producing '1(2 3) instead of '(1 2 3).
 ;; ---------------------------------------------------------------------------
 
-(deftest quoted-list-printer
-  (testing "'(1 2 3) roundtrips"
-    (let [form '(quote (1 2 3))
+(deftest quoted-call-printer
+  (testing "'f(x y) roundtrips"
+    (let [form '(quote (f x y))
           printed (p/print-form form)
           read-back (first (core/meme->forms printed))]
-      (is (= "'(1 2 3)" printed))
+      (is (= "'f(x y)" printed))
       (is (= form read-back))))
-  (testing "'(a b c) roundtrips"
-    (let [form '(quote (a b c))
+  (testing "'+(1 2) roundtrips"
+    (let [form '(quote (+ 1 2))
           printed (p/print-form form)
           read-back (first (core/meme->forms printed))]
-      (is (= "'(a b c)" printed))
+      (is (= "'+(1 2)" printed))
       (is (= form read-back))))
   (testing "quoted empty list"
     (is (= "'()" (p/print-form '(quote ()))))))
 
 ;; ---------------------------------------------------------------------------
-;; Empty list prints as valid meme: () → "'()" not "nil()".
+;; Empty list prints as (): not "nil()".
 ;; Bug: print-form on empty list produced "nil()" which re-reads as (nil).
 ;; ---------------------------------------------------------------------------
 
 (deftest empty-list-roundtrip
-  (testing "empty list prints as '()"
-    (is (= "'()" (p/print-form ()))))
+  (testing "empty list prints as ()"
+    (is (= "()" (p/print-form ()))))
   (testing "printed empty list re-reads correctly"
-    (is (= '(quote ()) (first (core/meme->forms "'()"))))))
+    (is (= [(list)] (core/meme->forms "()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; B4: #() printer drops surplus % params.
@@ -91,67 +91,19 @@
     (is (= "#(inc(%1))" (p/print-form '(fn [%1] (inc %1)))))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug: quoted list with non-callable-headed sublists produced broken output.
-;; Fix: '(...) sugar only when all inner sublists have callable heads.
+;; Quote uses meme syntax — callable-headed quoted forms roundtrip.
+;; Non-callable-headed lists (like (1 2 3)) are not representable in meme.
 ;; ---------------------------------------------------------------------------
 
-(deftest quoted-list-with-clj-syntax-inside
-  (testing "sublists inside quote print as S-expressions"
+(deftest quoted-call-form-roundtrip
+  (testing "'f(g(x)) roundtrips — nested call inside quote"
     (let [form '(quote (f (g x)))
           printed (p/print-form form)
           reread (first (core/meme->forms printed))]
-      (is (= "'(f (g x))" printed))
+      (is (= "'f(g(x))" printed))
       (is (= form reread))))
-  (testing "all-atoms quoted list still uses '(...) sugar"
-    (let [form '(quote (1 2 3))
-          printed (p/print-form form)]
-      (is (= "'(1 2 3)" printed))
-      (is (= form (first (core/meme->forms printed))))))
-  (testing "number-headed sublist now prints and roundtrips"
-    (let [form (list 'quote (list (list 1 2 3)))
-          printed (p/print-form form)
-          reread (first (core/meme->forms printed))]
-      (is (= "'((1 2 3))" printed))
-      (is (= form reread))))
-  (testing "string-headed sublist roundtrips"
-    (let [form (list 'quote (list (list "hello" 1)))
-          printed (p/print-form form)
-          reread (first (core/meme->forms printed))]
-      (is (= "'((\"hello\" 1))" printed))
-      (is (= form reread))))
-  (testing "nil-headed sublist roundtrips"
-    (let [form (list 'quote (list (list nil 1)))
-          printed (p/print-form form)
-          reread (first (core/meme->forms printed))]
-      (is (= "'((nil 1))" printed))
-      (is (= form reread))))
-  (testing "mixed elements with non-callable sublist roundtrips"
-    (let [form (list 'quote (list 'x (list 1 2) 'y))
-          printed (p/print-form form)
-          reread (first (core/meme->forms printed))]
-      (is (= "'(x (1 2) y)" printed))
-      (is (= form reread)))))
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: quoted list shorthand checked only direct children.
-;; Bug: (quote ((a (1 2)) b)) passed the every? check because (a (1 2))
-;; has a symbol head, but the nested (1 2) has a number head.
-;; Fix: recursive check of all nested sublists.
-;; ---------------------------------------------------------------------------
-
-(deftest quoted-list-nested-sublists-roundtrip
-  (testing "nested non-callable head now prints and roundtrips"
-    (let [form '(quote ((a (1 2)) b))
-          printed (p/print-form form)
-          reread (first (core/meme->forms printed))]
-      (is (= "'((a (1 2)) b)" printed))
-      (is (= form reread))))
-  (testing "all-callable nested sublists also roundtrip"
-    (let [form '(quote ((a (b c)) d))
-          printed (p/print-form form)]
-      (is (str/starts-with? printed "'("))))
-  (testing "deeply nested sublists roundtrip"
-    (let [form '(quote ((a (b c)) d))
+  (testing "'a(b(c) d) roundtrips — nested callable sublists"
+    (let [form '(quote (a (b c) d))
           printed (p/print-form form)
           read-back (first (core/meme->forms printed))]
       (is (= form read-back)))))

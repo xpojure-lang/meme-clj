@@ -58,14 +58,15 @@ clojure -T:build deploy
 ```
 
 The pipeline has three stages (composed by `meme.alpha.pipeline`):
-1. **Scan** (`meme.alpha.scan.tokenizer`) — characters → flat token vector. Opaque regions emit marker tokens (`:reader-cond-start`, `:namespaced-map-start`, `:syntax-quote-start`).
-2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters into single composite `-raw` tokens. Bracket matching is trivial because strings/chars/comments are already individual tokens.
-3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure forms. Value resolution (numbers, strings, chars, regex, opaque forms) is delegated to `meme.alpha.parse.resolve`.
+1. **Scan** (`meme.alpha.scan.tokenizer`) — characters → flat token vector. Compound forms emit marker tokens.
+2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters into composite tokens. Bracket matching is trivial because strings/chars/comments are already individual tokens.
+3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure forms. Value resolution delegated to `meme.alpha.parse.resolve`.
 
-- The reader is a **pure function** from meme text to Clojure forms. No runtime dependency.
+- The reader is a **pure function** from meme text to Clojure forms. No runtime dependency. No `read-string` delegation — everything is parsed natively.
 - A printer (`meme.alpha.emit.printer`) converts Clojure forms back to meme syntax (also pure).
 - File extension: `.meme`
-- `#` dispatch forms (`#?`, `#?@`, `#:ns{}`, tagged literals) and syntax-quote (`` ` ``) are **opaque** — the tokenizer emits markers, the grouper captures the balanced region as raw text, and `meme.alpha.parse.resolve` hands it off to Clojure's reader. `#{}`, `#""`, `#'`, `#_`, `#()` are parsed by meme since their contents use meme syntax.
+- `()` is the empty list. Every `(content)` requires a head: `head(content)`.
+- All `#` dispatch forms (`#?`, `#?@`, `#:ns{}`, `#{}`, `#""`, `#'`, `#_`, `#()`, tagged literals) and syntax-quote (`` ` ``) are parsed natively with meme rules inside. No opaque regions.
 
 ### Key namespaces
 
@@ -170,7 +171,10 @@ clojure-lsp is configured via the `.claude-plugin/` directory for Claude Code in
 - `ns(my.ns :require([...]))` — namespace declaration
 - `defprotocol(Name method-sigs...)`, `defrecord(Name [fields])` — protocols and records
 - `defmulti(name dispatch-fn)`, `defmethod(name dispatch-val [args] body)` — multimethods
-- `::keyword` — auto-resolve keywords are opaque (deferred to Clojure's reader)
+- `::keyword` — auto-resolve keywords resolved natively
 - Threading macros (`->`, `->>`) are just calls
-- `'(...)` uses Clojure S-expression syntax inside — `'(f (g x))` is `(quote (f (g x)))`, not a call
+- `()` is the empty list
+- `'x` quotes the next form; `'f(x)` → `(quote (f x))` — meme syntax inside, no S-expression escape
+- `` `if(~test ~body) `` — syntax-quote uses meme syntax inside
 - `[]` is always data; use `list(1 2 3)` for list literals
+- No opaque regions — everything parsed natively by meme

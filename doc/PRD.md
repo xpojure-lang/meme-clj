@@ -93,16 +93,20 @@ ClojureScript without modification.
 | R13 | Parse `ns(...)` with `:require` and `:import` | Done |
 | R15 | Parse all Clojure data literals unchanged | Done |
 | R16 | Parse Clojure reader macros (`@`, `^`, `#'`, `#_`, `'`) | Done |
-| R17 | Pass `#?()` reader conditionals through to Clojure's reader | Done |
+| R17 | Parse `#?()` reader conditionals natively (no read-string) | In progress |
 | R18 | Parse `defprotocol(...)`, `defrecord(...)`, `deftype(...)`, `reify(...)`, `defmulti(...)`, `defmethod(...)` | Done |
 | R19 | Parse Java interop: `.method()`, `Class/static()`, `.-field()` | Done |
 | R20 | Commas are whitespace | Done |
 | R21 | Line/column tracking for error messages | Done |
 | R22 | Portable `.cljc` — core reader/printer run on JVM, ClojureScript, Babashka | Done |
 | R23 | Signed numbers: `-1` is number, `-(1 2)` is call to `-` | Done |
-| R24 | `#:ns{...}` namespaced maps pass through to Clojure's reader | Done |
+| R24 | `#:ns{...}` namespaced maps parsed natively (no read-string) | In progress |
 | R25 | `#()` uses meme syntax inside, `%` params → `fn` form | Done |
 | R26 | `run-pipeline` exposes intermediate pipeline state for tooling | Done |
+| R28 | `()` is the empty list (no head required) | In progress |
+| R29 | No S-expression escape hatch — `'(...)` uses meme syntax inside | In progress |
+| R30 | Syntax-quote parsed natively — meme syntax inside `` ` `` | In progress |
+| R31 | Zero `read-string` delegation — all values resolved natively | In progress |
 
 ### Printer
 

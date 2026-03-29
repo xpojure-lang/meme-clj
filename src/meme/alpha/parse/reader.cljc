@@ -33,7 +33,7 @@
   ([tokens opts] (make-parser tokens opts nil))
   ([tokens opts source]
    {:tokens tokens :pos (volatile! 0) :depth (volatile! 0)
-    :opts opts :clj-mode (volatile! false) :source source}))
+    :opts opts :source source}))
 
 (defn- peof? [{:keys [tokens pos]}]
   (>= @pos (count tokens)))
@@ -271,15 +271,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- maybe-call
-  "If next token is (, parse call args and wrap — spacing is irrelevant.
-   In clj-mode (inside quoted lists), never forms calls — returns head as-is."
+  "If next token is (, parse call args and wrap — spacing is irrelevant."
   [p head]
-  (if @(:clj-mode p)
-    head
-    (if (tok-type? (ppeek p) :open-paren)
-      (let [args (parse-call-args p)]
-        (apply list head args))
-      head)))
+  (if (tok-type? (ppeek p) :open-paren)
+    (let [args (parse-call-args p)]
+      (apply list head args))
+    head))
 
 (defn- parse-form-base
   "Parse a single meme form."
@@ -329,14 +326,14 @@
           (resolve/resolve-regex (:value tok) (select-keys tok [:line :col])))
 
       :open-paren
-      (if @(:clj-mode p)
-        ;; In clj-mode (inside quoted lists), bare parens create lists
-        (let [loc (select-keys tok [:line :col])]
-          (padvance! p)
-          (apply list (parse-forms-until p :close-paren loc)))
-        (errors/meme-error
-          "Bare parentheses not allowed — every (...) needs a head: symbol, keyword, or vector. Write f(x) not (f x)."
-          (error-data p (select-keys tok [:line :col]))))
+      ;; () is the empty list. (content) without a head is an error.
+      (let [loc (select-keys tok [:line :col])]
+        (padvance! p)
+        (if (tok-type? (ppeek p) :close-paren)
+          (do (padvance! p) (list))
+          (errors/meme-error
+            "Bare parentheses not allowed — every (...) needs a head: symbol, keyword, or vector. Write f(x) not (f x). Use () for the empty list."
+            (error-data p loc))))
 
       :open-bracket (maybe-call p (parse-vector p))
       :open-brace (maybe-call p (parse-map p))
@@ -370,25 +367,14 @@
                                           (error-data p (select-keys tok [:line :col])))))))
 
       :quote
+      ;; ' quotes the next meme form. No S-expression escape hatch.
+      ;; '() quotes the empty list, 'f(x) quotes the call (f x).
       (do (padvance! p)
-          (if (tok-type? (ppeek p) :open-paren)
-            ;; '(...) — Clojure S-expression syntax inside quoted lists.
-            ;; Activates clj-mode: bare parens create lists, symbols don't
-            ;; trigger Rule 1 calls. This matches Clojure's quote semantics.
-            (let [paren-loc (select-keys (ppeek p) [:line :col])
-                  prev-mode @(:clj-mode p)]
-              (padvance! p)
-              (vreset! (:clj-mode p) true)
-              (let [forms (try
-                            (parse-forms-until p :close-paren paren-loc)
-                            (finally
-                              (vreset! (:clj-mode p) prev-mode)))]
-                (list 'quote (apply list forms))))
-            (let [inner (parse-form p)]
-              (when (discard-sentinel? inner)
-                (errors/meme-error "Quote target was discarded by #_ — nothing to quote"
-                                  (error-data p (select-keys tok [:line :col]))))
-              (list 'quote inner))))
+          (let [inner (parse-form p)]
+            (when (discard-sentinel? inner)
+              (errors/meme-error "Quote target was discarded by #_ — nothing to quote"
+                                (error-data p (select-keys tok [:line :col]))))
+            (list 'quote inner)))
 
       :syntax-quote-raw
       ;; ` forms are opaque — pass through to Clojure's reader
@@ -497,10 +483,9 @@
 (defn- parse-call-chain
   "After parsing a form, check for chained call openers: f(x)(y) → ((f x) y).
    Handles arbitrary depth: f(x)(y)(z) → (((f x) y) z).
-   Skipped in clj-mode (inside quoted lists) and for discard sentinels."
+   Skipped for discard sentinels."
   [p form]
-  (if (and (not @(:clj-mode p))
-           (not (discard-sentinel? form))
+  (if (and (not (discard-sentinel? form))
            (tok-type? (ppeek p) :open-paren))
     (let [args (parse-call-args p)]
       (recur p (apply list form args)))

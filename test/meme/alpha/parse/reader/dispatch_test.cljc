@@ -70,8 +70,8 @@
     (is (= 'quote (first result)))
     (is (= 'foo (second result)))))
 
-(deftest parse-quote-list
-  (let [result (first (core/meme->forms "'(1 2 3)"))]
+(deftest parse-quote-call
+  (let [result (first (core/meme->forms "'f(1 2 3)"))]
     (is (= 'quote (first result)))))
 
 ;; ---------------------------------------------------------------------------

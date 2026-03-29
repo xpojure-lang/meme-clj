@@ -9,10 +9,6 @@
 
 (declare print-form)
 
-;; When true, lists print in Clojure S-expression style: (f x y)
-;; instead of meme call style: f(x y). Set by the quote handler
-;; so that '(...) contains Clojure syntax. Also used by pprint.
-(def ^:dynamic *clj-mode* false)
 
 ;; ---------------------------------------------------------------------------
 ;; Print helpers
@@ -115,60 +111,30 @@
     (forms/deferred-auto-keyword? form)
     (forms/deferred-auto-keyword-raw form)
 
-    ;; empty list — in meme mode, print as '() (bare () is invalid meme);
-    ;; in clj-mode (inside quoted lists), print as ()
+    ;; empty list
     (and (seq? form) (empty? form))
-    (if *clj-mode* "()" "'()")
+    "()"
 
     ;; sequences — calls and reader sugar
     (seq? form)
-    (if *clj-mode*
-      ;; In clj-mode (inside quoted lists), print as S-expressions
-      (str "(" (str/join " " (map print-form form)) ")")
-      (let [head (first form)]
-        (cond
-          (anon-fn-shorthand? form)
-          (str "#(" (print-form (nth form 2)) ")")
+    (let [head (first form)]
+      (cond
+        (anon-fn-shorthand? form)
+        (str "#(" (print-form (nth form 2)) ")")
 
-          ;; @deref
-          (= head 'clojure.core/deref) (str "@" (print-form (second form)))
+        ;; @deref
+        (= head 'clojure.core/deref) (str "@" (print-form (second form)))
 
-          ;; 'quote — quoted lists use Clojure S-expression syntax inside.
-          ;; Activates *clj-mode* so nested lists print as (f x) not f(x).
-          (= head 'quote)
-          (let [inner (second form)]
-            (if (not (seq? inner))
-              (str "'" (print-form inner))
-              (binding [*clj-mode* true]
-                (str "'(" (str/join " " (map print-form inner)) ")"))))
+        ;; 'quote — prefix sugar
+        (= head 'quote)
+        (str "'" (print-form (second form)))
 
-          ;; #'var
-          (= head 'var) (str "#'" (print-form (second form)))
+        ;; #'var
+        (= head 'var) (str "#'" (print-form (second form)))
 
-          ;; call: (f args...) → f(args...) when head is a symbol
-          (symbol? head)
-          (str (print-form head) "(" (print-args (rest form)) ")")
-
-          ;; keyword-headed list: (:require [bar]) → :require([bar])
-          (keyword? head)
-          (str (print-form head) "(" (print-args (rest form)) ")")
-
-          ;; vector-headed list: ([params] body) → [params](body)
-          (vector? head)
-          (str (print-form head) "(" (print-args (rest form)) ")")
-
-          ;; set-headed list: (#{:a :b} x) → #{:a :b}(x)
-          (set? head)
-          (str (print-form head) "(" (print-args (rest form)) ")")
-
-          ;; map-headed list: ({:a 1} :a) → {:a 1}(:a)
-          (map? head)
-          (str (print-form head) "(" (print-args (rest form)) ")")
-
-          ;; any other head — reader conditionals, tagged literals, etc.
-          ;; may be valid call heads via maybe-call on opaque forms
-          :else
-          (str (print-form head) "(" (print-args (rest form)) ")"))))
+        ;; call: head(args...) — uniform for all head types
+        :else
+        (str (print-form head) "(" (print-args (rest form)) ")")))
 
     ;; vector
     (vector? form)

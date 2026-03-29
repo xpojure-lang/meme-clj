@@ -22,40 +22,34 @@ Everything else is Clojure.
 The reader pipeline is split into three explicit stages:
 
 1. **Scan** (`meme.alpha.scan.tokenizer`) — character scanning → flat token vector.
-   Opaque regions emit marker tokens (`:reader-cond-start`, etc.) rather
-   than capturing raw text inline.
-2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters
-   into single composite `-raw` tokens.
+   Compound forms (reader conditionals, namespaced maps, syntax-quote)
+   emit marker tokens rather than capturing raw text inline.
+2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced
+   delimiters into single composite tokens.
 3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser → Clojure forms.
 
-The original design captured opaque regions (reader conditionals, namespaced
-maps, syntax-quote with brackets) inline during tokenization via
-`read-balanced-raw`, which did character-level bracket matching. This had
-bugs: char literals (`\)`) and strings containing delimiters could fool the
-bracket counter, because it operated on raw characters rather than tokens.
-
-The grouper solves this by operating on already-tokenized input where
+The three-stage split makes each stage independently testable and the
+pipeline extensible. The grouper operates on already-tokenized input where
 bracket matching is trivial — strings, chars, and comments are individual
 tokens, so `\)` inside a string is just a `:string` token, not a closing
-paren. The three-stage split also makes each stage independently testable
-and the pipeline extensible.
+paren.
 
 `meme.alpha.pipeline` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:raw-tokens`, `:tokens`, `:forms`. This makes
 intermediate state visible to tooling via `meme.alpha.core/run-pipeline`.
 
 
-## Centralized host reader delegation (meme.alpha.parse.resolve)
+## Centralized value resolution (meme.alpha.parse.resolve)
 
-All `read-string` calls — for numbers, strings, chars, regex, syntax-quote,
-namespaced maps, reader conditionals, auto-resolve keywords, and tagged
-literals — are centralized in `meme.alpha.parse.resolve`. Previously these were
-scattered across the parser with inconsistent error handling.
+All value resolution — numbers, strings, chars, regex, auto-resolve
+keywords, tagged literals — is centralized in `meme.alpha.parse.resolve`.
+The parser deals only with structural parsing; value interpretation is
+delegated to resolve.
 
-Centralization provides:
-- A single `host-read` pattern that wraps exceptions with meme location info.
-- Clean separation of platform asymmetries (JVM vs ClojureScript) from parser logic.
-- The parser deals only with structural parsing; value interpretation is delegated.
+The goal is zero `read-string` delegation: meme parses everything
+natively, including forms that were previously opaque (syntax-quote,
+reader conditionals, namespaced maps). Platform asymmetries (JVM vs
+ClojureScript) are isolated in resolve.
 
 
 ## Custom tokenizer (not Clojure's reader)
@@ -87,8 +81,8 @@ on JVM and a JS array on ClojureScript.
 ## Everything is a call
 
 All special forms use call syntax: `def(x 42)`, `defn(f [x] body)`,
-`if(cond then else)`, `try(body catch(Exception e handler))`. There
-are no bare forms — every `(...)` must have a head.
+`if(cond then else)`, `try(body catch(Exception e handler))`. Every
+`(...)` with content must have a head. `()` is the empty list.
 
 This dramatically simplifies both the reader and the printer:
 - The reader has no special-form parsers — all symbols go through the
@@ -96,6 +90,10 @@ This dramatically simplifies both the reader and the printer:
 - The printer has no special-form printers — all lists use the generic
   `head(args...)` format.
 - `do`, `catch`, `finally` are regular symbols, not grammar keywords.
+
+The rule applies uniformly to reader dispatch forms too: `#?(...)` has
+`#?` as its head. `#(...)` has `#` as its head. These are not exceptions
+to the rule — they are instances of it.
 
 
 ## Head-outside-parens call detection
@@ -107,75 +105,59 @@ The rule is: the head of a list is written outside the parens. This
 applies to symbols (`f(x)`), keywords (`:require([bar])`), and
 vectors (`[x](body)` for multi-arity clauses like `([x] body)`).
 
-Bare `(...)` without a preceding head is an error — the reader rejects it
-with "Bare parentheses not allowed." The two exceptions are `'(...)` (quoted
-list) and nested parens inside `'(...)`, where the reader switches to Clojure
-S-expression mode so that `'(f (g x))` produces `(quote (f (g x)))`.
-Outside these quote contexts, every `(...)` must have a head, making the
-call rule uniform and eliminating ambiguity.
+Bare `(...)` with content but no preceding head is an error — the reader
+rejects it with "Bare parentheses not allowed." `()` (empty parens) is
+the empty list — it is unambiguous and needs no head.
 
 
 ## Spacing irrelevance
 
 Spacing between a head and its opening `(` is irrelevant — `f(x)` and
-`f (x)` both produce `(f x)`. Since bare `()` is rejected (every `(`
-requires a head), spacing irrelevance introduces no ambiguity — there
-is no valid meme program where `f (x)` could mean anything other than
-`(f x)`.
+`f (x)` both produce `(f x)`. Since bare `(content)` is rejected (every
+`(` with content requires a head), spacing irrelevance introduces no
+ambiguity — there is no valid meme program where `f (x)` could mean
+anything other than `(f x)`.
 
 
-## `#` dispatch forms are opaque
+## `#` dispatch forms follow the rule
 
-Reader conditionals (`#?`, `#?@`), tagged literals (`#inst`, `#uuid`), and
-other `#`-prefixed forms that don't need meme-internal parsing are captured
-as raw text and passed to Clojure's `read-string`. This avoids reimplementing
-Clojure's reader dispatch in meme.
+All `#`-prefixed forms are parsed natively by meme — no delegation to
+`read-string`. The `#` dispatch character combines with the next
+character(s) to form the head of an M-expression:
 
-Forms that need meme parsing inside their delimiters — `#{}` (sets), `#""`
-(regex), `#'` (var quote), `#_` (discard) — are handled by meme's tokenizer
-since their contents may contain meme syntax.
+- `#?(...)` — reader conditional. `#?` is the head.
+- `#?@(...)` — splicing reader conditional. `#?@` is the head.
+- `#(...)` — anonymous fn. `#` is the head. Body is a single meme
+  expression; `%`, `%1`, `%2`, `%&` are collected and used to build
+  the `fn` parameter vector. `#(inc(%))` → `(fn [%1] (inc %1))`.
+- `#{...}` — set literal. `#` dispatches with `{`.
+- `#"..."` — regex literal.
+- `#'x` — var quote. Prefix operator.
+- `#_x` — discard. Prefix operator.
+- `#inst "..."`, `#uuid "..."` — tagged literals.
+- `#:ns{...}` — namespaced maps.
 
-`#()` (anonymous fn shorthand) uses meme syntax inside — the call rule
-applies normally. The body is a single meme expression; `%`, `%1`, `%2`, `%&`
-are collected by the reader and used to build the `fn` parameter vector.
-`#(inc(%))` produces `(fn [%1] (inc %1))`. Bare `%` is normalized to `%1`.
+Reader conditionals parse only the matching platform's branch; non-matching
+branches are skipped without parsing (they may contain platform-specific
+syntax invalid on the current platform).
 
-On ClojureScript, opaque forms have limited support: `cljs.reader` does not
-handle `#?`, `#?@`, `#:ns{}`, or tagged literals at runtime (these are
-resolved at compile time). Regex is handled separately — the parser
-constructs `js/RegExp` directly instead of delegating to `read-string`.
+Syntax-quote (`` ` ``) is also parsed natively — its interior uses meme
+syntax with `~` (unquote) and `~@` (unquote-splicing). Macro templates
+are written in meme syntax: `` `if(~test do(~@body)) ``.
 
 
-## No quoting needed (usually)
+## Quote uses meme syntax
 
-In Clojure, `'(1 2 3)` is needed because `(1 2 3)` would try to call `1`.
-In meme, `()` forms a call when a symbol, keyword, or vector precedes it.
-`[]` is always data. There is no ambiguity, so you never need quote for
-your own code. Use `list(1 2 3)` to construct a list.
+`'` is a prefix operator that quotes the next meme form. There is no
+S-expression escape hatch — `'` does not switch parser modes:
 
-However, some macro APIs expect quoted arguments (e.g. `list('if test then else)`).
-Quote passes through for those cases. The printer preserves quote only when the
-source Clojure had it — it never synthesizes quote.
+- `'foo` → `(quote foo)` — quoted symbol
+- `'[1 2 3]` → `(quote [1 2 3])` — quoted vector
+- `'f(x y)` → `(quote (f x y))` — quoted call
+- `'()` → `(quote ())` — quoted empty list
 
-## Quote uses Clojure syntax inside
-
-Inside `'(...)`, the reader switches to Clojure S-expression mode: bare
-parentheses create lists, and symbols do not trigger Rule 1 calls. This
-means `'(f (g x))` produces `(quote (f (g x)))` — two elements, `f` and
-the list `(g x)`.
-
-This is essential for:
-- **Macros**: `list('if test then else)` — the `'if` is a symbol quote
-  (no change), but `'((f x) (g y))` now works for any list structure.
-- **Data**: Quoted lists with non-callable heads like `'((1 2) (3 4))`
-  are valid — no special cases or error paths.
-- **Roundtrip**: The printer emits `'(...)` with S-expression syntax
-  inside, and the reader reconstructs the same forms. Previously, quoted
-  lists with non-callable-headed sublists could not be printed.
-
-The mode is scoped: it activates on `'(` and deactivates at the matching
-`)`. Quote on non-list forms (`'foo`, `'42`) is unchanged. Backtick
-`` ` `` is unaffected — it was already opaque.
+Lists are constructed by calls: `list(1 2 3)` → `(list 1 2 3)`. For
+quoting code, use `quote`: `quote(+(1 2))` → `(quote (+ 1 2))`.
 
 
 ## Commas are whitespace
@@ -184,23 +166,19 @@ Same as Clojure. `f(a, b, c)` and `f(a b c)` are identical. Use
 whichever style is clearer for the context.
 
 
-## Backtick is opaque
+## Syntax-quote uses meme syntax
 
-Syntax-quote (`` ` ``) is an opaque boundary. The backtick and its body
-are captured as raw text and passed to Clojure's reader. Macro templates
-use S-expression syntax inside backtick — meme syntax applies everywhere
-else.
-
-This means macros work in `.meme` files:
+Syntax-quote (`` ` ``) is parsed natively — its interior uses meme
+call syntax, not S-expressions. `~` (unquote) and `~@` (unquote-splicing)
+work as prefix operators inside syntax-quote.
 
 ```
-defmacro(unless [test & body] `(if (not ~test) (do ~@body)))
+defmacro(unless [test & body] `if(~test nil do(~@body)))
 ```
 
-The `defmacro` call uses meme syntax. The template inside `` ` `` is raw
-Clojure, processed by Clojure's reader for namespace resolution, gensym
-expansion, and unquote handling. This avoids reimplementing syntax-quote
-while keeping macro definitions available in meme.
+The meme reader handles symbol resolution, gensym expansion, and
+unquote splicing — the same transformations Clojure's reader performs,
+but applied to meme-parsed forms. No `read-string` delegation.
 
 
 ## Signed number heuristic
@@ -216,34 +194,26 @@ it has a scar tissue test.
 
 ## Auto-resolve keywords
 
-`::foo` resolution depends on context:
+`::foo` is resolved natively by the meme reader:
 
 - **With `:resolve-keyword` option** (REPL, file runner): resolved at
   read time to `:actual.ns/foo`, matching Clojure's semantics. The
-  caller provides the resolver function; the REPL and file runner pass
-  `#(clojure.core/read-string %)` which resolves in the current `*ns*`.
+  caller provides the resolver function.
 - **Without option on JVM/Babashka** (tooling, bare `read-meme-string`):
-  deferred to eval time via `(clojure.core/read-string "::foo")`. The
-  printer detects this pattern and emits `::foo` for roundtripping.
-- **Without option on CLJS**: errors. `cljs.reader/read-string` resolves
-  `::` in the compiler's namespace, not the caller's, so deferred
-  resolution would silently produce wrong results.
-
-This avoids reimplementing Clojure's namespace resolution in the reader
-while eliminating the semantic shift for all practical use cases.
+  deferred to eval time. The printer detects the deferred form and
+  emits `::foo` for roundtripping.
+- **Without option on CLJS**: errors, since deferred resolution would
+  silently produce wrong results.
 
 
-## Delegation to host reader for primitives
+## Native value resolution for primitives
 
 Numbers, strings, character literals, and regex patterns are tokenized as
-raw text by meme's tokenizer, then passed to `read-string` for the host
-platform to produce actual values. meme never parses numeric formats (hex,
-octal, ratios, BigDecimal), string escape sequences, or character names.
-
-This avoids reimplementing Clojure's literal parsing and guarantees
-identical behavior to the host platform. The one exception is regex on
-ClojureScript, where `cljs.reader` doesn't handle `#"..."` — the parser
-constructs `js/RegExp` directly from the pattern string.
+raw text by meme's tokenizer, then resolved natively by
+`meme.alpha.parse.resolve`. The goal is zero delegation to `read-string` —
+meme parses numeric formats (hex, octal, ratios, BigDecimal), string
+escape sequences, and character names itself, guaranteeing identical
+behavior to the host platform without depending on its reader.
 
 
 ## Platform tiers
@@ -278,13 +248,12 @@ intentional — the printer cannot distinguish `fn([& %&] ...)` from a
 user-written named form.
 
 
-## `maybe-call` on opaque forms
+## `maybe-call` on all forms
 
-The reader applies `maybe-call` to syntax-quote, namespaced-map, and
-reader-conditional forms. This means `` `expr(args) ``, `#:ns{...}(args)`,
-and `#?(...)(args)` are valid call syntax, consistent with the Rule 1
-principle that any form followed by `(` is a call. In practice these
-are rarely meaningful, but the uniform behavior avoids special-casing.
+The reader applies `maybe-call` uniformly — any form followed by `(` is
+a call. This means `` `expr(args) ``, `#:ns{...}(args)`, and
+`#?(...)(args)` are valid call syntax. In practice these are rarely
+meaningful, but the uniform behavior avoids special-casing.
 
 
 ## Nesting depth limit
