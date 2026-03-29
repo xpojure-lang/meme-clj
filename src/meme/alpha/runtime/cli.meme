@@ -49,11 +49,12 @@ defn-(process-file-to-stdout
   [transform path]
   try(
     println(transform(path))
+    :ok
     catch(Exception e
       let(
         [src try(slurp(path) catch(Exception _ nil))]
         binding([*out* *err*] println(errors/format-error(e src))))
-      System/exit(1))))
+      :fail)))
 
 defn-(process-file-to-disk
   [transform output-fn verb path]
@@ -71,20 +72,21 @@ defn-(process-files
   let(
     [expanded expand-inputs(inputs pred)]
     when(empty?(expanded) println("No matching files found.") System/exit(1))
-    if(stdout
-      doseq([path expanded] process-file-to-stdout(transform path))
-      let(
-        [
-          results
+    let(
+      [
+        results
+        if(stdout
+          doall(map(fn([p] process-file-to-stdout(transform p)) expanded))
           doall(
             map(
               fn([p] process-file-to-disk(transform output-fn verb p))
-              expanded))
-          total
-          count(results)
-          failed
-          count(filter(fn([r] =(:fail r)) results))
-        ]
+              expanded)))
+        total
+        count(results)
+        failed
+        count(filter(fn([r] =(:fail r)) results))
+      ]
+      when-not(stdout
         println()
         println(
           str(
@@ -93,8 +95,8 @@ defn-(process-files
             -(total failed)
             " "
             verb
-            when(pos?(failed) str(", " failed " failed"))))
-        when(pos?(failed) System/exit(1))))))
+            when(pos?(failed) str(", " failed " failed")))))
+      when(pos?(failed) System/exit(1)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Commands — accept a map, work with both -T and babashka.cli
@@ -167,7 +169,7 @@ defn(format-cmd
         :verb "formatted"
       })))
 
-defn(version [_] println("meme 0.4.0-alpha"))
+defn(version [_] println(str("meme " str/trim(slurp(io/resource("meme/version.txt"))))))
 
 defn(help
   [_]
