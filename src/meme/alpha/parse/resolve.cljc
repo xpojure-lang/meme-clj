@@ -1,0 +1,109 @@
+(ns meme.alpha.parse.resolve
+  "Value resolution: converts raw token text to Clojure values.
+   Centralizes all host reader delegation (read-string calls) that were
+   previously scattered across the parser."
+  (:require [meme.alpha.errors :as errors]
+            [meme.alpha.forms :as forms]
+            #?@(:cljs [[cljs.reader]])))
+
+;; ---------------------------------------------------------------------------
+;; Host reader delegation — single try/catch pattern
+;; ---------------------------------------------------------------------------
+
+(defn- host-read
+  "Read a raw string via the host platform's reader, wrapping errors
+   with meme location info. Binds *read-eval* to false on JVM to prevent
+   #=() read-eval execution in opaque forms."
+  [raw loc error-prefix]
+  (try #?(:clj  (binding [*read-eval* false] (clojure.core/read-string raw))
+          :cljs (cljs.reader/read-string raw))
+       (catch #?(:clj Exception :cljs :default) e
+         (let [cause-msg (#?(:clj ex-message :cljs .-message) e)
+               detail (if cause-msg (str error-prefix " " raw " — " cause-msg)
+                                    (str error-prefix ": " raw))]
+           (errors/meme-error detail (assoc loc :cause e))))))
+
+#?(:clj
+(defn- host-read-with-opts
+  "Read a raw string via the host platform's reader with options (JVM only).
+   Binds *read-eval* to false to prevent #=() read-eval execution."
+  [read-opts raw loc error-prefix]
+  (try (binding [*read-eval* false] (clojure.core/read-string read-opts raw))
+       (catch Exception e
+         (let [cause-msg (ex-message e)
+               detail (if cause-msg (str error-prefix " " raw " — " cause-msg)
+                                    (str error-prefix ": " raw))]
+           (errors/meme-error detail (assoc loc :cause e)))))))
+
+;; ---------------------------------------------------------------------------
+;; Value resolvers by type
+;; ---------------------------------------------------------------------------
+
+(defn resolve-number [raw loc]
+  (host-read raw loc "Invalid number"))
+
+(defn resolve-string [raw loc]
+  (host-read raw loc "Invalid string"))
+
+(defn resolve-char [raw loc]
+  (host-read raw loc "Invalid character literal"))
+
+(defn resolve-regex [raw loc]
+  #?(:clj (host-read raw loc "Invalid regex")
+     :cljs (try (let [regex-delim-len (count "#\"")]
+                  (js/RegExp. (subs raw regex-delim-len (dec (count raw)))))
+                (catch :default e
+                  (let [cause-msg (.-message e)
+                        detail (if cause-msg
+                                 (str "Invalid regex " raw " — " cause-msg)
+                                 (str "Invalid regex: " raw))]
+                    (errors/meme-error detail (assoc loc :cause e)))))))
+
+(defn resolve-syntax-quote [raw loc]
+  #?(:clj (host-read raw loc "Invalid syntax-quote")
+     :cljs (errors/meme-error
+             (str "Syntax-quote (`) is not supported in ClojureScript meme reader. Raw form: " raw)
+             loc)))
+
+(defn resolve-namespaced-map [raw loc]
+  #?(:clj (host-read raw loc "Invalid namespaced map")
+     :cljs (errors/meme-error
+             (str "Namespaced maps (#:ns{}) are not supported in ClojureScript meme reader. Use .cljc files with Clojure/Babashka instead. Raw form: " raw)
+             loc)))
+
+(defn resolve-reader-cond [raw loc]
+  #?(:clj (host-read-with-opts {:read-cond :preserve} raw loc "Invalid reader conditional")
+     :cljs (errors/meme-error
+             (str "Reader conditionals (#?) are not supported in ClojureScript meme reader. Use .cljc files with Clojure/Babashka instead. Raw form: " raw)
+             loc)))
+
+
+(defn resolve-auto-keyword
+  "Resolve an auto-resolve keyword (::foo).
+   If resolve-fn is provided, resolves at read time.
+   Otherwise, defers to eval time via forms/deferred-auto-keyword.
+
+   On CLJS, :resolve-keyword is required — without it, :: keywords
+   cannot be correctly resolved (cljs.reader/read-string resolves in
+   the compiler's namespace, not the caller's)."
+  [raw loc resolve-fn]
+  (if resolve-fn
+    (try (resolve-fn raw)
+         (catch #?(:clj Exception :cljs :default) e
+           (let [cause-msg (#?(:clj ex-message :cljs .-message) e)
+                 detail (if cause-msg
+                          (str "Failed to resolve keyword " raw " — " cause-msg)
+                          (str "Failed to resolve keyword: " raw))]
+             (errors/meme-error detail (assoc loc :cause e)))))
+    #?(:clj (forms/deferred-auto-keyword raw)
+       :cljs (errors/meme-error
+               (str "Auto-resolve keywords (" raw ") require the :resolve-keyword option in ClojureScript — without it, namespace resolution is incorrect")
+               loc))))
+
+(defn resolve-tagged-literal
+  "Resolve a tagged literal. JVM: produces TaggedLiteral. CLJS: error."
+  [tag data loc]
+  #?(:clj (tagged-literal tag data)
+     :cljs (errors/meme-error
+             (str "Tagged literals (#" tag ") are not supported in ClojureScript meme reader. Use .cljc files with Clojure/Babashka instead. Raw form: #" tag " " (pr-str data))
+             loc)))

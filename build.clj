@@ -2,7 +2,7 @@
   (:require [clojure.tools.build.api :as b]
             [deps-deploy.deps-deploy :as dd]))
 
-(def lib 'io.github.beme-lang/beme-clj)
+(def lib 'io.github.beme-lang/meme-clj)
 (def version "0.4.0-alpha")
 (def class-dir "target/classes")
 (def jar-file (format "target/%s-%s.jar" (name lib) version))
@@ -19,9 +19,9 @@
                   :version version
                   :basis basis
                   :src-dirs ["src"]
-                  :scm {:url "https://github.com/beme-lang/beme-clj"
-                        :connection "scm:git:git://github.com/beme-lang/beme-clj.git"
-                        :developerConnection "scm:git:ssh://git@github.com/beme-lang/beme-clj.git"
+                  :scm {:url "https://github.com/beme-lang/meme-clj"
+                        :connection "scm:git:git://github.com/beme-lang/meme-clj.git"
+                        :developerConnection "scm:git:ssh://git@github.com/beme-lang/meme-clj.git"
                         :tag (str "v" version)}
                   :pom-data [[:licenses
                               [:license

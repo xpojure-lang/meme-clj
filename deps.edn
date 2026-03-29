@@ -10,9 +10,9 @@
                       {:mvn/version "1.1.1"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test}
-  :beme {:replace-paths ["src"]
+  :meme {:replace-paths ["src"]
          :replace-deps {}
-         :ns-default beme.alpha.runtime.cli}
+         :ns-default meme.alpha.runtime.cli}
   :cljs-test {:extra-paths ["test"]
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}}

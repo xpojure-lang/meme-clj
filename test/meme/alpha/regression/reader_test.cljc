@@ -1,0 +1,425 @@
+(ns meme.alpha.regression.reader-test
+  "Scar tissue: parser/reader regression tests.
+   Every test here prevents a specific bug from recurring."
+  (:require [clojure.test :refer [deftest is testing]]
+            [meme.alpha.core :as core]
+            [meme.alpha.emit.printer :as p]))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: auto-resolve keywords are opaque
+;; ---------------------------------------------------------------------------
+
+(deftest auto-resolve-keyword-is-opaque
+  #?(:clj
+     (testing "::foo emits a deferred read-string call on JVM"
+       (let [form (first (core/meme->forms "::local"))]
+         (is (seq? form))
+         (is (= 'clojure.core/read-string (first form)))
+         (is (= "::local" (second form)))))
+     :cljs
+     (testing "::foo without :resolve-keyword errors on CLJS"
+       (is (thrown-with-msg? js/Error #"resolve-keyword"
+             (core/meme->forms "::local")))))
+  #?(:clj
+     (testing "::foo in a map key"
+       (let [form (first (core/meme->forms "{::key 42}"))]
+         (is (map? form))
+         (let [[k v] (first form)]
+           (is (seq? k))
+           (is (= "::key" (second k)))
+           (is (= 42 v))))))
+  #?(:clj
+     (testing "printer round-trips ::foo"
+       (let [form (first (core/meme->forms "::local"))
+             printed (p/print-form form)]
+         (is (= "::local" printed))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: ratio literals.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest ratio-literals
+  (testing "1/2 — ratio literal works"
+    (is (= 1/2 (first (core/meme->forms "1/2")))))
+  (testing "3/4 — ratio literal works"
+    (is (= 3/4 (first (core/meme->forms "3/4")))))))
+
+;; ---------------------------------------------------------------------------
+;; #_ discard at end of stream or before closing delimiters.
+;; ---------------------------------------------------------------------------
+
+(deftest discard-bare-at-eof
+  (testing "#_ at bare EOF gives targeted error, not generic"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Missing form after #_"
+          (core/meme->forms "#_"))))
+  (testing "#_ at bare EOF is :incomplete for REPL continuation"
+    (let [e (try (core/meme->forms "#_")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (:incomplete (ex-data e))))))
+
+(deftest discard-at-end-of-stream
+  (testing "#_foo with nothing after returns empty"
+    (is (= [] (core/meme->forms "#_foo"))))
+  (testing "#_foo bar() still works"
+    (is (= '[(bar)] (core/meme->forms "#_foo bar()"))))
+  (testing "#_ before closing bracket"
+    (is (= [[1]] (core/meme->forms "[1 #_2]"))))
+  (testing "#_ in middle of collection"
+    (is (= [[1 3]] (core/meme->forms "[1 #_2 3]"))))
+  (testing "nested #_ #_ discards two forms"
+    (is (= '[(c)] (core/meme->forms "#_ #_ a b c()"))))
+  (testing "#_ before closing paren in list"
+    (is (= '[(foo 1)] (core/meme->forms "foo(1 #_2)"))))
+  (testing "#_ only form in collection"
+    (is (= [[]] (core/meme->forms "[#_1]"))))
+  (testing "Bug: #_ inside begin/end block — discard must recognize end as closer"
+    (is (= '[(f 1)] (core/meme->forms "f begin 1 #_2 end"))))
+  (testing "Bug: #_ as only form in begin/end block"
+    (is (= '[(f)] (core/meme->forms "f begin #_1 end"))))
+  (testing "Bug: multiple #_ before end in begin/end block"
+    (is (= '[(f 3)] (core/meme->forms "f begin #_1 #_2 3 end"))))
+  (testing "Bug: #_ #_ double-discard inside begin/end"
+    (is (= '[(f c)] (core/meme->forms "f begin #_ #_ a b c end"))))
+  (testing "#_ #_ in middle of begin/end body"
+    (is (= '[(f x y)] (core/meme->forms "f begin x #_ #_ a b y end"))))
+  (testing "#_ #_ discards everything in begin/end body"
+    (is (= '[(f)] (core/meme->forms "f begin #_ #_ a b end")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: discard-sentinel must not leak into :meta or :tagged-literal.
+;; ---------------------------------------------------------------------------
+
+(deftest discard-sentinel-in-meta
+  (testing "^:key #_foo throws — meta target discarded"
+    (is (thrown? #?(:clj Exception :cljs js/Error) (core/meme->forms "^:key #_foo"))))
+  (testing "^#_foo bar throws — meta value discarded"
+    (is (thrown? #?(:clj Exception :cljs js/Error) (core/meme->forms "^#_foo bar"))))
+  (testing "^:key foo still works when not discarded"
+    (is (true? (:key (meta (first (core/meme->forms "^:key foo"))))))))
+
+#?(:clj
+(deftest discard-sentinel-in-tagged-literal
+  (testing "#mytag #_foo throws — tagged literal value discarded"
+    (is (thrown? Exception (core/meme->forms "#mytag #_foo"))))
+  (testing "#mytag bar works when not discarded"
+    (is (tagged-literal? (first (core/meme->forms "#mytag bar")))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: % params inside tagged literals in #() must be found.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest percent-params-in-tagged-literals
+  (testing "#(#mytag %) finds percent param"
+    (let [form (first (core/meme->forms "#(#mytag %)"))]
+      (is (= 'fn (first form)))
+      (is (= '[%1] (second form)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: js/parseInt without radix parses leading-zero as octal.
+;; ---------------------------------------------------------------------------
+
+(deftest percent-param-leading-zero-not-octal
+  (testing "%08 param is decimal 8, not octal"
+    (let [form (first (core/meme->forms "#(+(%1 %08))"))]
+      (is (= 'fn (first form)))
+      (is (= 8 (count (second form)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: deeply nested input must not crash with StackOverflowError.
+;; ---------------------------------------------------------------------------
+
+(deftest recursion-depth-limit
+  (testing "deeply nested input throws clean depth error"
+    (let [deep-input (str (apply str (repeat 600 "f(")) "x" (apply str (repeat 600 ")")))]
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                            #"depth"
+                            (core/meme->forms deep-input)))))
+  (testing "50-level nesting succeeds within limit"
+    (let [input (str (apply str (repeat 50 "[")) "x" (apply str (repeat 50 "]")))]
+      (is (seq (core/meme->forms input))))))
+
+;; ---------------------------------------------------------------------------
+;; Syntax safety: meme operators must occupy dead Clojure syntax.
+;; ---------------------------------------------------------------------------
+
+(deftest rule1-call-syntax-trade-off
+  (testing "Rule 1: f(x) → (f x) — head outside parens is a call"
+    (is (= '[(f x)] (core/meme->forms "f(x)"))))
+  (testing "bare symbol without parens is just a symbol"
+    (is (= '[f] (core/meme->forms "f"))))
+  #?(:clj
+  (testing "this IS live Clojure syntax — known, documented trade-off"
+    (let [clj-forms (with-open [r (java.io.PushbackReader. (java.io.StringReader. "f(x)"))]
+                      [(read r) (read r)])]
+      (is (= ['f '(x)] clj-forms) "Clojure reads f(x) as two forms")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: spacing between head and ( is irrelevant.
+;; ---------------------------------------------------------------------------
+
+(deftest spacing-irrelevant-for-calls
+  (testing "symbol with space before paren is a call"
+    (is (= '[(f x)] (core/meme->forms "f (x)"))))
+  (testing "symbol with multiple spaces is a call"
+    (is (= '[(f x)] (core/meme->forms "f   (x)"))))
+  (testing "symbol with tab is a call"
+    (is (= '[(f x)] (core/meme->forms "f\t(x)"))))
+  (testing "symbol with newline is a call"
+    (is (= '[(f x)] (core/meme->forms "f\n(x)"))))
+  (testing "keyword with space is a call"
+    (is (= '(:k x) (first (core/meme->forms ":k (x)")))))
+  (testing "vector with space is a call (vector-as-head)"
+    (is (= '([x] 1) (first (core/meme->forms "[x] (1)"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: bare (...) without a head is a parse error.
+;; ---------------------------------------------------------------------------
+
+(deftest bare-parens-are-error
+  (testing "bare (1 2 3) at top level is an error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Bb]are parentheses"
+                          (core/meme->forms "(1 2 3)"))))
+  (testing "bare () is an error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Bb]are parentheses"
+                          (core/meme->forms "()"))))
+  (testing "bare (x y) at top level is an error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Bb]are parentheses"
+                          (core/meme->forms "(x y)")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: vector-as-head for multi-arity clauses.
+;; ---------------------------------------------------------------------------
+
+(deftest vector-as-head-multi-arity
+  (testing "[x](body) produces a list with vector head"
+    (is (= '([x] 1) (first (core/meme->forms "[x](1)")))))
+  (testing "multi-arity defn roundtrips"
+    (let [meme "defn(foo [x](x) [x y](+(x y)))"
+          forms (core/meme->forms meme)
+          printed (p/print-meme-string forms)
+          forms2 (core/meme->forms printed)]
+      (is (= forms forms2))))
+  (testing "vector-as-head with space"
+    (is (= '([a b] (+ a b)) (first (core/meme->forms "[a b] (+(a b))"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: keyword-as-head for ns :require/:import clauses.
+;; ---------------------------------------------------------------------------
+
+(deftest keyword-as-head-ns-clauses
+  (testing ":require([...]) produces keyword-headed list"
+    (is (= '(:require [bar]) (first (core/meme->forms ":require([bar])")))))
+  (testing "ns with :require roundtrips"
+    (let [meme "ns(foo :require([bar]))"
+          forms (core/meme->forms meme)
+          printed (p/print-meme-string forms)
+          forms2 (core/meme->forms printed)]
+      (is (= forms forms2)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: set-as-head and map-as-head for callable data structures.
+;; ---------------------------------------------------------------------------
+
+(deftest set-and-map-as-head
+  (testing "set-as-head: #{:a :b}(x) roundtrips"
+    (let [form (list #{:a :b} 'x)
+          printed (p/print-form form)
+          read-back (first (core/meme->forms printed))]
+      (is (= form read-back))))
+  (testing "map-as-head: {:a 1}(:a) roundtrips"
+    (let [form (list {:a 1} :a)
+          printed (p/print-form form)
+          read-back (first (core/meme->forms printed))]
+      (is (= form read-back)))))
+
+;; ---------------------------------------------------------------------------
+;; Prefix operator depth limit bypass.
+;; ---------------------------------------------------------------------------
+
+(deftest prefix-operator-depth-limit
+  (testing "deep @ chain hits depth limit"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"depth"
+          (core/meme->forms (str (apply str (repeat 600 "@")) "x")))))
+  (testing "deep ' chain hits depth limit"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"depth"
+          (core/meme->forms (str (apply str (repeat 600 "'")) "x")))))
+  (testing "deep #' chain hits depth limit"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"depth"
+          (core/meme->forms (str (apply str (repeat 600 "#'")) "foo")))))
+  (testing "moderate depth succeeds"
+    (is (some? (core/meme->forms (str (apply str (repeat 50 "@")) "x"))))))
+
+;; ---------------------------------------------------------------------------
+;; Discard sentinel leak in prefix operators.
+;; ---------------------------------------------------------------------------
+
+(deftest discard-sentinel-in-prefix-operators
+  (testing "@#_foo at EOF throws"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+          (core/meme->forms "@#_foo"))))
+  (testing "'#_foo at EOF throws"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+          (core/meme->forms "'#_foo"))))
+  (testing "#'#_foo at EOF throws"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+          (core/meme->forms "#'#_foo"))))
+  (testing "@#_foo bar applies deref to bar"
+    (is (= '[(clojure.core/deref bar)]
+           (core/meme->forms "@#_foo bar"))))
+  (testing "'#_foo bar quotes bar"
+    (is (= '[(quote bar)]
+           (core/meme->forms "'#_foo bar"))))
+  (testing "#'#_foo bar var-quotes bar"
+    (is (= '[(var bar)]
+           (core/meme->forms "#'#_foo bar")))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: "be" was previously reserved as a shorthand for "begin".
+;; ---------------------------------------------------------------------------
+
+(deftest be-is-a-normal-symbol
+  (testing "be parses as a regular symbol, not a delimiter"
+    (is (= '[be] (core/meme->forms "be"))))
+  (testing "be followed by parens is a call headed by be"
+    (is (= '[(be x y)] (core/meme->forms "be(x y)"))))
+  (testing "be inside begin/end is a normal symbol"
+    (is (= '[(foo be)] (core/meme->forms "foo begin be end")))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: ^42 x throws ClassCastException instead of meme error.
+;; ---------------------------------------------------------------------------
+
+(deftest invalid-metadata-type-error
+  (testing "^42 x throws meme error, not ClassCastException"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"[Mm]etadata must be"
+          (core/meme->forms "^42 x"))))
+  (testing "^\"str\" x throws meme error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"[Mm]etadata must be"
+          (core/meme->forms "^\"str\" x"))))
+  (testing "^[1 2] x throws meme error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"[Mm]etadata must be"
+          (core/meme->forms "^[1 2] x"))))
+  (testing "valid metadata still works"
+    (is (= {:private true} (dissoc (meta (first (core/meme->forms "^:private x"))) :ws)))
+    (is (= {:tag 'String} (dissoc (meta (first (core/meme->forms "^String x"))) :ws)))
+    (is (= {:doc "hi"} (dissoc (meta (first (core/meme->forms "^{:doc \"hi\"} x"))) :ws)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: double discard inside #() anonymous function.
+;; ---------------------------------------------------------------------------
+
+(deftest double-discard-in-anon-fn
+  (testing "#(#_ #_ a b c) — double discard skips a and b, c is the body"
+    (is (= '[(fn [] c)] (core/meme->forms "#(#_ #_ a b c)")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: %0 in #() silently produced (fn [] (inc %0)) with %0 as
+;; free symbol. Clojure rejects %0; meme must too.
+;; ---------------------------------------------------------------------------
+
+(deftest percent-zero-rejected-in-anon-fn
+  (testing "#(inc(%0)) — %0 is not a valid param, must error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"%0 is not a valid parameter"
+          (core/meme->forms "#(inc(%0))"))))
+  (testing "#(+(%0 %1)) — %0 mixed with valid params, must error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"%0 is not a valid parameter"
+          (core/meme->forms "#(+(%0 %1))"))))
+  (testing "%1 and higher still work"
+    (is (= '[(fn [%1] (inc %1))] (core/meme->forms "#(inc(%1))")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: bare % and numbered %N mixed in #() forms.
+;; ---------------------------------------------------------------------------
+
+(deftest mixed-bare-and-numbered-percent-params
+  (testing "#(+(% %3)) — bare % normalized to %1, params [%1 %2 %3]"
+    (let [form (first (core/meme->forms "#(+(% %3))"))]
+      (is (= 'fn (first form)))
+      (is (= '[%1 %2 %3] (second form)))
+      (is (= '(+ %1 %3) (nth form 2))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: mismatched bracket error includes location info.
+;; ---------------------------------------------------------------------------
+
+(deftest mismatched-bracket-error-message
+  (testing "mismatched bracket error has descriptive message"
+    (let [ex (try (core/meme->forms "f([)")
+                  (catch #?(:clj Exception :cljs :default) e e))]
+      (is (some? (ex-message ex)))
+      (is (:line (ex-data ex)))
+      (is (:col (ex-data ex))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: duplicate set elements and map keys silently deduplicated.
+;; ---------------------------------------------------------------------------
+
+(deftest duplicate-set-element-error
+  (testing "#{1 1} throws duplicate error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"[Dd]uplicate"
+          (core/meme->forms "#{1 1}"))))
+  (testing "#{1 2 3} is fine"
+    (is (= #{1 2 3} (first (core/meme->forms "#{1 2 3}"))))))
+
+(deftest duplicate-map-key-error
+  (testing "{:a 1 :a 2} throws duplicate error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"[Dd]uplicate"
+          (core/meme->forms "{:a 1 :a 2}"))))
+  (testing "{:a 1 :b 2} is fine"
+    (is (= {:a 1 :b 2} (first (core/meme->forms "{:a 1 :b 2}"))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: printer emits f(x)(y) for list-headed calls ((f x) y), but reader
+;; rejected (y) as "Bare parentheses." Roundtrip violated P13.
+;; Fix: parse-call-chain in parse-form chains calls after any form.
+;; ---------------------------------------------------------------------------
+
+(deftest chained-call-roundtrip
+  (testing "f(x)(y) → ((f x) y)"
+    (is (= '[(( f x) y)] (core/meme->forms "f(x)(y)"))))
+  (testing "f(x)(y)(z) → (((f x) y) z)"
+    (is (= '[(((f x) y) z)] (core/meme->forms "f(x)(y)(z)"))))
+  (testing "chaining with begin/end"
+    (is (= '[((f x) y)] (core/meme->forms "f(x) begin y end"))))
+  (testing "printer output roundtrips"
+    (let [form '((f x) y)
+          printed (p/print-form form)
+          re-read (first (core/meme->forms printed))]
+      (is (= "f(x)(y)" printed))
+      (is (= form re-read))))
+  (testing "chaining does not happen inside quoted lists"
+    (is (= '[(quote (a (b) (c d)))] (core/meme->forms "'(a(b) (c d))")))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: reader accepted source text as third argument to
+;; read-meme-string-from-tokens but discarded it (_source). Parse errors
+;; never carried :source-context in ex-data, even when source was available.
+;; Fix: store source in parser state, inject into all meme-error calls.
+;; ---------------------------------------------------------------------------
+
+(deftest reader-errors-include-source-context
+  (testing "parse error carries :source-context in ex-data"
+    (let [src "foo(bar"
+          e (try (core/meme->forms src) nil
+                 (catch #?(:clj Exception :cljs :default) e e))]
+      (is (some? e))
+      (is (some? (:source-context (ex-data e))))))
+  (testing "bare paren error carries :source-context"
+    (let [src "(oops)"
+          e (try (core/meme->forms src) nil
+                 (catch #?(:clj Exception :cljs :default) e e))]
+      (is (some? (:source-context (ex-data e)))))))

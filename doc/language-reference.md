@@ -1,6 +1,6 @@
-# beme Language Reference
+# meme Language Reference
 
-Complete syntax reference for writing `.beme` code.
+Complete syntax reference for writing `.meme` code.
 
 
 ## Two Rules
@@ -132,7 +132,7 @@ defn-(helper [x] +(x 1))
 
 ### defmacro
 
-Macros work in `.beme` files. Syntax-quote (`` ` ``) is an opaque boundary —
+Macros work in `.meme` files. Syntax-quote (`` ` ``) is an opaque boundary —
 the template inside backtick is raw Clojure, passed to Clojure's reader.
 
 ```
@@ -316,11 +316,11 @@ All of these work exactly as in Clojure:
 
 - Data literals: `[1 2 3]`, `{:a 1}`, `#{1 2 3}`, `:keyword`, `"string"`
 - Reader macros: `@deref`, `^metadata`, `#'var`, `#_discard`, `'quote`
-- Anonymous functions: `#(inc(%))` → `(fn [%1] (inc %1))`, `#(rand())` → `(fn [] (rand))`. Body must be a single expression. Uses beme syntax inside.
+- Anonymous functions: `#(inc(%))` → `(fn [%1] (inc %1))`, `#(rand())` → `(fn [] (rand))`. Body must be a single expression. Uses meme syntax inside.
 - Regex: `#"pattern"`
 - Character literals: `\a`, `\newline`, `\space`
 - Tagged literals: `#inst`, `#uuid`
-- Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `beme->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
+- Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `meme->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
 - Reader conditionals: `#?(:clj x :cljs y)` — passed through opaquely
 - Namespaced maps: `#:ns{}`
 - Destructuring in all binding positions
@@ -331,7 +331,7 @@ All of these work exactly as in Clojure:
 
 ## What's Different from Clojure
 
-| Clojure | beme | Notes |
+| Clojure | meme | Notes |
 |---------|-----|-------|
 | `(f x y)` | `f(x y)` | Parens follow the callable |
 | `(f x y)` | `f begin x y end` | Textual delimiters, equivalent to parens |
@@ -348,8 +348,8 @@ All of these work exactly as in Clojure:
 
 - **Backtick is opaque.** Syntax-quote (`` ` ``) and its body are raw Clojure,
   passed to Clojure's reader. Macro templates use S-expressions inside backtick;
-  beme syntax applies everywhere else.
+  meme syntax applies everywhere else.
 
-- **`#()` uses beme syntax inside.** `#(inc(%))` is `(fn [%1] (inc %1))`.
+- **`#()` uses meme syntax inside.** `#(inc(%))` is `(fn [%1] (inc %1))`.
   The call rule applies normally within `#()`. Use `%`, `%1`, `%2` for
   params.

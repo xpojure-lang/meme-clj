@@ -37,7 +37,7 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.3
         with:
           bb: latest
-      - run: bb test-beme
+      - run: bb test-meme
 
   test-cljs:
     name: ClojureScript Tests

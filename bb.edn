@@ -1,10 +1,10 @@
 {:paths ["src" "test"]
- :tasks {beme {:doc "beme CLI: run, repl, convert, format, version"
-              :task (do (require '[beme.alpha.runtime.cli])
-                        (apply (resolve 'beme.alpha.runtime.cli/-main) *command-line-args*))}
-         test-beme {:doc "Run all .beme tests (eval + fixture)"
-                   :task (do (require '[beme.alpha.test-runner])
-                             (let [fails ((resolve 'beme.alpha.test-runner/run-all-beme-tests))]
+ :tasks {meme {:doc "meme CLI: run, repl, convert, format, version"
+              :task (do (require '[meme.alpha.runtime.cli])
+                        (apply (resolve 'meme.alpha.runtime.cli/-main) *command-line-args*))}
+         test-meme {:doc "Run all .meme tests (eval + fixture)"
+                   :task (do (require '[meme.alpha.test-runner])
+                             (let [fails ((resolve 'meme.alpha.test-runner/run-all-meme-tests))]
                                (System/exit (if (zero? fails) 0 1))))}
          test-cljs {:doc "Run ClojureScript tests under Node.js"
                     :task (try
@@ -12,7 +12,7 @@
                             (finally
                               (babashka.fs/delete-tree "cljs-test-runner-out")))}
          test-all {:doc "Run all test suites (Babashka + JVM + ClojureScript)"
-                   :task (do (shell "bb" "test-beme")
+                   :task (do (shell "bb" "test-meme")
                              (println)
                              (shell "clojure" "-X:test")
                              (println)

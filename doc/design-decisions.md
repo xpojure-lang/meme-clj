@@ -1,6 +1,6 @@
-# beme Design Decisions
+# meme Design Decisions
 
-Decisions made during beme's design and implementation, with rationale.
+Decisions made during meme's design and implementation, with rationale.
 
 
 ## M-expressions: continuing McCarthy's original idea
@@ -10,7 +10,7 @@ syntax for Lisp. S-expressions were the internal representation — not
 meant for humans to write directly. The human-friendly syntax was never
 built; S-expressions stuck by accident.
 
-beme picks up that thread for Clojure. Two rules:
+meme picks up that thread for Clojure. Two rules:
 
 1. The head of a list is written outside the parens: `f(x y)` → `(f x y)`.
 2. `begin`/`end` as textual call delimiters: `f begin x y end` → `(f x y)`.
@@ -22,12 +22,12 @@ Everything else is Clojure.
 
 The reader pipeline is split into three explicit stages:
 
-1. **Scan** (`beme.alpha.scan.tokenizer`) — character scanning → flat token vector.
+1. **Scan** (`meme.alpha.scan.tokenizer`) — character scanning → flat token vector.
    Opaque regions emit marker tokens (`:reader-cond-start`, etc.) rather
    than capturing raw text inline.
-2. **Group** (`beme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters
+2. **Group** (`meme.alpha.scan.grouper`) — collapses marker tokens + balanced delimiters
    into single composite `-raw` tokens.
-3. **Parse** (`beme.alpha.parse.reader`) — recursive-descent parser → Clojure forms.
+3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser → Clojure forms.
 
 The original design captured opaque regions (reader conditionals, namespaced
 maps, syntax-quote with brackets) inline during tokenization via
@@ -41,34 +41,34 @@ tokens, so `\)` inside a string is just a `:string` token, not a closing
 paren. The three-stage split also makes each stage independently testable
 and the pipeline extensible.
 
-`beme.alpha.pipeline` composes the stages as `ctx → ctx` functions, threading a
+`meme.alpha.pipeline` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:raw-tokens`, `:tokens`, `:forms`. This makes
-intermediate state visible to tooling via `beme.alpha.core/run-pipeline`.
+intermediate state visible to tooling via `meme.alpha.core/run-pipeline`.
 
 
-## Centralized host reader delegation (beme.alpha.parse.resolve)
+## Centralized host reader delegation (meme.alpha.parse.resolve)
 
 All `read-string` calls — for numbers, strings, chars, regex, syntax-quote,
 namespaced maps, reader conditionals, auto-resolve keywords, and tagged
-literals — are centralized in `beme.alpha.parse.resolve`. Previously these were
+literals — are centralized in `meme.alpha.parse.resolve`. Previously these were
 scattered across the parser with inconsistent error handling.
 
 Centralization provides:
-- A single `host-read` pattern that wraps exceptions with beme location info.
+- A single `host-read` pattern that wraps exceptions with meme location info.
 - Clean separation of platform asymmetries (JVM vs ClojureScript) from parser logic.
 - The parser deals only with structural parsing; value interpretation is delegated.
 
 
 ## Custom tokenizer (not Clojure's reader)
 
-Clojure's reader rejects `f(x y)` as invalid syntax. beme fundamentally
+Clojure's reader rejects `f(x y)` as invalid syntax. meme fundamentally
 changes what constitutes a valid token sequence. A custom tokenizer is
 unavoidable.
 
 
 ## No intermediate AST
 
-beme is a thin syntactic transform. The output is Clojure forms — lists,
+meme is a thin syntactic transform. The output is Clojure forms — lists,
 vectors, maps, symbols, keywords. These are the same data structures
 Clojure's own reader produces. An intermediate AST would add complexity
 without benefit.
@@ -130,23 +130,23 @@ delimiter.
 The two rules are coupled: once textual delimiters exist, spacing
 *must* be irrelevant for both `(` and `begin`. And since bare `()`
 is rejected (every `(` requires a head), spacing irrelevance
-introduces no ambiguity — there is no valid beme program where
+introduces no ambiguity — there is no valid meme program where
 `f (x)` could mean anything other than `(f x)`.
 
 
 ## `#` dispatch forms are opaque
 
 Reader conditionals (`#?`, `#?@`), tagged literals (`#inst`, `#uuid`), and
-other `#`-prefixed forms that don't need beme-internal parsing are captured
+other `#`-prefixed forms that don't need meme-internal parsing are captured
 as raw text and passed to Clojure's `read-string`. This avoids reimplementing
-Clojure's reader dispatch in beme.
+Clojure's reader dispatch in meme.
 
-Forms that need beme parsing inside their delimiters — `#{}` (sets), `#""`
-(regex), `#'` (var quote), `#_` (discard) — are handled by beme's tokenizer
-since their contents may contain beme syntax.
+Forms that need meme parsing inside their delimiters — `#{}` (sets), `#""`
+(regex), `#'` (var quote), `#_` (discard) — are handled by meme's tokenizer
+since their contents may contain meme syntax.
 
-`#()` (anonymous fn shorthand) uses beme syntax inside — the call rule
-applies normally. The body is a single beme expression; `%`, `%1`, `%2`, `%&`
+`#()` (anonymous fn shorthand) uses meme syntax inside — the call rule
+applies normally. The body is a single meme expression; `%`, `%1`, `%2`, `%&`
 are collected by the reader and used to build the `fn` parameter vector.
 `#(inc(%))` produces `(fn [%1] (inc %1))`. Bare `%` is normalized to `%1`.
 
@@ -159,7 +159,7 @@ constructs `js/RegExp` directly instead of delegating to `read-string`.
 ## No quoting needed (usually)
 
 In Clojure, `'(1 2 3)` is needed because `(1 2 3)` would try to call `1`.
-In beme, `()` forms a call when a symbol, keyword, or vector precedes it.
+In meme, `()` forms a call when a symbol, keyword, or vector precedes it.
 `[]` is always data. There is no ambiguity, so you never need quote for
 your own code. Use `list(1 2 3)` to construct a list.
 
@@ -198,19 +198,19 @@ whichever style is clearer for the context.
 
 Syntax-quote (`` ` ``) is an opaque boundary. The backtick and its body
 are captured as raw text and passed to Clojure's reader. Macro templates
-use S-expression syntax inside backtick — beme syntax applies everywhere
+use S-expression syntax inside backtick — meme syntax applies everywhere
 else.
 
-This means macros work in `.beme` files:
+This means macros work in `.meme` files:
 
 ```
 defmacro(unless [test & body] `(if (not ~test) (do ~@body)))
 ```
 
-The `defmacro` call uses beme syntax. The template inside `` ` `` is raw
+The `defmacro` call uses meme syntax. The template inside `` ` `` is raw
 Clojure, processed by Clojure's reader for namespace resolution, gensym
 expansion, and unquote handling. This avoids reimplementing syntax-quote
-while keeping macro definitions available in beme.
+while keeping macro definitions available in meme.
 
 
 ## Signed number heuristic
@@ -232,7 +232,7 @@ it has a scar tissue test.
   read time to `:actual.ns/foo`, matching Clojure's semantics. The
   caller provides the resolver function; the REPL and file runner pass
   `#(clojure.core/read-string %)` which resolves in the current `*ns*`.
-- **Without option on JVM/Babashka** (tooling, bare `read-beme-string`):
+- **Without option on JVM/Babashka** (tooling, bare `read-meme-string`):
   deferred to eval time via `(clojure.core/read-string "::foo")`. The
   printer detects this pattern and emits `::foo` for roundtripping.
 - **Without option on CLJS**: errors. `cljs.reader/read-string` resolves
@@ -246,8 +246,8 @@ while eliminating the semantic shift for all practical use cases.
 ## Delegation to host reader for primitives
 
 Numbers, strings, character literals, and regex patterns are tokenized as
-raw text by beme's tokenizer, then passed to `read-string` for the host
-platform to produce actual values. beme never parses numeric formats (hex,
+raw text by meme's tokenizer, then passed to `read-string` for the host
+platform to produce actual values. meme never parses numeric formats (hex,
 octal, ratios, BigDecimal), string escape sequences, or character names.
 
 This avoids reimplementing Clojure's literal parsing and guarantees
@@ -306,7 +306,7 @@ This prevents stack overflow from deeply nested or malicious input.
 default stack sizes.
 
 
-## Shared source-position contract (beme.alpha.scan.source)
+## Shared source-position contract (meme.alpha.scan.source)
 
 The tokenizer records `(line, col)` on each token. The grouper later
 needs to map those positions back to character offsets in the source
@@ -315,7 +315,7 @@ namespaced maps, syntax-quote). If the two stages disagree on how
 `(line, col)` translates to an offset, the extracted text is wrong:
 off-by-one truncation, stray characters, or outright garbled output.
 
-`beme.alpha.scan.source/line-col->offset` is the single definition both
+`meme.alpha.scan.source/line-col->offset` is the single definition both
 stages share. The tokenizer uses it in `attach-whitespace`; the grouper
 uses it in `extract-source-range`. Because it's one function in one
 namespace, the mapping can't diverge. The alternative — each stage
@@ -323,9 +323,9 @@ carrying its own offset logic — was the source of a previous bug where
 whitespace attachment and source extraction disagreed after a newline.
 
 
-## Centralized error infrastructure (beme.alpha.errors)
+## Centralized error infrastructure (meme.alpha.errors)
 
-All error throw sites go through `beme-error`, which constructs `ex-info`
+All error throw sites go through `meme-error`, which constructs `ex-info`
 with a consistent structure: `:line`, `:col` (1-indexed), optional
 `:cause`, and optional `:source-context`. This gives every error —
 whether from the tokenizer, grouper, reader, or resolver — a uniform
@@ -350,9 +350,9 @@ diagnostics as the error system grows.
 
 `begin` and `end` are alternative call delimiters, equivalent
 to parentheses: `f begin x y end` parses as `(f x y)`, identical to
-`f(x y)`. This is the second of beme's two syntactic rules.
+`f(x y)`. This is the second of meme's two syntactic rules.
 
-The motivation is readability for multi-line blocks. In beme, everything
+The motivation is readability for multi-line blocks. In meme, everything
 is a call — `defn`, `let`, `try`, `if` all use `head(args...)`. For
 short expressions, parentheses are natural. For multi-line function
 bodies or `try`/`catch` blocks, `begin`/`end` reads more like
@@ -366,7 +366,7 @@ word is uncommon in Clojure code, and the alternative (an escape
 mechanism) would add complexity for a rare edge case.
 
 **The printer always emits parentheses.** `begin`/`end` is reader
-convenience — the canonical beme form uses `f(args...)`. This keeps the
+convenience — the canonical meme form uses `f(args...)`. This keeps the
 printer simple and means there is one canonical output form. Code written
 with `begin`/`end` round-trips semantically (same Clojure forms) but not
 textually (the printer emits parens).

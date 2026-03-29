@@ -1,12 +1,12 @@
-# beme-clj — begin/end and M-expressions for Clojure
+# meme-clj — begin/end and M-expressions for Clojure
 
-[![CI](https://github.com/beme-lang/beme-clj/actions/workflows/ci.yml/badge.svg)](https://github.com/beme-lang/beme-clj/actions/workflows/ci.yml)
+[![CI](https://github.com/beme-lang/meme-clj/actions/workflows/ci.yml/badge.svg)](https://github.com/beme-lang/meme-clj/actions/workflows/ci.yml)
 [![Clojure](https://img.shields.io/badge/Clojure-JVM%20%7C%20Babashka%20%7C%20ClojureScript-blue?logo=clojure&logoColor=white)](https://clojure.org)
-[![License](https://img.shields.io/github/license/beme-lang/beme-clj)](LICENSE)
+[![License](https://img.shields.io/github/license/beme-lang/meme-clj)](LICENSE)
 
 M-expressions were McCarthy's original intended syntax for Lisp (1960).
 S-expressions were meant to be internal representation only — but they stuck.
-beme picks up where McCarthy left off: two rules that make nesting self-evident,
+meme picks up where McCarthy left off: two rules that make nesting self-evident,
 while preserving Clojure's semantics exactly.
 
 **Rule 1** — head outside the parens: `f(x y)` => `(f x y)`
@@ -18,7 +18,7 @@ while preserving Clojure's semantics exactly.
 Everything else is Clojure.
 
 ```clojure
-;; examples/stars.beme — bb beme run examples/stars.beme
+;; examples/stars.meme — bb meme run examples/stars.meme
 require('[cheshire.core :as json])
 
 defn begin stars [owner repo]
@@ -34,7 +34,7 @@ defn begin stars [owner repo]
   end
 end
 
-stars("beme-lang" "beme-clj")
+stars("beme-lang" "meme-clj")
 ```
 
 ## Installation
@@ -42,51 +42,51 @@ stars("beme-lang" "beme-clj")
 Add to `deps.edn`:
 
 ```clojure
-io.github.beme-lang/beme-clj {:mvn/version "0.4.0-alpha"}
+io.github.beme-lang/meme-clj {:mvn/version "0.4.0-alpha"}
 ```
 
 Or clone and use directly:
 
 ```bash
-git clone https://github.com/beme-lang/beme-clj.git
-cd beme-clj
+git clone https://github.com/beme-lang/meme-clj.git
+cd meme-clj
 ```
 
-All namespaces live under `beme.alpha` to signal that the API is pre-1.0 and may change. When the API stabilizes, namespaces will move to `beme`.
+All namespaces live under `meme.alpha` to signal that the API is pre-1.0 and may change. When the API stabilizes, namespaces will move to `meme`.
 
 ## Getting Started
 
-Run a `.beme` file:
+Run a `.meme` file:
 
 ```bash
-$ bb beme run hello.beme                                # Babashka
-$ clojure -T:beme run :file '"hello.beme"'              # Clojure JVM
+$ bb meme run hello.meme                                # Babashka
+$ clojure -T:meme run :file '"hello.meme"'              # Clojure JVM
 Hello, world!
 ```
 
 Interactive REPL:
 
 ```bash
-$ bb beme repl                                          # Babashka
+$ bb meme repl                                          # Babashka
 user=> +(1 2)
 3
 user=> map(inc [1 2 3])
 (2 3 4)
 ```
 
-Convert between beme and Clojure (direction detected from extension):
+Convert between meme and Clojure (direction detected from extension):
 
 ```bash
-$ bb beme convert hello.beme                            # .beme → Clojure
-$ bb beme convert hello.clj                             # .clj → beme
-$ clojure -T:beme convert :file '"hello.beme"'          # Clojure JVM
+$ bb meme convert hello.meme                            # .meme → Clojure
+$ bb meme convert hello.clj                             # .clj → meme
+$ clojure -T:meme convert :file '"hello.meme"'          # Clojure JVM
 ```
 
-Format `.beme` files (normalize syntax via pprint):
+Format `.meme` files (normalize syntax via pprint):
 
 ```bash
-$ bb beme format hello.beme                             # in-place
-$ bb beme format src/                                   # directory, recursive
+$ bb meme format hello.meme                             # in-place
+$ bb meme format src/                                   # directory, recursive
 ```
 
 Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
@@ -95,10 +95,10 @@ Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
 | Editor | Repository | Features |
 |--------|-----------|----------|
-| [Zed](https://zed.dev) | [zed-beme](https://github.com/beme-lang/zed-beme) | Syntax highlighting, brackets, indentation, symbol outline |
-| [VS Code](https://code.visualstudio.com) | [vscode-beme](https://github.com/beme-lang/vscode-beme) | Syntax highlighting, brackets, indentation, folding |
+| [Zed](https://zed.dev) | [zed-meme](https://github.com/beme-lang/zed-meme) | Syntax highlighting, brackets, indentation, symbol outline |
+| [VS Code](https://code.visualstudio.com) | [vscode-meme](https://github.com/beme-lang/vscode-meme) | Syntax highlighting, brackets, indentation, folding |
 
-Tree-sitter grammar: [tree-sitter-beme](https://github.com/beme-lang/tree-sitter-beme)
+Tree-sitter grammar: [tree-sitter-meme](https://github.com/beme-lang/tree-sitter-meme)
 
 ## Documentation
 
