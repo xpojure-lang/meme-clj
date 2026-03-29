@@ -347,17 +347,6 @@
     (is (= "reify(Object toString([this] \"hello\"))"
            (p/print-form '(reify Object (toString [this] "hello")))))))
 
-;; ---------------------------------------------------------------------------
-;; begin/end as regular symbols in printed output
-;; ---------------------------------------------------------------------------
-
-(deftest print-begin-end-as-arguments
-  (testing "begin and end as symbol arguments print normally"
-    (is (= "foo(begin end)" (p/print-form '(foo begin end))))))
-
-(deftest print-begin-as-call-head
-  (testing "begin as a call head prints with parens"
-    (is (= "begin(x)" (p/print-form '(begin x))))))
 
 ;; ---------------------------------------------------------------------------
 ;; List-as-head: ((f x) y) → f(x)(y)

@@ -321,17 +321,3 @@
 (deftest pattern-try-catch
   (is (= '[(try (risky) (catch Exception e (handle e)))]
          (core/meme->forms "try(risky() catch(Exception e handle(e)))"))))
-
-;; ===========================================================================
-;; begin and end are regular symbols (not delimiters)
-;; ===========================================================================
-
-(deftest begin-as-standalone-symbol
-  (is (= '[begin] (core/meme->forms "begin"))))
-
-(deftest end-as-standalone-symbol
-  (is (= '[end] (core/meme->forms "end"))))
-
-(deftest begin-as-call-head
-  (testing "begin can be a call head with parens"
-    (is (= '[(begin x)] (core/meme->forms "begin(x)")))))

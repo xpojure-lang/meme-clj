@@ -318,11 +318,8 @@
            (core/meme->forms "defrecord(Foo [x y])")))))
 
 ;; ---------------------------------------------------------------------------
-;; end, do, catch, finally are regular symbols (not grammar keywords)
+;; do, catch, finally are regular symbols (not grammar keywords)
 ;; ---------------------------------------------------------------------------
-
-(deftest parse-end-as-symbol
-  (is (= '[end] (core/meme->forms "end"))))
 
 (deftest parse-do-as-symbol
   (is (= '[do] (core/meme->forms "do"))))

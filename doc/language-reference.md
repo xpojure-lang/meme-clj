@@ -3,9 +3,7 @@
 Complete syntax reference for writing `.meme` code.
 
 
-## Two Rules
-
-### Rule 1: Call
+## The Rule
 
 Parentheses after a symbol, keyword, or vector form a call — spacing
 is irrelevant. The preceding element becomes the head of a Clojure list.

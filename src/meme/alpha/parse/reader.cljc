@@ -413,13 +413,13 @@
             (list 'var inner)))
 
       :discard
-      ;; #_ consumes two forms: the discarded one, then its replacement.
+      ;; #_ discards the next form and, if a non-boundary form follows,
+      ;; returns it as this expression's value — so prefix operators
+      ;; (@, ^, #', #()) transparently skip over #_-discarded forms.
       ;; At a boundary (EOF / closing delimiter), returns discard-sentinel
-      ;; so callers that accumulate forms can skip the gap.
-      ;; Otherwise, returns the next real form — this is essential for
-      ;; prefix operators (@, ^, #', #()) which call parse-form expecting
-      ;; a value. It also makes #_ #_ chains work: each #_ in the chain
-      ;; discards the form returned by the inner #_ and returns the next.
+      ;; so callers that accumulate forms skip the gap.
+      ;; #_ #_ chains work because each outer #_ discards the return
+      ;; value of the inner #_ (itself a form or sentinel) and recurses.
       (do (padvance! p)
           (when (peof? p)
             (errors/meme-error "Missing form after #_ — expected a form to discard"

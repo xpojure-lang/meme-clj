@@ -1,6 +1,4 @@
-; Core rules — the two translations that define meme
-
-;; Rule 1: Call — f(x y) => (f x y)
+; Core rule: f(x y) => (f x y)
 
 ; simple call
 assert(=(+(1 2 3) 6))
@@ -34,7 +32,7 @@ assert(=(:country(:address(person)) "UA"))
 ; keyword call after call
 assert(=(:x(assoc({} :x 1)) 1))
 
-;; Call form replaces bare forms and do...end blocks
+;; Everything is a call — let, def, if, etc.
 
 ; let as a call
 def(result let([x +(1 2), y *(x 3)] y))

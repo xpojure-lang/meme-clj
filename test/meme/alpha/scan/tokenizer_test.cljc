@@ -44,12 +44,6 @@
     (is (= 1 (count tokens)))
     (is (= "str/upper-case" (:value (first tokens))))))
 
-(deftest tokenize-do-end-as-symbols
-  (let [tokens (tokenize "do end")]
-    (is (= [:symbol :symbol] (mapv :type tokens)))
-    (is (= "do" (:value (first tokens))))
-    (is (= "end" (:value (second tokens))))))
-
 (deftest tokenize-catch-finally-as-symbols
   (let [tokens (tokenize "catch finally")]
     (is (= [:symbol :symbol] (mapv :type tokens)))
