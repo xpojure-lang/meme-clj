@@ -141,3 +141,22 @@
   (testing "#uuid on CLJS throws meme error, not ReferenceError"
     (is (thrown-with-msg? js/Error #"not supported in ClojureScript"
           (core/meme->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))))))
+
+;; ---------------------------------------------------------------------------
+;; CLJS-only: unsupported number formats must error, not silently truncate.
+;; ---------------------------------------------------------------------------
+
+#?(:cljs
+(deftest cljs-unsupported-number-formats
+  (testing "BigInt N suffix"
+    (is (thrown-with-msg? js/Error #"BigInt" (core/meme->forms "42N"))))
+  (testing "BigDecimal M suffix"
+    (is (thrown-with-msg? js/Error #"BigDecimal" (core/meme->forms "42M"))))
+  (testing "Ratio"
+    (is (thrown-with-msg? js/Error #"Ratio" (core/meme->forms "1/2"))))
+  (testing "Hex"
+    (is (thrown-with-msg? js/Error #"Hex" (core/meme->forms "0xFF"))))
+  (testing "Radix"
+    (is (thrown-with-msg? js/Error #"Radix" (core/meme->forms "2r1010"))))
+  (testing "Octal"
+    (is (thrown-with-msg? js/Error #"Octal" (core/meme->forms "010"))))))

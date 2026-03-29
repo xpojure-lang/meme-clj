@@ -155,7 +155,7 @@
 (defn- expand-sq
   "Walk a form parsed inside syntax-quote and produce the expansion.
    Mirrors Clojure's SyntaxQuoteReader behavior."
-  [form opts]
+  [form opts loc]
   (cond
     ;; Unquote: ~x → x (the value, not quoted)
     (instance? Unquote form)
@@ -163,7 +163,7 @@
 
     ;; UnquoteSplicing at top level is an error (must be inside a collection)
     (instance? UnquoteSplicing form)
-    (throw (ex-info "Unquote-splicing (~@) not in collection" {}))
+    (errors/meme-error "Unquote-splicing (~@) not in collection" loc)
 
     ;; Symbol — resolve and quote
     (symbol? form)
@@ -180,7 +180,7 @@
                            (instance? Unquote item)
                            (list 'clojure.core/list (:form item))
                            :else
-                           (list 'clojure.core/list (expand-sq item opts))))
+                           (list 'clojure.core/list (expand-sq item opts loc))))
                        form)]
         (list 'clojure.core/seq (cons 'clojure.core/concat items))))
 
@@ -193,15 +193,15 @@
                          (instance? Unquote item)
                          (list 'clojure.core/list (:form item))
                          :else
-                         (list 'clojure.core/list (expand-sq item opts))))
+                         (list 'clojure.core/list (expand-sq item opts loc))))
                      form)]
       (list 'clojure.core/apply 'clojure.core/vector (cons 'clojure.core/concat items)))
 
     ;; Map — expand to (apply hash-map (concat ...))
     (map? form)
     (let [items (mapcat (fn [[k v]]
-                          [(list 'clojure.core/list (expand-sq k opts))
-                           (list 'clojure.core/list (expand-sq v opts))])
+                          [(list 'clojure.core/list (expand-sq k opts loc))
+                           (list 'clojure.core/list (expand-sq v opts loc))])
                         form)]
       (list 'clojure.core/apply 'clojure.core/hash-map (cons 'clojure.core/concat items)))
 
@@ -212,7 +212,7 @@
                          (instance? UnquoteSplicing item)
                          (:form item)
                          :else
-                         (list 'clojure.core/list (expand-sq item opts))))
+                         (list 'clojure.core/list (expand-sq item opts loc))))
                      form)]
       (list 'clojure.core/apply 'clojure.core/hash-set (cons 'clojure.core/concat items)))
 
@@ -498,7 +498,7 @@
               (errors/meme-error "Syntax-quote target was discarded by #_ — nothing to syntax-quote"
                                 (error-data p (select-keys tok [:line :col]))))
             (binding [*gensym-env* (volatile! {})]
-              (maybe-call p (expand-sq form (:opts p))))))
+              (maybe-call p (expand-sq form (:opts p) (select-keys tok [:line :col]))))))
 
       :unquote
       (if (pos? @(:sq-depth p))

@@ -422,3 +422,15 @@
           e (try (core/meme->forms src) nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? (:source-context (ex-data e)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: ~@ in non-collection inside syntax-quote must include location.
+;; ---------------------------------------------------------------------------
+
+(deftest unquote-splicing-error-has-location
+  (testing "~@ in map inside syntax-quote error includes location"
+    (try (core/meme->forms "`{~@xs 1}")
+         (is false "should have thrown")
+         (catch #?(:clj Exception :cljs :default) e
+           (is (some? (:line (ex-data e))) "error should have :line")
+           (is (some? (:col (ex-data e))) "error should have :col")))))

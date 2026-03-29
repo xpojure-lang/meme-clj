@@ -156,7 +156,41 @@
                  radix (Integer/parseInt (subs s 0 idx))
                  digits (subs s (inc idx))
                  val (Long/parseLong digits radix)]
-             (if negative? (- val) val))])
+             (if negative? (- val) val))]
+
+          :cljs
+          [;; BigInt N suffix — not supported in CLJS
+           (str/ends-with? raw "N")
+           (errors/meme-error "BigInt literals (N suffix) are not supported in ClojureScript" loc)
+
+           ;; BigDecimal M suffix — not supported in CLJS
+           (str/ends-with? raw "M")
+           (errors/meme-error "BigDecimal literals (M suffix) are not supported in ClojureScript" loc)
+
+           ;; Ratio — not supported in CLJS
+           (str/includes? raw "/")
+           (errors/meme-error "Ratio literals are not supported in ClojureScript" loc)
+
+           ;; Hex — not supported in CLJS
+           (or (str/starts-with? raw "0x") (str/starts-with? raw "0X")
+               (str/starts-with? raw "+0x") (str/starts-with? raw "+0X")
+               (str/starts-with? raw "-0x") (str/starts-with? raw "-0X"))
+           (errors/meme-error "Hex literals are not supported in ClojureScript" loc)
+
+           ;; Radix NNrDDDD — not supported in CLJS
+           (re-matches #"[+-]?\d{1,2}r[0-9a-zA-Z]+" raw)
+           (errors/meme-error "Radix literals are not supported in ClojureScript" loc)
+
+           ;; Octal (leading 0, not 0x, not just "0", not float) — not supported in CLJS
+           (and (or (str/starts-with? raw "0") (str/starts-with? raw "-0") (str/starts-with? raw "+0"))
+                (> (count raw) 1)
+                (not (str/starts-with? raw "0x")) (not (str/starts-with? raw "0X"))
+                (not (str/starts-with? raw "+0x")) (not (str/starts-with? raw "+0X"))
+                (not (str/starts-with? raw "-0x")) (not (str/starts-with? raw "-0X"))
+                (not (str/includes? raw "."))
+                (not (str/includes? raw "e")) (not (str/includes? raw "E"))
+                (re-matches #"[+-]?0[0-7]+" raw))
+           (errors/meme-error "Octal literals are not supported in ClojureScript" loc)])
 
       ;; Float (contains . or e/E)
       (or (str/includes? raw ".") (str/includes? raw "e") (str/includes? raw "E"))
