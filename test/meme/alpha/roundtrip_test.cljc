@@ -263,22 +263,22 @@
 (deftest roundtrip-metadata
   (let [[f1 f2 printed] (roundtrip-forms "^:private def(x 42)")]
     (is (= f1 f2))
-    (is (= {:private true} (dissoc (meta (first f1)) :ws)))
-    (is (= {:private true} (dissoc (meta (first f2)) :ws)))
+    (is (= {:private true} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
+    (is (= {:private true} (dissoc (meta (first f2)) :ws :meme/meta-chain)))
     (is (re-find #"\^:private" printed))))
 
 (deftest roundtrip-metadata-dynamic
   (let [[f1 f2 printed] (roundtrip-forms "^:dynamic *x*")]
     (is (= f1 f2))
-    (is (= {:dynamic true} (dissoc (meta (first f1)) :ws)))
-    (is (= {:dynamic true} (dissoc (meta (first f2)) :ws)))
+    (is (= {:dynamic true} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
+    (is (= {:dynamic true} (dissoc (meta (first f2)) :ws :meme/meta-chain)))
     (is (re-find #"\^:dynamic" printed))))
 
 (deftest roundtrip-metadata-type-tag
   (let [[f1 f2 printed] (roundtrip-forms "^String x")]
     (is (= f1 f2))
-    (is (= {:tag 'String} (dissoc (meta (first f1)) :ws)))
-    (is (= {:tag 'String} (dissoc (meta (first f2)) :ws)))
+    (is (= {:tag 'String} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
+    (is (= {:tag 'String} (dissoc (meta (first f2)) :ws :meme/meta-chain)))
     (is (re-find #"\^String" printed))))
 
 (deftest roundtrip-metadata-map
@@ -614,14 +614,14 @@
   (testing "^:tag [1 2 3] roundtrips"
     (let [[f1 f2 printed] (roundtrip-forms "^:tag [1 2 3]")]
       (is (= f1 f2))
-      (is (= {:tag true} (dissoc (meta (first f1)) :ws)))
+      (is (= {:tag true} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
       (is (re-find #"\^:tag" printed)))))
 
 (deftest roundtrip-metadata-on-map
   (testing "^:private {:a 1} roundtrips"
     (let [[f1 f2 _] (roundtrip-forms "^:private {:a 1}")]
       (is (= f1 f2))
-      (is (= {:private true} (dissoc (meta (first f1)) :ws))))))
+      (is (= {:private true} (dissoc (meta (first f1)) :ws :meme/meta-chain))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Multi-arity named fn
@@ -756,6 +756,28 @@
     (is (= "#'foo" (roundtrip-syntax "#'foo"))))
   (testing "var(x) explicit call roundtrips as var(x)"
     (is (= "var(foo)" (roundtrip-syntax "var(foo)")))))
+
+(deftest roundtrip-anon-fn-sugar-preserved
+  (testing "#() sugar roundtrips as #()"
+    (is (= "#(inc(%1))" (roundtrip-syntax "#(inc(%))"))))
+  (testing "fn() explicit call roundtrips as fn()"
+    (is (= "fn([%1] inc(%1))" (roundtrip-syntax "fn([%1] inc(%1))")))))
+
+(deftest roundtrip-set-ordering-preserved
+  (testing "set element order roundtrips"
+    (is (= "#{3 1 2}" (roundtrip-syntax "#{3 1 2}"))))
+  (testing "single-element set"
+    (is (= "#{1}" (roundtrip-syntax "#{1}")))))
+
+(deftest roundtrip-namespaced-map-preserved
+  (testing "#:ns{} roundtrips"
+    (is (= "#:user{:a 1 :b 2}" (roundtrip-syntax "#:user{:a 1 :b 2}")))))
+
+(deftest roundtrip-metadata-chain-preserved
+  (testing "^:a ^:b x preserves chain order"
+    (is (= "^:a ^:b foo" (roundtrip-syntax "^:a ^:b foo"))))
+  (testing "^:private ^String x preserves chain"
+    (is (= "^:private ^String x" (roundtrip-syntax "^:private ^String x")))))
 
 (deftest roundtrip-numeric-notation-preserved
   #?(:clj

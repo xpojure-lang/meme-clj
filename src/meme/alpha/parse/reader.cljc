@@ -273,7 +273,7 @@
       (when (not= (count s) (count forms))
         (errors/meme-error "Duplicate element in set literal"
                            (error-data p loc)))
-      s)))
+      (with-meta s {:meme/order (vec forms)}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Call: f(args...)
@@ -533,14 +533,16 @@
                 _ (when (discard-sentinel? target)
                     (errors/meme-error "Metadata target was discarded by #_ — nothing to attach metadata to"
                                       (error-data p (select-keys tok [:line :col]))))]
-            (vary-meta target merge (cond
-                                        (keyword? m) {m true}
-                                        (symbol? m)  {:tag m}
-                                        (map? m)     m
-                                        :else
-                                        (errors/meme-error
-                                          (str "Metadata must be a keyword, symbol, or map — got " (pr-str m))
-                                          (error-data p (select-keys tok [:line :col])))))))
+            (let [entry (cond
+                          (keyword? m) {m true}
+                          (symbol? m)  {:tag m}
+                          (map? m)     m
+                          :else
+                          (errors/meme-error
+                            (str "Metadata must be a keyword, symbol, or map — got " (pr-str m))
+                            (error-data p (select-keys tok [:line :col]))))
+                  chain (conj (or (:meme/meta-chain (meta target)) []) entry)]
+              (vary-meta target merge entry {:meme/meta-chain chain}))))
 
       :quote
       ;; ' quotes the next meme form. No S-expression escape hatch.
@@ -638,7 +640,8 @@
                            (keyword ns-name (name k))
                            k))
               nsed (into {} (map (fn [[k v]] [(apply-ns k) v]) m))]
-          (maybe-call p nsed)))
+          (let [tagged (vary-meta nsed assoc :meme/ns (if auto? (str ":" ns-name) ns-name))]
+            (maybe-call p tagged))))
 
       :open-anon-fn
       ;; #() — parse body as meme, collect % params, emit (fn [params] body)
@@ -663,7 +666,7 @@
                                          (error-data p (select-keys tok [:line :col]))))
                   param-vec (build-anon-fn-params params)
                   body' (normalize-bare-percent body)]
-              (list 'fn param-vec body'))))
+              (with-meta (list 'fn param-vec body') {:meme/sugar true}))))
 
       :reader-cond-start
       ;; #?(...) or #?@(...) — parse natively.

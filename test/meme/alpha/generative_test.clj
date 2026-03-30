@@ -373,7 +373,7 @@
     (let [printed (p/print-meme-string [form])
           read-back (first (core/meme->forms printed))]
       (and (= form read-back)
-           (= (meta form) (dissoc (meta read-back) :ws))))
+           (= (meta form) (dissoc (meta read-back) :ws :meme/meta-chain))))
     (catch Exception e
       (println "Meta roundtrip failed for form:" (pr-str form))
       (println "Error:" (.getMessage e))

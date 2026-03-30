@@ -56,23 +56,18 @@
           "surplus params must not emit #() shorthand")
       (is (= form (first (core/meme->forms printed)))
           "roundtrip must preserve arity")))
-  (testing "fn with matching % params still uses #() shorthand"
-    (let [form '(fn [%1 %2] (+ %1 %2))
+  (testing "fn with matching % params uses #() only when :meme/sugar tagged"
+    (let [form (with-meta '(fn [%1 %2] (+ %1 %2)) {:meme/sugar true})
           printed (p/print-form form)]
       (is (str/starts-with? printed "#(")
-          "matching params should emit #() shorthand")))
-  (testing "zero-param fn with %N in body must not use #() shorthand"
-    (let [form '(fn [] (inc %1))
+          "matching params with sugar tag should emit #() shorthand")))
+  (testing "fn without :meme/sugar never uses #() shorthand"
+    (let [form '(fn [%1] (inc %1))
           printed (p/print-form form)]
       (is (not (str/starts-with? printed "#("))
-          "body references %1 but params is [] — #() would change arity")
+          "without :meme/sugar, fn always emits fn() form")
       (is (= form (first (core/meme->forms printed)))
-          "roundtrip must preserve zero arity")))
-  (testing "zero-param fn without %N in body still uses #() shorthand"
-    (let [form '(fn [] (rand))
-          printed (p/print-form form)]
-      (is (str/starts-with? printed "#(")
-          "no % params in body — #() shorthand is safe"))))
+          "roundtrip must preserve form"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: max-percent-n recursed into nested fn bodies, so
@@ -83,15 +78,15 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest anon-fn-nested-fn-not-counted
-  (testing "(fn [%1] (fn [%1] %1)) — outer must not use #() shorthand"
+  (testing "(fn [%1] (fn [%1] %1)) — outer without sugar emits fn()"
     (let [form '(fn [%1] (fn [%1] %1))
           printed (p/print-form form)]
       (is (not (str/starts-with? printed "#("))
-          "outer fn should not emit #() — its %1 is in inner fn scope")
+          "without :meme/sugar, fn always emits fn() form")
       (is (= form (first (core/meme->forms printed)))
           "roundtrip must preserve outer arity")))
-  (testing "(fn [%1] (inc %1)) — non-nested still uses #()"
-    (is (= "#(inc(%1))" (p/print-form '(fn [%1] (inc %1)))))))
+  (testing "(fn [%1] (inc %1)) — with sugar emits #()"
+    (is (= "#(inc(%1))" (p/print-form (with-meta '(fn [%1] (inc %1)) {:meme/sugar true}))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Quote roundtrips — both sugar and call paths.

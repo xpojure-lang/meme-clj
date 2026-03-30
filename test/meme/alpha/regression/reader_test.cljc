@@ -311,9 +311,9 @@
           #"[Mm]etadata must be"
           (core/meme->forms "^[1 2] x"))))
   (testing "valid metadata still works"
-    (is (= {:private true} (dissoc (meta (first (core/meme->forms "^:private x"))) :ws)))
-    (is (= {:tag 'String} (dissoc (meta (first (core/meme->forms "^String x"))) :ws)))
-    (is (= {:doc "hi"} (dissoc (meta (first (core/meme->forms "^{:doc \"hi\"} x"))) :ws)))))
+    (is (= {:private true} (dissoc (meta (first (core/meme->forms "^:private x"))) :ws :meme/meta-chain)))
+    (is (= {:tag 'String} (dissoc (meta (first (core/meme->forms "^String x"))) :ws :meme/meta-chain)))
+    (is (= {:doc "hi"} (dissoc (meta (first (core/meme->forms "^{:doc \"hi\"} x"))) :ws :meme/meta-chain)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: double discard inside #() anonymous function.

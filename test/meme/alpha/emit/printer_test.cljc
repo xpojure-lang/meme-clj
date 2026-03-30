@@ -151,12 +151,20 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-fn-shorthand
-  (is (= "#(inc(%1))"
-         (p/print-form '(fn [%1] (inc %1))))))
+  (testing "sugar: #() when :meme/sugar tagged"
+    (is (= "#(inc(%1))"
+           (p/print-form (with-meta '(fn [%1] (inc %1)) {:meme/sugar true})))))
+  (testing "call form when not tagged"
+    (is (= "fn([%1] inc(%1))"
+           (p/print-form '(fn [%1] (inc %1)))))))
 
 (deftest print-fn-shorthand-zero-params
-  (is (= "#(rand())"
-         (p/print-form '(fn [] (rand))))))
+  (testing "sugar: #() when :meme/sugar tagged"
+    (is (= "#(rand())"
+           (p/print-form (with-meta '(fn [] (rand)) {:meme/sugar true})))))
+  (testing "call form when not tagged"
+    (is (= "fn([] rand())"
+           (p/print-form '(fn [] (rand)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Metadata
@@ -308,11 +316,13 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-anon-fn-shorthand
-  (testing "printer outputs #() for % params"
-    (is (= "#(inc(%1))" (p/print-form '(fn [%1] (inc %1))))))
-  (testing "#() zero params"
-    (is (= "#(rand())" (p/print-form '(fn [] (rand))))))
-  (testing "%& rest param falls through to fn form (no #() shorthand)"
+  (testing "#() sugar when :meme/sugar tagged"
+    (is (= "#(inc(%1))" (p/print-form (with-meta '(fn [%1] (inc %1)) {:meme/sugar true})))))
+  (testing "#() zero params when tagged"
+    (is (= "#(rand())" (p/print-form (with-meta '(fn [] (rand)) {:meme/sugar true})))))
+  (testing "fn() when not tagged"
+    (is (= "fn([%1] inc(%1))" (p/print-form '(fn [%1] (inc %1))))))
+  (testing "%& rest param falls through to fn form"
     (is (= "fn([& %&] apply(str %&))" (p/print-form '(fn [& %&] (apply str %&))))))
   (testing "numbered + rest falls through to fn form"
     (is (= "fn([%1 & %&] +(%1 %&))" (p/print-form '(fn [%1 & %&] (+ %1 %&)))))))

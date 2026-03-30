@@ -199,8 +199,8 @@
              #?(:clj  (instance? clojure.lang.IMeta form)
                 :cljs (satisfies? IMeta form))
              (some? (meta form))
-             (seq (dissoc (meta form) :line :column :file :ws :meme/sugar)))
-    (let [m (dissoc (meta form) :line :column :file :ws :meme/sugar)
+             (seq (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)))
+    (let [m (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)
           prefix (cond
                    (and (= 1 (count m))
                         (keyword? (key (first m)))

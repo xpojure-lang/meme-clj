@@ -64,17 +64,13 @@
 
 (defn- anon-fn-shorthand?
   "Can (fn [params] body) be printed as #(body)?
-   True when: single-body, all params are %-style, and declared param
-   count matches body usage (avoids silently changing arity)."
+   Only when :meme/sugar tagged by reader (i.e., originally written as #())."
   [form]
-  (and (seq? form)
+  (and (:meme/sugar (meta form))
+       (seq? form)
        (= 'fn (first form))
        (= 3 (count form))
-       (vector? (second form))
-       (let [params (second form)]
-         (and (every? percent-param? params)
-              (let [declared (count (filter #(not= (name %) "%&") params))]
-                (= declared (max-percent-n (nth form 2))))))))
+       (vector? (second form))))
 
 ;; ---------------------------------------------------------------------------
 ;; Main dispatch
@@ -90,24 +86,25 @@
          #?(:clj (instance? clojure.lang.IMeta form)
             :cljs (satisfies? IMeta form))
          (some? (meta form))
-         (seq (dissoc (meta form) :line :column :file :ws :meme/sugar)))
-    (let [m (dissoc (meta form) :line :column :file :ws :meme/sugar)
+         (seq (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)))
+    (let [chain (:meme/meta-chain (meta form))
           stripped (with-meta form nil)
-          prefix (cond
-                   ;; single true-valued keyword: ^:key
-                   (and (= 1 (count m))
-                        (keyword? (key (first m)))
-                        (true? (val (first m))))
-                   (str "^" (print-form (key (first m))))
-                   ;; single :tag with symbol value: ^Type
-                   (and (= 1 (count m))
-                        (contains? m :tag)
-                        (symbol? (:tag m)))
-                   (str "^" (print-form (:tag m)))
-                   ;; general map
-                   :else
-                   (str "^" (print-form m)))]
-      (str prefix " " (print-form stripped)))
+          emit-one (fn [m]
+                     (cond
+                       (and (= 1 (count m))
+                            (keyword? (key (first m)))
+                            (true? (val (first m))))
+                       (str "^" (print-form (key (first m))))
+                       (and (= 1 (count m))
+                            (contains? m :tag)
+                            (symbol? (:tag m)))
+                       (str "^" (print-form (:tag m)))
+                       :else
+                       (str "^" (print-form m))))]
+      (if chain
+        (str (str/join " " (map emit-one (reverse chain))) " " (print-form stripped))
+        (let [m (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)]
+          (str (emit-one m) " " (print-form stripped)))))
 
     ;; raw value wrapper — emit original source text
     (forms/raw? form) (:raw form)
@@ -182,17 +179,25 @@
     (vector? form)
     (str "[" (str/join " " (map print-form form)) "]")
 
-    ;; map
+    ;; map — reconstruct #:ns{} when :meme/ns metadata present
     (map? form)
-    (str "{"
-         (str/join " " (map (fn [[k v]]
-                              (str (print-form k) " " (print-form v)))
-                            form))
-         "}")
+    (if-let [ns-str (:meme/ns (meta form))]
+      (let [strip-ns (fn [k]
+                        (if (and (keyword? k) (= (namespace k) (if (str/starts-with? ns-str ":") (subs ns-str 1) ns-str)))
+                          (keyword (name k))
+                          k))
+            body (str/join " " (map (fn [[k v]] (str (print-form (strip-ns k)) " " (print-form v))) form))]
+        (str "#:" ns-str "{" body "}"))
+      (str "{"
+           (str/join " " (map (fn [[k v]]
+                                (str (print-form k) " " (print-form v)))
+                              form))
+           "}"))
 
-    ;; set
+    ;; set — use :meme/order for insertion-order output when available
     (set? form)
-    (str "#{" (str/join " " (map print-form form)) "}")
+    (let [elements (or (:meme/order (meta form)) (seq form))]
+      (str "#{" (str/join " " (map print-form elements)) "}"))
 
     ;; symbol
     (symbol? form) (str form)
