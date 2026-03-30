@@ -588,7 +588,15 @@
   (testing "nested backtick does not crash or produce map output"
     (let [forms (core/meme->forms "``x")
           expanded (expander/expand-forms forms)]
-      (is (seq? (first expanded)) "nested syntax-quote should expand to a seq form")))))
+      (is (seq? (first expanded)) "nested syntax-quote should expand to a seq form")))
+  (testing "nested backtick produces double-quoting, not direct expansion"
+    ;; Bug: expand-sq returned the inner expansion directly instead of
+    ;; quoting it. ``x produced (quote x) instead of code that generates
+    ;; (quote x). Fix: re-expand the inner result through expand-sq.
+    (let [expanded (first (expander/expand-forms (core/meme->forms "``x")))]
+      ;; eval of ``x should yield (quote x), not just x
+      (is (= '(quote x) (eval expanded))
+          "eval of nested syntax-quote should produce the inner expansion as data")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: MemeRaw inside #() body was corrupted by normalize-bare-percent.

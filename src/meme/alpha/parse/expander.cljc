@@ -90,11 +90,15 @@
     ;; Must be before map? because defrecords satisfy (map? x)
     (forms/raw? form) (:value form)
 
-    ;; Nested syntax-quote — expand inner backtick with fresh gensym-env
+    ;; Nested syntax-quote — expand inner, then quote the expansion.
+    ;; Mirrors Clojure: ``x produces code that generates `x's expansion.
+    ;; First expand the inner form with a fresh gensym-env, then treat
+    ;; the result as a regular form to be quoted by the current level.
     ;; Must be before map? because defrecords satisfy (map? x)
     (forms/syntax-quote? form)
-    (binding [*gensym-env* (volatile! {})]
-      (expand-sq (:form form) opts loc))
+    (let [inner (binding [*gensym-env* (volatile! {})]
+                  (expand-sq (:form form) opts loc))]
+      (expand-sq inner opts loc))
 
     ;; Map — expand to (apply hash-map (concat ...))
     (map? form)

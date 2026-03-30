@@ -99,7 +99,30 @@
   (testing "nested backtick does not crash"
     (let [forms (core/meme->forms "``x")
           expanded (expander/expand-forms forms)]
-      (is (seq? (first expanded)) "nested syntax-quote should expand to a seq form"))))
+      (is (seq? (first expanded)) "nested syntax-quote should expand to a seq form")))
+  (testing "nested backtick produces double-quoting (code that generates the inner expansion)"
+    ;; ``x should produce (seq (concat (list (quote quote)) (list (quote x))))
+    ;; which evaluates to (quote x), NOT just x.
+    ;; This matches Clojure's behavior where nested backticks add quoting levels.
+    (let [expanded (first (expander/expand-forms (core/meme->forms "``x")))]
+      ;; The expansion should be a seq/concat form, not a bare (quote x)
+      (is (= 'clojure.core/seq (first expanded)))
+      (let [concat-form (second expanded)
+            args (rest concat-form)]
+        ;; First arg should quote 'quote': (list (quote quote))
+        (is (= '(clojure.core/list (quote quote)) (first args)))
+        ;; Second arg should quote 'x': (list (quote x))
+        (is (= '(clojure.core/list (quote x)) (second args))))))
+  (testing "nested backtick on list produces code that generates inner expansion"
+    (let [expanded (first (expander/expand-forms (core/meme->forms "``foo(x)")))]
+      ;; Should be a seq/concat form (outer quoting)
+      (is (= 'clojure.core/seq (first expanded)))
+      ;; The expansion should contain quoted references to clojure.core/seq, etc.
+      ;; i.e. code that reconstructs the inner expansion
+      (let [concat-form (second expanded)
+            first-arg (second concat-form)]
+        ;; First element should be (list (quote clojure.core/seq))
+        (is (= '(clojure.core/list (quote clojure.core/seq)) first-arg))))))
 
 ;; ---------------------------------------------------------------------------
 ;; expand-syntax-quotes on individual forms
