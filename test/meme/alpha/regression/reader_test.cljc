@@ -706,3 +706,38 @@
     (let [r (first (core/meme->forms "36rZZZZZZZZZZZZZ"))]
       (is (forms/raw? r))
       (is (= 170581728179578208255N (:value r)))))))
+
+;; Bug: +42N and +3/4 failed to parse because java.math.BigInteger rejects
+;; leading '+' sign. The tokenizer correctly produced "+42N" but resolve-number
+;; passed the raw string (with '+') to BigInteger constructor.
+#?(:clj
+(deftest positive-sign-bigint-and-ratio
+  (testing "+42N — positive-signed BigInt"
+    (is (= 42N (first (core/meme->forms "+42N")))))
+  (testing "-42N — negative-signed BigInt (was already correct)"
+    (is (= -42N (first (core/meme->forms "-42N")))))
+  (testing "+3/4 — positive-signed ratio"
+    (is (= 3/4 (first (core/meme->forms "+3/4")))))
+  (testing "-3/4 — negative-signed ratio (was already correct)"
+    (is (= -3/4 (first (core/meme->forms "-3/4")))))))
+
+;; Bug: nil(x), true(x), false(x) were silently accepted by the reader,
+;; producing forms like (nil x) that the printer can't represent. The error
+;; only surfaced at print time. Now rejected at parse time with a clear message.
+(deftest non-callable-literal-heads
+  (testing "nil(x) rejected at parse time"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Cannot use nil as a call head"
+          (core/meme->forms "nil(x)"))))
+  (testing "true(x) rejected at parse time"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Cannot use true as a call head"
+          (core/meme->forms "true(x)"))))
+  (testing "false(x) rejected at parse time"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Cannot use false as a call head"
+          (core/meme->forms "false(x)"))))
+  (testing "nil standalone still parses"
+    (is (nil? (first (core/meme->forms "nil")))))
+  (testing "nil with space before parens is two forms"
+    (is (= [nil 'x] (core/meme->forms "nil x")))))

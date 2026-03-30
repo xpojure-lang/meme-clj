@@ -305,6 +305,14 @@ Read and eval a `.meme` file. Returns the last result. Uses `slurp` internally (
 
 Explicit pipeline composition. Each stage is a `ctx → ctx` function operating on a shared context map with keys `:source`, `:opts`, `:raw-tokens`, `:tokens`, `:forms`.
 
+### strip-shebang
+
+```clojure
+(meme.alpha.pipeline/strip-shebang ctx)
+```
+
+Remove `#!` shebang line from `:source` if present. For executable `.meme` scripts. This is the first pipeline stage.
+
 ### scan
 
 ```clojure
@@ -329,6 +337,16 @@ Pass-through stage — returns tokens unchanged. Retained for pipeline symmetry.
 
 Parse grouped tokens into Clojure forms. Reads `:tokens`, `:opts`, `:source` from ctx, assocs `:forms`.
 
+### expand
+
+```clojure
+(meme.alpha.pipeline/expand ctx)
+```
+
+Expand syntax-quote AST nodes (`MemeSyntaxQuote`) into plain Clojure forms (`seq`/`concat`/`list`). Also unwraps `MemeRaw` values. Only needed before eval — tooling paths work with AST nodes directly.
+
+Note: `run` intentionally omits this stage so tooling can access the unexpanded forms. Runtime paths (`run-string`, `run-file`) include `expand` in their pipeline.
+
 ### run
 
 ```clojure
@@ -336,7 +354,7 @@ Parse grouped tokens into Clojure forms. Reads `:tokens`, `:opts`, `:source` fro
 (meme.alpha.pipeline/run source opts)
 ```
 
-Run the full pipeline: `scan → group → parse`. Returns the complete context map.
+Run the pipeline: `strip-shebang → scan → group → parse`. Returns the complete context map. Does **not** include `expand` — forms contain AST nodes (`MemeSyntaxQuote`, `MemeRaw`) for tooling access. Call `expand` separately if you need eval-ready forms.
 
 ```clojure
 (meme.alpha.pipeline/run "+(1 2)")

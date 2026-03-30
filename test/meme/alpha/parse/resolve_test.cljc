@@ -21,8 +21,12 @@
       (is (= 255 (:value r)))
       (is (= "0xFF" (:raw r)))))
   (is (= 42N (resolve/resolve-number "42N" {:line 1 :col 1})))
+  (is (= 42N (resolve/resolve-number "+42N" {:line 1 :col 1})))
+  (is (= -42N (resolve/resolve-number "-42N" {:line 1 :col 1})))
   (is (= 1.5M (resolve/resolve-number "1.5M" {:line 1 :col 1})))
-  (is (= 1/2 (resolve/resolve-number "1/2" {:line 1 :col 1})))))
+  (is (= 1/2 (resolve/resolve-number "1/2" {:line 1 :col 1})))
+  (is (= 3/4 (resolve/resolve-number "+3/4" {:line 1 :col 1})))
+  (is (= -3/4 (resolve/resolve-number "-3/4" {:line 1 :col 1})))))
 
 (deftest resolve-number-invalid
   (is (thrown? #?(:clj Exception :cljs :default)

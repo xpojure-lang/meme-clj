@@ -657,13 +657,19 @@
 (defn- parse-call-chain
   "After parsing a form, check for chained call openers: f(x)(y) → ((f x) y).
    Handles arbitrary depth: f(x)(y)(z) → (((f x) y) z).
-   Skipped for discard sentinels and splice results. Requires adjacent ( (no whitespace)."
+   Skipped for discard sentinels and splice results. Requires adjacent ( (no whitespace).
+   Rejects nil/true/false as call heads — these are literals, not callable."
   [p form]
   (if (and (not (discard-sentinel? form))
            (not (splice-result? form))
            (adjacent-open-paren? p))
-    (let [args (parse-call-args p)]
-      (recur p (apply list form args)))
+    (if (contains? #{nil true false} form)
+      (errors/meme-error
+        (str "Cannot use " (pr-str form) " as a call head — "
+             (pr-str form) "(\u2026) is not valid meme syntax")
+        (error-data p (select-keys (ppeek p) [:line :col])))
+      (let [args (parse-call-args p)]
+        (recur p (apply list form args))))
     form))
 
 (defn- parse-form

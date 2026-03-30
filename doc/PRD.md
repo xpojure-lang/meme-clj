@@ -146,24 +146,29 @@ during design iteration. IDs are stable references and are not renumbered.
 ## Architecture
 
 ```
-.meme text ──→ tokenizer ──→ grouper ──→ parser ──→ Clojure forms ──→ eval
-               (scan)        (group)     (parse)          │
-                  │              │          │              ▼
-                  └──── source ──┘       resolve   printer ──→ .meme text
-                   (shared line/col                 pprint ──→ .meme text
-                    → offset contract)
+.meme file ──→ strip-shebang ──→ tokenizer ──→ grouper ──→ parser ──→ Clojure forms
+                                  (scan)        (group)     (parse)        │
+                                     │              │          │           ▼
+                                     └──── source ──┘       resolve    expander ──→ eval
+                                      (shared line/col                     │
+                                       → offset contract)           printer ──→ .meme text
+                                                                     pprint ──→ .meme text
 ```
 
-The reader is a three-stage pipeline (composed by `meme.alpha.pipeline`):
-1. **Scan** (`meme.alpha.scan.tokenizer`) — character stream → flat token vector.
+The pipeline has five stages (composed by `meme.alpha.pipeline`), each a `ctx → ctx` function:
+1. **Strip-shebang** — remove `#!` line from `:source` (for executable scripts).
+2. **Scan** (`meme.alpha.scan.tokenizer`) — character stream → flat token vector.
    Compound forms (dispatch, syntax-quote) emit marker tokens.
-2. **Group** (`meme.alpha.scan.grouper`) — pass-through stage (all forms are now
+3. **Group** (`meme.alpha.scan.grouper`) — pass-through stage (all forms are now
    parsed natively; the grouper is retained for pipeline symmetry).
-3. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure
+4. **Parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure
    forms. Value resolution (numbers, strings, chars, regex, keywords, tagged
    literals) is delegated to `meme.alpha.parse.resolve`. Volatile position
    counter for portability. No intermediate AST — forms are emitted as
    standard Clojure data. No `read-string` delegation.
+5. **Expand** (`meme.alpha.parse.expander`) — syntax-quote AST nodes → plain Clojure
+   forms. Only needed before eval, not for tooling. `meme.alpha.pipeline/run`
+   intentionally omits this stage, returning AST nodes for tooling access.
 
 The printer pattern-matches on form structure to reverse the transformation.
 It detects special forms and produces their meme syntax equivalents.

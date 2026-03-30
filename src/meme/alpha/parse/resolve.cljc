@@ -122,16 +122,20 @@
            (str/ends-with? raw "M")
            (BigDecimal. (subs raw 0 (dec (count raw))))
 
-           ;; BigInt
+           ;; BigInt — strip leading + (BigInteger rejects it)
            (str/ends-with? raw "N")
-           (clojure.lang.BigInt/fromBigInteger
-             (java.math.BigInteger. (subs raw 0 (dec (count raw)))))
+           (let [s (subs raw 0 (dec (count raw)))
+                 s (cond-> s (str/starts-with? s "+") (subs 1))]
+             (clojure.lang.BigInt/fromBigInteger (java.math.BigInteger. s)))
 
            ;; Ratio — use BigInteger to handle arbitrary-precision components
+           ;; Strip leading + from numerator (BigInteger rejects it)
            (str/includes? raw "/")
-           (let [idx (str/index-of raw "/")
-                 num (java.math.BigInteger. (subs raw 0 idx))
-                 den (java.math.BigInteger. (subs raw (inc idx)))]
+           (let [idx   (str/index-of raw "/")
+                 num-s (subs raw 0 idx)
+                 num-s (cond-> num-s (str/starts-with? num-s "+") (subs 1))
+                 num   (java.math.BigInteger. num-s)
+                 den   (java.math.BigInteger. (subs raw (inc idx)))]
              (/ (clojure.lang.BigInt/fromBigInteger num)
                 (clojure.lang.BigInt/fromBigInteger den)))
 
