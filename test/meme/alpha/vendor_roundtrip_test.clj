@@ -38,35 +38,20 @@
         (= 'ns head) (str "ns " (second form))
         :else (str head "...")))))
 
-(defn- contains-reader-conditional?
-  "Does the form tree contain any reader-conditional? objects?
-   These come from .cljc files and use Clojure S-expression syntax inside,
-   which can't roundtrip through meme's printer (it delegates to pr-str)."
-  [form]
-  (cond
-    (reader-conditional? form) true
-    (seq? form) (some contains-reader-conditional? form)
-    (vector? form) (some contains-reader-conditional? form)
-    (map? form) (some (fn [[k v]] (or (contains-reader-conditional? k)
-                                       (contains-reader-conditional? v))) form)
-    (set? form) (some contains-reader-conditional? form)
-    :else false))
-
 (defn- try-roundtrip-form
-  "Try to roundtrip a single form. Returns {:ok form}, {:error msg}, or {:skip reason}."
+  "Try to roundtrip a single form. Returns {:ok form} or {:error msg}.
+   Uses :read-cond :preserve so ReaderConditional objects roundtrip correctly."
   [form]
-  (if (contains-reader-conditional? form)
-    {:skip "contains reader conditional"}
-    (try
-      (let [meme-text (p/print-form form)
-            forms2 (core/meme->forms meme-text)]
-        {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
-      (catch Exception e
-        {:error (.getMessage e)}))))
+  (try
+    (let [meme-text (p/print-form form)
+          forms2 (core/meme->forms meme-text {:read-cond :preserve})]
+      {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
+    (catch Exception e
+      {:error (.getMessage e)})))
 
 (defn- roundtrip-file-forms
   "Roundtrip every form in a file individually.
-   Returns {:path p :total n :succeeded [...] :failed [...] :skipped [...] :read-errors [...]}."
+   Returns {:path p :total n :succeeded [...] :failed [...] :read-errors [...]}."
   [path]
   (let [read-results (read-clj-forms path)
         read-errors (filterv :read-error read-results)
@@ -79,7 +64,6 @@
      :total (+ (count results) (count read-errors))
      :succeeded (filterv :ok results)
      :failed (filterv :error results)
-     :skipped (filterv :skip results)
      :read-errors read-errors}))
 
 ;; ---------------------------------------------------------------------------
@@ -112,7 +96,6 @@
         total-forms (reduce + (map :total results))
         total-succeeded (reduce + (map #(count (:succeeded %)) results))
         total-failed (reduce + (map #(count (:failed %)) results))
-        total-skipped (reduce + (map #(count (:skipped %)) results))
         total-read-errors (reduce + (map #(count (:read-errors %)) results))
         passed-files (count (filter #(and (zero? (count (:failed %)))
                                           (zero? (count (:read-errors %))))
@@ -126,7 +109,6 @@
      :total-forms total-forms
      :succeeded-forms total-succeeded
      :failed-forms total-failed
-     :skipped-forms total-skipped
      :read-errors total-read-errors
      :file-details results
      :problem-file-details problem-files}))
@@ -134,11 +116,10 @@
 (defn- report-project
   "Print a human-readable report for a project result."
   [{:keys [project total-files passed-files total-forms succeeded-forms
-           skipped-forms read-errors problem-file-details]}]
-  (println (format "\n=== %s === files: %d/%d  forms: %d/%d  skipped: %d%s"
+           read-errors problem-file-details]}]
+  (println (format "\n=== %s === files: %d/%d  forms: %d/%d%s"
                    project passed-files total-files
                    succeeded-forms total-forms
-                   skipped-forms
                    (if (pos? read-errors)
                      (format "  (read-errors: %d)" read-errors)
                      "")))

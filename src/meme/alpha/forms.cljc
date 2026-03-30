@@ -32,3 +32,41 @@
    Caller must check deferred-auto-keyword? first."
   [form]
   (second form))
+
+;; ---------------------------------------------------------------------------
+;; Portable reader conditional support
+;;
+;; JVM has clojure.lang.ReaderConditional (created by reader-conditional,
+;; tested by reader-conditional?). CLJS has no equivalent, so we provide
+;; a defrecord polyfill and portable constructor/predicate/accessors.
+;; On JVM we use the native type so forms from meme->forms and clj->forms
+;; are the same type — critical for roundtrip equality.
+;; ---------------------------------------------------------------------------
+
+#?(:cljs
+(defrecord MemeReaderConditional [form splicing]))
+
+(defn make-reader-conditional
+  "Construct a reader conditional. Portable: uses native type on JVM,
+   MemeReaderConditional on CLJS."
+  [form splicing?]
+  #?(:clj  (reader-conditional form splicing?)
+     :cljs (->MemeReaderConditional form splicing?)))
+
+(defn meme-reader-conditional?
+  "Is x a reader conditional? Portable across JVM and CLJS."
+  [x]
+  #?(:clj  (reader-conditional? x)
+     :cljs (instance? MemeReaderConditional x)))
+
+(defn rc-form
+  "Get the form list from a reader conditional."
+  [rc]
+  #?(:clj  (.-form ^clojure.lang.ReaderConditional rc)
+     :cljs (:form rc)))
+
+(defn rc-splicing?
+  "Is this a splicing reader conditional (#?@)?"
+  [rc]
+  #?(:clj  (.-splicing ^clojure.lang.ReaderConditional rc)
+     :cljs (:splicing rc)))

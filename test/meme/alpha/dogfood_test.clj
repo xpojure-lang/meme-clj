@@ -38,38 +38,23 @@
         (= 'ns head) (str "ns " (second form))
         :else (str head "...")))))
 
-(defn- contains-reader-conditional?
-  "Does the form tree contain any reader-conditional? objects?
-   These come from .cljc files and use Clojure S-expression syntax inside,
-   which can't roundtrip through meme's native reader."
-  [form]
-  (cond
-    (reader-conditional? form) true
-    (seq? form) (some contains-reader-conditional? form)
-    (vector? form) (some contains-reader-conditional? form)
-    (map? form) (some (fn [[k v]] (or (contains-reader-conditional? k)
-                                       (contains-reader-conditional? v))) form)
-    (set? form) (some contains-reader-conditional? form)
-    :else false))
-
 (defn- try-roundtrip-form
-  "Try to roundtrip a single form. Returns {:ok form}, {:error msg}, or {:skip reason}."
+  "Try to roundtrip a single form. Returns {:ok form} or {:error msg}.
+   Uses :read-cond :preserve so ReaderConditional objects roundtrip correctly."
   [form]
-  (if (contains-reader-conditional? form)
-    {:skip "contains reader conditional"}
-    (try
-      (let [meme-text (p/print-form form)
-            forms2 (core/meme->forms meme-text)]
-        {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
-      (catch Exception e
-        {:error (.getMessage e)}))))
+  (try
+    (let [meme-text (p/print-form form)
+          forms2 (core/meme->forms meme-text {:read-cond :preserve})]
+      {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
+    (catch Exception e
+      {:error (.getMessage e)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-form roundtrip: precise accounting for every source file.
 ;; ---------------------------------------------------------------------------
 
 (defn- roundtrip-file-forms
-  "Roundtrip every form in a file individually. Returns {:total :succeeded :failed :skipped}."
+  "Roundtrip every form in a file individually. Returns {:total :succeeded :failed}."
   [path]
   (let [forms (read-clj-forms path)
         results (mapv (fn [form]
@@ -78,27 +63,26 @@
                       forms)]
     {:total (count results)
      :succeeded (filterv :ok results)
-     :failed (filterv :error results)
-     :skipped (filterv :skip results)}))
+     :failed (filterv :error results)}))
 
 (deftest dogfood-per-form-core
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/core.cljc")]
-    (is (= total (+ (count succeeded) (count skipped))) "all forms roundtrip")
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/core.cljc")]
+    (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-run
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/runtime/run.cljc")]
-    (is (= total (+ (count succeeded) (count skipped))) "all forms roundtrip")
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/runtime/run.cljc")]
+    (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-repl
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/runtime/repl.cljc")]
-    (is (= total (+ (count succeeded) (count skipped))) "all forms roundtrip")
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/runtime/repl.cljc")]
+    (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-test-runner
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "test/meme/alpha/test_runner.clj")]
-    (is (= total (+ (count succeeded) (count skipped))) "all forms roundtrip")
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "test/meme/alpha/test_runner.clj")]
+    (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))))
 
 ;; reader.cljc and printer.cljc: all forms currently roundtrip successfully.
@@ -107,50 +91,50 @@
 ;; and document the specific failing forms in a comment.
 
 (deftest dogfood-per-form-reader
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/parse/reader.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/parse/reader.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-printer
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/emit/printer.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/emit/printer.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-tokenizer
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/scan/tokenizer.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/scan/tokenizer.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-grouper
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/scan/grouper.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/scan/grouper.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-resolve
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/parse/resolve.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/parse/resolve.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-pipeline
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/pipeline.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/pipeline.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
 
 (deftest dogfood-per-form-errors
-  (let [{:keys [total succeeded failed skipped]} (roundtrip-file-forms "src/meme/alpha/errors.cljc")]
-    (is (= total (+ (count succeeded) (count skipped)))
+  (let [{:keys [total succeeded failed]} (roundtrip-file-forms "src/meme/alpha/errors.cljc")]
+    (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
     (is (zero? (count failed)))))
@@ -169,12 +153,12 @@
 
 (defn- roundtrip-to-tmp
   "Roundtrip a .cljc through meme and write result to a temp .clj file.
-   Skips forms containing reader-conditionals (they use S-expression syntax inside).
+   Uses :read-cond :preserve so ReaderConditional forms roundtrip correctly.
    Returns the temp file path."
   [path]
-  (let [forms (remove contains-reader-conditional? (read-clj-forms path))
+  (let [forms (read-clj-forms path)
         meme-text (p/print-meme-string forms)
-        roundtripped (core/meme->forms meme-text)
+        roundtripped (core/meme->forms meme-text {:read-cond :preserve})
         tmp (java.io.File/createTempFile "dogfood" ".clj")]
     (spit tmp (str/join "\n\n" (map pr-str roundtripped)))
     tmp))
@@ -186,11 +170,10 @@
                  "src/meme/alpha/scan/tokenizer.cljc" "src/meme/alpha/scan/grouper.cljc"
                  "src/meme/alpha/parse/resolve.cljc" "src/meme/alpha/pipeline.cljc"
                  "src/meme/alpha/errors.cljc"]]
-    (testing (str path " roundtripped vars are subset of original (forms with #? are skipped)")
+    (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)
             tmp (roundtrip-to-tmp path)
             roundtripped (kondo-var-defs (str tmp))]
         (.delete tmp)
-        ;; Roundtripped vars must be a subset of original (some are in #? blocks and skipped)
         (is (every? original roundtripped)
             (str "unexpected vars in roundtrip: " (clojure.set/difference roundtripped original)))))))

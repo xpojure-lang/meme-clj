@@ -107,7 +107,7 @@ The pipeline has three stages (composed by `meme.alpha.pipeline`):
 - Roundtrip tests (read → print → re-read) go in `test/meme/alpha/roundtrip_test.cljc`.
 - `.meme` example files in `test/examples/tests/` are eval-based (self-asserting). Numeric prefixes (`01_`, `02_`, ...) control execution order — the test runner sorts alphabetically, so fundamentals (core rules, definitions) run before features that build on them. New files should continue the numbering sequence.
 - Fixture pairs in `test/examples/fixtures/` compare parsed output against `.edn` expected forms.
-- **Vendor roundtrip tests** use git submodules in `test/vendor/` (core.async, specter, malli, ring, clj-http, medley, hiccup). Each `.clj`/`.cljc` file is roundtripped per-form. Initialize with `git submodule update --init`. Forms containing reader conditionals are skipped (meme's reader evaluates `#?` to one branch at read time, so `ReaderConditional` objects from `clj->forms` cannot survive a full roundtrip). Read errors (Clojure reader limitations) don't fail the test; roundtrip failures do.
+- **Vendor roundtrip tests** use git submodules in `test/vendor/` (core.async, specter, malli, ring, clj-http, medley, hiccup). Each `.clj`/`.cljc` file is roundtripped per-form using `:read-cond :preserve` so `ReaderConditional` objects survive the roundtrip. Initialize with `git submodule update --init`. Read errors (Clojure reader limitations) don't fail the test; roundtrip failures do.
 
 ### Test file placement
 

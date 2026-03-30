@@ -23,6 +23,8 @@
      :resolve-keyword — fn that resolves auto-resolve keyword strings (\"::foo\")
                         to keywords at read time. Required on CLJS (errors
                         without it, since cljs.reader cannot resolve :: correctly).
+     :read-cond       — :preserve to return ReaderConditional objects instead of
+                        evaluating. Default: evaluate for current platform.
    Note: returns only parsed forms. Use run-pipeline when you need
    access to intermediate pipeline state (raw tokens, grouped tokens)."
   ([s] (:forms (pipeline/run s)))

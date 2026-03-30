@@ -1,7 +1,8 @@
 (ns meme.alpha.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]))
+            [meme.alpha.emit.printer :as p]
+            [meme.alpha.forms :as forms]))
 
 (defn- roundtrip-forms
   "Parse meme string, get forms. Then print forms back to meme and re-parse.
@@ -678,4 +679,38 @@
       (is (= f1 f2))))
   (testing "some->> roundtrips"
     (let [[f1 f2 _] (roundtrip-forms "some->>(x str inc)")]
+      (is (= f1 f2)))))
+
+;; ---------------------------------------------------------------------------
+;; :read-cond :preserve roundtrip
+;; ---------------------------------------------------------------------------
+
+(defn- roundtrip-preserve
+  "Roundtrip with :read-cond :preserve — parse, print, re-parse."
+  [meme-src]
+  (let [forms1 (core/meme->forms meme-src {:read-cond :preserve})
+        meme-text (p/print-meme-string forms1)
+        forms2 (core/meme->forms meme-text {:read-cond :preserve})]
+    [forms1 forms2 meme-text]))
+
+(deftest roundtrip-reader-conditional-preserve
+  (testing "#? with two branches"
+    (let [[f1 f2 _] (roundtrip-preserve "#?(:clj 1 :cljs 2)")]
+      (is (= f1 f2))
+      (is (forms/meme-reader-conditional? (first f1)))))
+  (testing "#? with :default"
+    (let [[f1 f2 _] (roundtrip-preserve "#?(:clj 1 :default 0)")]
+      (is (= f1 f2))))
+  (testing "#? with call syntax inside branches"
+    (let [[f1 f2 _] (roundtrip-preserve "#?(:clj inc(1) :cljs dec(2))")]
+      (is (= f1 f2))))
+  (testing "#?@ splicing"
+    (let [[f1 f2 _] (roundtrip-preserve "#?@(:clj [1 2] :cljs [3 4])")]
+      (is (= f1 f2))
+      (is (true? (forms/rc-splicing? (first f1))))))
+  (testing "#? nested"
+    (let [[f1 f2 _] (roundtrip-preserve "#?(:clj #?(:clj 1 :cljs 2) :cljs 3)")]
+      (is (= f1 f2))))
+  (testing "#? inside a call"
+    (let [[f1 f2 _] (roundtrip-preserve "let([x #?(:clj 1 :cljs 2)] x)")]
       (is (= f1 f2)))))

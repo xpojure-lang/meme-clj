@@ -143,6 +143,14 @@
         :else
         (str (print-form head) "(" (print-args (rest form)) ")")))
 
+    ;; reader conditional — walk inner forms with meme syntax
+    ;; Must be before map? because CLJS MemeReaderConditional is a defrecord (satisfies map?)
+    (forms/meme-reader-conditional? form)
+    (let [prefix (if (forms/rc-splicing? form) "#?@(" "#?(")
+          pairs (partition 2 (forms/rc-form form))
+          body (str/join " " (mapcat (fn [[k v]] [(print-form k) (print-form v)]) pairs))]
+      (str prefix body ")"))
+
     ;; vector
     (vector? form)
     (str "[" (str/join " " (map print-form form)) "]")
@@ -202,14 +210,7 @@
 
     ;; tagged literal (JVM only — resolved at read time in ClojureScript)
     #?@(:clj [(tagged-literal? form)
-              (str "#" (.-tag form) " " (print-form (.-form form)))
-
-              ;; reader conditional — walk inner forms with meme syntax
-              (reader-conditional? form)
-              (let [prefix (if (.-splicing form) "#?@(" "#?(")
-                    pairs (partition 2 (.-form form))
-                    body (str/join " " (mapcat (fn [[k v]] [(print-form k) (print-form v)]) pairs))]
-                (str prefix body ")"))])
+              (str "#" (.-tag form) " " (print-form (.-form form)))])
 
     ;; fallback
     :else (pr-str form)))

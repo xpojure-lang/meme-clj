@@ -4,6 +4,7 @@
    tagged literals, reader conditionals, namespaced maps."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
+            [meme.alpha.forms :as forms]
             [meme.alpha.scan.tokenizer :as tokenizer]
             [meme.alpha.scan.grouper :as grouper]))
 
@@ -181,6 +182,41 @@
 (deftest parse-reader-conditional-splicing
   (testing "splicing returns matched branch value"
     (is (= #?(:clj [1 2] :cljs [3 4]) (first (core/meme->forms "#?@(:clj [1 2] :cljs [3 4])"))))))
+
+;; ---------------------------------------------------------------------------
+;; :read-cond :preserve — return ReaderConditional objects
+;; ---------------------------------------------------------------------------
+
+(deftest parse-reader-conditional-preserve
+  (testing "preserve returns a ReaderConditional with all branches"
+    (let [rc (first (core/meme->forms "#?(:clj 1 :cljs 2)" {:read-cond :preserve}))]
+      (is (forms/meme-reader-conditional? rc))
+      (is (= '(:clj 1 :cljs 2) (forms/rc-form rc)))
+      (is (false? (forms/rc-splicing? rc)))))
+  (testing "preserve with :default key"
+    (let [rc (first (core/meme->forms "#?(:clj 1 :default 0)" {:read-cond :preserve}))]
+      (is (forms/meme-reader-conditional? rc))
+      (is (= '(:clj 1 :default 0) (forms/rc-form rc))))))
+
+(deftest parse-reader-conditional-preserve-splicing
+  (testing "preserve splicing variant"
+    (let [rc (first (core/meme->forms "#?@(:clj [1] :cljs [2])" {:read-cond :preserve}))]
+      (is (forms/meme-reader-conditional? rc))
+      (is (true? (forms/rc-splicing? rc)))
+      (is (= '(:clj [1] :cljs [2]) (forms/rc-form rc))))))
+
+(deftest parse-reader-conditional-preserve-meme-syntax
+  (testing "inner forms use meme call syntax"
+    (let [rc (first (core/meme->forms "#?(:clj inc(1) :cljs dec(2))" {:read-cond :preserve}))]
+      (is (= '(:clj (inc 1) :cljs (dec 2)) (forms/rc-form rc))))))
+
+(deftest parse-reader-conditional-preserve-nested
+  (testing "nested #? in preserve mode"
+    (let [rc (first (core/meme->forms "#?(:clj #?(:clj 1 :cljs 2) :cljs 3)" {:read-cond :preserve}))]
+      (is (forms/meme-reader-conditional? rc))
+      (let [inner (second (forms/rc-form rc))]
+        (is (forms/meme-reader-conditional? inner))
+        (is (= '(:clj 1 :cljs 2) (forms/rc-form inner)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; maybe-call on opaque forms — opaque results can be call heads

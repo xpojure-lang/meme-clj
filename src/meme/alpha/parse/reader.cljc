@@ -3,6 +3,7 @@
    Transforms meme tokens into Clojure forms."
   (:require [clojure.string :as str]
             [meme.alpha.errors :as errors]
+            [meme.alpha.forms :as forms]
             [meme.alpha.parse.resolve :as resolve]))
 
 ;; Sentinel for #_ discard. Contract:
@@ -390,6 +391,59 @@
       (apply list head args))
     head))
 
+(defn- parse-reader-cond-preserve
+  "Parse #?(...) or #?@(...) in preserve mode — collect all branches,
+   return a ReaderConditional object."
+  [p loc splice?]
+  (loop [pairs []]
+    (cond
+      (peof? p)
+      (errors/meme-error (str "Unclosed reader conditional — expected )")
+                         (error-data p (assoc loc :incomplete true)))
+
+      (tok-type? (ppeek p) :close-paren)
+      (do (padvance! p)
+          (forms/make-reader-conditional (apply list pairs) splice?))
+
+      :else
+      (let [key-tok (ppeek p)]
+        (when-not (tok-type? key-tok :keyword)
+          (errors/meme-error (str "Expected platform keyword in reader conditional, got " (describe-token key-tok))
+                             (error-data p (select-keys key-tok [:line :col]))))
+        (let [platform-key (keyword (subs (:value key-tok) 1))]
+          (padvance! p)
+          (let [form (parse-form p)]
+            (recur (conj pairs platform-key form))))))))
+
+(defn- parse-reader-cond-eval
+  "Parse #?(...) or #?@(...) in evaluate mode — return matching platform's form."
+  [p loc splice?]
+  (let [platform #?(:clj :clj :cljs :cljs)]
+    (loop [matched nil]
+      (cond
+        (peof? p)
+        (errors/meme-error (str "Unclosed reader conditional — expected )")
+                           (error-data p (assoc loc :incomplete true)))
+
+        (tok-type? (ppeek p) :close-paren)
+        (do (padvance! p)
+            (if splice?
+              (if matched matched (list))
+              (maybe-call p (if matched matched (list)))))
+
+        :else
+        (let [key-tok (ppeek p)]
+          (when-not (tok-type? key-tok :keyword)
+            (errors/meme-error (str "Expected platform keyword in reader conditional, got " (describe-token key-tok))
+                               (error-data p (select-keys key-tok [:line :col]))))
+          (let [platform-key (keyword (subs (:value key-tok) 1))]
+            (padvance! p)
+            (let [form (parse-form p)]
+              (if (and (nil? matched)
+                       (or (= platform-key platform) (= platform-key :default)))
+                (recur form)
+                (recur matched)))))))))
+
 (defn- parse-form-base
   "Parse a single meme form."
   [p]
@@ -602,44 +656,20 @@
               (list 'fn param-vec body'))))
 
       :reader-cond-start
-      ;; #?(...) or #?@(...) — parse natively, return matching platform's form
-      (let [prefix (:value tok) ; "#?" or "#?@"
-            splice? (= prefix "#?@")
-            platform #?(:clj :clj :cljs :cljs)]
+      ;; #?(...) or #?@(...) — parse natively.
+      ;; With :read-cond :preserve, returns a ReaderConditional object.
+      ;; Otherwise (default), evaluates and returns the matching platform's form.
+      (let [prefix (:value tok)
+            splice? (= prefix "#?@")]
         (padvance! p)
         (when-not (tok-type? (ppeek p) :open-paren)
           (errors/meme-error (str "Expected ( after " prefix)
                              (error-data p (select-keys tok [:line :col]))))
         (let [loc (select-keys (ppeek p) [:line :col])]
           (padvance! p) ; consume (
-          (loop [matched nil]
-            (cond
-              (peof? p)
-              (errors/meme-error (str "Unclosed reader conditional — expected )")
-                                 (error-data p (assoc loc :incomplete true)))
-
-              (tok-type? (ppeek p) :close-paren)
-              (do (padvance! p)
-                  (if splice?
-                    ;; #?@ — wrap matched value for splicing (caller must handle)
-                    ;; For now, return as reader-conditional for eval to handle
-                    (if matched
-                      matched
-                      (list)) ; no match → empty
-                    (maybe-call p (if matched matched (list)))))
-
-              :else
-              (let [key-tok (ppeek p)]
-                (when-not (tok-type? key-tok :keyword)
-                  (errors/meme-error (str "Expected platform keyword in reader conditional, got " (describe-token key-tok))
-                                     (error-data p (select-keys key-tok [:line :col]))))
-                (let [platform-key (keyword (subs (:value key-tok) 1))]
-                  (padvance! p) ; consume :clj/:cljs/:default
-                  (let [form (parse-form p)]
-                    (if (and (nil? matched)
-                             (or (= platform-key platform) (= platform-key :default)))
-                      (recur form)
-                      (recur matched)))))))))
+          (if (= :preserve (:read-cond (:opts p)))
+            (parse-reader-cond-preserve p loc splice?)
+            (parse-reader-cond-eval p loc splice?))))
 
       ;; default
       (errors/meme-error (str "Unexpected " (describe-token tok))

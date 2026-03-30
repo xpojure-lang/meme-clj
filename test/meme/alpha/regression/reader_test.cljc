@@ -3,7 +3,8 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]))
+            [meme.alpha.emit.printer :as p]
+            [meme.alpha.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: auto-resolve keywords are opaque
@@ -434,3 +435,25 @@
          (catch #?(:clj Exception :cljs :default) e
            (is (some? (:line (ex-data e))) "error should have :line")
            (is (some? (:col (ex-data e))) "error should have :col")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #? reader conditionals lost non-matching branches on roundtrip.
+;; Without :read-cond :preserve, meme->forms evaluates #? at read time,
+;; discarding branches for other platforms. clj->meme->clj roundtrip was lossy.
+;; Fix: added :read-cond :preserve option to return ReaderConditional objects.
+;; ---------------------------------------------------------------------------
+
+(deftest reader-conditional-preserve-mode
+  (testing "preserve mode returns ReaderConditional, not the evaluated branch"
+    (let [rc (first (core/meme->forms "#?(:clj 1 :cljs 2)" {:read-cond :preserve}))]
+      (is (forms/meme-reader-conditional? rc))
+      (is (= '(:clj 1 :cljs 2) (forms/rc-form rc)))))
+  (testing "default mode still evaluates (backwards compat)"
+    (let [result (first (core/meme->forms "#?(:clj 1 :cljs 2)"))]
+      (is (not (forms/meme-reader-conditional? result)))
+      (is (= #?(:clj 1 :cljs 2) result))))
+  (testing "preserve roundtrips through printer"
+    (let [rc (first (core/meme->forms "#?(:clj inc(1) :cljs dec(2))" {:read-cond :preserve}))
+          printed (p/print-form rc)
+          rc2 (first (core/meme->forms printed {:read-cond :preserve}))]
+      (is (= rc rc2)))))
