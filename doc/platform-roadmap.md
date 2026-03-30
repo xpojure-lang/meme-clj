@@ -37,9 +37,9 @@ rewrite rules and programmable traversal strategies layered on top.
   attachment, cross-platform (JVM/CLJS/bb)
 - FullForm parser: `f(x y)` → `(f x y)`, recursive-descent, handles all
   Clojure reader features natively
-- Printer/pprint: forms → meme text, roundtrip-correct, width-aware,
-  comment-preserving
-- Pipeline: `scan → group → parse`, composable `ctx → ctx` stages,
+- Printer + formatters: forms → meme text, roundtrip-correct, width-aware,
+  comment-preserving (flat and canonical formatters compose printer + render)
+- Pipeline: `scan → parse`, composable `ctx → ctx` stages,
   intermediate state exposed for tooling
 - Error infrastructure: source context with line numbers and carets,
   secondary locations, hints

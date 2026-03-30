@@ -12,7 +12,7 @@ bb test-all            # All three suites
 ## Architecture
 
 ```
-.meme file -> tokenizer -> grouper -> parser -> Clojure forms -> eval
+.meme file -> tokenizer -> parser -> Clojure forms -> eval
 ```
 
 Pure-function reader and printer (`.cljc`), portable across JVM, Babashka, and ClojureScript. No runtime dependency. meme is a reader, not a language.

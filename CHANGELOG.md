@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Nested syntax-quote semantics**: `` ``x `` now correctly produces double-quoting (code that generates the inner expansion), matching Clojure's behavior. Previously the inner expansion was returned directly, losing one nesting level.
 
 ### Changed
-- **Expander extracted**: Syntax-quote expansion (`expand-sq`, `expand-syntax-quotes`, `expand-forms`) moved from `meme.alpha.parse.reader` to new `meme.alpha.parse.expander` namespace. Re-exports in `reader` preserve backwards compatibility.
+- **Expander extracted**: Syntax-quote expansion (`expand-sq`, `expand-syntax-quotes`, `expand-forms`) moved from `meme.alpha.parse.reader` to new `meme.alpha.parse.expander` namespace.
 - **Shared utilities**: Metadata exclusion key set (`strip-internal-meta`) and `percent-param-type` extracted to `meme.alpha.forms` to prevent drift between reader and printer.
 - **CI deploy gate**: ClojureScript tests now required before deployment (added `test-cljs` to deploy job dependencies).
 

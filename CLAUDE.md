@@ -72,18 +72,20 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 
 ### Key namespaces
 
-- `meme.alpha.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Used by tokenizer, grouper, reader, and REPL. Portable.
+- `meme.alpha.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Used by tokenizer, reader, and REPL. Portable.
 - `meme.alpha.forms` (.cljc) — Shared form-level predicates, constructors, and constants. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding, `percent-param-type`, `strip-internal-meta`). Portable.
 - `meme.alpha.scan.source` (.cljc) — Scanner-level source-position utilities. `line-col->offset` uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). Note: the scanner and display line models diverge for CRLF sources — see `format-error` for how the bridge is handled. Portable.
 - `meme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for compound forms. Portable.
 - `meme.alpha.scan.grouper` (.cljc) — Vestigial pass-through (all forms are now parsed natively by the reader). Not part of the pipeline; retained for backward compatibility. Portable.
-- `meme.alpha.parse.reader` (.cljc) — Recursive-descent parser (tokens → Clojure forms). Delegates value resolution to `meme.alpha.parse.resolve`. Re-exports `expand-forms`/`expand-syntax-quotes` from `parse.expander` for backwards compatibility. Portable.
+- `meme.alpha.parse.reader` (.cljc) — Recursive-descent parser (tokens → Clojure forms). Delegates value resolution to `meme.alpha.parse.resolve`. Portable.
 - `meme.alpha.parse.expander` (.cljc) — Syntax-quote expansion: `MemeSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Called by runtime paths (run, repl) before eval. Also unwraps `MemeRaw` to plain values. Portable.
 - `meme.alpha.parse.resolve` (.cljc) — Value resolution: converts raw token text to Clojure values. Centralizes all host reader delegation (`read-string` calls) with consistent error wrapping. Handles platform asymmetries (JVM vs CLJS). Portable.
-- `meme.alpha.emit.printer` (.cljc) — Wadler-Lindig pretty-printer: `to-doc` (form → Doc tree) + `layout` (Doc tree → string at given width). Single source of truth for both flat and width-aware rendering. Supports `:meme` and `:clj` output modes. Portable.
-- `meme.alpha.emit.pprint` (.cljc) — Thin wrapper: `pprint-form` = `to-doc` + `layout` at configured width. Preserves comments from `:ws` metadata. Portable.
+- `meme.alpha.emit.printer` (.cljc) — Wadler-Lindig Doc tree builder: `to-doc` (form → Doc tree) + `extract-comments`. Single source of truth for meme and Clojure output modes. Delegates layout to `render`. Portable.
+- `meme.alpha.emit.render` (.cljc) — Doc algebra and layout engine: `DocText`, `DocLine`, `DocCat`, `DocNest`, `DocGroup`, `DocIfBreak`, `layout` (Doc tree → string at given width). Pure, no meme-specific logic. Portable.
+- `meme.alpha.emit.formatter.flat` (.cljc) — Flat formatter: composes printer + render at infinite width. `format-form`, `format-forms`, `format-clj`. Single-line output. Portable.
+- `meme.alpha.emit.formatter.canon` (.cljc) — Canonical formatter: composes printer + render at target width. `format-form`, `format-forms`. Width-aware multi-line output. Used by `meme format` CLI. Portable.
 - `meme.alpha.pipeline` (.cljc) — Composable pipeline stages: `step-scan`, `step-parse`, `step-expand-syntax-quotes`. Each is a `ctx → ctx` function. Context map contract documented in namespace docstring. Exposes intermediate state (`:raw-tokens`, `:tokens`, `:forms`) for tooling. Portable.
-- `meme.alpha.core` (.cljc) — Public API in three tracks: text-to-form (`meme->forms`, `forms->meme`), form-to-text (`forms->clj`, `clj->forms`), text-to-text (`meme->clj`, `clj->meme`). Also `pprint-meme` for pretty-printing and `run-pipeline` for tooling access to intermediate pipeline state. `clj->forms` and `clj->meme` are JVM only.
+- `meme.alpha.core` (.cljc) — Public API in three tracks: text-to-form (`meme->forms`, `forms->meme`), form-to-text (`forms->clj`, `clj->forms`), text-to-text (`meme->clj`, `clj->meme`). Also `format-meme` for width-aware formatting (`pprint-meme` is a deprecated alias) and `run-pipeline` for tooling access to intermediate pipeline state. `clj->forms` and `clj->meme` are JVM only.
 - `meme.alpha.runtime.repl` (.cljc) — REPL. Requires `eval`; JVM/Babashka only by default, CLJS with injected `:eval`/`:read-line`.
 - `meme.alpha.runtime.run` (.cljc) — File runner. Requires `eval` + `slurp`; JVM/Babashka only by default.
 - `meme.alpha.runtime.cli` (.clj + .meme) — Unified CLI: `run`, `repl`, `convert`, `format`, `version`. The `.clj` shim loads `cli.meme` at require time (top-level `run-string`) — the first meme component implemented in meme itself. Babashka entry point via `bb.edn`. Not AOT-compatible (load-time eval by design).
@@ -93,7 +95,7 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 
 | Tier | Modules | Platforms |
 |------|---------|-----------|
-| Core translation | tokenizer, reader, expander, resolve, printer, pprint, pipeline, core, errors, forms, source | JVM, Babashka, ClojureScript |
+| Core translation | tokenizer, reader, expander, resolve, printer, render, formatter.flat, formatter.canon, pipeline, core, errors, forms, source | JVM, Babashka, ClojureScript |
 | Runtime | repl, run | JVM, Babashka (CLJS possible with injected eval) |
 | Test infra | test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
@@ -126,14 +128,14 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 | `parse/reader/dispatch_test` | Reader macros and dispatch: @, ^, ', #', #_, #(), regex, char, tagged literals, reader conditionals, namespaced maps |
 | `parse/reader/errors_test` | Error cases, rejected forms (unquote outside backtick), error messages with locations, CLJS-specific errors |
 | `parse/resolve_test` | Value resolution: numbers, strings, chars, regex, keywords, tagged literals |
-| `emit/printer_test` | Printer: Clojure forms → meme text. Individual form cases. |
-| `emit/pprint_test` | Pretty-printer: width-aware formatting, multi-line layout, comments |
+| `emit/formatter/flat_test` | Flat formatter: single-line meme/clj output, reader sugar, individual form cases |
+| `emit/formatter/canon_test` | Canonical formatter: width-aware formatting, multi-line layout, comments |
 | `roundtrip_test` | Read → print → re-read identity. Structural invariant tests. |
 | `regression/scan_test` | Scar tissue: tokenizer bugs (bracket depth, char/string in syntax-quote, symbol parsing, EOF handling) |
 | `regression/reader_test` | Scar tissue: parser bugs (discard sentinel, depth limits, head types, spacing, duplicates, metadata) |
 | `regression/emit_test` | Scar tissue: printer and pprint bugs (regex escaping, reader-sugar pprint, deferred auto-keywords, metadata, comments, width) |
 | `regression/errors_test` | Scar tissue: error infrastructure and resolve error-wrapping bugs (source-context, gutter width, CLJS guards) |
-| `core_test` | Public API surface (`meme->forms`, `forms->meme`, `pprint-meme`, etc.) |
+| `core_test` | Public API surface (`meme->forms`, `forms->meme`, `format-meme`, etc.) |
 | `runtime/repl_test` | REPL infrastructure (`input-state`, `read-input`) |
 | `runtime/run_test` | File runner: `run-string`, `run-file`, shebang handling, custom eval-fn |
 | `examples_test` | Integration scenarios, multi-feature examples |

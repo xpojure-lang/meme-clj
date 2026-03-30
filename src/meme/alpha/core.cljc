@@ -97,7 +97,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-pipeline
-  "Run the full pipeline: source → scan → group → parse.
+  "Run the full pipeline: source → scan → parse.
    Returns a context map with :source, :opts, :raw-tokens, :tokens, :forms.
    Useful for tooling that needs intermediate pipeline state."
   ([source] (pipeline/run source))

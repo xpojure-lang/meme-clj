@@ -82,22 +82,24 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 
 ### Pretty-printing
 
-#### pprint-meme
+#### format-meme
 
 ```clojure
-(meme.alpha.core/pprint-meme forms)
-(meme.alpha.core/pprint-meme forms opts)
+(meme.alpha.core/format-meme forms)
+(meme.alpha.core/format-meme forms opts)
 ```
 
-Pretty-print Clojure forms as multi-line, indented meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:ws` metadata (attached by the pipeline's scan stage). All platforms.
+Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:ws` metadata (attached by the pipeline's scan stage). All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
 
 ```clojure
-(pprint-meme ['(defn greet [name] (println (str "Hello " name)))])
+(format-meme ['(defn greet [name] (println (str "Hello " name)))])
 ;=> "defn(greet [name]\n  println(str(\"Hello \" name)))"
 ```
+
+`pprint-meme` is a deprecated alias for `format-meme`.
 
 ### Text-to-text track
 
@@ -134,14 +136,14 @@ Convert a Clojure source string to meme source string. JVM/Babashka only. Equiva
 (meme.alpha.core/run-pipeline source opts)
 ```
 
-Run the full pipeline: source → scan → group → parse. Returns a context map with intermediate state. All platforms. Useful for tooling that needs access to raw tokens, tokens, or parsed forms.
+Run the full pipeline: source → scan → parse. Returns a context map with intermediate state. All platforms. Useful for tooling that needs access to raw tokens, tokens, or parsed forms.
 
 ```clojure
 (run-pipeline "foo(1 2)")
 ;=> {:source "foo(1 2)"
 ;    :opts nil
 ;    :raw-tokens [...tokenizer output with :ws...]
-;    :tokens [...same (grouper is pass-through)...]
+;    :tokens [...same as :raw-tokens...]
 ;    :forms [(foo 1 2)]}
 ```
 
@@ -165,60 +167,89 @@ Parse a token vector into Clojure forms. Used by `meme.alpha.pipeline/step-parse
 
 ## meme.alpha.emit.printer
 
-Low-level printer API.
+Low-level Doc tree builder. Most callers should use `formatter.flat` or `formatter.canon` instead.
 
-### print-form
+### to-doc
 
 ```clojure
-(meme.alpha.emit.printer/print-form form)
+(meme.alpha.emit.printer/to-doc form mode)
 ```
 
-Print a single Clojure form as meme text.
+Convert a Clojure form to a Wadler-Lindig Doc tree. `mode` is `:meme` (call notation) or `:clj` (standard Clojure with reader sugar). The Doc tree is passed to `render/layout` for final string output.
+
+### extract-comments
 
 ```clojure
-(print-form '(+ 1 2))
+(meme.alpha.emit.printer/extract-comments ws)
+```
+
+Extract comment lines from a `:ws` metadata string. Returns a vector of trimmed comment strings, or nil.
+
+
+## meme.alpha.emit.formatter.flat
+
+Flat (single-line) formatter. Composes printer + render at infinite width.
+
+### format-form
+
+```clojure
+(meme.alpha.emit.formatter.flat/format-form form)
+```
+
+Format a single Clojure form as flat meme text (single-line).
+
+```clojure
+(format-form '(+ 1 2))
 ;=> "+(1 2)"
 
-(print-form '(:balance account))
+(format-form '(:balance account))
 ;=> ":balance(account)"
 
-(print-form '(def x 42))
+(format-form '(def x 42))
 ;=> "def(x 42)"
 ```
 
-### print-meme-string
+### format-forms
 
 ```clojure
-(meme.alpha.emit.printer/print-meme-string forms)
+(meme.alpha.emit.formatter.flat/format-forms forms)
 ```
 
-Print a sequence of Clojure forms as meme text, separated by blank lines.
+Format a sequence of Clojure forms as flat meme text, separated by blank lines.
 
-
-## meme.alpha.emit.pprint
-
-Low-level pretty-printer API.
-
-### pprint-form
+### format-clj
 
 ```clojure
-(meme.alpha.emit.pprint/pprint-form form)
-(meme.alpha.emit.pprint/pprint-form form opts)
+(meme.alpha.emit.formatter.flat/format-clj forms)
 ```
 
-Pretty-print a single Clojure form as meme text. Width-aware — uses indented parenthesized form for calls that don't fit on one line. Preserves comments from `:ws` metadata.
+Format Clojure forms as Clojure text with reader sugar (`'quote`, `@deref`, `#'var`).
+
+
+## meme.alpha.emit.formatter.canon
+
+Canonical (width-aware) formatter. Composes printer + render at target width. Used by `meme format` CLI.
+
+### format-form
+
+```clojure
+(meme.alpha.emit.formatter.canon/format-form form)
+(meme.alpha.emit.formatter.canon/format-form form opts)
+```
+
+Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:ws` metadata.
 
 Options:
 - `:width` — target line width (default: 80)
 
-### pprint-forms
+### format-forms
 
 ```clojure
-(meme.alpha.emit.pprint/pprint-forms forms)
-(meme.alpha.emit.pprint/pprint-forms forms opts)
+(meme.alpha.emit.formatter.canon/format-forms forms)
+(meme.alpha.emit.formatter.canon/format-forms forms opts)
 ```
 
-Pretty-print a sequence of Clojure forms as meme text, separated by blank lines. Preserves comments from `:ws` metadata, including trailing comments after the last form.
+Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:ws` metadata, including trailing comments after the last form.
 
 
 ## meme.alpha.runtime.repl
@@ -441,7 +472,7 @@ Unified CLI for meme. Implemented in meme syntax (`cli.meme`), loaded by a `.clj
 | `meme run <file>` | Run a `.meme` file |
 | `meme repl` | Start the meme REPL |
 | `meme convert <file\|dir>` | Convert between `.meme` and `.clj` (direction detected from extension) |
-| `meme format <file\|dir>` | Format `.meme` files via pprint (in-place by default, `--stdout` to print) |
+| `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print) |
 | `meme version` | Print version |
 
 All file commands accept directories (processed recursively) and multiple paths. `convert` and `format` accept `--stdout` to print to stdout instead of writing files.
