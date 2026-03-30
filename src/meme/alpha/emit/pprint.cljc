@@ -234,8 +234,12 @@
                     (forms/deferred-auto-keyword? form)
                     (forms/deferred-auto-keyword-raw form)
 
-                    ;; Quote — prefix sugar
-                    (and (call? form) (= 'quote (first form)))
+                    ;; Quote — prefix sugar.
+                    ;; Skip sugar when inner is a non-empty list with non-symbol head:
+                    ;; '1(2 3) parses as (quote 1) + bare (2 3), not (quote (1 2 3)).
+                    (and (call? form) (= 'quote (first form))
+                         (let [inner (second form)]
+                           (not (and (seq? inner) (seq inner) (not (symbol? (first inner)))))))
                     (str "'" (pp (second form) (inc col) width))
 
                     ;; @deref — preserve sugar, recurse on inner

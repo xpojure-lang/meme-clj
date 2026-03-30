@@ -132,8 +132,13 @@
         ;; @deref
         (= head 'clojure.core/deref) (str "@" (print-form (second form)))
 
-        ;; 'quote — prefix sugar
-        (= head 'quote)
+        ;; 'quote — prefix sugar.
+        ;; Skip sugar when inner form is a non-empty list with a non-symbol head:
+        ;; '1(2 3) would parse as (quote 1) + bare (2 3), not (quote (1 2 3)).
+        ;; Fall through to generic call: quote(1(2 3)) which roundtrips correctly.
+        (and (= head 'quote)
+             (let [inner (second form)]
+               (not (and (seq? inner) (seq inner) (not (symbol? (first inner)))))))
         (str "'" (print-form (second form)))
 
         ;; #'var

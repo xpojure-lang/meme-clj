@@ -175,5 +175,5 @@
             tmp (roundtrip-to-tmp path)
             roundtripped (kondo-var-defs (str tmp))]
         (.delete tmp)
-        (is (every? original roundtripped)
-            (str "unexpected vars in roundtrip: " (clojure.set/difference roundtripped original)))))))
+        (is (every? roundtripped original)
+            (str "vars lost in roundtrip: " (clojure.set/difference original roundtripped)))))))

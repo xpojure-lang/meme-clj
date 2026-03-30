@@ -202,7 +202,7 @@
   (testing "#? with char literal \\) — parses matching branch"
     (is (= [#?(:clj \) :cljs \x)] (forms-for "#?(:clj \\) :cljs \\x)"))))
   (testing "#? with string containing ) — parses matching branch"
-    (is (= [#?(:clj ")" :cljs ())] (forms-for "#?(:clj \")\" :cljs nil)")))))
+    (is (= [#?(:clj ")" :cljs nil)] (forms-for "#?(:clj \")\" :cljs nil)")))))
 
 (deftest token-snapshot-namespaced-map-with-char
   (testing "#:ns{} with \\} char literal parses correctly"

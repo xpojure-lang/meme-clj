@@ -457,3 +457,48 @@
           printed (p/print-form rc)
           rc2 (first (core/meme->forms printed {:read-cond :preserve}))]
       (is (= rc rc2)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: non-matching reader conditional must produce no form.
+;; Bug: parse-reader-cond-eval returned (list) on no-match instead of
+;; discard-sentinel, injecting an empty list '() into the output.
+;; Fix: return discard-sentinel when no branch matches.
+;; ---------------------------------------------------------------------------
+
+(deftest reader-conditional-no-match-produces-no-form
+  (testing "#?(:cljs x) on JVM produces no form"
+    #?(:clj  (is (= [] (core/meme->forms "#?(:cljs x)")))
+       :cljs (is (= [] (core/meme->forms "#?(:clj x)")))))
+  (testing "surrounding forms preserved when reader conditional is skipped"
+    #?(:clj  (is (= [1 2] (core/meme->forms "1 #?(:cljs 99) 2")))
+       :cljs (is (= [1 2] (core/meme->forms "1 #?(:clj 99) 2")))))
+  (testing "splicing non-matching produces no form"
+    #?(:clj  (is (= [] (core/meme->forms "#?@(:cljs [1 2])")))
+       :cljs (is (= [] (core/meme->forms "#?@(:clj [1 2])")))))
+  (testing "#?() empty — no branches, no form"
+    (is (= [] (core/meme->forms "#?()")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #_ inside reader conditional must not consume platform keyword.
+;; Bug: #_ read-through consumed the next platform keyword as the branch value,
+;; corrupting the pair structure. e.g. #?(:clj #_x :cljs 99) — #_ discards x,
+;; reads :cljs as :clj's value, then 99 fails as "expected keyword".
+;; Fix: once a branch is matched, remaining forms are consumed permissively
+;; (matching Clojure reader behavior).
+;; ---------------------------------------------------------------------------
+
+(deftest discard-inside-reader-conditional
+  #?(:clj
+     (do
+       (testing "#?(:clj #_x :cljs 99) — #_ eats :cljs, matched value is :cljs keyword"
+         (is (= [:cljs] (core/meme->forms "#?(:clj #_x :cljs 99)"))))
+       (testing "#?(:clj #_x y :cljs 99) — #_ eats x, y is the value"
+         (is (= ['y] (core/meme->forms "#?(:clj #_x y :cljs 99)"))))
+       (testing "permissive after match — stray form after matched branch"
+         (is (= [1] (core/meme->forms "#?(:clj 1 99)")))))
+     :cljs
+     (do
+       (testing "#?(:cljs #_x :clj 99) — #_ eats :clj, matched value is :clj keyword"
+         (is (= [:clj] (core/meme->forms "#?(:cljs #_x :clj 99)"))))
+       (testing "#?(:cljs #_x y :clj 99) — #_ eats x, y is the value"
+         (is (= ['y] (core/meme->forms "#?(:cljs #_x y :clj 99)")))))))

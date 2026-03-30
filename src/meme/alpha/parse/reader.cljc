@@ -419,7 +419,8 @@
   "Parse #?(...) or #?@(...) in evaluate mode — return matching platform's form."
   [p loc splice?]
   (let [platform #?(:clj :clj :cljs :cljs)]
-    (loop [matched nil]
+    ;; Use discard-sentinel as the "no match" marker — nil can be a valid form value.
+    (loop [matched discard-sentinel]
       (cond
         (peof? p)
         (errors/meme-error (str "Unclosed reader conditional — expected )")
@@ -427,9 +428,17 @@
 
         (tok-type? (ppeek p) :close-paren)
         (do (padvance! p)
-            (if splice?
-              (if matched matched (list))
-              (maybe-call p (if matched matched (list)))))
+            (if (discard-sentinel? matched)
+              discard-sentinel
+              (if splice? matched (maybe-call p matched))))
+
+        ;; Already matched — consume remaining forms permissively until ).
+        ;; Matches Clojure's behavior: once a branch is selected, remaining
+        ;; content is not validated for key-value pair structure. This handles
+        ;; #_ read-through consuming a platform keyword as a branch value.
+        (not (discard-sentinel? matched))
+        (do (parse-form p)
+            (recur matched))
 
         :else
         (let [key-tok (ppeek p)]
@@ -439,8 +448,7 @@
           (let [platform-key (keyword (subs (:value key-tok) 1))]
             (padvance! p)
             (let [form (parse-form p)]
-              (if (and (nil? matched)
-                       (or (= platform-key platform) (= platform-key :default)))
+              (if (or (= platform-key platform) (= platform-key :default))
                 (recur form)
                 (recur matched)))))))))
 

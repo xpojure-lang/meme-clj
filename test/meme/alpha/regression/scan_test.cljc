@@ -121,8 +121,8 @@
     (is (= [#?(:clj 'x :cljs 'y)] (core/meme->forms "#?(:clj x :cljs y)"))))
   (testing "#?(:default fallback) uses :default"
     (is (= '[fallback] (core/meme->forms "#?(:unknown x :default fallback)"))))
-  (testing "#?() empty — returns empty list"
-    (is (= [(list)] (core/meme->forms "#?()")))))
+  (testing "#?() empty — no branches match, produces no form"
+    (is (= [] (core/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: radix numbers for bases 17–36 need letters G-Z.

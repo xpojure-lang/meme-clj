@@ -370,3 +370,34 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
           #"not representable"
           (p/print-form (list false 1 2))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: (quote (non-symbol-head ...)) must not use ' prefix sugar.
+;; Bug: '1(2 3) parses as (quote 1) + bare (2 3), not (quote (1 2 3)).
+;; Fix: skip ' sugar when inner is non-empty list with non-symbol head;
+;; fall through to generic call syntax: quote(1(2 3)).
+;; ---------------------------------------------------------------------------
+
+(deftest quoted-non-symbol-head-skips-sugar
+  (testing "(quote (1 2 3)) — number head, uses call syntax"
+    (let [printed (p/print-form '(quote (1 2 3)))]
+      (is (= "quote(1(2 3))" printed))
+      (is (= ['(quote (1 2 3))] (core/meme->forms printed)))))
+  (testing "(quote (\"s\" a)) — string head, uses call syntax"
+    (let [printed (p/print-form '(quote ("s" a)))]
+      (is (= "quote(\"s\"(a))" printed))
+      (is (= ['(quote ("s" a))] (core/meme->forms printed)))))
+  (testing "(quote (:k v)) — keyword head, uses call syntax"
+    (let [printed (p/print-form '(quote (:k v)))]
+      (is (= "quote(:k(v))" printed))
+      (is (= ['(quote (:k v))] (core/meme->forms printed)))))
+  (testing "(quote ([x] body)) — vector head, uses call syntax"
+    (let [printed (p/print-form '(quote ([x] body)))]
+      (is (= "quote([x](body))" printed))
+      (is (= ['(quote ([x] body))] (core/meme->forms printed)))))
+  (testing "(quote (f x)) — symbol head, still uses ' sugar"
+    (is (= "'f(x)" (p/print-form '(quote (f x))))))
+  (testing "non-list inner forms still use ' sugar"
+    (is (= "'x" (p/print-form '(quote x))))
+    (is (= "'42" (p/print-form '(quote 42))))
+    (is (= "'()" (p/print-form '(quote ()))))))
