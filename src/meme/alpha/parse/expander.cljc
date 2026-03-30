@@ -45,7 +45,7 @@
 ;; expand-sq — core syntax-quote expansion
 ;; ---------------------------------------------------------------------------
 
-(defn expand-sq
+(defn- expand-sq
   "Walk a form parsed inside syntax-quote and produce the expansion.
    Mirrors Clojure's SyntaxQuoteReader behavior.
    Used by expand-syntax-quotes to expand MemeSyntaxQuote AST nodes at eval time."
