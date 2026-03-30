@@ -642,3 +642,37 @@
           #"Splicing reader conditional value must be"
           (core/meme->forms #?(:clj  "[#?@(:clj 42)]"
                                 :cljs "[#?@(:cljs 42)]"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: hex/octal/radix literals exceeding Long.MAX_VALUE must promote
+;; to BigInt, matching Clojure's reader behavior.
+;; Bug: Long/parseLong threw NumberFormatException for values > Long.MAX_VALUE.
+;; Fix: use BigInteger + reduce (longValue when < 64 bits, BigInt otherwise).
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest large-hex-octal-radix-promote-to-bigint
+  (testing "hex at Long.MAX_VALUE stays Long"
+    (let [r (first (core/meme->forms "0x7FFFFFFFFFFFFFFF"))]
+      (is (forms/raw? r))
+      (is (= Long/MAX_VALUE (:value r)))))
+  (testing "hex above Long.MAX_VALUE promotes to BigInt"
+    (let [r (first (core/meme->forms "0x8000000000000000"))]
+      (is (forms/raw? r))
+      (is (= 9223372036854775808N (:value r)))))
+  (testing "hex 0xFFFFFFFFFFFFFFFF promotes to BigInt"
+    (let [r (first (core/meme->forms "0xFFFFFFFFFFFFFFFF"))]
+      (is (forms/raw? r))
+      (is (= 18446744073709551615N (:value r)))))
+  (testing "negative hex at Long.MIN_VALUE stays Long"
+    (let [r (first (core/meme->forms "-0x8000000000000000"))]
+      (is (forms/raw? r))
+      (is (= Long/MIN_VALUE (:value r)))))
+  (testing "large octal promotes to BigInt"
+    (let [r (first (core/meme->forms "01777777777777777777777"))]
+      (is (forms/raw? r))
+      (is (= 18446744073709551615N (:value r)))))
+  (testing "large radix promotes to BigInt"
+    (let [r (first (core/meme->forms "36rZZZZZZZZZZZZZ"))]
+      (is (forms/raw? r))
+      (is (= 170581728179578208255N (:value r)))))))

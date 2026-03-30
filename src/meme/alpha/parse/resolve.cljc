@@ -140,8 +140,10 @@
                (str/starts-with? raw "-0x") (str/starts-with? raw "-0X"))
            (let [negative? (str/starts-with? raw "-")
                  hex-str (subs raw (if (or (str/starts-with? raw "+") (str/starts-with? raw "-")) 3 2))
-                 val (Long/parseLong hex-str 16)]
-             (forms/->MemeRaw (if negative? (- val) val) raw))
+                 bi (java.math.BigInteger. hex-str 16)
+                 bi (if negative? (.negate bi) bi)
+                 val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]
+             (forms/->MemeRaw val raw))
 
            ;; Octal — wrap in MemeRaw to preserve notation
            (and (or (str/starts-with? raw "0") (str/starts-with? raw "-0") (str/starts-with? raw "+0"))
@@ -154,8 +156,10 @@
                 (re-matches #"[+-]?0[0-7]+" raw))
            (let [negative? (str/starts-with? raw "-")
                  oct-str (subs raw (if (or (str/starts-with? raw "+") (str/starts-with? raw "-")) 2 1))
-                 val (Long/parseLong oct-str 8)]
-             (forms/->MemeRaw (if negative? (- val) val) raw))
+                 bi (java.math.BigInteger. oct-str 8)
+                 bi (if negative? (.negate bi) bi)
+                 val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]
+             (forms/->MemeRaw val raw))
 
            ;; Radix NNrDDDD — wrap in MemeRaw to preserve notation
            (re-matches #"[+-]?\d{1,2}r[0-9a-zA-Z]+" raw)
@@ -164,8 +168,10 @@
                  idx (str/index-of s "r")
                  radix (Integer/parseInt (subs s 0 idx))
                  digits (subs s (inc idx))
-                 val (Long/parseLong digits radix)]
-             (forms/->MemeRaw (if negative? (- val) val) raw))]
+                 bi (java.math.BigInteger. digits (int radix))
+                 bi (if negative? (.negate bi) bi)
+                 val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]
+             (forms/->MemeRaw val raw))]
 
           :cljs
           [;; BigInt N suffix — not supported in CLJS
