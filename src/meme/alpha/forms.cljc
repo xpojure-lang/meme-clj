@@ -70,3 +70,47 @@
   [rc]
   #?(:clj  (.-splicing ^clojure.lang.ReaderConditional rc)
      :cljs (:splicing rc)))
+
+;; ---------------------------------------------------------------------------
+;; Syntax-quote / unquote / unquote-splicing AST nodes
+;;
+;; These preserve syntax-quote structure through the pipeline instead of
+;; eagerly expanding into seq/concat/list. The printer reconstructs
+;; backtick/tilde syntax from these nodes. Runtime paths (run, repl)
+;; expand them before eval.
+;; ---------------------------------------------------------------------------
+
+;; ---------------------------------------------------------------------------
+;; Raw value wrapper — preserves source notation for types without metadata
+;;
+;; Numbers (0xFF, 010, 1e2), characters (\u0041, \o101), and strings
+;; ("hello \u0041") are primitive types that can't carry metadata.
+;; MemeRaw wraps the resolved value alongside the raw source text so the
+;; printer can reproduce the original notation. Runtime paths unwrap
+;; before eval.
+;; ---------------------------------------------------------------------------
+
+(defrecord MemeRaw [value raw])
+
+(defn raw? [x] (instance? MemeRaw x))
+(defn raw-value [x] (:value x))
+(defn raw-text [x] (:raw x))
+
+(defrecord MemeSyntaxQuote [form])
+(defrecord MemeUnquote [form])
+(defrecord MemeUnquoteSplicing [form])
+
+(defn syntax-quote?
+  "Is x a syntax-quote AST node?"
+  [x]
+  (instance? MemeSyntaxQuote x))
+
+(defn unquote?
+  "Is x an unquote AST node?"
+  [x]
+  (instance? MemeUnquote x))
+
+(defn unquote-splicing?
+  "Is x an unquote-splicing AST node?"
+  [x]
+  (instance? MemeUnquoteSplicing x))

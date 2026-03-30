@@ -117,10 +117,8 @@
 ;; Syntax-quote expansion
 ;; ---------------------------------------------------------------------------
 
-;; Marker types for unquote/unquote-splicing inside syntax-quote.
-;; These are recognized by expand-sq during the form walk.
-(defrecord Unquote [form])
-(defrecord UnquoteSplicing [form])
+;; Unquote/UnquoteSplicing types are defined in forms.cljc as
+;; MemeUnquote/MemeUnquoteSplicing for cross-stage portability.
 
 (defn- sq-resolve-symbol
   "Resolve a symbol for syntax-quote. Uses the resolver from parser opts
@@ -153,17 +151,18 @@
             gs)))
       sym)))
 
-(defn- expand-sq
+(defn expand-sq
   "Walk a form parsed inside syntax-quote and produce the expansion.
-   Mirrors Clojure's SyntaxQuoteReader behavior."
+   Mirrors Clojure's SyntaxQuoteReader behavior.
+   Used by expand-syntax-quotes to expand MemeSyntaxQuote AST nodes at eval time."
   [form opts loc]
   (cond
     ;; Unquote: ~x → x (the value, not quoted)
-    (instance? Unquote form)
+    (forms/unquote? form)
     (:form form)
 
     ;; UnquoteSplicing at top level is an error (must be inside a collection)
-    (instance? UnquoteSplicing form)
+    (forms/unquote-splicing? form)
     (errors/meme-error "Unquote-splicing (~@) not in collection" loc)
 
     ;; Symbol — resolve and quote
@@ -176,9 +175,9 @@
       (list 'clojure.core/list)
       (let [items (map (fn [item]
                          (cond
-                           (instance? UnquoteSplicing item)
+                           (forms/unquote-splicing? item)
                            (:form item)
-                           (instance? Unquote item)
+                           (forms/unquote? item)
                            (list 'clojure.core/list (:form item))
                            :else
                            (list 'clojure.core/list (expand-sq item opts loc))))
@@ -189,9 +188,9 @@
     (vector? form)
     (let [items (map (fn [item]
                        (cond
-                         (instance? UnquoteSplicing item)
+                         (forms/unquote-splicing? item)
                          (:form item)
-                         (instance? Unquote item)
+                         (forms/unquote? item)
                          (list 'clojure.core/list (:form item))
                          :else
                          (list 'clojure.core/list (expand-sq item opts loc))))
@@ -210,12 +209,15 @@
     (set? form)
     (let [items (map (fn [item]
                        (cond
-                         (instance? UnquoteSplicing item)
+                         (forms/unquote-splicing? item)
                          (:form item)
                          :else
                          (list 'clojure.core/list (expand-sq item opts loc))))
                      form)]
       (list 'clojure.core/apply 'clojure.core/hash-set (cons 'clojure.core/concat items)))
+
+    ;; MemeRaw — unwrap to plain value for expansion
+    (forms/raw? form) (:value form)
 
     ;; Keyword, number, string, char, nil, boolean — self-quoting
     :else form))
@@ -551,7 +553,8 @@
             (with-meta (list 'quote inner) {:meme/sugar true})))
 
       :syntax-quote
-      ;; ` — parse next form with meme rules, then expand
+      ;; ` — parse next form with meme rules, preserve as AST node.
+      ;; Expansion to seq/concat/list happens at eval time, not read time.
       (do (padvance! p)
           (vswap! (:sq-depth p) inc)
           (let [form (try (parse-form p)
@@ -559,8 +562,7 @@
             (when (discard-sentinel? form)
               (errors/meme-error "Syntax-quote target was discarded by #_ — nothing to syntax-quote"
                                 (error-data p (select-keys tok [:line :col]))))
-            (binding [*gensym-env* (volatile! {})]
-              (maybe-call p (expand-sq form (:opts p) (select-keys tok [:line :col]))))))
+            (forms/->MemeSyntaxQuote form)))
 
       :unquote
       (if (pos? @(:sq-depth p))
@@ -569,7 +571,7 @@
               (when (discard-sentinel? inner)
                 (errors/meme-error "Unquote target was discarded by #_"
                                   (error-data p (select-keys tok [:line :col]))))
-              (->Unquote inner)))
+              (forms/->MemeUnquote inner)))
         (errors/meme-error "Unquote (~) outside syntax-quote — ~ only has meaning inside `"
                            (error-data p (select-keys tok [:line :col]))))
 
@@ -580,7 +582,7 @@
               (when (discard-sentinel? inner)
                 (errors/meme-error "Unquote-splicing target was discarded by #_"
                                   (error-data p (select-keys tok [:line :col]))))
-              (->UnquoteSplicing inner)))
+              (forms/->MemeUnquoteSplicing inner)))
         (errors/meme-error "Unquote-splicing (~@) outside syntax-quote — ~@ only has meaning inside `"
                            (error-data p (select-keys tok [:line :col]))))
 
@@ -722,6 +724,52 @@
         (attach-ws (parse-call-chain p form) ws))
       (finally
         (vswap! (:depth p) dec)))))
+
+;; ---------------------------------------------------------------------------
+;; Syntax-quote expansion (for eval — not for tooling)
+;; ---------------------------------------------------------------------------
+
+(defn expand-syntax-quotes
+  "Walk a form tree and expand all AST nodes into plain Clojure forms.
+   Expands MemeSyntaxQuote into seq/concat/list, unwraps MemeRaw to plain values.
+   Called by runtime paths (run, repl) before eval."
+  ([form] (expand-syntax-quotes form nil))
+  ([form opts]
+   (cond
+     (forms/raw? form)
+     (:value form)
+
+     (forms/syntax-quote? form)
+     (binding [*gensym-env* (volatile! {})]
+       (expand-sq (:form form) opts nil))
+
+     (forms/unquote? form)
+     (forms/->MemeUnquote (expand-syntax-quotes (:form form) opts))
+
+     (forms/unquote-splicing? form)
+     (forms/->MemeUnquoteSplicing (expand-syntax-quotes (:form form) opts))
+
+     (seq? form)
+     (with-meta (apply list (map #(expand-syntax-quotes % opts) form)) (meta form))
+
+     (vector? form)
+     (with-meta (mapv #(expand-syntax-quotes % opts) form) (meta form))
+
+     (map? form)
+     (with-meta (into {} (map (fn [[k v]] [(expand-syntax-quotes k opts)
+                                            (expand-syntax-quotes v opts)]) form))
+                (meta form))
+
+     (set? form)
+     (with-meta (set (map #(expand-syntax-quotes % opts) form)) (meta form))
+
+     :else form)))
+
+(defn expand-forms
+  "Expand all syntax-quote nodes in a vector of forms. For eval pipelines."
+  ([forms] (expand-forms forms nil))
+  ([forms opts]
+   (mapv #(expand-syntax-quotes % opts) forms)))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

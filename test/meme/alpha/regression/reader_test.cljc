@@ -4,7 +4,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
             [meme.alpha.emit.printer :as p]
-            [meme.alpha.forms :as forms]))
+            [meme.alpha.forms :as forms]
+            [meme.alpha.parse.reader :as reader]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: auto-resolve keywords are opaque
@@ -429,12 +430,13 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest unquote-splicing-error-has-location
-  (testing "~@ in map inside syntax-quote error includes location"
-    (try (core/meme->forms "`{~@xs 1}")
-         (is false "should have thrown")
-         (catch #?(:clj Exception :cljs :default) e
-           (is (some? (:line (ex-data e))) "error should have :line")
-           (is (some? (:col (ex-data e))) "error should have :col")))))
+  (testing "~@ in map inside syntax-quote — error at expansion time"
+    (let [forms (core/meme->forms "`{~@xs 1}")]
+      (is (forms/syntax-quote? (first forms)) "read produces AST node")
+      (try (reader/expand-forms forms)
+           (is false "should have thrown")
+           (catch #?(:clj Exception :cljs :default) e
+             (is (re-find #"Unquote-splicing" (ex-message e))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #? reader conditionals lost non-matching branches on roundtrip.

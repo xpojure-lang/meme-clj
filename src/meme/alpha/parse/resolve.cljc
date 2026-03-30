@@ -30,25 +30,33 @@
       [(char code) end])))
 
 (defn resolve-string
-  "Resolve a quoted string token to a string value. Handles escape sequences natively."
+  "Resolve a quoted string token to a string value. Handles escape sequences natively.
+   Wraps in MemeRaw when the string contains unicode escapes (\\uNNNN) that would
+   be lost through pr-str roundtrip."
   [raw loc]
   (let [inner (subs raw 1 (dec (count raw))) ; strip surrounding quotes
-        len (count inner)]
-    (loop [i 0 sb #?(:clj (StringBuilder.) :cljs #js [])]
-      (if (>= i len)
-        #?(:clj (.toString sb) :cljs (.join sb ""))
-        (let [ch (.charAt inner i)]
-          (if (= ch \\)
-            (if (>= (inc i) len)
-              (errors/meme-error "Unterminated escape sequence in string" loc)
-              (let [esc (.charAt inner (inc i))]
-                (if-let [replacement (get string-escapes esc)]
-                  (recur (+ i 2) #?(:clj (.append sb replacement) :cljs (do (.push sb replacement) sb)))
-                  (if (= esc \u)
-                    (let [[ch' new-i] (parse-unicode-escape inner (inc i) loc)]
-                      (recur new-i #?(:clj (.append sb ch') :cljs (do (.push sb ch') sb))))
-                    (errors/meme-error (str "Unsupported escape sequence \\" esc " in string") loc)))))
-            (recur (inc i) #?(:clj (.append sb ch) :cljs (do (.push sb (str ch)) sb)))))))))
+        len (count inner)
+        has-unicode? (volatile! false)
+        resolved
+        (loop [i 0 sb #?(:clj (StringBuilder.) :cljs #js [])]
+          (if (>= i len)
+            #?(:clj (.toString sb) :cljs (.join sb ""))
+            (let [ch (.charAt inner i)]
+              (if (= ch \\)
+                (if (>= (inc i) len)
+                  (errors/meme-error "Unterminated escape sequence in string" loc)
+                  (let [esc (.charAt inner (inc i))]
+                    (if-let [replacement (get string-escapes esc)]
+                      (recur (+ i 2) #?(:clj (.append sb replacement) :cljs (do (.push sb replacement) sb)))
+                      (if (= esc \u)
+                        (let [[ch' new-i] (parse-unicode-escape inner (inc i) loc)]
+                          (vreset! has-unicode? true)
+                          (recur new-i #?(:clj (.append sb ch') :cljs (do (.push sb ch') sb))))
+                        (errors/meme-error (str "Unsupported escape sequence \\" esc " in string") loc)))))
+                (recur (inc i) #?(:clj (.append sb ch) :cljs (do (.push sb (str ch)) sb)))))))]
+    (if @has-unicode?
+      (forms/->MemeRaw resolved raw)
+      resolved)))
 
 ;; ---------------------------------------------------------------------------
 ;; Character resolution
@@ -77,7 +85,7 @@
                                  n))
                       (catch #?(:clj Exception :cljs :default) _
                         (errors/meme-error (str "Invalid unicode character \\u" hex) loc)))]
-        (char code))
+        (forms/->MemeRaw (char code) raw))
 
       #?@(:clj [(and (str/starts-with? name-part "o")
                       (<= 2 (count name-part) 4))
@@ -87,7 +95,7 @@
                                    (errors/meme-error (str "Invalid octal character \\" name-part) loc)))]
                    (when (> code 0377)
                      (errors/meme-error (str "Octal character out of range: \\" name-part) loc))
-                   (char code))])
+                   (forms/->MemeRaw (char code) raw))])
 
       :else
       (errors/meme-error (str "Invalid character literal: " raw) loc))))
@@ -125,16 +133,16 @@
                  den (Long/parseLong (subs raw (inc idx)))]
              (/ num den))
 
-           ;; Hex
+           ;; Hex — wrap in MemeRaw to preserve notation
            (or (str/starts-with? raw "0x") (str/starts-with? raw "0X")
                (str/starts-with? raw "+0x") (str/starts-with? raw "+0X")
                (str/starts-with? raw "-0x") (str/starts-with? raw "-0X"))
            (let [negative? (str/starts-with? raw "-")
                  hex-str (subs raw (if (or (str/starts-with? raw "+") (str/starts-with? raw "-")) 3 2))
                  val (Long/parseLong hex-str 16)]
-             (if negative? (- val) val))
+             (forms/->MemeRaw (if negative? (- val) val) raw))
 
-           ;; Octal (leading 0, not 0x, not just "0", not float)
+           ;; Octal — wrap in MemeRaw to preserve notation
            (and (or (str/starts-with? raw "0") (str/starts-with? raw "-0") (str/starts-with? raw "+0"))
                 (> (count raw) 1)
                 (not (str/starts-with? raw "0x")) (not (str/starts-with? raw "0X"))
@@ -146,9 +154,9 @@
            (let [negative? (str/starts-with? raw "-")
                  oct-str (subs raw (if (or (str/starts-with? raw "+") (str/starts-with? raw "-")) 2 1))
                  val (Long/parseLong oct-str 8)]
-             (if negative? (- val) val))
+             (forms/->MemeRaw (if negative? (- val) val) raw))
 
-           ;; Radix NNrDDDD
+           ;; Radix NNrDDDD — wrap in MemeRaw to preserve notation
            (re-matches #"[+-]?\d{1,2}r[0-9a-zA-Z]+" raw)
            (let [negative? (str/starts-with? raw "-")
                  s (cond-> raw (or (str/starts-with? raw "+") (str/starts-with? raw "-")) (subs 1))
@@ -156,7 +164,7 @@
                  radix (Integer/parseInt (subs s 0 idx))
                  digits (subs s (inc idx))
                  val (Long/parseLong digits radix)]
-             (if negative? (- val) val))]
+             (forms/->MemeRaw (if negative? (- val) val) raw))]
 
           :cljs
           [;; BigInt N suffix — not supported in CLJS
@@ -192,9 +200,12 @@
                 (re-matches #"[+-]?0[0-7]+" raw))
            (errors/meme-error "Octal literals are not supported in ClojureScript" loc)])
 
-      ;; Float (contains . or e/E)
+      ;; Float (contains . or e/E) — wrap in MemeRaw when scientific notation
       (or (str/includes? raw ".") (str/includes? raw "e") (str/includes? raw "E"))
-      #?(:clj (Double/parseDouble raw) :cljs (js/parseFloat raw))
+      (let [val #?(:clj (Double/parseDouble raw) :cljs (js/parseFloat raw))]
+        (if (or (str/includes? raw "e") (str/includes? raw "E"))
+          (forms/->MemeRaw val raw)
+          val))
 
       ;; Plain integer
       :else

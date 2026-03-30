@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
             [meme.alpha.emit.printer :as p]
+            [meme.alpha.forms :as forms]
             [meme.alpha.pipeline :as pipeline]
             [meme.alpha.scan.tokenizer :as tokenizer]
             [meme.alpha.scan.grouper :as grouper]))
@@ -16,14 +17,19 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest syntax-quote-native
-  (testing "backtick on symbol produces a quoted form"
-    (is (some? (first (core/meme->forms "`foo")))))
-  (testing "backtick on call produces expanded form"
-    (is (seq? (first (core/meme->forms "`a(b c)")))))
+  (testing "backtick on symbol produces a MemeSyntaxQuote node"
+    (let [form (first (core/meme->forms "`foo"))]
+      (is (some? form))
+      (is (instance? meme.alpha.forms.MemeSyntaxQuote form))))
+  (testing "backtick on call produces a MemeSyntaxQuote wrapping the call"
+    (let [form (first (core/meme->forms "`a(b c)"))]
+      (is (instance? meme.alpha.forms.MemeSyntaxQuote form))
+      (is (= '(a b c) (:form form)))))
   (testing "backtick nested inside a call works"
     (let [form (first (core/meme->forms "foo(`bar)"))]
       (is (seq? form))
-      (is (= 'foo (first form))))))
+      (is (= 'foo (first form)))
+      (is (instance? meme.alpha.forms.MemeSyntaxQuote (second form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Signed number tokenization: sign adjacent to digit = number,
@@ -95,8 +101,11 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest syntax-quote-unquote-forms
-  (testing "`~foo returns the symbol foo (unquoted)"
-    (is (= 'foo (first (core/meme->forms "`~foo")))))
+  (testing "`~foo produces MemeSyntaxQuote wrapping MemeUnquote"
+    (let [form (first (core/meme->forms "`~foo"))]
+      (is (instance? meme.alpha.forms.MemeSyntaxQuote form))
+      (is (instance? meme.alpha.forms.MemeUnquote (:form form)))
+      (is (= 'foo (:form (:form form))))))
   (testing "` + ~ tokenize as separate prefix tokens"
     (let [tokens (tokenize "`~foo")]
       (is (= :syntax-quote (:type (first tokens))))
@@ -132,14 +141,19 @@
 
 #?(:clj
 (deftest radix-numbers-high-bases
-  (testing "36rZ — base-36 with letter beyond hex range"
-    (is (= 35 (first (core/meme->forms "36rZ")))))
+  (testing "36rZ — base-36, value preserved in MemeRaw"
+    (let [form (first (core/meme->forms "36rZ"))]
+      (is (= 35 (:value form)))
+      (is (= "36rZ" (:raw form)))))
   (testing "16rFF — hex via radix notation"
-    (is (= 255 (first (core/meme->forms "16rFF")))))
+    (let [form (first (core/meme->forms "16rFF"))]
+      (is (= 255 (:value form)))))
   (testing "2r1010 — binary"
-    (is (= 10 (first (core/meme->forms "2r1010")))))
+    (let [form (first (core/meme->forms "2r1010"))]
+      (is (= 10 (:value form)))))
   (testing "36rHelloWorld — large base-36 number"
-    (is (= 1767707668033969 (first (core/meme->forms "36rHelloWorld")))))))
+    (let [form (first (core/meme->forms "36rHelloWorld"))]
+      (is (= 1767707668033969 (:value form)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: backslash terminates symbol — foo\a is symbol + char literal.
@@ -168,8 +182,10 @@
   (testing "`~\"foo\" starts with :syntax-quote prefix"
     (let [tokens (tokenize "`~\"foo\"")]
       (is (= :syntax-quote (:type (first tokens))))))
-  (testing "`~\"foo\" returns unquoted string"
-    (is (= "foo" (first (core/meme->forms "`~\"foo\""))))))
+  (testing "`~\"foo\" produces MemeSyntaxQuote wrapping MemeUnquote of string"
+    (let [form (first (core/meme->forms "`~\"foo\""))]
+      (is (instance? meme.alpha.forms.MemeSyntaxQuote form))
+      (is (= "foo" (:form (:form form)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; B3: \uXXXX and \oXXX char literals.
@@ -188,8 +204,10 @@
       (is (= :char (:type (first tokens))))
       (is (= "\\o101" (:value (first tokens))))))
   #?(:clj
-  (testing "\\u0041 roundtrips to char A"
-    (is (= [\A] (core/meme->forms "\\u0041"))))))
+  (testing "\\u0041 resolves to char A, preserves raw notation"
+    (let [form (first (core/meme->forms "\\u0041"))]
+      (is (= \A (:value form)))
+      (is (= "\\u0041" (:raw form)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: \u00g1 tokenized as \u00 + g1 instead of erroring.
@@ -238,7 +256,7 @@
   (testing "\\u alone at EOF is complete (character u)"
     (is (= [\u] (core/meme->forms "\\u"))))
   (testing "\\u0041 is complete"
-    (is (= [\A] (core/meme->forms "\\u0041"))))
+    (is (= \A (:value (first (core/meme->forms "\\u0041"))))))
   (testing "\\u00g1 is still :invalid (not :incomplete)"
     (let [ex (try (core/meme->forms "\\u00g1")
                   (catch #?(:clj Exception :cljs :default) e e))]
@@ -400,8 +418,10 @@
 (deftest syntax-quote-unquote-char-literal
   (testing "`~\\a starts with :syntax-quote prefix"
     (is (= :syntax-quote (:type (first (tokenize "`~\\a"))))))
-  (testing "`~\\a parses to char value"
-    (is (= \a (first (core/meme->forms "`~\\a"))))))
+  (testing "`~\\a produces MemeSyntaxQuote wrapping MemeUnquote of char"
+    (let [form (first (core/meme->forms "`~\\a"))]
+      (is (instance? meme.alpha.forms.MemeSyntaxQuote form))
+      (is (= \a (:form (:form form)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: ##Inf, ##-Inf, ##NaN silently misparsed as tagged literals.

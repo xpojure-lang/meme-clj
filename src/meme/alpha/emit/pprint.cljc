@@ -250,6 +250,16 @@
                     (call? form)
                     (pp-call-smart form col width)
 
+                    ;; Syntax-quote / unquote / unquote-splicing AST nodes
+                    (forms/syntax-quote? form)
+                    (str "`" (pp (:form form) (inc col) width))
+
+                    (forms/unquote? form)
+                    (str "~" (pp (:form form) (inc col) width))
+
+                    (forms/unquote-splicing? form)
+                    (str "~@" (pp (:form form) (+ col 2) width))
+
                     ;; Collections
                     (vector? form) (pp-vec form col width)
                     (map? form)    (pp-map form col width)

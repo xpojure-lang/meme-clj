@@ -464,7 +464,7 @@
   (testing "string with unicode escape"
     (let [[f1 f2 _] (roundtrip-forms "\"\\u0041\"")]
       (is (= f1 f2))
-      (is (= ["A"] f1)))))
+      (is (= "A" (:value (first f1)))))))
 
 (deftest roundtrip-deftype
   (let [[f1 f2 _] (roundtrip-forms "deftype(Point [x y])")]
@@ -756,6 +756,50 @@
     (is (= "#'foo" (roundtrip-syntax "#'foo"))))
   (testing "var(x) explicit call roundtrips as var(x)"
     (is (= "var(foo)" (roundtrip-syntax "var(foo)")))))
+
+(deftest roundtrip-numeric-notation-preserved
+  #?(:clj
+  (testing "hex notation roundtrips"
+    (is (= "0xFF" (roundtrip-syntax "0xFF")))))
+  #?(:clj
+  (testing "octal notation roundtrips"
+    (is (= "010" (roundtrip-syntax "010")))))
+  #?(:clj
+  (testing "radix notation roundtrips"
+    (is (= "2r1010" (roundtrip-syntax "2r1010")))))
+  (testing "scientific notation roundtrips"
+    (is (= "1e2" (roundtrip-syntax "1e2"))))
+  (testing "standard notation unchanged"
+    (is (= "42" (roundtrip-syntax "42")))
+    (is (= "3.14" (roundtrip-syntax "3.14")))))
+
+#?(:clj
+(deftest roundtrip-char-escape-preserved
+  (testing "unicode char escape roundtrips"
+    (is (= "\\u0041" (roundtrip-syntax "\\u0041"))))
+  (testing "octal char escape roundtrips"
+    (is (= "\\o101" (roundtrip-syntax "\\o101"))))
+  (testing "standard chars unchanged"
+    (is (= "\\a" (roundtrip-syntax "\\a")))
+    (is (= "\\newline" (roundtrip-syntax "\\newline"))))))
+
+(deftest roundtrip-string-unicode-preserved
+  (testing "string with unicode escape roundtrips"
+    (is (= "\"hello \\u0041\"" (roundtrip-syntax "\"hello \\u0041\""))))
+  (testing "standard string escapes unchanged"
+    (is (= "\"hello\\nworld\"" (roundtrip-syntax "\"hello\\nworld\"")))))
+
+(deftest roundtrip-syntax-quote-preserved
+  (testing "backtick on symbol roundtrips"
+    (is (= "`foo" (roundtrip-syntax "`foo"))))
+  (testing "backtick on call roundtrips"
+    (is (= "`if(~test ~body)" (roundtrip-syntax "`if(~test ~body)"))))
+  (testing "backtick with unquote-splicing roundtrips"
+    (is (= "`do(~@body)" (roundtrip-syntax "`do(~@body)"))))
+  (testing "nested syntax-quote roundtrips"
+    (is (= "`list('a `b)" (roundtrip-syntax "`list('a `b)"))))
+  (testing "backtick on vector roundtrips"
+    (is (= "`[~a ~b]" (roundtrip-syntax "`[~a ~b]")))))
 
 (deftest roundtrip-sugar-in-clj-output
   (testing "meme 'x → clj 'x"

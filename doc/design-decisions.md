@@ -344,15 +344,11 @@ can two notations produce the same form? If yes, metadata must
 distinguish them.
 
 **Known remaining losses** (as of v0.5.0-alpha):
-- Numeric representations: `0xFF`, `010`, `2r1010`, `1e2` all resolve
-  to values, losing the original notation.
-- Character escapes: `\u0041`, `\o101` resolve to the char value.
-- String unicode escapes: `\u0041` inside strings decoded to literal.
-- Syntax-quote: expanded at read time, no inverse exists.
 - Namespaced maps: `#:ns{:a 1}` expanded to `{:ns/a 1}`.
 - Commas: treated as whitespace, not preserved.
 - `#_` discarded forms: gone by design.
 - Chained metadata annotations: merged, order and count lost.
 - Set element ordering: hash-determined.
+- `#()` vs `fn()`: `anon-fn-shorthand?` heuristic normalizes.
 
 

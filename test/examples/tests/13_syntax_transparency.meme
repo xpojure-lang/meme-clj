@@ -45,3 +45,45 @@ assert(=(rt-clj("@foo") "@foo"))
 assert(=(rt-clj("clojure.core/deref(foo)") "(clojure.core/deref foo)"))
 assert(=(rt-clj("#'foo") "#'foo"))
 assert(=(rt-clj("var(foo)") "(var foo)"))
+
+;; ---------------------------------------------------------------
+;; Syntax-quote: `form preserved as AST, not expanded at read time
+;; ---------------------------------------------------------------
+
+assert(=(rt("`foo") "`foo"))
+assert(=(rt("`if(~test ~body)") "`if(~test ~body)"))
+assert(=(rt("`do(~@body)") "`do(~@body)"))
+assert(=(rt("`[~a ~b]") "`[~a ~b]"))
+
+;; ---------------------------------------------------------------
+;; Numeric notation preserved through roundtrip
+;; ---------------------------------------------------------------
+
+assert(=(rt("0xFF") "0xFF"))
+assert(=(rt("010") "010"))
+assert(=(rt("2r1010") "2r1010"))
+assert(=(rt("1e2") "1e2"))
+
+;; Standard notation still works
+assert(=(rt("42") "42"))
+assert(=(rt("3.14") "3.14"))
+
+;; ---------------------------------------------------------------
+;; Character escape notation preserved
+;; ---------------------------------------------------------------
+
+assert(=(rt("\\u0041") "\\u0041"))
+assert(=(rt("\\o101") "\\o101"))
+
+;; Standard chars still work
+assert(=(rt("\\a") "\\a"))
+assert(=(rt("\\newline") "\\newline"))
+
+;; ---------------------------------------------------------------
+;; String unicode escapes preserved
+;; ---------------------------------------------------------------
+
+assert(=(rt("\"hello \\u0041\"") "\"hello \\u0041\""))
+
+;; Standard string escapes still work
+assert(=(rt("\"hello\\nworld\"") "\"hello\\nworld\""))

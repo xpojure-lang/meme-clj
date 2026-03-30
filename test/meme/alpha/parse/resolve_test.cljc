@@ -1,6 +1,7 @@
 (ns meme.alpha.parse.resolve-test
   "Unit tests for meme.alpha.parse.resolve: value resolution from raw token text."
   (:require [clojure.test :refer [deftest is testing]]
+            [meme.alpha.forms :as forms]
             [meme.alpha.parse.resolve :as resolve]))
 
 ;; ---------------------------------------------------------------------------
@@ -14,7 +15,11 @@
 
 #?(:clj
 (deftest resolve-number-formats
-  (is (= 255 (resolve/resolve-number "0xFF" {:line 1 :col 1})))
+  (testing "hex wraps in MemeRaw"
+    (let [r (resolve/resolve-number "0xFF" {:line 1 :col 1})]
+      (is (forms/raw? r))
+      (is (= 255 (:value r)))
+      (is (= "0xFF" (:raw r)))))
   (is (= 42N (resolve/resolve-number "42N" {:line 1 :col 1})))
   (is (= 1.5M (resolve/resolve-number "1.5M" {:line 1 :col 1})))
   (is (= 1/2 (resolve/resolve-number "1/2" {:line 1 :col 1})))))

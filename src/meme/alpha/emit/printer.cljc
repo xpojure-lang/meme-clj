@@ -109,6 +109,9 @@
                    (str "^" (print-form m)))]
       (str prefix " " (print-form stripped)))
 
+    ;; raw value wrapper — emit original source text
+    (forms/raw? form) (:raw form)
+
     ;; nil
     (nil? form) "nil"
 
@@ -155,6 +158,17 @@
         (if (= *mode* :clj)
           (str "(" (print-form head) (when (seq (rest form)) (str " " (print-args (rest form)))) ")")
           (str (print-form head) "(" (print-args (rest form)) ")"))))
+
+    ;; syntax-quote / unquote / unquote-splicing AST nodes
+    ;; Must be before map? because these are defrecords (satisfy map?)
+    (forms/syntax-quote? form)
+    (str "`" (print-form (:form form)))
+
+    (forms/unquote? form)
+    (str "~" (print-form (:form form)))
+
+    (forms/unquote-splicing? form)
+    (str "~@" (print-form (:form form)))
 
     ;; reader conditional — walk inner forms with meme syntax
     ;; Must be before map? because CLJS MemeReaderConditional is a defrecord (satisfies map?)
