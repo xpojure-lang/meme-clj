@@ -138,6 +138,10 @@
 ;; Collections
 ;; ---------------------------------------------------------------------------
 
+(def ^:private closer-types
+  "Set of token types that are closing delimiters."
+  #{:close-paren :close-bracket :close-brace})
+
 (defn- parse-forms-until
   ([p end-type] (parse-forms-until p end-type nil))
   ([p end-type open-loc]
@@ -152,8 +156,24 @@
                              open-loc (assoc :secondary [{:line (:line open-loc) :col (:col open-loc) :label "opened here"}])
                              open-loc (assoc :hint (str "Add " (get token-name end-type (name end-type)) " to close this " ctx)))))))
        (let [tok (ppeek p)]
-         (if (end-pred tok)
+         (cond
+           ;; Correct closer — done
+           (end-pred tok)
            (do (padvance! p) forms)
+
+           ;; Wrong closer — mismatched delimiter
+           (and (closer-types (:type tok)) (not (end-pred tok)))
+           (let [expected (get token-name end-type (name end-type))
+                 actual (get token-name (:type tok) (name (:type tok)))
+                 ctx (get closer-context end-type "expression")]
+             (errors/meme-error
+               (str "Mismatched delimiter — expected " expected " to close " ctx " but got " actual)
+               (error-data p (cond-> (select-keys tok [:line :col])
+                               open-loc (assoc :secondary [{:line (:line open-loc) :col (:col open-loc) :label "opened here"}])
+                               open-loc (assoc :hint (str "Replace " actual " with " expected " to close this " ctx))))))
+
+           ;; Normal form — parse and accumulate
+           :else
            (let [form (parse-form p)]
              (cond
                (discard-sentinel? form) (recur forms)
@@ -172,10 +192,12 @@
       (when (odd? (count forms))
         (errors/meme-error (str "Map literal requires an even number of forms, but got " (count forms))
                            (error-data p (assoc loc :hint "Maps need key-value pairs — check for a missing key or value"))))
-      (let [m (apply array-map forms)]
+      (let [m (apply array-map forms)
+            keys (take-nth 2 forms)]
         (when (not= (count m) (/ (count forms) 2))
-          (errors/meme-error "Duplicate key in map literal"
-                             (error-data p loc)))
+          (let [dup (first (filter (fn [k] (> (count (filter #(= k %) keys)) 1)) keys))]
+            (errors/meme-error (str "Duplicate key in map literal: " (pr-str dup))
+                               (error-data p loc))))
         m))))
 
 (defn- parse-set [p]
@@ -184,8 +206,10 @@
     (let [forms (parse-forms-until p :close-brace loc)
           s (set forms)]
       (when (not= (count s) (count forms))
-        (errors/meme-error "Duplicate element in set literal"
-                           (error-data p loc)))
+        (let [seen (volatile! #{})
+              dup (first (filter (fn [x] (if (contains? @seen x) true (do (vswap! seen conj x) false))) forms))]
+          (errors/meme-error (str "Duplicate element in set literal: " (pr-str dup))
+                             (error-data p loc))))
       (with-meta s {:meme/order (vec forms)}))))
 
 ;; ---------------------------------------------------------------------------
@@ -307,8 +331,10 @@
   (loop [pairs []]
     (cond
       (peof? p)
-      (errors/meme-error (str "Unclosed reader conditional — expected )")
-                         (error-data p (assoc loc :incomplete true)))
+      (errors/meme-error (str "Unclosed reader conditional — expected ) but reached end of input")
+                         (error-data p (cond-> (assoc loc :incomplete true)
+                                         loc (assoc :secondary [{:line (:line loc) :col (:col loc) :label "opened here"}])
+                                         loc (assoc :hint "Add ) to close this reader conditional"))))
 
       (tok-type? (ppeek p) :close-paren)
       (do (padvance! p)
@@ -332,8 +358,10 @@
     (loop [matched discard-sentinel]
       (cond
         (peof? p)
-        (errors/meme-error (str "Unclosed reader conditional — expected )")
-                           (error-data p (assoc loc :incomplete true)))
+        (errors/meme-error (str "Unclosed reader conditional — expected ) but reached end of input")
+                           (error-data p (cond-> (assoc loc :incomplete true)
+                                           loc (assoc :secondary [{:line (:line loc) :col (:col loc) :label "opened here"}])
+                                           loc (assoc :hint "Add ) to close this reader conditional"))))
 
         (tok-type? (ppeek p) :close-paren)
         (do (padvance! p)
@@ -484,7 +512,7 @@
         (do (padvance! p)
             (let [inner (parse-form p)]
               (when (discard-sentinel? inner)
-                (errors/meme-error "Unquote target was discarded by #_"
+                (errors/meme-error "Unquote target was discarded by #_ — nothing to unquote"
                                   (error-data p (select-keys tok [:line :col]))))
               (forms/->MemeUnquote inner)))
         (errors/meme-error "Unquote (~) outside syntax-quote — ~ only has meaning inside `"
@@ -495,7 +523,7 @@
         (do (padvance! p)
             (let [inner (parse-form p)]
               (when (discard-sentinel? inner)
-                (errors/meme-error "Unquote-splicing target was discarded by #_"
+                (errors/meme-error "Unquote-splicing target was discarded by #_ — nothing to unquote-splice"
                                   (error-data p (select-keys tok [:line :col]))))
               (forms/->MemeUnquoteSplicing inner)))
         (errors/meme-error "Unquote-splicing (~@) outside syntax-quote — ~@ only has meaning inside `"
@@ -571,7 +599,8 @@
 
               (not (tok-type? nxt :close-paren))
               (errors/meme-error "#() body must be a single expression — use fn(args...) for multiple expressions"
-                                (error-data p (select-keys nxt [:line :col]))))
+                                (error-data p (assoc (select-keys nxt [:line :col])
+                                                :secondary [{:line (:line tok) :col (:col tok) :label "#( opened here"}]))))
             (padvance! p)
             (let [params (find-percent-params body)
                   _ (when (contains? params 0)

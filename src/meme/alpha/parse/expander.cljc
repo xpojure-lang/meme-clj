@@ -139,7 +139,7 @@
 
      (forms/syntax-quote? form)
      (binding [*gensym-env* (volatile! {})]
-       (expand-sq (:form form) opts nil))
+       (expand-sq (:form form) opts (select-keys (meta form) [:line :col])))
 
      (forms/unquote? form)
      (forms/->MemeUnquote (expand-syntax-quotes (:form form) opts))

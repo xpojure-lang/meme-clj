@@ -160,3 +160,75 @@
     (is (thrown-with-msg? js/Error #"Radix" (core/meme->forms "2r1010"))))
   (testing "Octal"
     (is (thrown-with-msg? js/Error #"Octal" (core/meme->forms "010"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: error message quality improvements
+;; ---------------------------------------------------------------------------
+
+(deftest mismatched-bracket-error-is-specific
+  (testing "[1 2) produces mismatch message, not generic 'Unexpected )'"
+    (let [e (try (core/meme->forms "[1 2)")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (re-find #"[Mm]ismatched" (ex-message e))
+          "error should mention 'mismatched', not generic 'Unexpected'")
+      (is (re-find #"expected \]" (ex-message e)))
+      (is (re-find #"got [)]" (ex-message e)))))
+  (testing "{:a 1] produces mismatch with opened-here secondary"
+    (let [e (try (core/meme->forms "{:a 1]")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (re-find #"[Mm]ismatched" (ex-message e)))
+      (is (some? (:secondary (ex-data e)))
+          "should have secondary location pointing at opener"))))
+
+(deftest duplicate-key-names-the-offender
+  (testing "duplicate map key includes the key in the message"
+    (let [e (try (core/meme->forms "{:a 1 :b 2 :a 3}")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (re-find #":a" (ex-message e))
+          "error should name the duplicate key :a")))
+  (testing "duplicate set element includes the element in the message"
+    (let [e (try (core/meme->forms "#{1 2 1}")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (re-find #"1" (ex-message e))
+          "error should name the duplicate element"))))
+
+(deftest unclosed-reader-conditional-has-context
+  (testing "unclosed #?( has secondary and hint"
+    (let [e (try (core/meme->forms "#?(:clj 1")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (:incomplete (ex-data e)))
+      (is (re-find #"end of input" (ex-message e)))
+      (is (some? (:secondary (ex-data e)))
+          "should have secondary location")
+      (is (some? (:hint (ex-data e)))
+          "should have hint about closing )"))))
+
+(deftest unquote-discard-messages-have-suffix
+  (testing "unquote discard message ends with action"
+    (let [e (try (core/meme->forms "`[~#_ x]")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (re-find #"nothing to unquote" (ex-message e))))))
+
+(deftest anon-fn-multi-body-shows-opener
+  (testing "#() with two expressions shows #( location"
+    (let [e (try (core/meme->forms "#(1 2)")
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) e e))]
+      (is (re-find #"single expression" (ex-message e)))
+      (is (some? (:secondary (ex-data e)))
+          "should have secondary pointing at #( opener"))))
+
+#?(:clj
+(deftest unicode-escape-in-string-reports-count
+  (testing "truncated \\u in string includes digit count"
+    (let [e (try (core/meme->forms "\"\\u41\"")
+                 nil
+                 (catch Exception e e))]
+      (is (re-find #"got 2" (ex-message e))
+          "should report how many hex digits were found")))))

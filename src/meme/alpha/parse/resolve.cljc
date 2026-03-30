@@ -16,9 +16,10 @@
   "Parse \\uNNNN from raw string starting at idx (pointing at 'u').
    Returns [char new-idx]."
   [raw idx loc]
-  (let [end (min (+ idx 5) (count raw))]
-    (when (< (- end idx) 5)
-      (errors/meme-error (str "Invalid unicode escape in string — expected 4 hex digits")
+  (let [end (min (+ idx 5) (count raw))
+        consumed (- end idx 1)]
+    (when (< consumed 4)
+      (errors/meme-error (str "Invalid unicode escape in string — expected 4 hex digits after \\u, got " consumed)
                          loc))
     (let [hex (subs raw (inc idx) end)
           code (try #?(:clj (Integer/parseInt hex 16)
@@ -250,7 +251,7 @@
     #?(:clj (forms/deferred-auto-keyword raw)
        :cljs (errors/meme-error
                (str "Auto-resolve keywords (" raw ") require the :resolve-keyword option in ClojureScript")
-               loc))))
+               (assoc loc :hint "Pass :resolve-keyword (fn [kw] ...) in the opts map to meme->forms")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Tagged literals
