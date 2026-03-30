@@ -167,7 +167,7 @@ defn(format-cmd
                      [path]
                      let(
                        [src slurp(path)]
-                       core/pprint-meme(core/meme->forms(src))))
+                       core/format-meme(core/meme->forms(src))))
         :output-fn nil
         :stdout stdout
         :verb "formatted"

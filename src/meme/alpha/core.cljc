@@ -8,8 +8,8 @@
 
    Pipeline:
      meme.alpha.pipeline/run — full ctx->ctx pipeline with intermediate state"
-  (:require [meme.alpha.emit.printer :as printer]
-            [meme.alpha.emit.pprint :as pprint]
+  (:require [meme.alpha.emit.formatter.flat :as fmt-flat]
+            [meme.alpha.emit.formatter.canon :as fmt-canon]
             [meme.alpha.parse.expander :as expander]
             [meme.alpha.pipeline :as pipeline]))
 
@@ -33,13 +33,18 @@
 (defn forms->meme
   "Print Clojure forms as meme source string (single-line per form)."
   [forms]
-  (printer/print-meme-string forms))
+  (fmt-flat/format-forms forms))
 
-(defn pprint-meme
-  "Pretty-print Clojure forms as meme source string (multi-line, indented).
+(defn format-meme
+  "Format Clojure forms as canonical meme source string (multi-line, indented).
    opts: {:width 80}"
-  ([forms] (pprint/pprint-forms forms))
-  ([forms opts] (pprint/pprint-forms forms opts)))
+  ([forms] (fmt-canon/format-forms forms))
+  ([forms opts] (fmt-canon/format-forms forms opts)))
+
+;; Backwards compatibility
+(def pprint-meme
+  "Deprecated: use format-meme instead."
+  format-meme)
 
 ;; ---------------------------------------------------------------------------
 ;; Form-to-text track
@@ -49,7 +54,7 @@
   "Print Clojure forms as Clojure source string with reader sugar.
    Expands syntax-quote AST nodes since Clojure has no backtick form."
   [forms]
-  (printer/print-clj-string (expander/expand-forms forms)))
+  (fmt-flat/format-clj (expander/expand-forms forms)))
 
 #?(:clj
 (def ^:private eof-sentinel (Object.)))
@@ -97,4 +102,3 @@
    Useful for tooling that needs intermediate pipeline state."
   ([source] (pipeline/run source))
   ([source opts] (pipeline/run source opts)))
-

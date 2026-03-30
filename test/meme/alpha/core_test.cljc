@@ -233,22 +233,26 @@
       (is (= "3.14" (forms/raw-text r))))))
 
 ;; ---------------------------------------------------------------------------
-;; pprint-meme
+;; format-meme (canonical formatter)
 ;; ---------------------------------------------------------------------------
 
-(deftest pprint-meme-test
-  (testing "pretty-prints a single form in a vector"
-    (is (= "42" (core/pprint-meme [42]))))
-  (testing "pretty-prints multiple forms separated by blank lines"
+(deftest format-meme-test
+  (testing "formats a single form in a vector"
+    (is (= "42" (core/format-meme [42]))))
+  (testing "formats multiple forms separated by blank lines"
     (is (= "def(x 42)\n\nprintln(x)"
-           (core/pprint-meme ['(def x 42) '(println x)]))))
+           (core/format-meme ['(def x 42) '(println x)]))))
   (testing "works with list input"
     (is (= "def(x 42)\n\nprintln(x)"
-           (core/pprint-meme (list '(def x 42) '(println x)))))))
+           (core/format-meme (list '(def x 42) '(println x)))))))
 
-(deftest pprint-meme-width-option
+(deftest format-meme-width-option
   (testing "respects :width option"
-    (let [narrow (core/pprint-meme ['(+ 1 2 3 4 5)] {:width 10})
-          wide (core/pprint-meme ['(+ 1 2 3 4 5)] {:width 200})]
+    (let [narrow (core/format-meme ['(+ 1 2 3 4 5)] {:width 10})
+          wide (core/format-meme ['(+ 1 2 3 4 5)] {:width 200})]
       (is (re-find #"\n" narrow))
       (is (not (re-find #"\n" wide))))))
+
+(deftest pprint-meme-backwards-compat
+  (testing "pprint-meme is an alias for format-meme"
+    (is (= (core/format-meme ['(def x 42)]) (core/pprint-meme ['(def x 42)])))))

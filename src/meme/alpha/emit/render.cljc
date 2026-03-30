@@ -1,0 +1,165 @@
+(ns meme.alpha.emit.render
+  "Wadler-Lindig document algebra and layout engine.
+   Generic — no meme-specific knowledge. Reusable for any pretty-printing task.
+
+   Doc types form a small algebra:
+     DocText     — literal string
+     DocLine     — newline+indent (or flat-alt when flat)
+     DocCat      — concatenation
+     DocNest     — increase indent
+     DocGroup    — try flat, break if too wide
+     DocIfBreak  — conditional on flat/break mode
+
+   layout renders a Doc tree to a string at a given page width.
+   Use ##Inf for single-line (flat) rendering."
+  (:refer-clojure :exclude [cat]))
+
+;; ---------------------------------------------------------------------------
+;; Doc types — Lindig's strict-language variant of Wadler's algebra
+;; ---------------------------------------------------------------------------
+
+(defrecord DocText [s])
+(defrecord DocLine [flat-alt])     ; nil flat-alt = hardline (always breaks)
+(defrecord DocCat [a b])
+(defrecord DocNest [indent doc])
+(defrecord DocGroup [doc])
+(defrecord DocIfBreak [break-doc flat-doc])
+
+;; ---------------------------------------------------------------------------
+;; Smart constructors
+;; ---------------------------------------------------------------------------
+
+(def line  (->DocLine " "))    ; space when flat, newline+indent when broken
+(def line0 (->DocLine ""))     ; empty when flat, newline+indent when broken
+(def hardline (->DocLine nil)) ; always breaks — never flat
+
+(defn text [s]
+  (when (and s (not= s ""))
+    (->DocText s)))
+
+(defn nest [i doc]
+  (when doc (->DocNest i doc)))
+
+(defn group [doc]
+  (when doc (->DocGroup doc)))
+
+(defn if-break [break-doc flat-doc]
+  (->DocIfBreak break-doc flat-doc))
+
+(defn cat
+  ([] nil)
+  ([a] a)
+  ([a b] (cond (nil? a) b (nil? b) a :else (->DocCat a b)))
+  ([a b & more] (reduce cat (cat a b) more)))
+
+;; ---------------------------------------------------------------------------
+;; Portable string builder
+;; ---------------------------------------------------------------------------
+
+(defn- make-sb [] #?(:clj (StringBuilder.) :cljs #js []))
+
+(defn- sb-append! [sb x]
+  #?(:clj (.append ^StringBuilder sb ^String x) :cljs (.push sb x))
+  sb)
+
+(defn- sb-str [sb]
+  #?(:clj (.toString sb) :cljs (.join sb "")))
+
+(defn- indent-str [n]
+  (apply str (repeat n \space)))
+
+;; ---------------------------------------------------------------------------
+;; Layout engine — Lindig's format algorithm
+;;
+;; Work-list items: [indent mode doc]
+;;   indent — current indentation level (absolute)
+;;   mode   — :flat or :break
+;;   doc    — Doc node to process
+;; ---------------------------------------------------------------------------
+
+(defn- fits?
+  "Does the first line of the work-list fit in `remaining` columns?
+   Returns true at any line break (rest is on the next line)."
+  [remaining work]
+  (loop [remaining remaining
+         work work]
+    (cond
+      (neg? remaining) false
+      (empty? work) true
+      :else
+      (let [[i mode doc] (first work)
+            rest-work (subvec work 1)]
+        (condp instance? doc
+          DocText   (recur (- remaining (count (:s doc))) rest-work)
+          DocLine   (if (= mode :flat)
+                      (if (nil? (:flat-alt doc))
+                        false ; hardline never fits flat
+                        (recur (- remaining (count (:flat-alt doc))) rest-work))
+                      true) ; break mode line → always fits (rest on next line)
+          DocCat    (recur remaining (into [[i mode (:a doc)] [i mode (:b doc)]] rest-work))
+          DocNest   (recur remaining (into [[(+ i (:indent doc)) mode (:doc doc)]] rest-work))
+          DocGroup  (recur remaining (into [[i :flat (:doc doc)]] rest-work))
+          DocIfBreak (if (= mode :flat)
+                       (if (:flat-doc doc)
+                         (recur remaining (into [[i :flat (:flat-doc doc)]] rest-work))
+                         (recur remaining rest-work))
+                       (if (:break-doc doc)
+                         (recur remaining (into [[i :break (:break-doc doc)]] rest-work))
+                         (recur remaining rest-work)))
+          ;; nil doc (from cat filtering)
+          (recur remaining rest-work))))))
+
+(defn layout
+  "Render a Doc tree as a string at the given page width.
+   Use ##Inf for flat (single-line) rendering."
+  [doc width]
+  (let [sb (make-sb)]
+    (loop [col 0
+           work [[0 :break doc]]]
+      (if (empty? work)
+        (sb-str sb)
+        (let [[i mode d] (first work)
+              rest-work (subvec work 1)]
+          (if (nil? d)
+            (recur col rest-work)
+            (condp instance? d
+              DocText
+              (let [s (:s d)]
+                (sb-append! sb s)
+                (recur (+ col (count s)) rest-work))
+
+              DocLine
+              (if (and (= mode :flat) (some? (:flat-alt d)))
+                ;; Flat mode: emit flat-alt
+                (let [alt (:flat-alt d)]
+                  (when (not= alt "") (sb-append! sb alt))
+                  (recur (+ col (count alt)) rest-work))
+                ;; Break mode (or hardline in flat — shouldn't happen but handle safely)
+                (let [indent-s (indent-str i)]
+                  (sb-append! sb "\n")
+                  (sb-append! sb indent-s)
+                  (recur i rest-work)))
+
+              DocCat
+              (recur col (into [[i mode (:a d)] [i mode (:b d)]] rest-work))
+
+              DocNest
+              (recur col (into [[(+ i (:indent d)) mode (:doc d)]] rest-work))
+
+              DocGroup
+              (let [flat-work (into [[i :flat (:doc d)]] rest-work)]
+                (if (fits? (- width col) flat-work)
+                  (recur col flat-work)
+                  (recur col (into [[i :break (:doc d)]] rest-work))))
+
+              DocIfBreak
+              (if (= mode :flat)
+                (if (:flat-doc d)
+                  (recur col (into [[i :flat (:flat-doc d)]] rest-work))
+                  (recur col rest-work))
+                (if (:break-doc d)
+                  (recur col (into [[i :break (:break-doc d)]] rest-work))
+                  (recur col rest-work)))
+
+              ;; Unknown — skip
+              (recur col rest-work))))))))

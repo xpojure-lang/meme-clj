@@ -3,7 +3,7 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]
+            [meme.alpha.emit.formatter.flat :as fmt-flat]
             [meme.alpha.forms :as forms]
             [meme.alpha.parse.expander :as expander]))
 
@@ -33,7 +33,7 @@
   #?(:clj
      (testing "printer round-trips ::foo"
        (let [form (first (core/meme->forms "::local"))
-             printed (p/print-form form)]
+             printed (fmt-flat/format-form form)]
          (is (= "::local" printed))))))
 
 ;; ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@
   (testing "multi-arity defn roundtrips"
     (let [meme "defn(foo [x](x) [x y](+(x y)))"
           forms (core/meme->forms meme)
-          printed (p/print-meme-string forms)
+          printed (fmt-flat/format-forms forms)
           forms2 (core/meme->forms printed)]
       (is (= forms forms2))))
   (testing "vector-as-head requires adjacency — space prevents call"
@@ -225,7 +225,7 @@
   (testing "ns with :require roundtrips"
     (let [meme "ns(foo :require([bar]))"
           forms (core/meme->forms meme)
-          printed (p/print-meme-string forms)
+          printed (fmt-flat/format-forms forms)
           forms2 (core/meme->forms printed)]
       (is (= forms forms2)))))
 
@@ -236,12 +236,12 @@
 (deftest set-and-map-as-head
   (testing "set-as-head: #{:a :b}(x) roundtrips"
     (let [form (list #{:a :b} 'x)
-          printed (p/print-form form)
+          printed (fmt-flat/format-form form)
           read-back (first (core/meme->forms printed))]
       (is (= form read-back))))
   (testing "map-as-head: {:a 1}(:a) roundtrips"
     (let [form (list {:a 1} :a)
-          printed (p/print-form form)
+          printed (fmt-flat/format-form form)
           read-back (first (core/meme->forms printed))]
       (is (= form read-back)))))
 
@@ -399,7 +399,7 @@
     (is (= '[(((f x) y) z)] (core/meme->forms "f(x)(y)(z)"))))
   (testing "printer output roundtrips"
     (let [form '((f x) y)
-          printed (p/print-form form)
+          printed (fmt-flat/format-form form)
           re-read (first (core/meme->forms printed))]
       (is (= "f(x)(y)" printed))
       (is (= form re-read))))
@@ -459,7 +459,7 @@
       (is (= #?(:clj 1 :cljs 2) result))))
   (testing "preserve roundtrips through printer"
     (let [rc (first (core/meme->forms "#?(:clj inc(1) :cljs dec(2))" {:read-cond :preserve}))
-          printed (p/print-form rc)
+          printed (fmt-flat/format-form rc)
           rc2 (first (core/meme->forms printed {:read-cond :preserve}))]
       (is (= rc rc2)))))
 
@@ -547,7 +547,7 @@
           (core/meme->forms "{x 1 x 2}"))))
   (testing "unique keys roundtrip fine"
     (let [forms (core/meme->forms "{:a 1 :b 2}")
-          printed (p/print-meme-string forms)
+          printed (fmt-flat/format-forms forms)
           re-read (core/meme->forms printed)]
       (is (= forms re-read)))))
 

@@ -4,7 +4,7 @@
    Every .clj/.cljc file is roundtripped per-form with precise accounting."
   (:require [clojure.test :refer [deftest is]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]
+            [meme.alpha.emit.formatter.flat :as fmt-flat]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -43,7 +43,7 @@
    Uses :read-cond :preserve so ReaderConditional objects roundtrip correctly."
   [form]
   (try
-    (let [meme-text (p/print-form form)
+    (let [meme-text (fmt-flat/format-form form)
           forms2 (core/meme->forms meme-text {:read-cond :preserve})]
       {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
     (catch Exception e

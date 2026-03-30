@@ -3,7 +3,7 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]
+            [meme.alpha.emit.formatter.flat :as fmt-flat]
             [meme.alpha.forms :as forms]
             [meme.alpha.scan.tokenizer :as tokenizer]
             [meme.alpha.scan.grouper :as grouper]))
@@ -464,16 +464,16 @@
     (is (Double/isNaN (first (core/meme->forms "##NaN")))))
   (testing "##Inf roundtrips through print → re-read"
     (let [forms (core/meme->forms "##Inf")
-          printed (p/print-meme-string forms)
+          printed (fmt-flat/format-forms forms)
           re-read (core/meme->forms printed)]
       (is (= "##Inf" printed))
       (is (= forms re-read))))
   (testing "##-Inf roundtrips"
     (let [forms (core/meme->forms "##-Inf")
-          printed (p/print-meme-string forms)]
+          printed (fmt-flat/format-forms forms)]
       (is (= "##-Inf" printed))))
   (testing "##NaN prints as ##NaN"
-    (is (= "##NaN" (p/print-meme-string (core/meme->forms "##NaN")))))))
+    (is (= "##NaN" (fmt-flat/format-forms (core/meme->forms "##NaN")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; The group stage was collapsed into scan (it was a pass-through).

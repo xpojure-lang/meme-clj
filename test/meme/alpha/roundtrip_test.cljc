@@ -1,7 +1,7 @@
 (ns meme.alpha.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]
+            [meme.alpha.emit.formatter.flat :as fmt-flat]
             [meme.alpha.forms :as forms]))
 
 (defn- roundtrip-forms
@@ -9,7 +9,7 @@
    The re-parsed forms should equal the original forms."
   [meme-src]
   (let [forms1 (core/meme->forms meme-src)
-        meme-text (p/print-meme-string forms1)
+        meme-text (fmt-flat/format-forms forms1)
         forms2 (core/meme->forms meme-text)]
     [forms1 forms2 meme-text]))
 
@@ -203,17 +203,17 @@
 
 (deftest roundtrip-named-chars
   (testing "\\newline roundtrips"
-    (is (= [\newline] (core/meme->forms (p/print-meme-string [\newline])))))
+    (is (= [\newline] (core/meme->forms (fmt-flat/format-forms [\newline])))))
   (testing "\\space roundtrips"
-    (is (= [\space] (core/meme->forms (p/print-meme-string [\space])))))
+    (is (= [\space] (core/meme->forms (fmt-flat/format-forms [\space])))))
   (testing "\\tab roundtrips"
-    (is (= [\tab] (core/meme->forms (p/print-meme-string [\tab])))))
+    (is (= [\tab] (core/meme->forms (fmt-flat/format-forms [\tab])))))
   (testing "\\return roundtrips"
-    (is (= [\return] (core/meme->forms (p/print-meme-string [\return])))))
+    (is (= [\return] (core/meme->forms (fmt-flat/format-forms [\return])))))
   (testing "\\backspace roundtrips"
-    (is (= [\backspace] (core/meme->forms (p/print-meme-string [\backspace])))))
+    (is (= [\backspace] (core/meme->forms (fmt-flat/format-forms [\backspace])))))
   (testing "\\formfeed roundtrips"
-    (is (= [\formfeed] (core/meme->forms (p/print-meme-string [\formfeed]))))))
+    (is (= [\formfeed] (core/meme->forms (fmt-flat/format-forms [\formfeed]))))))
 
 (deftest roundtrip-regex
   ;; Regex patterns don't support equality, so compare by pattern string
@@ -689,7 +689,7 @@
   "Roundtrip with :read-cond :preserve — parse, print, re-parse."
   [meme-src]
   (let [forms1 (core/meme->forms meme-src {:read-cond :preserve})
-        meme-text (p/print-meme-string forms1)
+        meme-text (fmt-flat/format-forms forms1)
         forms2 (core/meme->forms meme-text {:read-cond :preserve})]
     [forms1 forms2 meme-text]))
 

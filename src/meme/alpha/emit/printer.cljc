@@ -1,160 +1,12 @@
 (ns meme.alpha.emit.printer
-  "Wadler-Lindig pretty-printer for meme.
-   Single pass: form → Doc tree → layout → string.
-   Handles both flat (print-form) and width-aware (pprint) rendering."
+  "Meme printer: Clojure forms → Doc trees.
+   Builds Wadler-Lindig Doc trees from Clojure forms, handling meme syntax
+   (call notation, sugar, metadata, comments) and Clojure output mode.
+   Delegates to render for Doc algebra and layout."
   (:require [clojure.string :as str]
             [meme.alpha.errors :as errors]
+            [meme.alpha.emit.render :as render]
             [meme.alpha.forms :as forms]))
-
-;; ---------------------------------------------------------------------------
-;; Doc types — Lindig's strict-language variant of Wadler's algebra
-;; ---------------------------------------------------------------------------
-
-(defrecord DocText [s])
-(defrecord DocLine [flat-alt])     ; nil flat-alt = hardline (always breaks)
-(defrecord DocCat [a b])
-(defrecord DocNest [indent doc])
-(defrecord DocGroup [doc])
-(defrecord DocIfBreak [break-doc flat-doc])
-
-;; ---------------------------------------------------------------------------
-;; Smart constructors
-;; ---------------------------------------------------------------------------
-
-(def doc-line  (->DocLine " "))    ; space when flat, newline+indent when broken
-(def doc-line0 (->DocLine ""))     ; empty when flat, newline+indent when broken
-(def doc-hardline (->DocLine nil)) ; always breaks — never flat
-
-(defn- doc-text [s]
-  (when (and s (not= s ""))
-    (->DocText s)))
-
-(defn- doc-nest [i doc]
-  (when doc (->DocNest i doc)))
-
-(defn- doc-group [doc]
-  (when doc (->DocGroup doc)))
-
-(defn- doc-if-break [break-doc flat-doc]
-  (->DocIfBreak break-doc flat-doc))
-
-(defn- doc-cat
-  ([] nil)
-  ([a] a)
-  ([a b] (cond (nil? a) b (nil? b) a :else (->DocCat a b)))
-  ([a b & more] (reduce doc-cat (doc-cat a b) more)))
-
-;; ---------------------------------------------------------------------------
-;; Portable string builder (same pattern as tokenizer)
-;; ---------------------------------------------------------------------------
-
-(defn- make-sb [] #?(:clj (StringBuilder.) :cljs #js []))
-
-(defn- sb-append! [sb x]
-  #?(:clj (.append ^StringBuilder sb ^String x) :cljs (.push sb x))
-  sb)
-
-(defn- sb-str [sb]
-  #?(:clj (.toString sb) :cljs (.join sb "")))
-
-(defn- indent-str [n]
-  (apply str (repeat n \space)))
-
-;; ---------------------------------------------------------------------------
-;; Layout engine — Lindig's format algorithm
-;;
-;; Work-list items: [indent mode doc]
-;;   indent — current indentation level (absolute)
-;;   mode   — :flat or :break
-;;   doc    — Doc node to process
-;; ---------------------------------------------------------------------------
-
-(defn- fits?
-  "Does the first line of the work-list fit in `remaining` columns?
-   Returns true at any line break (rest is on the next line)."
-  [remaining work]
-  (loop [remaining remaining
-         work work]
-    (cond
-      (neg? remaining) false
-      (empty? work) true
-      :else
-      (let [[i mode doc] (first work)
-            rest-work (subvec work 1)]
-        (condp instance? doc
-          DocText   (recur (- remaining (count (:s doc))) rest-work)
-          DocLine   (if (= mode :flat)
-                      (if (nil? (:flat-alt doc))
-                        false ; hardline never fits flat
-                        (recur (- remaining (count (:flat-alt doc))) rest-work))
-                      true) ; break mode line → always fits (rest on next line)
-          DocCat    (recur remaining (into [[i mode (:a doc)] [i mode (:b doc)]] rest-work))
-          DocNest   (recur remaining (into [[(+ i (:indent doc)) mode (:doc doc)]] rest-work))
-          DocGroup  (recur remaining (into [[i :flat (:doc doc)]] rest-work))
-          DocIfBreak (if (= mode :flat)
-                       (if (:flat-doc doc)
-                         (recur remaining (into [[i :flat (:flat-doc doc)]] rest-work))
-                         (recur remaining rest-work))
-                       (if (:break-doc doc)
-                         (recur remaining (into [[i :break (:break-doc doc)]] rest-work))
-                         (recur remaining rest-work)))
-          ;; nil doc (from doc-cat filtering)
-          (recur remaining rest-work))))))
-
-(defn layout
-  "Render a Doc tree as a string at the given page width.
-   Use ##Inf for flat (single-line) rendering."
-  [doc width]
-  (let [sb (make-sb)]
-    (loop [col 0
-           work [[0 :break doc]]]
-      (if (empty? work)
-        (sb-str sb)
-        (let [[i mode d] (first work)
-              rest-work (subvec work 1)]
-          (if (nil? d)
-            (recur col rest-work)
-            (condp instance? d
-              DocText
-              (let [s (:s d)]
-                (sb-append! sb s)
-                (recur (+ col (count s)) rest-work))
-
-              DocLine
-              (if (and (= mode :flat) (some? (:flat-alt d)))
-                ;; Flat mode: emit flat-alt
-                (let [alt (:flat-alt d)]
-                  (when (not= alt "") (sb-append! sb alt))
-                  (recur (+ col (count alt)) rest-work))
-                ;; Break mode (or hardline in flat — shouldn't happen but handle safely)
-                (let [indent-s (indent-str i)]
-                  (sb-append! sb "\n")
-                  (sb-append! sb indent-s)
-                  (recur i rest-work)))
-
-              DocCat
-              (recur col (into [[i mode (:a d)] [i mode (:b d)]] rest-work))
-
-              DocNest
-              (recur col (into [[(+ i (:indent d)) mode (:doc d)]] rest-work))
-
-              DocGroup
-              (let [flat-work (into [[i :flat (:doc d)]] rest-work)]
-                (if (fits? (- width col) flat-work)
-                  (recur col flat-work)
-                  (recur col (into [[i :break (:doc d)]] rest-work))))
-
-              DocIfBreak
-              (if (= mode :flat)
-                (if (:flat-doc d)
-                  (recur col (into [[i :flat (:flat-doc d)]] rest-work))
-                  (recur col rest-work))
-                (if (:break-doc d)
-                  (recur col (into [[i :break (:break-doc d)]] rest-work))
-                  (recur col rest-work)))
-
-              ;; Unknown — skip
-              (recur col rest-work))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Comment extraction from :ws metadata
@@ -182,7 +34,7 @@
    Each comment line is on its own line."
   [comments]
   (reduce (fn [acc c]
-            (doc-cat acc (doc-text c) doc-hardline))
+            (render/cat acc (render/text c) render/hardline))
           nil
           comments))
 
@@ -225,7 +77,7 @@
   "Interleave docs with separator, returning concatenated Doc."
   [sep docs]
   (when (seq docs)
-    (reduce (fn [acc d] (doc-cat acc sep d)) (first docs) (rest docs))))
+    (reduce (fn [acc d] (render/cat acc sep d)) (first docs) (rest docs))))
 
 ;; ---------------------------------------------------------------------------
 ;; Form → Doc — single source of truth for notation AND formatting
@@ -240,13 +92,13 @@
     (and (= 1 (count m))
          (keyword? (key (first m)))
          (true? (val (first m))))
-    (str "^" (layout (to-doc-form (key (first m)) mode) ##Inf))
+    (str "^" (render/layout (to-doc-form (key (first m)) mode) ##Inf))
     (and (= 1 (count m))
          (contains? m :tag)
          (symbol? (:tag m)))
-    (str "^" (layout (to-doc-form (:tag m) mode) ##Inf))
+    (str "^" (render/layout (to-doc-form (:tag m) mode) ##Inf))
     :else
-    (str "^" (layout (to-doc-form m mode) ##Inf))))
+    (str "^" (render/layout (to-doc-form m mode) ##Inf))))
 
 (defn- call-doc
   "Build Doc for a call form. Handles head-line-args and meme/clj modes."
@@ -256,12 +108,12 @@
     (if (= mode :clj)
       ;; Clojure mode: (head arg1 arg2)
       (if (empty? arg-docs)
-        (doc-group (doc-cat (doc-text "(") head-doc (doc-text ")")))
-        (doc-group
-          (doc-cat
-            (doc-text "(") head-doc
-            (doc-nest 2 (doc-cat doc-line (intersperse doc-line arg-docs)))
-            (doc-text ")"))))
+        (render/group (render/cat (render/text "(") head-doc (render/text ")")))
+        (render/group
+          (render/cat
+            (render/text "(") head-doc
+            (render/nest 2 (render/cat render/line (intersperse render/line arg-docs)))
+            (render/text ")"))))
       ;; Meme mode: head(arg1 arg2) with head-line-args
       (do
         ;; Non-callable heads
@@ -273,56 +125,56 @@
           (cond
             ;; Zero args: head()
             (empty? arg-docs)
-            (doc-group (doc-cat head-doc (doc-text "(")(doc-text ")")))
+            (render/group (render/cat head-doc (render/text "(")(render/text ")")))
 
             ;; Head-line args: keep n args on head line, rest in body
             (and n-head (pos? n-head) (> (count arg-docs) n-head))
             (let [hl (subvec arg-docs 0 n-head)
                   body (subvec arg-docs n-head)]
-              (doc-group
-                (doc-cat
-                  head-doc (doc-text "(")
-                  (doc-nest 2
-                    (doc-cat
-                      (doc-group (doc-cat doc-line0 (intersperse doc-line hl)))
-                      (reduce (fn [acc d] (doc-cat acc doc-line d)) nil body)))
-                  (doc-text ")"))))
+              (render/group
+                (render/cat
+                  head-doc (render/text "(")
+                  (render/nest 2
+                    (render/cat
+                      (render/group (render/cat render/line0 (intersperse render/line hl)))
+                      (reduce (fn [acc d] (render/cat acc render/line d)) nil body)))
+                  (render/text ")"))))
 
             ;; Default: all args in body
             :else
-            (doc-group
-              (doc-cat
-                head-doc (doc-text "(")
-                (doc-nest 2 (doc-cat doc-line0 (intersperse doc-line arg-docs)))
-                (doc-text ")")))))))))
+            (render/group
+              (render/cat
+                head-doc (render/text "(")
+                (render/nest 2 (render/cat render/line0 (intersperse render/line arg-docs)))
+                (render/text ")")))))))))
 
 (defn- collection-doc
   "Build Doc for a delimited collection: [elems], #{elems}, #(body)."
   [open close children mode]
   (if (empty? children)
-    (doc-text (str open close))
+    (render/text (str open close))
     (let [child-docs (mapv #(to-doc % mode) children)]
-      (doc-group
-        (doc-cat
-          (doc-text open)
-          (doc-nest 2 (doc-cat doc-line0 (intersperse doc-line child-docs)))
-          doc-line0
-          (doc-text close))))))
+      (render/group
+        (render/cat
+          (render/text open)
+          (render/nest 2 (render/cat render/line0 (intersperse render/line child-docs)))
+          render/line0
+          (render/text close))))))
 
 (defn- pairs-doc
   "Build Doc for key-value pairs: {k v ...}, #:ns{k v ...}, #?(k v ...)."
   [open close entries mode]
   (if (empty? entries)
-    (doc-text (str open close))
+    (render/text (str open close))
     (let [pair-docs (mapv (fn [[k v]]
-                            (doc-cat (to-doc k mode) (doc-text " ") (to-doc v mode)))
+                            (render/cat (to-doc k mode) (render/text " ") (to-doc v mode)))
                           entries)]
-      (doc-group
-        (doc-cat
-          (doc-text open)
-          (doc-nest 2 (doc-cat doc-line0 (intersperse doc-line pair-docs)))
-          doc-line0
-          (doc-text close))))))
+      (render/group
+        (render/cat
+          (render/text open)
+          (render/nest 2 (render/cat render/line0 (intersperse render/line pair-docs)))
+          render/line0
+          (render/text close))))))
 
 (defn- to-doc-form
   "Convert a Clojure form to a Doc tree. Handles metadata wrapping.
@@ -340,24 +192,24 @@
           prefixes (if chain
                      (mapv #(emit-meta-prefix % mode) (reverse chain))
                      [(emit-meta-prefix (forms/strip-internal-meta (meta form)) mode)])]
-      (doc-cat (doc-text (str (str/join " " prefixes) " ")) (to-doc-form stripped mode)))
+      (render/cat (render/text (str (str/join " " prefixes) " ")) (to-doc-form stripped mode)))
 
     ;; Raw value wrapper — emit original source text
-    (forms/raw? form) (doc-text (:raw form))
+    (forms/raw? form) (render/text (:raw form))
 
     ;; nil
-    (nil? form) (doc-text "nil")
+    (nil? form) (render/text "nil")
 
     ;; boolean
-    (boolean? form) (doc-text (str form))
+    (boolean? form) (render/text (str form))
 
     ;; Deferred auto-resolve keywords
     (forms/deferred-auto-keyword? form)
-    (doc-text (forms/deferred-auto-keyword-raw form))
+    (render/text (forms/deferred-auto-keyword-raw form))
 
     ;; Empty list
     (and (seq? form) (empty? form))
-    (doc-text "()")
+    (render/text "()")
 
     ;; Anon-fn shorthand #()
     (anon-fn-shorthand? form)
@@ -369,15 +221,15 @@
       (cond
         ;; @deref sugar
         (and (= head 'clojure.core/deref) (:meme/sugar (meta form)))
-        (doc-cat (doc-text "@") (to-doc (second form) mode))
+        (render/cat (render/text "@") (to-doc (second form) mode))
 
         ;; 'quote sugar
         (and (= head 'quote) (:meme/sugar (meta form)))
-        (doc-cat (doc-text "'") (to-doc (second form) mode))
+        (render/cat (render/text "'") (to-doc (second form) mode))
 
         ;; #'var sugar
         (and (= head 'var) (:meme/sugar (meta form)))
-        (doc-cat (doc-text "#'") (to-doc (second form) mode))
+        (render/cat (render/text "#'") (to-doc (second form) mode))
 
         ;; Regular call
         :else
@@ -386,13 +238,13 @@
     ;; Syntax-quote / unquote / unquote-splicing AST nodes
     ;; Must be before map? (defrecords satisfy map?)
     (forms/syntax-quote? form)
-    (doc-cat (doc-text "`") (to-doc (:form form) mode))
+    (render/cat (render/text "`") (to-doc (:form form) mode))
 
     (forms/unquote? form)
-    (doc-cat (doc-text "~") (to-doc (:form form) mode))
+    (render/cat (render/text "~") (to-doc (:form form) mode))
 
     (forms/unquote-splicing? form)
-    (doc-cat (doc-text "~@") (to-doc (:form form) mode))
+    (render/cat (render/text "~@") (to-doc (:form form) mode))
 
     ;; Reader conditional — must be before map?
     (forms/meme-reader-conditional? form)
@@ -421,50 +273,50 @@
       (collection-doc "#{" "}" (vec (or elements [])) mode))
 
     ;; Symbol
-    (symbol? form) (doc-text (str form))
+    (symbol? form) (render/text (str form))
 
     ;; Keyword
     (keyword? form)
-    (doc-text (if (namespace form)
+    (render/text (if (namespace form)
                 (str ":" (namespace form) "/" (name form))
                 (str ":" (name form))))
 
     ;; String
-    (string? form) (doc-text (pr-str form))
+    (string? form) (render/text (pr-str form))
 
     ;; Regex
     (instance? #?(:clj java.util.regex.Pattern :cljs js/RegExp) form)
     (let [raw #?(:clj (.pattern ^java.util.regex.Pattern form) :cljs (.-source form))]
-      (doc-text (str "#\"" (str/replace raw #"\\.|\"" (fn [m] (if (= m "\"") "\\\"" m))) "\"")))
+      (render/text (str "#\"" (str/replace raw #"\\.|\"" (fn [m] (if (= m "\"") "\\\"" m))) "\"")))
 
     ;; Char (JVM only)
     #?@(:clj [(char? form)
               (let [named {(char 10) "newline" (char 13) "return" (char 9) "tab"
                            (char 32) "space" (char 8) "backspace" (char 12) "formfeed"}]
-                (doc-text (if-let [n (get named form)]
+                (render/text (if-let [n (get named form)]
                             (str \\ n)
                             (str \\ form))))])
 
     ;; Number — preserve BigDecimal M and BigInt N suffixes, symbolic values
-    #?@(:clj [(decimal? form) (doc-text (str form "M"))
-              (instance? clojure.lang.BigInt form) (doc-text (str form "N"))
-              (instance? java.math.BigInteger form) (doc-text (str form "N"))])
+    #?@(:clj [(decimal? form) (render/text (str form "M"))
+              (instance? clojure.lang.BigInt form) (render/text (str form "N"))
+              (instance? java.math.BigInteger form) (render/text (str form "N"))])
     (and (number? form)
          #?(:clj (Double/isNaN (double form))
             :cljs (js/isNaN form)))
-    (doc-text "##NaN")
+    (render/text "##NaN")
     (and (number? form)
          #?(:clj (Double/isInfinite (double form))
             :cljs (and (not (js/isFinite form)) (not (js/isNaN form)))))
-    (doc-text (if (pos? (double form)) "##Inf" "##-Inf"))
-    (number? form) (doc-text (str form))
+    (render/text (if (pos? (double form)) "##Inf" "##-Inf"))
+    (number? form) (render/text (str form))
 
     ;; Tagged literal (JVM only)
     #?@(:clj [(tagged-literal? form)
-              (doc-cat (doc-text (str "#" (.-tag form) " ")) (to-doc (.-form form) mode))])
+              (render/cat (render/text (str "#" (.-tag form) " ")) (to-doc (.-form form) mode))])
 
     ;; Fallback
-    :else (doc-text (pr-str form))))
+    :else (render/text (pr-str form))))
 
 (defn to-doc
   "Convert a Clojure form to a Doc tree, with comment attachment.
@@ -475,26 +327,7 @@
    (let [doc (to-doc-form form mode)
          comments (form-comments form)]
      (if comments
-       (doc-if-break
-         (doc-cat (comment-doc comments) doc) ; break: comments + form
-         doc)                                  ; flat: just form
+       (render/if-break
+         (render/cat (comment-doc comments) doc) ; break: comments + form
+         doc)                                     ; flat: just form
        doc))))
-
-;; ---------------------------------------------------------------------------
-;; Public API
-;; ---------------------------------------------------------------------------
-
-(defn print-form
-  "Print a single Clojure form as meme text (flat, single-line)."
-  [form]
-  (layout (to-doc form :meme) ##Inf))
-
-(defn print-meme-string
-  "Print Clojure forms as meme text."
-  [forms]
-  (str/join "\n\n" (map print-form forms)))
-
-(defn print-clj-string
-  "Print Clojure forms as Clojure text with reader sugar ('quote, @deref, #'var)."
-  [forms]
-  (str/join "\n\n" (map #(layout (to-doc % :clj) ##Inf) forms)))

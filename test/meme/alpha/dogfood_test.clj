@@ -5,7 +5,7 @@
    - clj-kondo var-definition comparison for semantic equivalence"
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]
+            [meme.alpha.emit.formatter.flat :as fmt-flat]
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -44,7 +44,7 @@
    Uses :read-cond :preserve so ReaderConditional objects roundtrip correctly."
   [form]
   (try
-    (let [meme-text (p/print-form form)
+    (let [meme-text (fmt-flat/format-form form)
           forms2 (core/meme->forms meme-text {:read-cond :preserve})]
       {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
     (catch Exception e
@@ -158,7 +158,7 @@
    Returns the temp file path."
   [path]
   (let [forms (read-clj-forms path)
-        meme-text (p/print-meme-string forms)
+        meme-text (fmt-flat/format-forms forms)
         roundtripped (core/meme->forms meme-text {:read-cond :preserve})
         tmp (java.io.File/createTempFile "dogfood" ".clj")]
     (spit tmp (str/join "\n\n" (map pr-str roundtripped)))

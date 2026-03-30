@@ -15,7 +15,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [meme.alpha.core :as core]
-            [meme.alpha.emit.printer :as p]))
+            [meme.alpha.emit.formatter.flat :as fmt-flat]))
 
 ;; ===========================================================================
 ;; Leaf generators
@@ -358,7 +358,7 @@
 
 (defn roundtrip-ok? [form]
   (try
-    (let [printed (p/print-meme-string [form])
+    (let [printed (fmt-flat/format-forms [form])
           read-back (core/meme->forms printed)]
       (= [form] read-back))
     (catch Exception e
@@ -370,7 +370,7 @@
   "Check roundtrip preserving metadata (ignoring :ws added by reader)."
   [form]
   (try
-    (let [printed (p/print-meme-string [form])
+    (let [printed (fmt-flat/format-forms [form])
           read-back (first (core/meme->forms printed))]
       (and (= form read-back)
            (= (meta form) (dissoc (meta read-back) :ws :meme/meta-chain))))
@@ -440,7 +440,7 @@
 (defspec prop-anon-fn-roundtrip 200
   (prop/for-all [form gen-anon-fn-form]
     (try
-      (let [printed (p/print-form form)
+      (let [printed (fmt-flat/format-form form)
             read-back (first (core/meme->forms printed))]
         (= form read-back))
       (catch Exception e
@@ -468,8 +468,8 @@
   (prop/for-all [form gen-form
                  discard-form gen-primitive]
     (try
-      (let [printed (p/print-meme-string [form])
-            discard-printed (str "#_" (p/print-meme-string [discard-form]) " " printed)
+      (let [printed (fmt-flat/format-forms [form])
+            discard-printed (str "#_" (fmt-flat/format-forms [discard-form]) " " printed)
             read-normal (core/meme->forms printed)
             read-discard (core/meme->forms discard-printed)]
         (= read-normal read-discard))
@@ -491,7 +491,7 @@
   (prop/for-all [meme-str gen-meme-text]
     (try
       (let [forms (core/meme->forms meme-str)
-            printed (p/print-meme-string forms)
+            printed (fmt-flat/format-forms forms)
             re-read (core/meme->forms printed)]
         ;; pr-str comparison: handles Pattern (no equals) and NaN (!= itself)
         (= (pr-str forms) (pr-str re-read)))
