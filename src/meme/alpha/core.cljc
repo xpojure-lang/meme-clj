@@ -10,7 +10,7 @@
      meme.alpha.pipeline/run — full ctx->ctx pipeline with intermediate state"
   (:require [meme.alpha.emit.printer :as printer]
             [meme.alpha.emit.pprint :as pprint]
-            [meme.alpha.parse.reader :as reader]
+            [meme.alpha.parse.expander :as expander]
             [meme.alpha.pipeline :as pipeline]))
 
 ;; ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@
   "Print Clojure forms as Clojure source string with reader sugar.
    Expands syntax-quote AST nodes since Clojure has no backtick form."
   [forms]
-  (printer/print-clj-string (reader/expand-forms forms)))
+  (printer/print-clj-string (expander/expand-forms forms)))
 
 #?(:clj
 (def ^:private eof-sentinel (Object.)))

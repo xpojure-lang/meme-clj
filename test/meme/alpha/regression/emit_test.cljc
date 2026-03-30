@@ -394,3 +394,25 @@
               printed (core/forms->meme forms)]
           (is (= [expected-form] forms))
           (is (= input printed)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: MemeRaw in pprint was rendered as {:value N :raw "..."}.
+;; The pp dispatch function checked (map? form) before (forms/raw? form).
+;; Since defrecords satisfy (map? x), MemeRaw hit pp-map and was printed
+;; as a map literal instead of its original source notation.
+;; Fix: check (forms/raw? form) before (map? form) in pp.
+;; ---------------------------------------------------------------------------
+
+;; Hex literals are JVM/Babashka only (ClojureScript rejects 0xFF).
+;; Scientific notation works on both platforms.
+(deftest pprint-meme-raw-renders-source-notation
+  #?(:clj
+     (testing "hex literal in pprint renders as 0xFF, not {:value 255 :raw ...}"
+       (let [forms (core/meme->forms "let([x 0xFF] x)")
+             pp (core/pprint-meme forms)]
+         (is (str/includes? pp "0xFF") "pprint must preserve hex notation")
+         (is (not (str/includes? pp ":value")) "pprint must not leak MemeRaw fields"))))
+  (testing "scientific notation in pprint"
+    (let [forms (core/meme->forms "def(y 1e5)")
+          pp (core/pprint-meme forms)]
+      (is (str/includes? pp "1e5") "pprint must preserve scientific notation"))))

@@ -114,3 +114,44 @@
   "Is x an unquote-splicing AST node?"
   [x]
   (instance? MemeUnquoteSplicing x))
+
+;; ---------------------------------------------------------------------------
+;; Shared metadata keys — internal keys used by the meme pipeline
+;;
+;; Both printer and pprint need to distinguish user-visible metadata
+;; (^:private, ^:tag, ^{:doc "..."}) from internal bookkeeping keys.
+;; Centralizing the set here prevents drift between modules.
+;; ---------------------------------------------------------------------------
+
+(def internal-meta-keys
+  "Metadata keys used internally by the meme pipeline.
+   Excluded when checking for user-visible metadata."
+  #{:line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain})
+
+(defn strip-internal-meta
+  "Remove internal meme metadata keys, returning only user-visible metadata."
+  [m]
+  (apply dissoc m internal-meta-keys))
+
+;; ---------------------------------------------------------------------------
+;; Shared % parameter utilities
+;;
+;; Both the reader (#() → fn) and printer (fn → #()) need to identify
+;; % parameter symbols. Centralizing here prevents logic drift.
+;; ---------------------------------------------------------------------------
+
+(defn percent-param-type
+  "If sym is a % parameter symbol, return its type: :bare, :rest, or the integer N.
+   Returns nil otherwise."
+  [sym]
+  (when (symbol? sym)
+    (let [n (name sym)]
+      (cond
+        (= n "%") :bare
+        (= n "%&") :rest
+        (and (str/starts-with? n "%")
+             (> (count n) 1)
+             (re-matches #"\d+" (subs n 1)))
+        #?(:clj (Long/parseLong (subs n 1))
+           :cljs (js/parseInt (subs n 1) 10))
+        :else nil))))

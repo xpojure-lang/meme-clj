@@ -199,8 +199,8 @@
              #?(:clj  (instance? clojure.lang.IMeta form)
                 :cljs (satisfies? IMeta form))
              (some? (meta form))
-             (seq (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)))
-    (let [m (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)
+             (seq (forms/strip-internal-meta (meta form))))
+    (let [m (forms/strip-internal-meta (meta form))
           prefix (cond
                    (and (= 1 (count m))
                         (keyword? (key (first m)))
@@ -259,6 +259,11 @@
 
                     (forms/unquote-splicing? form)
                     (str "~@" (pp (:form form) (+ col 2) width))
+
+                    ;; AST node defrecords satisfy (map? x) — delegate to flat
+                    ;; Must be before vector?/map? to avoid mishandling
+                    (forms/raw? form) (flat form)
+                    (forms/meme-reader-conditional? form) (flat form)
 
                     ;; Collections
                     (vector? form) (pp-vec form col width)

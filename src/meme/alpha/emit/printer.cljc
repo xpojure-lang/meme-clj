@@ -30,12 +30,7 @@
 (defn- percent-param?
   "Is sym a % parameter symbol (%1, %2, %&)?"
   [sym]
-  (and (symbol? sym)
-       (let [n (name sym)]
-         (or (= n "%&")
-             (and (str/starts-with? n "%")
-                  (> (count n) 1)
-                  (re-matches #"\d+" (subs n 1)))))))
+  (some? (forms/percent-param-type sym)))
 
 (defn- max-percent-n
   "Find the max numbered %N param index referenced in a form body.
@@ -44,15 +39,16 @@
   [form]
   (cond
     (symbol? form)
-    (let [n (name form)]
-      (if (and (str/starts-with? n "%") (> (count n) 1)
-               (re-matches #"\d+" (subs n 1)))
-        #?(:clj (Long/parseLong (subs n 1))
-           :cljs (js/parseInt (subs n 1) 10))
-        0))
+    (let [p (forms/percent-param-type form)]
+      (if (number? p) p 0))
     (and (seq? form) (= 'fn (first form))) 0
     (seq? form) (reduce max 0 (map max-percent-n form))
     (vector? form) (reduce max 0 (map max-percent-n form))
+    ;; AST node defrecords satisfy (map? x) — check before map?
+    (forms/raw? form) 0
+    (forms/syntax-quote? form) (max-percent-n (:form form))
+    (forms/unquote? form) (max-percent-n (:form form))
+    (forms/unquote-splicing? form) (max-percent-n (:form form))
     (map? form) (reduce max 0 (mapcat (fn [[k v]] [(max-percent-n k) (max-percent-n v)]) form))
     (set? form) (reduce max 0 (map max-percent-n form))
     #?@(:clj [(tagged-literal? form) (max-percent-n (.-form form))])
@@ -86,7 +82,7 @@
          #?(:clj (instance? clojure.lang.IMeta form)
             :cljs (satisfies? IMeta form))
          (some? (meta form))
-         (seq (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)))
+         (seq (forms/strip-internal-meta (meta form))))
     (let [chain (:meme/meta-chain (meta form))
           stripped (with-meta form nil)
           emit-one (fn [m]
@@ -103,7 +99,7 @@
                        (str "^" (print-form m))))]
       (if chain
         (str (str/join " " (map emit-one (reverse chain))) " " (print-form stripped))
-        (let [m (dissoc (meta form) :line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain)]
+        (let [m (forms/strip-internal-meta (meta form))]
           (str (emit-one m) " " (print-form stripped)))))
 
     ;; raw value wrapper — emit original source text

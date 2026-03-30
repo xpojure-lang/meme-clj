@@ -72,11 +72,12 @@ The pipeline has three stages (composed by `meme.alpha.pipeline`):
 ### Key namespaces
 
 - `meme.alpha.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Used by tokenizer, grouper, reader, and REPL. Portable.
-- `meme.alpha.forms` (.cljc) — Shared form-level predicates and constructors. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding). Portable.
+- `meme.alpha.forms` (.cljc) — Shared form-level predicates, constructors, and constants. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding, `percent-param-type`, `strip-internal-meta`). Portable.
 - `meme.alpha.scan.source` (.cljc) — Scanner-level source-position utilities. `line-col->offset` uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). Tokenizer and grouper must agree with this model. Note: the scanner and display line models diverge for CRLF sources — see `format-error` for how the bridge is handled. Portable.
 - `meme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for compound forms. Portable.
 - `meme.alpha.scan.grouper` (.cljc) — Pass-through stage (all forms are now parsed natively). Retained for pipeline symmetry. Portable.
-- `meme.alpha.parse.reader` (.cljc) — Recursive-descent parser (grouped tokens → Clojure forms). Delegates value resolution to `meme.alpha.parse.resolve`. Portable.
+- `meme.alpha.parse.reader` (.cljc) — Recursive-descent parser (grouped tokens → Clojure forms). Delegates value resolution to `meme.alpha.parse.resolve`. Re-exports `expand-forms`/`expand-syntax-quotes` from `parse.expander` for backwards compatibility. Portable.
+- `meme.alpha.parse.expander` (.cljc) — Syntax-quote expansion: `MemeSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Called by runtime paths (run, repl) before eval. Also unwraps `MemeRaw` to plain values. Portable.
 - `meme.alpha.parse.resolve` (.cljc) — Value resolution: converts raw token text to Clojure values. Centralizes all host reader delegation (`read-string` calls) with consistent error wrapping. Handles platform asymmetries (JVM vs CLJS). Portable.
 - `meme.alpha.emit.printer` (.cljc) — Pattern-matches on Clojure form structure to produce meme text. Portable.
 - `meme.alpha.emit.pprint` (.cljc) — Pretty-printer: width-aware, uses indented parenthesized form for multi-line calls. Preserves comments from `:ws` metadata. Portable.
@@ -91,7 +92,7 @@ The pipeline has three stages (composed by `meme.alpha.pipeline`):
 
 | Tier | Modules | Platforms |
 |------|---------|-----------|
-| Core translation | tokenizer, grouper, reader, resolve, printer, pprint, pipeline, core, errors, forms, source | JVM, Babashka, ClojureScript |
+| Core translation | tokenizer, grouper, reader, expander, resolve, printer, pprint, pipeline, core, errors, forms, source | JVM, Babashka, ClojureScript |
 | Runtime | repl, run | JVM, Babashka (CLJS possible with injected eval) |
 | Test infra | test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 

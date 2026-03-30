@@ -180,8 +180,8 @@
     (is (= #?(:clj 1 :cljs 2) (first (core/meme->forms "#?(:clj 1 :cljs 2)"))))))
 
 (deftest parse-reader-conditional-splicing
-  (testing "splicing returns matched branch value"
-    (is (= #?(:clj [1 2] :cljs [3 4]) (first (core/meme->forms "#?@(:clj [1 2] :cljs [3 4])"))))))
+  (testing "splicing at top level returns individual elements as separate forms"
+    (is (= #?(:clj [1 2] :cljs [3 4]) (core/meme->forms "#?@(:clj [1 2] :cljs [3 4])")))))
 
 ;; ---------------------------------------------------------------------------
 ;; :read-cond :preserve — return ReaderConditional objects

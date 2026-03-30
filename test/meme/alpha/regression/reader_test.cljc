@@ -5,6 +5,7 @@
             [meme.alpha.core :as core]
             [meme.alpha.emit.printer :as p]
             [meme.alpha.forms :as forms]
+            [meme.alpha.parse.expander :as expander]
             [meme.alpha.parse.reader :as reader]))
 
 ;; ---------------------------------------------------------------------------
@@ -525,3 +526,97 @@
           printed (p/print-meme-string forms)
           re-read (core/meme->forms printed)]
       (is (= forms re-read)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: MemeRaw inside syntax-quote was treated as a map by expand-sq.
+;; defrecord instances satisfy (map? x), so MemeRaw{:value 255, :raw "0xFF"}
+;; hit the map branch and produced (apply hash-map ...) instead of the plain
+;; value. Fix: check forms/raw? before (map? form) in expand-sq.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest meme-raw-in-syntax-quote-expands-correctly
+  (testing "hex number inside syntax-quote expands to its value, not a map"
+    (let [forms (core/meme->forms "`[0xFF]")
+          expanded (expander/expand-forms forms)]
+      ;; The expanded form should contain the number 255, not {:value 255 :raw "0xFF"}
+      (is (not (some #(and (map? %) (contains? % :value)) (flatten (map seq expanded))))
+          "MemeRaw must not leak as a map into expanded forms")))
+  (testing "scientific notation inside syntax-quote"
+    (let [forms (core/meme->forms "`1e2")
+          expanded (expander/expand-forms forms)]
+      (is (= [100.0] expanded))))
+  (testing "char literal inside syntax-quote"
+    (let [forms (core/meme->forms "`\\a")
+          expanded (expander/expand-forms forms)]
+      (is (= [\a] expanded))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: nested MemeSyntaxQuote inside expand-sq was treated as a map.
+;; ``x produced MemeSyntaxQuote{:form x} inside the outer MemeSyntaxQuote.
+;; expand-sq fell through to (map? form) and produced garbage.
+;; Fix: check forms/syntax-quote? before (map? form) in expand-sq.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest nested-syntax-quote-expands-without-error
+  (testing "nested backtick does not crash or produce map output"
+    (let [forms (core/meme->forms "``x")
+          expanded (expander/expand-forms forms)]
+      (is (seq? (first expanded)) "nested syntax-quote should expand to a seq form")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: MemeRaw inside #() body was corrupted by normalize-bare-percent.
+;; normalize-bare-percent dispatches on (map? form) and uses (into {} ...) which
+;; destroys the MemeRaw defrecord, replacing it with a plain map. This caused
+;; ClassCastException at runtime when the anonymous function was called.
+;; Fix: check forms/raw? before (map? form) in normalize-bare-percent and
+;; find-percent-params.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+(deftest meme-raw-in-anon-fn-survives-normalization
+  (testing "hex literal inside #() preserves its value through expansion"
+    (let [forms (core/meme->forms "#(+(% 0xFF))")
+          expanded (expander/expand-forms forms)
+          f (first expanded)]
+      (is (seq? f) "should be (fn [%1] ...)")
+      (is (= 'fn (first f)))
+      ;; The 0xFF should resolve to 255, not to {:value 255 :raw "0xFF"}
+      (is (some #(= 255 %) (flatten (map #(if (seq? %) (seq %) [%]) (rest f))))
+          "0xFF must be resolved to 255, not leaked as a MemeRaw map")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #?@(:clj [2 3]) inside a collection did not splice.
+;; parse-reader-cond-eval returned the matched vector as a single form,
+;; so [1 #?@(:clj [2 3]) 4] produced [1 [2 3] 4] instead of [1 2 3 4].
+;; Fix: wrap splice matches with a splice-result marker, detect in
+;; parse-forms-until to splice instead of conj.
+;; ---------------------------------------------------------------------------
+
+(deftest splice-reader-conditional-in-vector
+  (testing "#?@ splices into surrounding vector"
+    (is (= [[1 2 3 4]]
+           (core/meme->forms #?(:clj  "[1 #?@(:clj [2 3]) 4]"
+                                :cljs "[1 #?@(:cljs [2 3]) 4]")))
+        "#?@ should splice elements into the vector"))
+  (testing "#?@ splices into surrounding map (pairs)"
+    (is (= [{:a 1 :b 2}]
+           (core/meme->forms #?(:clj  "{#?@(:clj [:a 1 :b 2])}"
+                                :cljs "{#?@(:cljs [:a 1 :b 2])}")))
+        "#?@ should splice key-value pairs into the map"))
+  (testing "#?@ at top level returns individual forms"
+    (is (= [1 2]
+           (core/meme->forms #?(:clj  "#?@(:clj [1 2])"
+                                :cljs "#?@(:cljs [1 2])")))
+        "#?@ at top level should return elements separately"))
+  (testing "#?@ with non-matching platform returns nothing"
+    (is (= [[1 3]]
+           (core/meme->forms #?(:clj  "[1 #?@(:cljs [2]) 3]"
+                                :cljs "[1 #?@(:clj [2]) 3]")))
+        "non-matching #?@ should contribute no elements"))
+  (testing "#?@ with non-sequential value errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Splicing reader conditional value must be"
+          (core/meme->forms #?(:clj  "[#?@(:clj 42)]"
+                                :cljs "[#?@(:cljs 42)]"))))))

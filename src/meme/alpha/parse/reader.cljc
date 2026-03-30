@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [meme.alpha.errors :as errors]
             [meme.alpha.forms :as forms]
+            [meme.alpha.parse.expander :as expander]
             [meme.alpha.parse.resolve :as resolve]))
 
 ;; Sentinel for #_ discard. Contract:
@@ -114,113 +115,24 @@
 (declare parse-form parse-form-base)
 
 ;; ---------------------------------------------------------------------------
-;; Syntax-quote expansion
+;; Syntax-quote expansion — delegated to meme.alpha.parse.expander
 ;; ---------------------------------------------------------------------------
 
-;; Unquote/UnquoteSplicing types are defined in forms.cljc as
-;; MemeUnquote/MemeUnquoteSplicing for cross-stage portability.
+;; ---------------------------------------------------------------------------
+;; Splice result marker for #?@ inside collections
+;; ---------------------------------------------------------------------------
 
-(defn- sq-resolve-symbol
-  "Resolve a symbol for syntax-quote. Uses the resolver from parser opts
-   if available, otherwise returns the symbol as-is (best effort)."
-  [sym opts]
-  (if-let [resolver (:resolve-symbol opts)]
-    (resolver sym)
-    ;; Without a resolver, qualify symbols that have no namespace
-    ;; but look like they could be vars. Leave special forms alone.
-    (if (and (nil? (namespace sym))
-             (not (#{'if 'do 'let 'fn 'var 'quote 'loop 'recur 'throw 'try 'catch
-                     'finally 'def 'new 'set! 'monitor-enter 'monitor-exit
-                     'letfn 'case 'deftype 'reify} sym)))
-      sym ; can't resolve without ns context — leave as-is
-      sym)))
+(defn- splice-result
+  "Wrap matched forms for #?@ splicing into surrounding collection.
+   In Clojure, #?@(:clj [2 3]) inside [1 ... 4] splices to [1 2 3 4].
+   The marker is detected by parse-forms-until which splices instead of conj'ing."
+  [forms]
+  (with-meta (vec forms) {::splice true}))
 
-(def ^:private ^:dynamic *gensym-env* nil)
-
-(defn- sq-gensym
-  "Auto-gensym: foo# → foo__NNN__auto__. Same foo# in one syntax-quote
-   resolves to the same gensym."
-  [sym]
-  (let [n (name sym)]
-    (if (str/ends-with? n "#")
-      (let [base (subs n 0 (dec (count n)))]
-        (if-let [existing (get @*gensym-env* sym)]
-          existing
-          (let [gs (symbol (str base "__" (gensym) "__auto__"))]
-            (vswap! *gensym-env* assoc sym gs)
-            gs)))
-      sym)))
-
-(defn expand-sq
-  "Walk a form parsed inside syntax-quote and produce the expansion.
-   Mirrors Clojure's SyntaxQuoteReader behavior.
-   Used by expand-syntax-quotes to expand MemeSyntaxQuote AST nodes at eval time."
-  [form opts loc]
-  (cond
-    ;; Unquote: ~x → x (the value, not quoted)
-    (forms/unquote? form)
-    (:form form)
-
-    ;; UnquoteSplicing at top level is an error (must be inside a collection)
-    (forms/unquote-splicing? form)
-    (errors/meme-error "Unquote-splicing (~@) not in collection" loc)
-
-    ;; Symbol — resolve and quote
-    (symbol? form)
-    (list 'quote (sq-gensym (sq-resolve-symbol form opts)))
-
-    ;; List — expand to (seq (concat ...))
-    (seq? form)
-    (if (empty? form)
-      (list 'clojure.core/list)
-      (let [items (map (fn [item]
-                         (cond
-                           (forms/unquote-splicing? item)
-                           (:form item)
-                           (forms/unquote? item)
-                           (list 'clojure.core/list (:form item))
-                           :else
-                           (list 'clojure.core/list (expand-sq item opts loc))))
-                       form)]
-        (list 'clojure.core/seq (cons 'clojure.core/concat items))))
-
-    ;; Vector — expand to (vec (concat ...))
-    (vector? form)
-    (let [items (map (fn [item]
-                       (cond
-                         (forms/unquote-splicing? item)
-                         (:form item)
-                         (forms/unquote? item)
-                         (list 'clojure.core/list (:form item))
-                         :else
-                         (list 'clojure.core/list (expand-sq item opts loc))))
-                     form)]
-      (list 'clojure.core/apply 'clojure.core/vector (cons 'clojure.core/concat items)))
-
-    ;; Map — expand to (apply hash-map (concat ...))
-    (map? form)
-    (let [items (mapcat (fn [[k v]]
-                          [(list 'clojure.core/list (expand-sq k opts loc))
-                           (list 'clojure.core/list (expand-sq v opts loc))])
-                        form)]
-      (list 'clojure.core/apply 'clojure.core/hash-map (cons 'clojure.core/concat items)))
-
-    ;; Set — expand to (apply hash-set (concat ...))
-    (set? form)
-    (let [items (map (fn [item]
-                       (cond
-                         (forms/unquote-splicing? item)
-                         (:form item)
-                         :else
-                         (list 'clojure.core/list (expand-sq item opts loc))))
-                     form)]
-      (list 'clojure.core/apply 'clojure.core/hash-set (cons 'clojure.core/concat items)))
-
-    ;; MemeRaw — unwrap to plain value for expansion
-    (forms/raw? form) (:value form)
-
-    ;; Keyword, number, string, char, nil, boolean — self-quoting
-    :else form))
+(defn- splice-result?
+  "Is this form a splice marker from #?@ evaluation?"
+  [form]
+  (and (vector? form) (some? (meta form)) (::splice (meta form))))
 
 ;; ---------------------------------------------------------------------------
 ;; Collections
@@ -243,9 +155,10 @@
          (if (end-pred tok)
            (do (padvance! p) forms)
            (let [form (parse-form p)]
-             (if (discard-sentinel? form)
-               (recur forms)
-               (recur (conj forms form))))))))))
+             (cond
+               (discard-sentinel? form) (recur forms)
+               (splice-result? form) (recur (into forms form))
+               :else (recur (conj forms form))))))))))
 
 (defn- parse-vector [p]
   (let [loc (select-keys (ppeek p) [:line :col])]
@@ -289,32 +202,14 @@
 ;; #() anonymous function — % param helpers
 ;; ---------------------------------------------------------------------------
 
-(defn- char-code* [ch]
-  #?(:clj (int ch) :cljs (.charCodeAt ch 0)))
-
-(def ^:private code-0* (char-code* \0))
-(def ^:private code-9* (char-code* \9))
-
-(defn- percent-param-type
-  "If sym is a % parameter symbol, return its type: :bare, :rest, or the integer N."
-  [sym]
-  (when (symbol? sym)
-    (let [n (name sym)]
-      (cond
-        (= n "%") :bare
-        (= n "%&") :rest
-        (and (str/starts-with? n "%")
-             (> (count n) 1)
-             (every? #(let [c (char-code* %)] (and (>= c code-0*) (<= c code-9*))) (seq (subs n 1))))
-        (#?(:clj Long/parseLong :cljs #(js/parseInt % 10)) (subs n 1))
-        :else nil))))
+;; percent-param-type is in forms.cljc (shared with printer)
 
 (defn- find-percent-params
   "Walk form collecting % param types. Skips nested (fn ...) bodies."
   [form]
   (cond
     (symbol? form)
-    (if-let [p (percent-param-type form)] #{p} #{})
+    (if-let [p (forms/percent-param-type form)] #{p} #{})
 
     (and (seq? form) (= 'fn (first form)))
     #{} ; don't recurse into nested fn / inner #()
@@ -324,6 +219,12 @@
 
     (vector? form)
     (reduce into #{} (map find-percent-params form))
+
+    ;; AST node defrecords satisfy (map? x) — check before map?
+    (forms/raw? form) #{} ; raw values (numbers, chars) contain no % params
+    (forms/syntax-quote? form) (find-percent-params (:form form))
+    (forms/unquote? form) (find-percent-params (:form form))
+    (forms/unquote-splicing? form) (find-percent-params (:form form))
 
     (map? form)
     (reduce into #{} (mapcat (fn [[k v]] [(find-percent-params k) (find-percent-params v)]) form))
@@ -350,6 +251,12 @@
 
     (vector? form)
     (mapv normalize-bare-percent form)
+
+    ;; AST node defrecords satisfy (map? x) — check before map?
+    (forms/raw? form) form ; pass through unchanged
+    (forms/syntax-quote? form) (forms/->MemeSyntaxQuote (normalize-bare-percent (:form form)))
+    (forms/unquote? form) (forms/->MemeUnquote (normalize-bare-percent (:form form)))
+    (forms/unquote-splicing? form) (forms/->MemeUnquoteSplicing (normalize-bare-percent (:form form)))
 
     (map? form)
     (into {} (map (fn [[k v]] [(normalize-bare-percent k) (normalize-bare-percent v)]) form))
@@ -432,7 +339,13 @@
         (do (padvance! p)
             (if (discard-sentinel? matched)
               discard-sentinel
-              (if splice? matched (maybe-call p matched))))
+              (if splice?
+                (if (sequential? matched)
+                  (splice-result matched)
+                  (errors/meme-error
+                    "Splicing reader conditional value must be a list or vector"
+                    (error-data p loc)))
+                (maybe-call p matched))))
 
         ;; Already matched — consume remaining forms permissively until ).
         ;; Matches Clojure's behavior: once a branch is selected, remaining
@@ -704,9 +617,10 @@
 (defn- parse-call-chain
   "After parsing a form, check for chained call openers: f(x)(y) → ((f x) y).
    Handles arbitrary depth: f(x)(y)(z) → (((f x) y) z).
-   Skipped for discard sentinels. Requires adjacent ( (no whitespace)."
+   Skipped for discard sentinels and splice results. Requires adjacent ( (no whitespace)."
   [p form]
   (if (and (not (discard-sentinel? form))
+           (not (splice-result? form))
            (adjacent-open-paren? p))
     (let [args (parse-call-args p)]
       (recur p (apply list form args)))
@@ -729,50 +643,18 @@
         (vswap! (:depth p) dec)))))
 
 ;; ---------------------------------------------------------------------------
-;; Syntax-quote expansion (for eval — not for tooling)
+;; Syntax-quote expansion — re-exported from parse.expander for compatibility
 ;; ---------------------------------------------------------------------------
 
-(defn expand-syntax-quotes
+(def expand-syntax-quotes
   "Walk a form tree and expand all AST nodes into plain Clojure forms.
-   Expands MemeSyntaxQuote into seq/concat/list, unwraps MemeRaw to plain values.
-   Called by runtime paths (run, repl) before eval."
-  ([form] (expand-syntax-quotes form nil))
-  ([form opts]
-   (cond
-     (forms/raw? form)
-     (:value form)
+   Delegates to meme.alpha.parse.expander/expand-syntax-quotes."
+  expander/expand-syntax-quotes)
 
-     (forms/syntax-quote? form)
-     (binding [*gensym-env* (volatile! {})]
-       (expand-sq (:form form) opts nil))
-
-     (forms/unquote? form)
-     (forms/->MemeUnquote (expand-syntax-quotes (:form form) opts))
-
-     (forms/unquote-splicing? form)
-     (forms/->MemeUnquoteSplicing (expand-syntax-quotes (:form form) opts))
-
-     (seq? form)
-     (with-meta (apply list (map #(expand-syntax-quotes % opts) form)) (meta form))
-
-     (vector? form)
-     (with-meta (mapv #(expand-syntax-quotes % opts) form) (meta form))
-
-     (map? form)
-     (with-meta (into {} (map (fn [[k v]] [(expand-syntax-quotes k opts)
-                                            (expand-syntax-quotes v opts)]) form))
-                (meta form))
-
-     (set? form)
-     (with-meta (set (map #(expand-syntax-quotes % opts) form)) (meta form))
-
-     :else form)))
-
-(defn expand-forms
-  "Expand all syntax-quote nodes in a vector of forms. For eval pipelines."
-  ([forms] (expand-forms forms nil))
-  ([forms opts]
-   (mapv #(expand-syntax-quotes % opts) forms)))
+(def expand-forms
+  "Expand all syntax-quote nodes in a vector of forms. For eval pipelines.
+   Delegates to meme.alpha.parse.expander/expand-forms."
+  expander/expand-forms)
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
@@ -791,6 +673,7 @@
          (cond-> forms
            trailing (with-meta {:trailing-ws trailing}))
          (let [form (parse-form p)]
-           (if (discard-sentinel? form)
-             (recur forms)
-             (recur (conj forms form)))))))))
+           (cond
+             (discard-sentinel? form) (recur forms)
+             (splice-result? form) (recur (into forms form))
+             :else (recur (conj forms form)))))))))

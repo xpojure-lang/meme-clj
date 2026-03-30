@@ -1,7 +1,7 @@
 (ns meme.alpha.runtime.run
   "Run .meme files: read, eval, return last result."
   (:require [meme.alpha.pipeline :as pipeline]
-            [meme.alpha.parse.reader :as reader]
+            [meme.alpha.parse.expander :as expander]
             [clojure.string :as str]))
 
 (defn- strip-shebang
@@ -38,7 +38,7 @@
                         :cljs (throw (ex-info "run-string requires :eval option in ClojureScript" {}))))
          reader-opts (default-reader-opts opts)
          src (strip-shebang s)
-         forms (reader/expand-forms (:forms (pipeline/run src reader-opts)) reader-opts)]
+         forms (expander/expand-forms (:forms (pipeline/run src reader-opts)) reader-opts)]
      (reduce (fn [_ form] (eval-fn form)) nil forms))))
 
 (defn run-file
