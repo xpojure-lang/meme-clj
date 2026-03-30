@@ -301,10 +301,10 @@
      ;; collections
      (gen/let [elems (gen/vector gen-meme-atom 0 3)]
        (str "[" (str/join " " elems) "]"))
-     (gen/let [pairs (gen/vector (gen/tuple
-                                   (gen/fmap #(str ":" (name %)) gen-keyword)
-                                   gen-meme-atom) 0 3)]
-       (str "{" (str/join " " (mapcat identity pairs)) "}"))
+     (gen/let [keys  (gen/fmap #(into [] (distinct) %)
+                              (gen/vector (gen/fmap #(str ":" (name %)) gen-keyword) 0 3))
+               vals  (gen/vector gen-meme-atom (count keys))]
+       (str "{" (str/join " " (interleave keys vals)) "}"))
      ;; set
      (gen/let [elems (gen/vector (gen/fmap str gen-simple-symbol) 0 3)]
        (str "#{" (str/join " " elems) "}"))

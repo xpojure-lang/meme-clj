@@ -502,3 +502,24 @@
          (is (= [:clj] (core/meme->forms "#?(:cljs #_x :clj 99)"))))
        (testing "#?(:cljs #_x y :clj 99) — #_ eats x, y is the value"
          (is (= ['y] (core/meme->forms "#?(:cljs #_x y :clj 99)")))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: map with duplicate keys roundtrips correctly
+;; Found by generative testing: {:p a :p a} — Clojure deduplicates keys on
+;; read, so print→re-read must produce the same deduplicated form.
+;; ---------------------------------------------------------------------------
+
+(deftest duplicate-map-keys-rejected
+  (testing "duplicate keyword keys are rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Duplicate key"
+          (core/meme->forms "{:p a :p a}"))))
+  (testing "duplicate symbol keys are rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+          #"Duplicate key"
+          (core/meme->forms "{x 1 x 2}"))))
+  (testing "unique keys roundtrip fine"
+    (let [forms (core/meme->forms "{:a 1 :b 2}")
+          printed (p/print-meme-string forms)
+          re-read (core/meme->forms printed)]
+      (is (= forms re-read)))))
