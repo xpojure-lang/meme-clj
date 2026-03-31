@@ -20,7 +20,11 @@
      :prelude-file — path to prelude .meme file (eval'd before user code)
      :rules-file   — path to rules .meme file (eval'd, must return rule vector)
      :prelude      — prelude forms (alternative to :prelude-file)
-     :rules        — rule vector (alternative to :rules-file)"
+     :rules        — rule vector (alternative to :rules-file)
+     :parser       — custom parser fn: (fn [tokens opts source] forms-vector)
+                     If nil, uses the default meme parser.
+                     The parser receives meme's token vector and should
+                     return a vector of Clojure forms."
   [lang-name config]
   (swap! registry assoc lang-name config))
 

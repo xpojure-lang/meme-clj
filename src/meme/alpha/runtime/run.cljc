@@ -57,7 +57,7 @@
        (reduce (fn [_ form] (eval-fn form)) nil forms)))))
 
 (defn- resolve-lang-opts
-  "If path matches a registered language, load its prelude/rules and merge into opts."
+  "If path matches a registered language, load its prelude/rules/parser and merge into opts."
   [path opts]
   #?(:clj
      (if-let [lang (or (:lang opts) (registry/resolve-lang path))]
@@ -73,7 +73,10 @@
            (assoc :rewrite-rules (run-string (slurp (:rules-file config))))
 
            (and (:rules config) (not (:rewrite-rules opts)))
-           (assoc :rewrite-rules (:rules config))))
+           (assoc :rewrite-rules (:rules config))
+
+           (and (:parser config) (not (:parser opts)))
+           (assoc :parser (:parser config))))
        opts)
      :cljs opts))
 

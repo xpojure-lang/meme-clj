@@ -10,7 +10,9 @@
    raw tagged tree here, then let rewrite rules handle the rest."
   (:require [clojure.string :as str]
             [meme.alpha.forms :as forms]
-            [meme.alpha.parse.resolve :as resolve]))
+            [meme.alpha.parse.resolve :as resolve]
+            [meme.alpha.rewrite :as rewrite]
+            [meme.alpha.rewrite.rules :as rules]))
 
 ;; ============================================================
 ;; Token stream helpers
@@ -210,3 +212,13 @@
       forms
       (let [[form new-pos] (build-tree tokens pos)]
         (recur new-pos (if (some? form) (conj forms form) forms))))))
+
+(defn rewrite-parser
+  "Parser that conforms to the pipeline contract: (fn [tokens opts source] → forms).
+   Uses the rewrite-based pipeline: tokens → tagged tree → rules → structures.
+   Drop-in replacement for meme.alpha.parse.reader/read-meme-string-from-tokens."
+  [tokens _opts _source]
+  (let [tagged (tokens->tree tokens)]
+    (mapv (comp rules/transform-structures
+                #(rewrite/rewrite rules/tree->s-rules %))
+          tagged)))

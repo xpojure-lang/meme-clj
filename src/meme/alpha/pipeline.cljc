@@ -52,13 +52,17 @@
       result)))
 
 (defn step-parse
-  "Parse tokens into Clojure forms."
+  "Parse tokens into Clojure forms.
+   If :parser is set in :opts, uses that function instead of the default
+   meme parser. A custom parser has the signature:
+     (fn [tokens opts source] -> forms-vector)"
   [ctx]
   (contract/validate! :parse :input ctx)
   (when-not (:tokens ctx)
     (throw (ex-info "Pipeline :tokens missing — run scan before parse" {})))
-  (let [result (assoc ctx :forms (reader/read-meme-string-from-tokens
-                                  (:tokens ctx) (:opts ctx) (:source ctx)))]
+  (let [parse-fn (or (get-in ctx [:opts :parser])
+                     reader/read-meme-string-from-tokens)
+        result (assoc ctx :forms (parse-fn (:tokens ctx) (:opts ctx) (:source ctx)))]
     (contract/validate! :parse :output result)
     result))
 
