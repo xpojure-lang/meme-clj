@@ -314,11 +314,18 @@
          (not (:ws tok)))))
 
 (defn- maybe-call
-  "If next token is ( with no whitespace gap, parse call args and wrap."
+  "If next token is ( with no whitespace gap, parse call args and wrap.
+   Rejects nil/true/false as call heads — these are literals, not callable."
   [p head]
   (if (adjacent-open-paren? p)
-    (let [args (parse-call-args p)]
-      (apply list head args))
+    (do
+      (when (contains? #{nil true false} head)
+        (errors/meme-error
+         (str "Cannot use " (pr-str head) " as a call head \u2014 "
+              (pr-str head) "(\u2026) is not valid meme syntax")
+         (error-data p (select-keys (ppeek p) [:line :col]))))
+      (let [args (parse-call-args p)]
+        (apply list head args)))
     head))
 
 (defn- parse-reader-cond-preserve

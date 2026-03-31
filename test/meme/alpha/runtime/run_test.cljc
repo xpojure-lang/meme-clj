@@ -1,6 +1,7 @@
 (ns meme.alpha.runtime.run-test
   "Tests for the meme.alpha.runtime.run module."
   (:require [clojure.test :refer [deftest is testing]]
+            [meme.alpha.core :as core]
             [meme.alpha.runtime.run :as run]))
 
 ;; ---------------------------------------------------------------------------
@@ -92,6 +93,27 @@
      (testing "::foo without ns declaration resolves in current namespace"
        (is (= (keyword (str (ns-name *ns*)) "bar")
               (run/run-string "::bar"))))))
+
+;; ---------------------------------------------------------------------------
+;; Bug: prelude forms were eval'd without syntax-quote expansion.
+;; run-string and REPL start eval'd (:prelude opts) directly, but prelude
+;; forms from meme->forms contain MemeSyntaxQuote/MemeRaw AST nodes that
+;; must be expanded before eval — matching the user-code path.
+;; Fix: expand prelude through step-expand-syntax-quotes before eval.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest run-string-prelude-expands-syntax-quotes
+     (testing "prelude with syntax-quote expands and evals correctly"
+       (let [prelude-forms (core/meme->forms "`map")
+             result (run/run-string "42" {:prelude prelude-forms})]
+         (is (= 42 result)
+             "prelude with syntax-quote should not crash")))
+     (testing "prelude with MemeRaw values (hex literals) expands correctly"
+       (let [prelude-forms (core/meme->forms "def(hex-val 0xFF)")
+             result (run/run-string "hex-val" {:prelude prelude-forms})]
+         (is (= 255 result)
+             "prelude with hex literal should eval to correct value")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Syntax-quote symbol resolution

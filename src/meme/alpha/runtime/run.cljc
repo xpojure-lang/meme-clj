@@ -45,9 +45,13 @@
                      #?(:clj eval
                         :cljs (throw (ex-info "run-string requires :eval option in ClojureScript" {}))))
          reader-opts (default-reader-opts opts)]
-     ;; Eval prelude before user code
-     (doseq [form (:prelude opts)]
-       (eval-fn form))
+     ;; Expand and eval prelude before user code (must expand syntax-quotes,
+     ;; matching the user-code path — raw parsed forms contain AST nodes)
+     (when-let [prelude (seq (:prelude opts))]
+       (let [expanded (:forms (pipeline/step-expand-syntax-quotes
+                                {:forms (vec prelude) :opts reader-opts}))]
+         (doseq [form expanded]
+           (eval-fn form))))
      (let [forms (:forms (-> {:source s :opts reader-opts}
                              step-strip-shebang
                              pipeline/step-scan

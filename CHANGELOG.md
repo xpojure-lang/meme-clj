@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.alpha.platform.registry`)
+- **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.alpha.rewrite`)
+- **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.alpha.rewrite.tree`)
+- **Pipeline contracts**: opt-in spec validation at stage boundaries (`meme.alpha.pipeline.contract`)
+- **LANGBOOK.md**: language maker cookbook — patterns for building guest languages on the meme platform
+- **Superficie example**: surface-syntax renderer reimplemented as a guest language (212 lines vs ~2000 original)
+
+### Fixed
+- **Prelude expansion**: prelude forms are now expanded through `step-expand-syntax-quotes` before eval, matching the user-code path. Previously, syntax-quote in prelude files caused runtime errors.
+- **maybe-call nil/true/false guard**: `maybe-call` now rejects `nil`, `true`, `false` as call heads (matching the existing guard in `parse-call-chain`). Previously, reader conditionals resolving to these values could silently produce invalid forms.
+- **build-tree delimiter validation**: `build-tree` now validates expected delimiters after `#?` and `#:ns` prefixes (matching the main parser). Previously, malformed tokens caused silent off-by-one parsing.
+- **load-prelude docstring**: corrected to reflect actual behavior (parse-only, not eval).
+- **README.md**: fixed dead link to `doc/development.md` (now points to `CLAUDE.md`).
+
 ## [0.6.0-alpha] — 2026-03-30
 
 ### Fixed

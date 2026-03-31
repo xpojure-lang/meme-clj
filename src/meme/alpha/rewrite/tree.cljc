@@ -188,15 +188,21 @@
       ;; Reader conditionals and namespaced maps — pass through as markers
       :reader-cond-start
       (let [splicing? (= "#?@" (:value token))
-            ;; skip the :open-paren that follows :reader-cond-start
             paren-pos (inc pos)
+            _ (when (or (>= paren-pos (count tokens))
+                        (not= :open-paren (tok-type tokens paren-pos)))
+                (throw (ex-info (str "Expected ( after " (:value token))
+                                {:pos paren-pos})))
             [items new-pos] (build-collection tokens (inc paren-pos) :close-paren)]
         [(apply list (if splicing? 'meme/reader-cond-splicing 'meme/reader-cond) items) new-pos])
 
       :namespaced-map-start
       (let [ns-prefix (:value token)
-            ;; skip the :open-brace that follows :namespaced-map-start
             brace-pos (inc pos)
+            _ (when (or (>= brace-pos (count tokens))
+                        (not= :open-brace (tok-type tokens brace-pos)))
+                (throw (ex-info (str "Expected { after " ns-prefix)
+                                {:pos brace-pos})))
             [items new-pos] (build-collection tokens (inc brace-pos) :close-brace)]
         [(apply list 'meme/ns-map (symbol ns-prefix) items) new-pos])
 

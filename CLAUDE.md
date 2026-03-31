@@ -143,6 +143,11 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 | `generative_test` | Property-based tests with test.check. Print→read roundtrip on generated forms. JVM only. |
 | `errors_test` | Error infrastructure: `source-context`, `meme-error`, `format-error` |
 | `vendor_roundtrip_test` | Vendor roundtrip: real-world Clojure libraries (git submodules in `test/vendor/`) roundtripped per-form through clj→meme→clj. JVM only. |
+| `pipeline/contract_test` | Pipeline spec validation: token and context-map specs at stage boundaries |
+| `rewrite_test` | Rewrite engine: pattern matching, substitution, splice variables, cycle detection |
+| `rewrite/rules_test` | Rewrite rules: S→M and M→S transformations |
+| `rewrite/tree_test` | Rewrite tree builder: tokens→tagged tree, cross-test vs main parser |
+| `platform/registry_test` | Language registration, extension dispatch, prelude injection, custom parser. JVM only. |
 
 ## Development tools
 

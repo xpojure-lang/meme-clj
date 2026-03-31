@@ -77,6 +77,27 @@
     (is (= [42] (rewrite-parse "42")))))
 
 ;; ============================================================
+;; Delimiter validation in build-tree
+;; ============================================================
+
+;; Bug: build-tree skipped validation that :open-paren follows #? and
+;; :open-brace follows #:ns. If tokens were malformed, position would
+;; silently be off by one and wrong tokens would be parsed.
+;; Fix: added explicit delimiter type checks matching the main parser.
+
+(deftest build-tree-reader-cond-delimiter-validation
+  (testing "reader conditional with correct delimiter parses normally"
+    (let [tree (tree/tokens->tree
+                (tokenizer/attach-whitespace
+                 (tokenizer/tokenize "#?(:clj 1 :cljs 2)") "#?(:clj 1 :cljs 2)"))]
+      (is (= 1 (count tree)))))
+  (testing "namespaced map with correct delimiter parses normally"
+    (let [tree (tree/tokens->tree
+                (tokenizer/attach-whitespace
+                 (tokenizer/tokenize "#:user{:a 1}") "#:user{:a 1}"))]
+      (is (= 1 (count tree))))))
+
+;; ============================================================
 ;; Cross-test: rewrite pipeline vs existing parser
 ;; ============================================================
 

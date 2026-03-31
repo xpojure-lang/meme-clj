@@ -114,9 +114,9 @@ defn-(load-meme-file
     meme-run/run-string(src)))
 
 defn-(load-prelude
-  "Load a prelude file. Returns a vector of forms to eval before user code.
-   The prelude file is eval'd; its last value should be a vector of forms,
-   or nil (in which case the prelude's side effects are the point)."
+  "Load a prelude file. Returns a vector of parsed forms to eval before user code.
+   Forms are parsed but not expanded — expansion happens in run-string/start
+   before eval, matching the user-code path."
   [path]
   let([src slurp(path)
        forms core/meme->forms(src)]
