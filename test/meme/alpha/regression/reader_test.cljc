@@ -13,11 +13,10 @@
 
 (deftest auto-resolve-keyword-is-opaque
   #?(:clj
-     (testing "::foo emits a deferred read-string call on JVM"
+     (testing "::foo emits a MemeAutoKeyword on JVM"
        (let [form (first (core/meme->forms "::local"))]
-         (is (seq? form))
-         (is (= 'clojure.core/read-string (first form)))
-         (is (= "::local" (second form)))))
+         (is (forms/deferred-auto-keyword? form))
+         (is (= "::local" (forms/deferred-auto-keyword-raw form)))))
      :cljs
      (testing "::foo without :resolve-keyword errors on CLJS"
        (is (thrown-with-msg? js/Error #"resolve-keyword"
@@ -27,8 +26,8 @@
        (let [form (first (core/meme->forms "{::key 42}"))]
          (is (map? form))
          (let [[k v] (first form)]
-           (is (seq? k))
-           (is (= "::key" (second k)))
+           (is (forms/deferred-auto-keyword? k))
+           (is (= "::key" (forms/deferred-auto-keyword-raw k)))
            (is (= 42 v))))))
   #?(:clj
      (testing "printer round-trips ::foo"

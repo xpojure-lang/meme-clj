@@ -65,12 +65,24 @@
 (s/def :meme.opts/resolve-keyword ifn?)
 (s/def :meme.opts/read-cond #{:preserve})
 (s/def :meme.opts/resolve-symbol ifn?)
+(s/def :meme.opts/parser ifn?)
+(s/def :meme.opts/rewrite-rules (s/coll-of ifn?))
+(s/def :meme.opts/rewrite-max-iters pos-int?)
+(s/def :meme.opts/prelude string?)
+(s/def :meme.opts/eval ifn?)
+(s/def :meme.opts/lang keyword?)
 
 (s/def ::opts
   (s/nilable
    (s/keys :opt-un [:meme.opts/resolve-keyword
                     :meme.opts/read-cond
-                    :meme.opts/resolve-symbol])))
+                    :meme.opts/resolve-symbol
+                    :meme.opts/parser
+                    :meme.opts/rewrite-rules
+                    :meme.opts/rewrite-max-iters
+                    :meme.opts/prelude
+                    :meme.opts/eval
+                    :meme.opts/lang])))
 
 ;; ---------------------------------------------------------------------------
 ;; Context map specs — per stage boundary

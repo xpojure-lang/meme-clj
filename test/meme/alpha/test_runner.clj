@@ -1,11 +1,16 @@
 (ns meme.alpha.test-runner
   "Run .meme tests: eval-based and fixture-based."
   (:require [meme.alpha.core :as core]
+            [meme.alpha.forms :as forms]
             [meme.alpha.runtime.run :as run]
             [meme.alpha.errors :as errors]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]))
+
+(def ^:private edn-readers
+  "Data readers for fixture .edn files."
+  {'meme/auto-kw forms/deferred-auto-keyword})
 
 (defn- deep=
   "Compare two form trees for structural equality, treating lists and seqs as equal.
@@ -108,7 +113,7 @@
                                       ;; the first form, so multiple top-level forms would be silently
                                       ;; ignored. The vector corresponds to the parsed forms from the
                                       ;; matching .meme file.
-                                     expected (edn/read-string edn-src)
+                                     expected (edn/read-string {:readers edn-readers} edn-src)
                                      diff (diff-forms expected actual)]
                                  (if diff
                                    (do (println "FAIL")

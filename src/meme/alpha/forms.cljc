@@ -12,26 +12,32 @@
 ;; encoding to round-trip :: keywords back to "::foo" text.
 ;; ---------------------------------------------------------------------------
 
+(defrecord MemeAutoKeyword [raw])
+
 (defn deferred-auto-keyword
   "Wrap a :: keyword string as a deferred eval form.
-   Returns (clojure.core/read-string \"::foo\")."
+   Returns a MemeAutoKeyword record that the printer can recognize
+   unambiguously and the expander converts to (clojure.core/read-string \"::foo\")
+   before eval."
   [raw]
-  (list 'clojure.core/read-string raw))
+  (->MemeAutoKeyword raw))
 
 (defn deferred-auto-keyword?
   "Is form a deferred auto-resolve keyword produced by the reader?"
   [form]
-  (and (seq? form)
-       (= 2 (count form))
-       (= 'clojure.core/read-string (first form))
-       (let [s (second form)]
-         (and (string? s) (str/starts-with? s "::")))))
+  (instance? MemeAutoKeyword form))
 
 (defn deferred-auto-keyword-raw
   "Extract the raw :: keyword string from a deferred form.
    Caller must check deferred-auto-keyword? first."
   [form]
-  (second form))
+  (:raw form))
+
+(defn deferred-auto-keyword->form
+  "Convert a MemeAutoKeyword to an eval-able list form:
+   (clojure.core/read-string \"::foo\")."
+  [^MemeAutoKeyword ak]
+  (list 'clojure.core/read-string (:raw ak)))
 
 ;; ---------------------------------------------------------------------------
 ;; Portable reader conditional support
@@ -155,3 +161,86 @@
         #?(:clj (Long/parseLong (subs n 1))
            :cljs (js/parseInt (subs n 1) 10))
         :else nil))))
+
+;; ---------------------------------------------------------------------------
+;; Shared anonymous function parameter utilities
+;;
+;; find-percent-params, normalize-bare-percent, and build-anon-fn-params are
+;; used by both the parser (#() → fn) and the rewrite engine (tree → forms).
+;; Centralizing here prevents behavioral divergence between the two paths.
+;; ---------------------------------------------------------------------------
+
+(defn find-percent-params
+  "Walk form collecting % param types. Skips nested (fn ...) bodies."
+  [form]
+  (cond
+    (symbol? form)
+    (if-let [p (percent-param-type form)] #{p} #{})
+
+    (and (seq? form) (= 'fn (first form)))
+    #{} ; don't recurse into nested fn / inner #()
+
+    (seq? form)
+    (reduce into #{} (map find-percent-params form))
+
+    (vector? form)
+    (reduce into #{} (map find-percent-params form))
+
+    ;; AST node defrecords satisfy (map? x) — check before map?
+    (raw? form) #{} ; raw values (numbers, chars) contain no % params
+    (syntax-quote? form) (find-percent-params (:form form))
+    (unquote? form) (find-percent-params (:form form))
+    (unquote-splicing? form) (find-percent-params (:form form))
+
+    (map? form)
+    (reduce into #{} (mapcat (fn [[k v]] [(find-percent-params k) (find-percent-params v)]) form))
+
+    (set? form)
+    (reduce into #{} (map find-percent-params form))
+
+    #?@(:clj [(tagged-literal? form)
+              (find-percent-params (.-form form))])
+
+    :else #{}))
+
+(defn normalize-bare-percent
+  "Replace bare % with %1 in form. Skips nested (fn ...) bodies."
+  [form]
+  (cond
+    (and (symbol? form) (= "%" (name form))) (symbol "%1")
+
+    (and (seq? form) (= 'fn (first form)))
+    form ; don't recurse into nested fn
+
+    (seq? form)
+    (apply list (map normalize-bare-percent form))
+
+    (vector? form)
+    (mapv normalize-bare-percent form)
+
+    ;; AST node defrecords satisfy (map? x) — check before map?
+    (raw? form) form ; pass through unchanged
+    (syntax-quote? form) (->MemeSyntaxQuote (normalize-bare-percent (:form form)))
+    (unquote? form) (->MemeUnquote (normalize-bare-percent (:form form)))
+    (unquote-splicing? form) (->MemeUnquoteSplicing (normalize-bare-percent (:form form)))
+
+    (map? form)
+    (into {} (map (fn [[k v]] [(normalize-bare-percent k) (normalize-bare-percent v)]) form))
+
+    (set? form)
+    (set (map normalize-bare-percent form))
+
+    #?@(:clj [(tagged-literal? form)
+              (tagged-literal (.-tag form) (normalize-bare-percent (.-form form)))])
+
+    :else form))
+
+(defn build-anon-fn-params
+  "Build [%1 %2 ...] or [%1 & %&] param vector from collected param types."
+  [param-set]
+  (let [has-bare? (contains? param-set :bare)
+        has-rest? (contains? param-set :rest)
+        nums (filter number? param-set)
+        max-n (if (seq nums) (apply max nums) (if has-bare? 1 0))]
+    (cond-> (mapv #(symbol (str "%" %)) (range 1 (inc max-n)))
+      has-rest? (into ['& (symbol "%&")]))))

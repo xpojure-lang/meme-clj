@@ -1,3 +1,3 @@
 [{:user/name "Andriy" :user/age 45}
- (clojure.core/read-string "::local")
- {(clojure.core/read-string "::key") 42}]
+ #meme/auto-kw "::local"
+ {#meme/auto-kw "::key" 42}]

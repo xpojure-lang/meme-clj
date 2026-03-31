@@ -234,10 +234,19 @@
       [true result]
       [false expr])))
 
+(def ^:const default-max-iters
+  "Default safety cap on rewrite iterations. This is a guard against
+   non-terminating rule sets, not structural cycle detection. If a
+   legitimate transformation needs more passes, pass a higher value
+   as the max-iters argument."
+  100)
+
 (defn rewrite
   "Apply rules repeatedly (bottom-up) until fixed point or max iterations.
-   Returns the final expression."
-  ([rules expr] (rewrite rules expr 100))
+   Returns the final expression. Default max-iters is 100 — a safety cap,
+   not true cycle detection. Override with the 3-arity form if a rule set
+   needs more passes to converge."
+  ([rules expr] (rewrite rules expr default-max-iters))
   ([rules expr max-iters]
    (loop [expr expr
           i 0]
@@ -251,8 +260,8 @@
 
 (defn rewrite-top
   "Apply rules only at the top level (no descent into children).
-   Repeat until fixed point."
-  ([rules expr] (rewrite-top rules expr 100))
+   Repeat until fixed point. Default max-iters is 100."
+  ([rules expr] (rewrite-top rules expr default-max-iters))
   ([rules expr max-iters]
    (loop [expr expr
           i 0]

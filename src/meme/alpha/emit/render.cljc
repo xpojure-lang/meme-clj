@@ -78,6 +78,10 @@
 ;;   indent — current indentation level (absolute)
 ;;   mode   — :flat or :break
 ;;   doc    — Doc node to process
+;;
+;; The work-list is a persistent list (not a vector) so that prepend
+;; via cons/list* is O(1). This is critical for performance: DocCat
+;; prepends two items per step, and O(n) vector-into was quadratic.
 ;; ---------------------------------------------------------------------------
 
 (defn- fits?
@@ -88,10 +92,10 @@
          work work]
     (cond
       (neg? remaining) false
-      (empty? work) true
+      (nil? (seq work)) true
       :else
       (let [[i mode doc] (first work)
-            rest-work (subvec work 1)]
+            rest-work (rest work)]
         (condp instance? doc
           DocText   (recur (- remaining (count (:s doc))) rest-work)
           DocLine   (if (= mode :flat)
@@ -99,15 +103,15 @@
                         false ; hardline never fits flat
                         (recur (- remaining (count (:flat-alt doc))) rest-work))
                       true) ; break mode line → always fits (rest on next line)
-          DocCat    (recur remaining (into [[i mode (:a doc)] [i mode (:b doc)]] rest-work))
-          DocNest   (recur remaining (into [[(+ i (:indent doc)) mode (:doc doc)]] rest-work))
-          DocGroup  (recur remaining (into [[i :flat (:doc doc)]] rest-work))
+          DocCat    (recur remaining (list* [i mode (:a doc)] [i mode (:b doc)] rest-work))
+          DocNest   (recur remaining (cons [(+ i (:indent doc)) mode (:doc doc)] rest-work))
+          DocGroup  (recur remaining (cons [i :flat (:doc doc)] rest-work))
           DocIfBreak (if (= mode :flat)
                        (if (:flat-doc doc)
-                         (recur remaining (into [[i :flat (:flat-doc doc)]] rest-work))
+                         (recur remaining (cons [i :flat (:flat-doc doc)] rest-work))
                          (recur remaining rest-work))
                        (if (:break-doc doc)
-                         (recur remaining (into [[i :break (:break-doc doc)]] rest-work))
+                         (recur remaining (cons [i :break (:break-doc doc)] rest-work))
                          (recur remaining rest-work)))
           ;; nil doc (from cat filtering)
           (recur remaining rest-work))))))
@@ -118,11 +122,11 @@
   [doc width]
   (let [sb (make-sb)]
     (loop [col 0
-           work [[0 :break doc]]]
-      (if (empty? work)
+           work (list [0 :break doc])]
+      (if (nil? (seq work))
         (sb-str sb)
         (let [[i mode d] (first work)
-              rest-work (subvec work 1)]
+              rest-work (rest work)]
           (if (nil? d)
             (recur col rest-work)
             (condp instance? d
@@ -144,24 +148,24 @@
                   (recur i rest-work)))
 
               DocCat
-              (recur col (into [[i mode (:a d)] [i mode (:b d)]] rest-work))
+              (recur col (list* [i mode (:a d)] [i mode (:b d)] rest-work))
 
               DocNest
-              (recur col (into [[(+ i (:indent d)) mode (:doc d)]] rest-work))
+              (recur col (cons [(+ i (:indent d)) mode (:doc d)] rest-work))
 
               DocGroup
-              (let [flat-work (into [[i :flat (:doc d)]] rest-work)]
+              (let [flat-work (cons [i :flat (:doc d)] rest-work)]
                 (if (fits? (- width col) flat-work)
                   (recur col flat-work)
-                  (recur col (into [[i :break (:doc d)]] rest-work))))
+                  (recur col (cons [i :break (:doc d)] rest-work))))
 
               DocIfBreak
               (if (= mode :flat)
                 (if (:flat-doc d)
-                  (recur col (into [[i :flat (:flat-doc d)]] rest-work))
+                  (recur col (cons [i :flat (:flat-doc d)] rest-work))
                   (recur col rest-work))
                 (if (:break-doc d)
-                  (recur col (into [[i :break (:break-doc d)]] rest-work))
+                  (recur col (cons [i :break (:break-doc d)] rest-work))
                   (recur col rest-work)))
 
               ;; Unknown — skip

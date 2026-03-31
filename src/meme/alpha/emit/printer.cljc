@@ -92,11 +92,14 @@
     (and (= 1 (count m))
          (keyword? (key (first m)))
          (true? (val (first m))))
-    (str "^" (render/layout (to-doc-form (key (first m)) mode) ##Inf))
+    (let [kw (key (first m))]
+      (if (= mode :clj)
+        (str "^" (pr-str kw))
+        (str "^" (pr-str kw))))
     (and (= 1 (count m))
          (contains? m :tag)
          (symbol? (:tag m)))
-    (str "^" (render/layout (to-doc-form (:tag m) mode) ##Inf))
+    (str "^" (:tag m))
     :else
     (str "^" (render/layout (to-doc-form m mode) ##Inf))))
 

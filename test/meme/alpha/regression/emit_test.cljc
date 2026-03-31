@@ -5,7 +5,8 @@
             [clojure.string :as str]
             [meme.alpha.core :as core]
             [meme.alpha.emit.formatter.flat :as fmt-flat]
-            [meme.alpha.emit.formatter.canon :as fmt-canon]))
+            [meme.alpha.emit.formatter.canon :as fmt-canon]
+            [meme.alpha.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
@@ -220,10 +221,10 @@
    (deftest canon-deferred-auto-keyword-not-corrupted
      (testing "::foo preserved at narrow width"
        (is (= "::foo"
-              (fmt-canon/format-form '(clojure.core/read-string "::foo") {:width 4}))))
+              (fmt-canon/format-form (forms/deferred-auto-keyword "::foo") {:width 4}))))
      (testing "::keyword preserved when nested deeply"
        (let [result (fmt-canon/format-form
-                     (list 'def 'x '(clojure.core/read-string "::long-keyword"))
+                     (list 'def 'x (forms/deferred-auto-keyword "::long-keyword"))
                      {:width 20})]
          (is (re-find #"::long-keyword" result))
          (is (not (re-find #"clojure.core/read-string" result)))))

@@ -68,11 +68,10 @@
 
 (deftest resolve-auto-keyword-deferred
   #?(:clj
-     (testing "without resolver, emits read-string form on JVM"
+     (testing "without resolver, emits MemeAutoKeyword on JVM"
        (let [form (resolve/resolve-auto-keyword "::foo" {:line 1 :col 1} nil)]
-         (is (seq? form))
-         (is (= 'clojure.core/read-string (first form)))
-         (is (= "::foo" (second form)))))
+         (is (forms/deferred-auto-keyword? form))
+         (is (= "::foo" (forms/deferred-auto-keyword-raw form)))))
      :cljs
      (testing "without resolver, errors on CLJS"
        (is (thrown-with-msg? js/Error #"resolve-keyword"

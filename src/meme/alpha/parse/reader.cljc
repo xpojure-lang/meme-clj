@@ -224,82 +224,8 @@
 ;; #() anonymous function — % param helpers
 ;; ---------------------------------------------------------------------------
 
-;; percent-param-type is in forms.cljc (shared with printer)
-
-(defn- find-percent-params
-  "Walk form collecting % param types. Skips nested (fn ...) bodies."
-  [form]
-  (cond
-    (symbol? form)
-    (if-let [p (forms/percent-param-type form)] #{p} #{})
-
-    (and (seq? form) (= 'fn (first form)))
-    #{} ; don't recurse into nested fn / inner #()
-
-    (seq? form)
-    (reduce into #{} (map find-percent-params form))
-
-    (vector? form)
-    (reduce into #{} (map find-percent-params form))
-
-    ;; AST node defrecords satisfy (map? x) — check before map?
-    (forms/raw? form) #{} ; raw values (numbers, chars) contain no % params
-    (forms/syntax-quote? form) (find-percent-params (:form form))
-    (forms/unquote? form) (find-percent-params (:form form))
-    (forms/unquote-splicing? form) (find-percent-params (:form form))
-
-    (map? form)
-    (reduce into #{} (mapcat (fn [[k v]] [(find-percent-params k) (find-percent-params v)]) form))
-
-    (set? form)
-    (reduce into #{} (map find-percent-params form))
-
-    #?@(:clj [(tagged-literal? form)
-              (find-percent-params (.-form form))])
-
-    :else #{}))
-
-(defn- normalize-bare-percent
-  "Replace bare % with %1 in form. Skips nested (fn ...) bodies."
-  [form]
-  (cond
-    (and (symbol? form) (= "%" (name form))) (symbol "%1")
-
-    (and (seq? form) (= 'fn (first form)))
-    form ; don't recurse into nested fn
-
-    (seq? form)
-    (apply list (map normalize-bare-percent form))
-
-    (vector? form)
-    (mapv normalize-bare-percent form)
-
-    ;; AST node defrecords satisfy (map? x) — check before map?
-    (forms/raw? form) form ; pass through unchanged
-    (forms/syntax-quote? form) (forms/->MemeSyntaxQuote (normalize-bare-percent (:form form)))
-    (forms/unquote? form) (forms/->MemeUnquote (normalize-bare-percent (:form form)))
-    (forms/unquote-splicing? form) (forms/->MemeUnquoteSplicing (normalize-bare-percent (:form form)))
-
-    (map? form)
-    (into {} (map (fn [[k v]] [(normalize-bare-percent k) (normalize-bare-percent v)]) form))
-
-    (set? form)
-    (set (map normalize-bare-percent form))
-
-    #?@(:clj [(tagged-literal? form)
-              (tagged-literal (.-tag form) (normalize-bare-percent (.-form form)))])
-
-    :else form))
-
-(defn- build-anon-fn-params
-  "Build [%1 %2 ...] or [%1 & %&] param vector from collected param types."
-  [param-set]
-  (let [has-bare? (contains? param-set :bare)
-        has-rest? (contains? param-set :rest)
-        nums (filter number? param-set)
-        max-n (if (seq nums) (apply max nums) (if has-bare? 1 0))]
-    (cond-> (mapv #(symbol (str "%" %)) (range 1 (inc max-n)))
-      has-rest? (into ['& (symbol "%&")]))))
+;; find-percent-params, normalize-bare-percent, build-anon-fn-params
+;; are in forms.cljc (shared with rewrite/rules.cljc)
 
 ;; ---------------------------------------------------------------------------
 ;; Main parse dispatch
@@ -623,12 +549,12 @@
                                  (error-data p (assoc (select-keys nxt [:line :col])
                                                       :secondary [{:line (:line tok) :col (:col tok) :label "#( opened here"}]))))
             (padvance! p)
-            (let [params (find-percent-params body)
+            (let [params (forms/find-percent-params body)
                   _ (when (contains? params 0)
                       (errors/meme-error "%0 is not a valid parameter — use %1 or % for the first argument"
                                          (error-data p (select-keys tok [:line :col]))))
-                  param-vec (build-anon-fn-params params)
-                  body' (normalize-bare-percent body)]
+                  param-vec (forms/build-anon-fn-params params)
+                  body' (forms/normalize-bare-percent body)]
               (with-meta (list 'fn param-vec body') {:meme/sugar true}))))
 
       :reader-cond-start
@@ -668,19 +594,27 @@
   "After parsing a form, check for chained call openers: f(x)(y) → ((f x) y).
    Handles arbitrary depth: f(x)(y)(z) → (((f x) y) z).
    Skipped for discard sentinels and splice results. Requires adjacent ( (no whitespace).
-   Rejects nil/true/false as call heads — these are literals, not callable."
+   Rejects nil/true/false as call heads — these are literals, not callable.
+   Chain length is capped at max-depth to prevent unbounded recursion."
   [p form]
-  (if (and (not (discard-sentinel? form))
-           (not (splice-result? form))
-           (adjacent-open-paren? p))
-    (if (contains? #{nil true false} form)
-      (errors/meme-error
-       (str "Cannot use " (pr-str form) " as a call head — "
-            (pr-str form) "(\u2026) is not valid meme syntax")
-       (error-data p (select-keys (ppeek p) [:line :col])))
-      (let [args (parse-call-args p)]
-        (recur p (apply list form args))))
-    form))
+  (loop [form form
+         chain 0]
+    (if (and (not (discard-sentinel? form))
+             (not (splice-result? form))
+             (adjacent-open-paren? p))
+      (do
+        (when (> chain max-depth)
+          (errors/meme-error
+           (str "Maximum call chain depth (" max-depth ") exceeded")
+           (error-data p (select-keys (ppeek p) [:line :col]))))
+        (if (contains? #{nil true false} form)
+          (errors/meme-error
+           (str "Cannot use " (pr-str form) " as a call head — "
+                (pr-str form) "(\u2026) is not valid meme syntax")
+           (error-data p (select-keys (ppeek p) [:line :col])))
+          (let [args (parse-call-args p)]
+            (recur (apply list form args) (inc chain)))))
+      form)))
 
 (defn- parse-form
   "Parse a single meme form. Attaches :ws (leading whitespace/comments)

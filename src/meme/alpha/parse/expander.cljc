@@ -95,6 +95,12 @@
     ;; Must be before map? because defrecords satisfy (map? x)
     (forms/raw? form) (:value form)
 
+    ;; MemeAutoKeyword — pass through unchanged in syntax-quote context.
+    ;; Must be before map? because defrecords satisfy (map? x).
+    ;; Expansion to (read-string ...) happens in step-expand-syntax-quotes.
+    (forms/deferred-auto-keyword? form)
+    (forms/deferred-auto-keyword->form form)
+
     ;; Nested syntax-quote — expand inner, then quote the expansion.
     ;; Mirrors Clojure: ``x produces code that generates `x's expansion.
     ;; First expand the inner form with a fresh gensym-env, then treat
@@ -140,6 +146,11 @@
    (cond
      (forms/raw? form)
      (:value form)
+
+     ;; MemeAutoKeyword — pass through for the printer to handle.
+     ;; Expansion to (read-string ...) happens in step-expand-syntax-quotes.
+     ;; Must be before map? because defrecords satisfy (map? x).
+     (forms/deferred-auto-keyword? form) form
 
      (forms/syntax-quote? form)
      (binding [*gensym-env* (volatile! {})]

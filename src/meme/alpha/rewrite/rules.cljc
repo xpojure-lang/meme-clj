@@ -30,37 +30,8 @@
 ;; Helpers for anon-fn transformation
 ;; ============================================================
 
-(defn- normalize-bare-percent
-  "Replace bare % with %1 in a form tree."
-  [form]
-  (cond
-    (= form '%) '%1
-    (seq? form) (apply list (map normalize-bare-percent form))
-    (vector? form) (mapv normalize-bare-percent form)
-    (map? form) (into {} (map (fn [[k v]] [(normalize-bare-percent k)
-                                            (normalize-bare-percent v)]) form))
-    (set? form) (set (map normalize-bare-percent form))
-    :else form))
-
-(defn- find-percent-params
-  "Walk form collecting % param types."
-  [form]
-  (cond
-    (symbol? form) (if-let [p (forms/percent-param-type form)] #{p} #{})
-    (sequential? form) (reduce into #{} (map find-percent-params form))
-    (set? form) (reduce into #{} (map find-percent-params form))
-    (map? form) (reduce into #{} (mapcat (fn [[k v]] [(find-percent-params k) (find-percent-params v)]) form))
-    :else #{}))
-
-(defn- build-anon-fn-params
-  "Build the param vector for an anonymous fn from collected param types."
-  [param-set]
-  (let [has-bare? (contains? param-set :bare)
-        has-rest? (contains? param-set :rest)
-        nums (filter number? param-set)
-        max-n (if (seq nums) (apply max nums) (if has-bare? 1 0))]
-    (cond-> (mapv #(symbol (str "%" %)) (range 1 (inc max-n)))
-      has-rest? (into ['& (symbol "%&")]))))
+;; find-percent-params, normalize-bare-percent, build-anon-fn-params
+;; are in forms.cljc (shared with parse/reader.cljc)
 
 ;; ============================================================
 ;; Tree→S: tagged tree (from tree-builder) → Clojure forms
@@ -112,9 +83,9 @@
 
         anon-fn
         (let [body (first children)
-              body (normalize-bare-percent body)
-              params (find-percent-params body)
-              param-vec (build-anon-fn-params params)]
+              body (forms/normalize-bare-percent body)
+              params (forms/find-percent-params body)
+              param-vec (forms/build-anon-fn-params params)]
           (with-meta (list 'fn param-vec body) {:meme/sugar true}))
 
         meme/tagged
@@ -152,6 +123,7 @@
         (apply list (transform-structures head) (seq children))))
 
     (vector? form) (mapv transform-structures form)
+    (record? form) form
     (map? form) (into {} (map (fn [[k v]] [(transform-structures k)
                                             (transform-structures v)]) form))
     (set? form) (set (map transform-structures form))

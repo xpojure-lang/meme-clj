@@ -9,12 +9,15 @@
    M→S transformation in one pass. This module separates them: build a
    raw tagged tree here, then let rewrite rules handle the rest."
   (:require [clojure.string :as str]
+            [meme.alpha.errors :as errors]
             [meme.alpha.forms :as forms]
             [meme.alpha.parse.resolve :as resolve]
             [meme.alpha.rewrite :as rewrite]
             [meme.alpha.rewrite.rules :as rules]))
 
 (def ^:private discard-sentinel ::discarded)
+(def ^:private ^:const max-depth 512)
+(def ^:private ^:dynamic *depth* nil)
 
 ;; ============================================================
 ;; Token stream helpers
@@ -67,8 +70,10 @@
          items []]
     (cond
       (>= pos (count tokens))
-      (throw (ex-info (str "Unclosed " (name close-type))
-                      {:pos pos}))
+      (let [start-tok (when (pos? pos) (nth tokens (dec pos)))]
+        (errors/meme-error (str "Unclosed " (name close-type))
+                           (merge {:incomplete true}
+                                  (when start-tok (select-keys start-tok [:line :col])))))
 
       (= (tok-type tokens pos) close-type)
       [items (inc pos)]
@@ -100,126 +105,137 @@
 
 (defn build-tree
   "Build a tagged tree node from tokens starting at pos.
-   Returns [node new-pos]."
+   Returns [node new-pos]. When *depth* is bound (via tokens->tree),
+   tracks recursion depth and throws at max-depth (512)."
   [tokens pos]
-  (let [token (nth tokens pos)
-        tt (:type token)]
-    (case tt
-      ;; Atoms — resolve value, then check for adjacent call
-      (:symbol :keyword)
-      (let [val (resolve-atom token)]
-        (build-call-or-atom tokens (inc pos) val))
+  (when *depth*
+    (let [d (vswap! *depth* inc)]
+      (when (> d max-depth)
+        (let [token (nth tokens pos)]
+          (errors/meme-error (str "Maximum nesting depth (" max-depth ") exceeded — input is too deeply nested")
+                             (select-keys token [:line :col]))))))
+  (try
+    (let [token (nth tokens pos)
+          tt (:type token)]
+      (case tt
+        ;; Atoms — resolve value, then check for adjacent call
+        (:symbol :keyword)
+        (let [val (resolve-atom token)]
+          (build-call-or-atom tokens (inc pos) val))
 
-      (:number :string :char :regex)
-      [(resolve-atom token) (inc pos)]
+        (:number :string :char :regex)
+        [(resolve-atom token) (inc pos)]
 
-      ;; Vectors: [items...] → (bracket items...)
-      ;; Also check for vector-as-head: [x](body) → m-call
-      :open-bracket
-      (let [[items new-pos] (build-collection tokens (inc pos) :close-bracket)
-            vec-form (apply list 'bracket items)]
-        (build-call-or-atom tokens new-pos vec-form))
+        ;; Vectors: [items...] → (bracket items...)
+        ;; Also check for vector-as-head: [x](body) → m-call
+        :open-bracket
+        (let [[items new-pos] (build-collection tokens (inc pos) :close-bracket)
+              vec-form (apply list 'bracket items)]
+          (build-call-or-atom tokens new-pos vec-form))
 
-      ;; Maps: {k v ...} → (brace k v ...)
-      :open-brace
-      (let [[items new-pos] (build-collection tokens (inc pos) :close-brace)]
-        [(apply list 'brace items) new-pos])
+        ;; Maps: {k v ...} → (brace k v ...)
+        :open-brace
+        (let [[items new-pos] (build-collection tokens (inc pos) :close-brace)]
+          [(apply list 'brace items) new-pos])
 
-      ;; Sets: #{items...} → (set-lit items...)
-      :open-set
-      (let [[items new-pos] (build-collection tokens (inc pos) :close-brace)]
-        [(apply list 'set-lit items) new-pos])
+        ;; Sets: #{items...} → (set-lit items...)
+        :open-set
+        (let [[items new-pos] (build-collection tokens (inc pos) :close-brace)]
+          [(apply list 'set-lit items) new-pos])
 
-      ;; Bare parens: (...) → (paren ...) or empty list
-      :open-paren
-      (let [[items new-pos] (build-collection tokens (inc pos) :close-paren)]
-        (if (empty? items)
-          ['() new-pos]
-          [(apply list 'paren items) new-pos]))
+        ;; Bare parens: (...) → (paren ...) or empty list
+        :open-paren
+        (let [[items new-pos] (build-collection tokens (inc pos) :close-paren)]
+          (if (empty? items)
+            ['() new-pos]
+            [(apply list 'paren items) new-pos]))
 
-      ;; #() anonymous function
-      :open-anon-fn
-      (let [[items new-pos] (build-collection tokens (inc pos) :close-paren)]
-        [(apply list 'anon-fn items) new-pos])
+        ;; #() anonymous function
+        :open-anon-fn
+        (let [[items new-pos] (build-collection tokens (inc pos) :close-paren)]
+          [(apply list 'anon-fn items) new-pos])
 
-      ;; Prefix markers
-      :quote
-      (let [[inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/quote inner) new-pos])
+        ;; Prefix markers
+        :quote
+        (let [[inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/quote inner) new-pos])
 
-      :deref
-      (let [[inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/deref inner) new-pos])
+        :deref
+        (let [[inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/deref inner) new-pos])
 
-      :meta
-      (let [[meta-val new-pos1] (build-tree tokens (inc pos))
-            [target new-pos2] (build-tree tokens new-pos1)]
-        [(list 'meme/meta meta-val target) new-pos2])
+        :meta
+        (let [[meta-val new-pos1] (build-tree tokens (inc pos))
+              [target new-pos2] (build-tree tokens new-pos1)]
+          [(list 'meme/meta meta-val target) new-pos2])
 
-      :syntax-quote
-      (let [[inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/syntax-quote inner) new-pos])
+        :syntax-quote
+        (let [[inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/syntax-quote inner) new-pos])
 
-      :unquote
-      (let [[inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/unquote inner) new-pos])
+        :unquote
+        (let [[inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/unquote inner) new-pos])
 
-      :unquote-splicing
-      (let [[inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/unquote-splicing inner) new-pos])
+        :unquote-splicing
+        (let [[inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/unquote-splicing inner) new-pos])
 
-      :var-quote
-      (let [[inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/var inner) new-pos])
+        :var-quote
+        (let [[inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/var inner) new-pos])
 
-      :discard
-      (let [[_ new-pos] (build-tree tokens (inc pos))]
-        ;; discard the form, try next
-        (if (< new-pos (count tokens))
-          (build-tree tokens new-pos)
-          [discard-sentinel new-pos]))
+        :discard
+        (let [[_ new-pos] (build-tree tokens (inc pos))]
+          ;; discard the form, try next
+          (if (< new-pos (count tokens))
+            (build-tree tokens new-pos)
+            [discard-sentinel new-pos]))
 
-      ;; Tagged literals: #tag form
-      :tagged-literal
-      (let [tag (symbol (subs (:value token) 1))
-            [inner new-pos] (build-tree tokens (inc pos))]
-        [(list 'meme/tagged tag inner) new-pos])
+        ;; Tagged literals: #tag form
+        :tagged-literal
+        (let [tag (symbol (subs (:value token) 1))
+              [inner new-pos] (build-tree tokens (inc pos))]
+          [(list 'meme/tagged tag inner) new-pos])
 
-      ;; Reader conditionals and namespaced maps — pass through as markers
-      :reader-cond-start
-      (let [splicing? (= "#?@" (:value token))
-            paren-pos (inc pos)
-            _ (when (or (>= paren-pos (count tokens))
-                        (not= :open-paren (tok-type tokens paren-pos)))
-                (throw (ex-info (str "Expected ( after " (:value token))
-                                {:pos paren-pos})))
-            [items new-pos] (build-collection tokens (inc paren-pos) :close-paren)]
-        [(apply list (if splicing? 'meme/reader-cond-splicing 'meme/reader-cond) items) new-pos])
+        ;; Reader conditionals and namespaced maps — pass through as markers
+        :reader-cond-start
+        (let [splicing? (= "#?@" (:value token))
+              paren-pos (inc pos)
+              _ (when (or (>= paren-pos (count tokens))
+                          (not= :open-paren (tok-type tokens paren-pos)))
+                  (errors/meme-error (str "Expected ( after " (:value token))
+                                     (select-keys token [:line :col])))
+              [items new-pos] (build-collection tokens (inc paren-pos) :close-paren)]
+          [(apply list (if splicing? 'meme/reader-cond-splicing 'meme/reader-cond) items) new-pos])
 
-      :namespaced-map-start
-      (let [ns-prefix (:value token)
-            brace-pos (inc pos)
-            _ (when (or (>= brace-pos (count tokens))
-                        (not= :open-brace (tok-type tokens brace-pos)))
-                (throw (ex-info (str "Expected { after " ns-prefix)
-                                {:pos brace-pos})))
-            [items new-pos] (build-collection tokens (inc brace-pos) :close-brace)]
-        [(apply list 'meme/ns-map (symbol ns-prefix) items) new-pos])
+        :namespaced-map-start
+        (let [ns-prefix (:value token)
+              brace-pos (inc pos)
+              _ (when (or (>= brace-pos (count tokens))
+                          (not= :open-brace (tok-type tokens brace-pos)))
+                  (errors/meme-error (str "Expected { after " ns-prefix)
+                                     (select-keys token [:line :col])))
+              [items new-pos] (build-collection tokens (inc brace-pos) :close-brace)]
+          [(apply list 'meme/ns-map (symbol ns-prefix) items) new-pos])
 
-      ;; Fallback
-      (throw (ex-info (str "Unexpected token type: " tt)
-                      {:token token :pos pos})))))
+        ;; Fallback
+        (errors/meme-error (str "Unexpected token type: " tt)
+                           (select-keys token [:line :col]))))
+    (finally
+      (when *depth* (vswap! *depth* dec)))))
 
 (defn tokens->tree
   "Convert a flat token vector to a tagged tree.
    Returns a vector of top-level forms."
   [tokens]
-  (loop [pos 0
-         forms []]
-    (if (>= pos (count tokens))
-      forms
-      (let [[form new-pos] (build-tree tokens pos)]
-        (recur new-pos (if (= form discard-sentinel) forms (conj forms form)))))))
+  (binding [*depth* (volatile! 0)]
+    (loop [pos 0
+           forms []]
+      (if (>= pos (count tokens))
+        forms
+        (let [[form new-pos] (build-tree tokens pos)]
+          (recur new-pos (if (= form discard-sentinel) forms (conj forms form))))))))
 
 (defn rewrite-parser
   "Parser that conforms to the pipeline contract: (fn [tokens opts source] → forms).

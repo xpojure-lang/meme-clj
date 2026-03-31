@@ -1,7 +1,8 @@
 (ns meme.alpha.parse.reader.data-literals-test
   "Parser tests for data literal passthrough (vectors, maps, sets, keywords, numbers)."
   (:require [clojure.test :refer [deftest is]]
-            [meme.alpha.core :as core]))
+            [meme.alpha.core :as core]
+            [meme.alpha.forms :as forms]))
 
 (deftest parse-vector-literal
   (is (= '[[1 2 3]] (core/meme->forms "[1 2 3]"))))
@@ -31,8 +32,9 @@
 
 (deftest parse-auto-resolve-keyword
   #?(:clj
-     (is (= (list 'clojure.core/read-string "::local")
-            (first (core/meme->forms "::local"))))
+     (let [form (first (core/meme->forms "::local"))]
+       (is (forms/deferred-auto-keyword? form))
+       (is (= "::local" (forms/deferred-auto-keyword-raw form))))
      :cljs
      (is (thrown-with-msg? js/Error #"resolve-keyword"
                            (core/meme->forms "::local")))))

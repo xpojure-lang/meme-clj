@@ -5,6 +5,7 @@
    observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
+            [meme.alpha.forms :as forms]
             [meme.alpha.scan.tokenizer :as tokenizer]))
 
 (defn- tokenize [s]
@@ -322,8 +323,9 @@
 
 (deftest form-snapshot-auto-resolve-keyword
   #?(:clj
-     (is (= (list 'clojure.core/read-string "::local")
-            (first (forms-for "::local"))))
+     (let [form (first (forms-for "::local"))]
+       (is (forms/deferred-auto-keyword? form))
+       (is (= "::local" (forms/deferred-auto-keyword-raw form))))
      :cljs
      (is (thrown-with-msg? js/Error #"resolve-keyword"
                            (forms-for "::local")))))
