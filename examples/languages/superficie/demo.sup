@@ -1,0 +1,37 @@
+; demo.sup — superficie in action.
+; The prelude gives us render-string and render-forms.
+; We render Clojure code as familiar syntax.
+
+println("--- Functions ---")
+println(render-string("(defn greet [name] (str \"Hello, \" name \"!\"))"))
+println()
+println(render-string("(defn quadratic [a b c x] (+ (* a x x) (* b x) c))"))
+
+println("\n--- Control flow ---")
+println(render-string("(if (> x 0) :positive :non-positive)"))
+println()
+println(render-string("(cond (< x 0) :negative (= x 0) :zero :else :positive)"))
+
+println("\n--- Bindings ---")
+println(render-string("(let [x 1 y 2] (+ x y))"))
+
+println("\n--- Pipes ---")
+println(render-string("(->> users (filter :active) (map :name) (sort) (take 10))"))
+println()
+println(render-string("(-> config (assoc :port 8080) (merge defaults))"))
+
+println("\n--- Infix ---")
+println(render-string("(+ (* a x x) (* b x) c)"))
+println()
+println(render-string("(and (> x 0) (<= x 100))"))
+
+println("\n--- Try/catch ---")
+println(render-string("(try (risky-fn) (catch Exception e (handle e)))"))
+
+println("\n--- Interop ---")
+println(render-string("(.toString obj)"))
+println()
+println(render-string("(.method obj arg1 arg2)"))
+
+println("\n--- For ---")
+println(render-string("(for [x xs y ys] [x y])"))

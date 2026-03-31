@@ -55,7 +55,9 @@ defn(render-binding-vec
 
 defn(render-body
   [forms indent-str]
-  str/join("\n" map(fn([f] str(indent-str render(f))) forms)))
+  let([indent-lines fn([s] str/join("\n" map(fn([line] if(str/blank?(line) line str(indent-str line)))
+                                                 str/split-lines(s))))]
+    str/join("\n" map(fn([f] indent-lines(render(f))) forms))))
 
 defn(render-block
   [head parts]
@@ -124,7 +126,7 @@ defn(render
     and(seq?(form) =(first(form) 'let))
     let([bindings second(form)
          body drop(2 form)]
-      str(render-binding-vec(bindings) "\n" render-body(body "")))
+      str(render-binding-vec(bindings) "\n" str/join("\n" map(render body))))
 
     ; if
     and(seq?(form) =(first(form) 'if))

@@ -1,0 +1,7 @@
+; Register the superficie language.
+
+require('[meme.alpha.platform.registry :as reg])
+
+reg/register!(:superficie
+  {:extension ".sup"
+   :prelude-file "examples/languages/superficie/core.meme"})

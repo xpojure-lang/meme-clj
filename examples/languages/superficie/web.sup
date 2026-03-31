@@ -1,0 +1,15 @@
+; web.sup — a tiny web handler, rendered as superficie
+
+println(render-string("
+(defn handle-request [req]
+  (let [method (:method req)
+        path (:path req)]
+    (cond
+      (and (= method :get) (= path \"/\")) {:status 200 :body \"Welcome\"}
+      (and (= method :get) (= path \"/users\")) {:status 200 :body (get-users)}
+      (= method :post) (try
+                          (create-resource req)
+                          (catch Exception e
+                            {:status 500 :body (.getMessage e)}))
+      :else {:status 404 :body \"Not found\"})))
+"))

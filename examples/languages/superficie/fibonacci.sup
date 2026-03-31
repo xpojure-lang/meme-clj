@@ -1,0 +1,16 @@
+; fibonacci.sup — classic recursion, rendered as superficie
+
+println(render-string("
+(defn fib [n]
+  (loop [i n acc-a 0 acc-b 1]
+    (if (<= i 0)
+      acc-a
+      (recur (dec i) acc-b (+ acc-a acc-b)))))
+"))
+
+println(render-string("
+(defn fib-seq [n]
+  (->> (range n)
+       (map fib)
+       (into [])))
+"))
