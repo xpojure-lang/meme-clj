@@ -76,7 +76,6 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 - `meme.alpha.forms` (.cljc) — Shared form-level predicates, constructors, and constants. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding, `percent-param-type`, `strip-internal-meta`). Portable.
 - `meme.alpha.scan.source` (.cljc) — Scanner-level source-position utilities. `line-col->offset` uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). Note: the scanner and display line models diverge for CRLF sources — see `format-error` for how the bridge is handled. Portable.
 - `meme.alpha.scan.tokenizer` (.cljc) — Character scanning and token production. Emits flat token vector with marker tokens for compound forms. Portable.
-- `meme.alpha.scan.grouper` (.cljc) — Vestigial pass-through (all forms are now parsed natively by the reader). Not part of the pipeline; retained for backward compatibility. Portable.
 - `meme.alpha.parse.reader` (.cljc) — Recursive-descent parser (tokens → Clojure forms). Delegates value resolution to `meme.alpha.parse.resolve`. Portable.
 - `meme.alpha.parse.expander` (.cljc) — Syntax-quote expansion: `MemeSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Called by runtime paths (run, repl) before eval. Also unwraps `MemeRaw` to plain values. Portable.
 - `meme.alpha.parse.resolve` (.cljc) — Value resolution: converts raw token text to Clojure values. Centralizes all host reader delegation (`read-string` calls) with consistent error wrapping. Handles platform asymmetries (JVM vs CLJS). Portable.
@@ -119,7 +118,6 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 | File | What belongs here |
 |------|-------------------|
 | `scan/tokenizer_test` | Tokenizer behavior in isolation (token types, column tracking) |
-| `scan/grouper_test` | Grouper: vestigial pass-through behavior tests |
 | `scan/source_test` | Source-position contract: `line-col->offset` |
 | `parse/reader/rule1_test` | Rule 1 (call syntax): head type x spacing x arity matrix |
 | `parse/reader/calls_test` | All Clojure forms as calls: def, defn, fn, let, loop, for, if, when, cond, try, threading, ns, protocols, records, multimethods, concurrency, "everything is a call" |

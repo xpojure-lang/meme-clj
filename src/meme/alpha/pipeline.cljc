@@ -12,8 +12,7 @@
    | :tokens      | Vector         | scan          | parse                |
    | :forms       | Vector         | parse, expand | expand, caller       |
 
-   :raw-tokens and :tokens are identical (the former grouper stage was a
-   pass-through). Both keys are written by scan for backward compatibility;
+   :raw-tokens and :tokens are identical. Both keys are written by scan;
    :raw-tokens is retained so tooling that reads it continues to work.
 
    Stages are independent functions. Compose them in any order that respects

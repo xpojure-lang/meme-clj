@@ -124,14 +124,6 @@
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
 
-(deftest dogfood-per-form-grouper
-  (let [{:keys [total succeeded failed read-errors]} (roundtrip-file-forms "src/meme/alpha/scan/grouper.cljc")]
-    (is (= total (count succeeded))
-        (str "all forms roundtrip; failures: "
-             (str/join ", " (map :name failed))))
-    (is (zero? (count failed)))
-    (is (zero? (count read-errors)) "no read errors in own source")))
-
 (deftest dogfood-per-form-resolve
   (let [{:keys [total succeeded failed read-errors]} (roundtrip-file-forms "src/meme/alpha/parse/resolve.cljc")]
     (is (= total (count succeeded))
@@ -184,7 +176,7 @@
   (doseq [path ["src/meme/alpha/core.cljc" "src/meme/alpha/runtime/run.cljc"
                  "src/meme/alpha/runtime/repl.cljc" "test/meme/alpha/test_runner.clj"
                  "src/meme/alpha/parse/reader.cljc" "src/meme/alpha/emit/printer.cljc"
-                 "src/meme/alpha/scan/tokenizer.cljc" "src/meme/alpha/scan/grouper.cljc"
+                 "src/meme/alpha/scan/tokenizer.cljc"
                  "src/meme/alpha/parse/resolve.cljc" "src/meme/alpha/pipeline.cljc"
                  "src/meme/alpha/errors.cljc"]]
     (testing (str path " roundtripped vars match original")

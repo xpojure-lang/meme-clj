@@ -1,6 +1,6 @@
 (ns meme.alpha.scan.source
   "Scanner-level source-position utilities.
-   Defines the character-level line/col model used by the tokenizer and grouper.
+   Defines the character-level line/col model used by the tokenizer.
    Only \\n advances the line counter — \\r is a regular character that occupies
    a column. This matches sadvance! in the tokenizer.
 
