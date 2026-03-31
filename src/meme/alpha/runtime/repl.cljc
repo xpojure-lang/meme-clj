@@ -94,7 +94,8 @@
          reader-opts (let [rk (or (:resolve-keyword opts)
                                   #?(:clj #(clojure.core/read-string %)
                                      :cljs nil))
-                           base (if rk {:resolve-keyword rk} {})]
+                           base (cond-> (if rk {:resolve-keyword rk} {})
+                                  (:parser opts) (assoc :parser (:parser opts)))]
                        #?(:clj (cond-> base
                                  (not (:resolve-symbol opts))
                                  (assoc :resolve-symbol resolve/default-resolve-symbol))

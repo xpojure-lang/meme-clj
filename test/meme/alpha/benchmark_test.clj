@@ -11,13 +11,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [meme.alpha.convert :as convert]
-            [meme.alpha.core :as core]
-            [meme.alpha.emit.formatter.flat :as fmt-flat]
-            [meme.alpha.rewrite :as rw]
-            [meme.alpha.rewrite.rules :as rules]
-            [meme.alpha.rewrite.emit :as remit]
-            [meme.alpha.collapsar :as c]
-            [meme.alpha.collapsar.meme :as collapsar]))
+            [meme.alpha.core :as core]))
 
 ;; ============================================================
 ;; Timing
@@ -143,24 +137,14 @@
 ;; ============================================================
 
 (defn- roundtrip-form
-  "Roundtrip a single Clojure form through clj→meme→clj for a given pipeline.
-   Returns {:ok true} or {:error msg}."
+  "Roundtrip a single Clojure form through clj→meme→clj using the public API.
+   End-to-end: pr-str → convert/clj->meme → convert/meme->clj → clj->forms."
   [form pipeline-name]
   (try
-    (let [;; clj→meme: operate on forms directly (no pr-str detour that loses map order)
-          meme-text (case pipeline-name
-                      :classic
-                      (fmt-flat/format-form form)
-                      :rewrite
-                      (let [tagged (rw/rewrite rules/s->m-rules form)
-                            tagged (rules/rewrite-inside-reader-conditionals
-                                     (fn [f] (rw/rewrite rules/s->m-rules f)) tagged)]
-                        (remit/emit tagged))
-                      :collapsar
-                      (c/run-pipeline collapsar/clj->meme-pipeline [form]))
-          ;; meme→clj
-          forms-back (convert/meme->clj meme-text pipeline-name)
-          back-forms (core/clj->forms forms-back)]
+    (let [clj-src (pr-str form)
+          meme-text (convert/clj->meme clj-src pipeline-name)
+          clj-back (convert/meme->clj meme-text pipeline-name)
+          back-forms (core/clj->forms clj-back)]
       (if (form= [form] back-forms)
         {:ok true}
         {:error "roundtrip mismatch"}))

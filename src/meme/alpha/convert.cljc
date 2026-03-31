@@ -1,10 +1,8 @@
 (ns meme.alpha.convert
-  "Unified convert: meme↔clj via classic, rewrite, or collapsar pipeline.
+  "Unified convert: meme↔clj via three named pipelines.
 
-   Three pipelines:
-     :classic   — recursive-descent parser + Wadler-Lindig printer (default)
-     :rewrite   — tree builder + meme.alpha.rewrite rules
-     :collapsar — tree builder + meme.alpha.collapsar phases"
+   Each pipeline is a map with :name, :parse, :meme->clj, and :clj->meme.
+   The CLI and public API look up the pipeline by keyword and call through it."
   (:require [meme.alpha.core :as core]
             [meme.alpha.collapsar.meme :as collapsar]
             [meme.alpha.pipeline :as pipeline]
@@ -13,30 +11,62 @@
             [meme.alpha.rewrite.rules :as rules]
             [meme.alpha.rewrite.emit :as remit]))
 
+;; ---------------------------------------------------------------------------
+;; Pipeline constants
+;; ---------------------------------------------------------------------------
+
+(def classic-pipeline
+  "Classic: recursive-descent parser + Wadler-Lindig printer."
+  {:name     :classic
+   :parse    (fn [src opts] (:forms (pipeline/run src opts)))
+   :meme->clj (fn [src opts] (core/meme->clj src opts))
+   #?@(:clj [:clj->meme (fn [src] (core/clj->meme src))])})
+
+(def rewrite-pipeline
+  "Rewrite: tree builder + rewrite rules."
+  {:name     :rewrite
+   :parse    (fn [src opts] (:forms (pipeline/run src (assoc opts :parser tree/rewrite-parser))))
+   :meme->clj (fn [src opts]
+                (core/forms->clj
+                  (:forms (pipeline/run src (merge opts {:parser tree/rewrite-parser
+                                                         :read-cond :preserve})))))
+   #?@(:clj [:clj->meme (fn [src]
+                           (let [forms (core/clj->forms src)
+                                 tagged (mapv #(rw/rewrite rules/s->m-rules %) forms)
+                                 tagged (mapv #(rules/rewrite-inside-reader-conditionals
+                                                 (fn [f] (rw/rewrite rules/s->m-rules f)) %)
+                                              tagged)]
+                             (remit/emit-forms tagged)))])})
+
+(def collapsar-pipeline
+  "Collapsar: tree builder + collapsar phases."
+  {:name     :collapsar
+   :parse    (fn [src opts] (:forms (pipeline/run src (assoc opts :parser tree/rewrite-parser))))
+   :meme->clj (fn [src opts] (collapsar/meme->clj src opts))
+   #?@(:clj [:clj->meme (fn [src] (collapsar/clj->meme src))])})
+
 (def pipelines
-  "Available pipeline names."
-  #{:classic :rewrite :collapsar})
+  "Available pipelines by keyword."
+  {:classic   classic-pipeline
+   :rewrite   rewrite-pipeline
+   :collapsar collapsar-pipeline})
 
 ;; ---------------------------------------------------------------------------
-;; meme → clj
+;; Public API
 ;; ---------------------------------------------------------------------------
+
+(defn resolve-pipeline
+  "Look up a pipeline by keyword. Throws on unknown name."
+  [pipeline-name]
+  (or (get pipelines pipeline-name)
+      (throw (ex-info (str "Unknown pipeline: " pipeline-name
+                           " — must be one of: classic, rewrite, collapsar") {}))))
 
 (defn meme->clj
   "Convert meme source to Clojure source using the named pipeline."
   ([src] (meme->clj src :classic))
   ([src pipeline-name]
-   (case pipeline-name
-     :classic   (core/meme->clj src {:read-cond :preserve})
-     :rewrite   (core/forms->clj
-                  (:forms (pipeline/run src {:parser tree/rewrite-parser
-                                             :read-cond :preserve})))
-     :collapsar (collapsar/meme->clj src {:read-cond :preserve})
-     (throw (ex-info (str "Unknown pipeline: " pipeline-name
-                          " — must be one of: classic, rewrite, collapsar") {})))))
-
-;; ---------------------------------------------------------------------------
-;; clj → meme
-;; ---------------------------------------------------------------------------
+   ((:meme->clj (resolve-pipeline pipeline-name)) src {:read-cond :preserve})))
 
 #?(:clj
    (defn clj->meme
@@ -44,14 +74,4 @@
    JVM/Babashka only."
      ([src] (clj->meme src :classic))
      ([src pipeline-name]
-      (case pipeline-name
-        :classic   (core/clj->meme src)
-        :rewrite   (let [forms (core/clj->forms src)
-                         tagged (mapv #(rw/rewrite rules/s->m-rules %) forms)
-                         tagged (mapv #(rules/rewrite-inside-reader-conditionals
-                                         (fn [f] (rw/rewrite rules/s->m-rules f)) %)
-                                      tagged)]
-                     (remit/emit-forms tagged))
-        :collapsar (collapsar/clj->meme src)
-        (throw (ex-info (str "Unknown pipeline: " pipeline-name
-                             " — must be one of: classic, rewrite, collapsar") {}))))))
+      ((:clj->meme (resolve-pipeline pipeline-name)) src))))
