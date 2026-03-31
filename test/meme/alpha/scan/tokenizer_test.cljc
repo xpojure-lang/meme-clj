@@ -1,14 +1,8 @@
 (ns meme.alpha.scan.tokenizer-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.alpha.scan.tokenizer :as tokenizer]
-            [meme.alpha.scan.grouper :as grouper]))
+            [meme.alpha.scan.tokenizer :as tokenizer]))
 
 (defn- tokenize [s]
-  (-> (tokenizer/tokenize s) (grouper/group-tokens s)))
-
-(defn- tokenize-raw
-  "Tokenize without grouping — returns raw tokenizer output."
-  [s]
   (tokenizer/tokenize s))
 
 ;; ---------------------------------------------------------------------------
@@ -119,20 +113,20 @@
     (is (= "\\newline" (:value tok)))))
 
 (deftest tokenize-reader-cond
-  (testing "raw tokenizer emits :reader-cond-start marker (grouper collapses to -raw)"
-    (let [tok (first (tokenize-raw "#?(:clj 1)"))]
+  (testing "tokenizer emits :reader-cond-start marker"
+    (let [tok (first (tokenize "#?(:clj 1)"))]
       (is (= :reader-cond-start (:type tok)))
       (is (= "#?" (:value tok))))))
 
 (deftest tokenize-reader-cond-splicing
   (testing "raw tokenizer emits :reader-cond-start marker for #?@"
-    (let [tok (first (tokenize-raw "#?@(:clj [1])"))]
+    (let [tok (first (tokenize "#?@(:clj [1])"))]
       (is (= :reader-cond-start (:type tok)))
       (is (= "#?@" (:value tok))))))
 
 (deftest tokenize-namespaced-map
-  (testing "raw tokenizer emits :namespaced-map-start marker (grouper collapses to -raw)"
-    (let [tok (first (tokenize-raw "#:ns{:a 1}"))]
+  (testing "tokenizer emits :namespaced-map-start marker"
+    (let [tok (first (tokenize "#:ns{:a 1}"))]
       (is (= :namespaced-map-start (:type tok)))
       (is (= "#:ns" (:value tok))))))
 

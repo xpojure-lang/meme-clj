@@ -439,7 +439,18 @@
       (try (expander/expand-forms forms)
            (is false "should have thrown")
            (catch #?(:clj Exception :cljs :default) e
-             (is (re-find #"Unquote-splicing" (ex-message e))))))))
+             (is (re-find #"Unquote-splicing" (ex-message e)))))))
+  (testing "~@ error points at ~@ token, not the backtick"
+    ;; `~@xs — backtick at col 1, ~@ at col 2. Top-level ~@ (not in collection) errors.
+    (let [forms (core/meme->forms "`~@xs")]
+      (try (expander/expand-forms forms)
+           (is false "should have thrown")
+           (catch #?(:clj Exception :cljs :default) e
+             (let [data (ex-data e)]
+               ;; The ~@ token is at col 2 (after the backtick)
+               ;; It should NOT point at col 1 (the backtick)
+               (is (= 2 (:col data))
+                   "error location should point at ~@, not the backtick")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #? reader conditionals lost non-matching branches on roundtrip.

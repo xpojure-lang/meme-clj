@@ -24,6 +24,9 @@
    opts: {:width 80}"
   ([forms] (format-forms forms nil))
   ([forms opts]
+   (when (string? forms)
+     (throw (ex-info "format-forms expects a sequence of forms, not a string"
+                     {:input (subs forms 0 (min 50 (count forms)))})))
    (let [trailing-ws (:trailing-ws (meta forms))
          trailing-comments (when trailing-ws
                              (printer/extract-comments trailing-ws))

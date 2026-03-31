@@ -1,15 +1,14 @@
 (ns meme.alpha.regression.scan-test
-  "Scar tissue: tokenizer and grouper regression tests.
+  "Scar tissue: tokenizer regression tests.
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
             [meme.alpha.emit.formatter.flat :as fmt-flat]
             [meme.alpha.forms :as forms]
-            [meme.alpha.scan.tokenizer :as tokenizer]
-            [meme.alpha.scan.grouper :as grouper]))
+            [meme.alpha.scan.tokenizer :as tokenizer]))
 
 (defn- tokenize [s]
-  (-> (tokenizer/tokenize s) (grouper/group-tokens s)))
+  (tokenizer/tokenize s))
 
 ;; ---------------------------------------------------------------------------
 ;; Syntax-quote is parsed natively with meme rules inside.
@@ -315,8 +314,8 @@
             (core/meme->forms input))))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug: #() inside opaque regions desynchronized the grouper's bracket depth
-;; counter. :open-anon-fn was not in opening-type?.
+;; Bug: #() inside compound dispatch forms desynchronized bracket depth
+;; tracking. :open-anon-fn was not in opening-type?.
 ;; ---------------------------------------------------------------------------
 
 (deftest anon-fn-inside-reader-conditional
@@ -346,8 +345,8 @@
     (is (some? (core/meme->forms "#:user{:f #(inc(%))}"))))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug: unclosed opaque forms returned :invalid instead of :incomplete.
-;; Fix: grouper detects unterminated opaque regions.
+;; Bug: unclosed compound dispatch forms returned :invalid instead of :incomplete.
+;; Fix: unterminated compound forms are detected as :incomplete.
 ;; ---------------------------------------------------------------------------
 
 (deftest unclosed-opaque-forms-are-incomplete

@@ -13,6 +13,9 @@
 (defn format-forms
   "Format Clojure forms as flat meme text, separated by blank lines."
   [forms]
+  (when (string? forms)
+    (throw (ex-info "format-forms expects a sequence of forms, not a string"
+                    {:input (subs forms 0 (min 50 (count forms)))})))
   (str/join "\n\n" (map format-form forms)))
 
 (defn format-clj

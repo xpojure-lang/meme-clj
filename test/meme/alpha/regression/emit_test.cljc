@@ -428,3 +428,24 @@
       (is (= (re-find r "a\\\"b")
              (re-find (first forms) "a\\\"b"))
           "regex behavior should be preserved")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #() shorthand in :clj mode wrapped the body in extra parens.
+;; (fn [%1] (+ %1 1)) with :meme/sugar printed as #((+ %1 1)) instead of
+;; #(+ %1 1). In Clojure, #((f)) calls the result of (f) — different semantics.
+;; Fix: unwrap the body list in :clj mode.
+;; ---------------------------------------------------------------------------
+
+(deftest anon-fn-clj-mode-no-double-parens
+  (testing "single-arg #() in :clj mode"
+    (let [form (with-meta '(fn [%1] (+ %1 1)) {:meme/sugar true})]
+      (is (= "#(+ %1 1)" (fmt-flat/format-clj [form]))
+          "#() body must not get extra parens in :clj mode")))
+  (testing "multi-arg #() in :clj mode"
+    (let [form (with-meta '(fn [%1 %2] (+ %1 %2)) {:meme/sugar true})]
+      (is (= "#(+ %1 %2)" (fmt-flat/format-clj [form]))
+          "#() with multiple args must not get extra parens")))
+  (testing "#() in :meme mode is unchanged"
+    (let [form (with-meta '(fn [%1] (+ %1 1)) {:meme/sugar true})]
+      (is (= "#(+(%1 1))" (fmt-flat/format-forms [form]))
+          "#() in meme mode should use call syntax"))))

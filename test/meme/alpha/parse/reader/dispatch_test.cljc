@@ -5,11 +5,10 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
             [meme.alpha.forms :as forms]
-            [meme.alpha.scan.tokenizer :as tokenizer]
-            [meme.alpha.scan.grouper :as grouper]))
+            [meme.alpha.scan.tokenizer :as tokenizer]))
 
 (defn- tokenize [s]
-  (-> (tokenizer/tokenize s) (grouper/group-tokens s)))
+  (tokenizer/tokenize s))
 
 ;; ---------------------------------------------------------------------------
 ;; Prefix reader macros: @, ^, ', #'

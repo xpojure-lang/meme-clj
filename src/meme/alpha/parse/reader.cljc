@@ -528,7 +528,8 @@
               (when (discard-sentinel? inner)
                 (errors/meme-error "Unquote target was discarded by #_ — nothing to unquote"
                                   (error-data p (select-keys tok [:line :col]))))
-              (forms/->MemeUnquote inner)))
+              (with-meta (forms/->MemeUnquote inner)
+                        (select-keys tok [:line :col]))))
         (errors/meme-error "Unquote (~) outside syntax-quote — ~ only has meaning inside `"
                            (error-data p (select-keys tok [:line :col]))))
 
@@ -539,7 +540,8 @@
               (when (discard-sentinel? inner)
                 (errors/meme-error "Unquote-splicing target was discarded by #_ — nothing to unquote-splice"
                                   (error-data p (select-keys tok [:line :col]))))
-              (forms/->MemeUnquoteSplicing inner)))
+              (with-meta (forms/->MemeUnquoteSplicing inner)
+                         (select-keys tok [:line :col]))))
         (errors/meme-error "Unquote-splicing (~@) outside syntax-quote — ~@ only has meaning inside `"
                            (error-data p (select-keys tok [:line :col]))))
 

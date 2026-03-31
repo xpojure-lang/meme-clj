@@ -52,7 +52,9 @@
 
     ;; UnquoteSplicing at top level is an error (must be inside a collection)
     (forms/unquote-splicing? form)
-    (errors/meme-error "Unquote-splicing (~@) not in collection" loc)
+    (errors/meme-error "Unquote-splicing (~@) not in collection"
+                       (let [form-loc (select-keys (meta form) [:line :col])]
+                         (if (seq form-loc) form-loc loc)))
 
     ;; Symbol — resolve and quote
     (symbol? form)

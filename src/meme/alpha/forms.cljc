@@ -126,7 +126,7 @@
 (def internal-meta-keys
   "Metadata keys used internally by the meme pipeline.
    Excluded when checking for user-visible metadata."
-  #{:line :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain})
+  #{:line :col :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain})
 
 (defn strip-internal-meta
   "Remove internal meme metadata keys, returning only user-visible metadata."

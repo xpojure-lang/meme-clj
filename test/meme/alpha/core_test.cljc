@@ -252,3 +252,11 @@
           wide (core/format-meme ['(+ 1 2 3 4 5)] {:width 200})]
       (is (re-find #"\n" narrow))
       (is (not (re-find #"\n" wide))))))
+
+(deftest format-forms-rejects-string-input
+  (testing "forms->meme rejects a string"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+                 (core/forms->meme "hello"))))
+  (testing "format-meme rejects a string"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+                 (core/format-meme "hello")))))

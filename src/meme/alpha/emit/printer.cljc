@@ -213,7 +213,11 @@
 
     ;; Anon-fn shorthand #()
     (anon-fn-shorthand? form)
-    (collection-doc "#(" ")" [(nth form 2)] mode)
+    (if (and (= mode :clj) (seq? (nth form 2)))
+      ;; :clj mode: unwrap body list to avoid double parens.
+      ;; (fn [%1] (+ %1 1)) → #(+ %1 1), not #((+ %1 1))
+      (collection-doc "#(" ")" (seq (nth form 2)) mode)
+      (collection-doc "#(" ")" [(nth form 2)] mode))
 
     ;; Sequences — check sugar then call
     (seq? form)
