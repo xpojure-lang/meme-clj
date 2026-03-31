@@ -200,7 +200,7 @@ meme rules inside. No opaque regions.
 ## Completed work (post-initial release)
 
 - **Syntax highlighting grammars.** TextMate grammar in `vscode-beme/`,
-  Tree-sitter grammar in `tree-sitter-beme/` (both in the `beme-lang` org).
+  Tree-sitter grammar in `tree-sitter-beme/` (both in the `xpojure-lang` org).
   Both cover `.beme` and `.meme` extensions.
 
 - **Platform / guest language system.** See `doc/platform-roadmap.md` and

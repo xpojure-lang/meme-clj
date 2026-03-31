@@ -1,8 +1,8 @@
 # meme-clj — M-Expressions with Macro Expansion
 
-[![CI](https://github.com/beme-lang/meme-clj/actions/workflows/ci.yml/badge.svg)](https://github.com/beme-lang/meme-clj/actions/workflows/ci.yml)
+[![CI](https://github.com/xpojure-lang/meme-clj/actions/workflows/ci.yml/badge.svg)](https://github.com/xpojure-lang/meme-clj/actions/workflows/ci.yml)
 [![Clojure](https://img.shields.io/badge/Clojure-JVM%20%7C%20Babashka%20%7C%20ClojureScript-blue?logo=clojure&logoColor=white)](https://clojure.org)
-[![License](https://img.shields.io/github/license/beme-lang/meme-clj)](LICENSE)
+[![License](https://img.shields.io/github/license/xpojure-lang/meme-clj)](LICENSE)
 
 M-expressions were McCarthy's original intended syntax for Lisp (1960).
 S-expressions were meant to be internal representation only — but they stuck.
@@ -34,7 +34,7 @@ defn(stars
     ]
     println(str(owner "/" repo ": " count " ⭐"))))
 
-stars("beme-lang" "meme-clj")
+stars("xpojure-lang" "meme-clj")
 ```
 
 ## Installation
@@ -43,13 +43,13 @@ Add to `deps.edn`:
 
 <!-- Update version below when releasing — source of truth is src/meme/version.txt -->
 ```clojure
-io.github.beme-lang/meme-clj {:mvn/version "0.10.0"}
+io.github.xpojure-lang/meme-clj {:mvn/version "0.10.0"}
 ```
 
 Or clone and use directly:
 
 ```bash
-git clone https://github.com/beme-lang/meme-clj.git
+git clone https://github.com/xpojure-lang/meme-clj.git
 cd meme-clj
 ```
 
@@ -96,10 +96,10 @@ Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
 | Editor | Repository | Features |
 |--------|-----------|----------|
-| [Zed](https://zed.dev) | [zed-meme](https://github.com/beme-lang/zed-meme) | Syntax highlighting, brackets, indentation, symbol outline |
-| [VS Code](https://code.visualstudio.com) | [vscode-meme](https://github.com/beme-lang/vscode-meme) | Syntax highlighting, brackets, indentation, folding |
+| [Zed](https://zed.dev) | [zed-meme](https://github.com/xpojure-lang/zed-meme) | Syntax highlighting, brackets, indentation, symbol outline |
+| [VS Code](https://code.visualstudio.com) | [vscode-meme](https://github.com/xpojure-lang/vscode-meme) | Syntax highlighting, brackets, indentation, folding |
 
-Tree-sitter grammar: [tree-sitter-meme](https://github.com/beme-lang/tree-sitter-meme)
+Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sitter-meme)
 
 ## Documentation
 

@@ -3,7 +3,7 @@
             [clojure.tools.build.api :as b]
             [deps-deploy.deps-deploy :as dd]))
 
-(def lib 'io.github.beme-lang/meme-clj)
+(def lib 'io.github.xpojure-lang/meme-clj)
 (def version (str/trim (slurp "src/meme/version.txt")))
 (def class-dir "target/classes")
 (def jar-file (format "target/%s-%s.jar" (name lib) version))
@@ -20,9 +20,9 @@
                   :version version
                   :basis basis
                   :src-dirs ["src"]
-                  :scm {:url "https://github.com/beme-lang/meme-clj"
-                        :connection "scm:git:git://github.com/beme-lang/meme-clj.git"
-                        :developerConnection "scm:git:ssh://git@github.com/beme-lang/meme-clj.git"
+                  :scm {:url "https://github.com/xpojure-lang/meme-clj"
+                        :connection "scm:git:git://github.com/xpojure-lang/meme-clj.git"
+                        :developerConnection "scm:git:ssh://git@github.com/xpojure-lang/meme-clj.git"
                         :tag (str "v" version)}
                   :pom-data [[:licenses
                               [:license

@@ -15,4 +15,4 @@ defn(stars
     ]
     println(str(owner "/" repo ": " count " ⭐"))))
 
-stars("beme-lang" "meme-clj")
+stars("xpojure-lang" "meme-clj")
