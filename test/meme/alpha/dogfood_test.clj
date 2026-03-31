@@ -186,3 +186,55 @@
         (.delete tmp)
         (is (every? roundtripped original)
             (str "vars lost in roundtrip: " (set/difference original roundtripped)))))))
+
+;; ---------------------------------------------------------------------------
+;; Self-hosting: roundtrip .meme files through meme→forms→meme→forms.
+;; The CLI is written in .meme — this verifies meme can read its own syntax.
+;; ---------------------------------------------------------------------------
+
+(defn- normalize-for-compare
+  "Recursively strip metadata and normalize regex for structural comparison."
+  [form]
+  (cond
+    (instance? java.util.regex.Pattern form)
+    (str "#\"" (.pattern ^java.util.regex.Pattern form) "\"")
+    (seq? form)  (with-meta (apply list (map normalize-for-compare form)) nil)
+    (vector? form) (with-meta (mapv normalize-for-compare form) nil)
+    (map? form) (with-meta (into {} (map (fn [[k v]] [(normalize-for-compare k) (normalize-for-compare v)]) form)) nil)
+    (set? form) (with-meta (set (map normalize-for-compare form)) nil)
+    (instance? clojure.lang.IObj form) (with-meta form nil)
+    :else form))
+
+(defn- roundtrip-meme-file
+  "Roundtrip a .meme file: parse → print → re-parse. Returns {:total :succeeded :failed}.
+   Compares structurally (ignoring metadata) since flat printing loses whitespace metadata."
+  [path]
+  (let [src (slurp path)
+        forms1 (core/meme->forms src)
+        printed (fmt-flat/format-forms forms1)
+        forms2 (core/meme->forms printed)
+        pairs (map vector forms1 forms2)
+        succeeded (filterv (fn [[a b]] (= (normalize-for-compare a) (normalize-for-compare b))) pairs)
+        failed (filterv (fn [[a b]] (not= (normalize-for-compare a) (normalize-for-compare b))) pairs)]
+    {:total (count forms1)
+     :succeeded (count succeeded)
+     :failed failed}))
+
+(deftest self-hosting-cli-meme
+  (testing "cli.meme roundtrips through meme→forms→meme→forms"
+    (let [{:keys [total succeeded failed]} (roundtrip-meme-file "src/meme/alpha/runtime/cli.meme")]
+      (is (pos? total) "cli.meme should have forms")
+      (is (= total succeeded)
+          (str total " forms, " (count failed) " failed roundtrip"))
+      (is (empty? failed)))))
+
+(deftest self-hosting-example-meme-files
+  (doseq [path ["examples/rewrite/simplify.meme"
+                 "examples/rewrite/m-call.meme"
+                 "examples/rewrite/guards.meme"]]
+    (testing (str path " roundtrips")
+      (let [{:keys [total succeeded failed]} (roundtrip-meme-file path)]
+        (is (pos? total) (str path " should have forms"))
+        (is (= total succeeded)
+            (str path ": " (count failed) " of " total " forms failed"))
+        (is (empty? failed))))))
