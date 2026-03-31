@@ -4,9 +4,14 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.12.0] — 2026-04-01
 
 ### Added
+- **Collapsar engine** (`meme.alpha.collapsar`): self-contained declarative rewrite engine (584 LOC) with phases, pipelines, head analysis, verified termination, and tower collapse
+- **Collapsar meme↔clj pipeline** (`meme.alpha.collapsar.meme`): meme-to-Clojure and Clojure-to-meme conversion expressed as collapsar rule phases and procedural phases
+- **Unified convert CLI**: `meme convert --pipeline classic|rewrite|collapsar` selects the conversion pipeline; `meme inspect --pipeline` shows pipeline structure
+- **Unified convert module** (`meme.alpha.convert`): single dispatch point for all three pipelines
+- **Comparative benchmark** (`benchmark_test.clj`): benchmarks all three pipelines across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
 - **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.alpha.platform.registry`)
 - **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.alpha.rewrite`)
 - **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.alpha.rewrite.tree`)
@@ -15,11 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Superficie example**: surface-syntax renderer reimplemented as a guest language (212 lines vs ~2000 original)
 
 ### Fixed
-- **Prelude expansion**: prelude forms are now expanded through `step-expand-syntax-quotes` before eval, matching the user-code path. Previously, syntax-quote in prelude files caused runtime errors.
-- **nil/true/false as call heads**: `nil(x)`, `true(x)`, `false(x)` now parse and print correctly. The rule is purely syntactic — `nil(1 2)` → `(nil 1 2)`. Previously these were rejected artificially.
-- **build-tree delimiter validation**: `build-tree` now validates expected delimiters after `#?` and `#:ns` prefixes (matching the main parser). Previously, malformed tokens caused silent off-by-one parsing.
-- **load-prelude docstring**: corrected to reflect actual behavior (parse-only, not eval).
-- **README.md**: fixed dead link to `doc/development.md` (now points to `CLAUDE.md`).
+- **nil/true/false as call heads**: the M-expression rule is purely syntactic — `nil(1 2)` → `(nil 1 2)`. Any value can be a head. Previously these were rejected artificially.
+- **Tokenizer ns// symbols**: `clojure.core//` now reads as one symbol (namespace `clojure.core`, name `/`). Previously split into two tokens.
+- **Rewrite emitter type gaps**: BigDecimal `M` suffix, BigInt `N` suffix, `##NaN`/`##Inf`/`##-Inf`, tagged literals, named chars (`\newline` etc.), `pr-str` fallback for UUID/Date
+- **Reader conditional preservation**: all three pipelines now pass `:read-cond :preserve` during conversion, preserving `#?(:clj ...)` branches in output
+- **Prelude expansion**: prelude forms are now expanded through `step-expand-syntax-quotes` before eval, matching the user-code path
+- **build-tree delimiter validation**: `build-tree` now validates expected delimiters after `#?` and `#:ns` prefixes
+- **load-prelude docstring**: corrected to reflect actual behavior (parse-only, not eval)
+- **README.md**: fixed dead link to `doc/development.md`
 
 ## [0.6.0-alpha] — 2026-03-30
 
