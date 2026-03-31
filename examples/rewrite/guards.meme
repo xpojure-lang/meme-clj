@@ -1,0 +1,32 @@
+#!/usr/bin/env bb meme-run
+; Rewrite rules with guards — conditional pattern matching.
+; Run: bb meme run examples/rewrite/guards.meme
+
+require('[meme.alpha.rewrite :as rw])
+
+; Constant folding: only fire when both args are numbers
+def(const-fold
+  [rw/rule(list('+ '?a '?b) '?result
+           fn([b] and(number?(get(b 'a)) number?(get(b 'b)))))
+   rw/rule(list('* '?a '?b) '?result
+           fn([b] and(number?(get(b 'a)) number?(get(b 'b)))))])
+
+; Hmm — guards can check conditions but can't compute the replacement.
+; For constant folding, we need computed replacements. The rewrite engine
+; doesn't support that yet — replacements are templates, not functions.
+;
+; What we CAN do: classification rules with guards.
+
+def(classify
+  [rw/rule('?x 'positive
+           fn([b] and(number?(get(b 'x)) pos?(get(b 'x)))))
+   rw/rule('?x 'zero
+           fn([b] and(number?(get(b 'x)) zero?(get(b 'x)))))
+   rw/rule('?x 'negative
+           fn([b] and(number?(get(b 'x)) neg?(get(b 'x)))))])
+
+println("=== Guards: Classify numbers ===")
+println(rw/rewrite-once-top(classify 42))       ; → positive
+println(rw/rewrite-once-top(classify 0))        ; → zero
+println(rw/rewrite-once-top(classify -7))       ; → negative
+println(rw/rewrite-once-top(classify 'x))       ; → x (no match)

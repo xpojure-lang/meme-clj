@@ -112,8 +112,10 @@
          (when (= (get bindings var) expr) bindings)
          (assoc bindings var expr)))
 
-     ;; both are sequential (lists/seqs) — match element by element
-     (and (sequential? pattern) (sequential? expr))
+     ;; both are sequential and same type — match element by element.
+     ;; List patterns match lists/seqs, vector patterns match vectors.
+     (and (sequential? pattern) (sequential? expr)
+          (= (vector? pattern) (vector? expr)))
      (match-seq (vec pattern) (vec expr) bindings)
 
      ;; literal equality

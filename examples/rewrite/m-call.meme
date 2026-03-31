@@ -1,0 +1,33 @@
+#!/usr/bin/env bb meme-run
+; M-expression / S-expression conversion via rewrite rules.
+; Demonstrates the core M-to-S rule as a single rewrite rule.
+; Run: bb meme run examples/rewrite/m-call.meme
+
+require('[meme.alpha.rewrite :as rw])
+
+; The ONE rule: (m-call f args...) to (f args...)
+def(m->s [rw/rule(list('m-call '?f '??args) list('?f '??args))])
+
+; The reverse: (f args...) to (m-call f args...)
+def(s->m [rw/rule(list('?f '??args) list('m-call '?f '??args)
+                  fn([b] and(symbol?(get(b 'f))
+                             not=(get(b 'f) 'm-call))))])
+
+println("=== m-call to call ===")
+println(rw/rewrite(m->s list('m-call 'println "hello")))
+println(rw/rewrite(m->s list('m-call '+ 1 2 3)))
+
+println()
+println("=== call to m-call ===")
+println(rw/rewrite(s->m '+(1 2)))
+println(rw/rewrite(s->m 'defn(foo [x] +(x 1))))
+
+println()
+println("=== Roundtrip ===")
+let([original 'defn(greet [name] str("Hello, " name))
+     tagged rw/rewrite(s->m original)
+     recovered rw/rewrite(m->s tagged)]
+  println("original: " original)
+  println("tagged:   " tagged)
+  println("recovered:" recovered)
+  println("equal?    " =(original recovered)))

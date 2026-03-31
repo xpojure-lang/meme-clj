@@ -1,0 +1,21 @@
+#!/usr/bin/env bb meme-run
+; Algebraic simplification via rewrite rules.
+; Run: bb meme run examples/rewrite/simplify.meme
+
+require('[meme.alpha.rewrite :as rw])
+
+; Define simplification rules
+def(rules
+  [rw/rule(list('+ '?a 0) '?a)
+   rw/rule(list('+ 0 '?a) '?a)
+   rw/rule(list('* '?a 1) '?a)
+   rw/rule(list('* 1 '?a) '?a)
+   rw/rule(list('* '?a 0) 0)
+   rw/rule(list('* 0 '?a) 0)])
+
+; Simplify expressions (quoted data, not evaluated)
+println("=== Algebraic Simplification ===")
+println(rw/rewrite(rules '+(*(1 x) 0)))        ; → x
+println(rw/rewrite(rules '*(+(a b) 1)))         ; → (+ a b)
+println(rw/rewrite(rules '+(0 *(1 +(x 0)))))    ; → x
+println(rw/rewrite(rules '*(0 +(a b c))))       ; → 0
