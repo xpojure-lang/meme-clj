@@ -1,0 +1,7 @@
+; Register the prefix language.
+
+require('[meme.alpha.platform.registry :as reg])
+
+reg/register!(:prefix
+  {:extension ".pfx"
+   :prelude-file "examples/languages/prefix/core.meme"})

@@ -1,0 +1,8 @@
+; Register the calc language.
+; Run this before running .calc files.
+
+require('[meme.alpha.platform.registry :as reg])
+
+reg/register!(:calc
+  {:extension ".calc"
+   :prelude-file "examples/languages/calc/core.meme"})
