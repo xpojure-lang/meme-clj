@@ -1,10 +1,12 @@
 ; superficie — surface syntax renderer for Clojure.
 ; Renders S-expressions as familiar syntax: infix, blocks, pipes.
 ;
-; This is a meme platform reimplementation of Christian Weilbach's
-; superficie (https://github.com/replikativ/superficie).
-; The original is ~1000 lines of Clojure/CLJS with instaparse.
-; This version: rewrite rules + an emitter. Same idea, different engine.
+; Reimplements the renderer from Christian Weilbach's superficie
+; (https://github.com/replikativ/superficie) on the meme platform.
+; The original is ~2000 lines of Clojure/CLJS with instaparse + rewrite-clj.
+; This version: 212 lines of meme. Renderer only (Clojure → superficie).
+; The reverse direction (superficie → Clojure) needs a parser — the
+; original's instaparse grammar could be wired in via Phase 2.
 
 require('[meme.alpha.rewrite :as rw])
 require('[meme.alpha.core :as core])

@@ -1,0 +1,44 @@
+#!/usr/bin/env bb meme-run
+; Superficie renderer demo.
+; Translates Clojure S-expressions into familiar surface syntax.
+;
+; Run: bb meme run examples/languages/superficie/demo.meme
+
+require('[meme.alpha.runtime.run :as run])
+run/run-file("examples/languages/superficie/core.meme")
+
+; --- render Clojure code and show the superficie output ---
+
+defn(show [label clj-src]
+  println(str("\n--- " label " ---\n"))
+  println(render-string(clj-src)))
+
+show("Functions"
+  "(defn greet [name] (str \"Hello, \" name \"!\"))")
+
+show("Infix math"
+  "(defn quadratic [a b c x] (+ (* a x x) (* b x) c))")
+
+show("Control flow"
+  "(if (> x 0) :positive :non-positive)")
+
+show("Cond"
+  "(cond (< x 0) :negative (= x 0) :zero :else :positive)")
+
+show("Let bindings"
+  "(let [x 1 y 2] (+ x y))")
+
+show("Pipes (thread-last)"
+  "(->> users (filter :active) (map :name) (sort) (take 10))")
+
+show("Pipes (thread-first)"
+  "(-> config (assoc :port 8080) (merge defaults))")
+
+show("Try/catch"
+  "(try (risky-fn) (catch Exception e (handle e)))")
+
+show("Java interop"
+  "(.method obj arg1 arg2)")
+
+show("For comprehension"
+  "(for [x xs y ys] [x y])")
