@@ -60,8 +60,8 @@
              children (mapv xf (rest form))]
          (case head
            bracket    (vec children)
-           brace      (apply hash-map children)
-           set-lit    (set children)
+           brace      (apply array-map children)
+           set-lit    (with-meta (set children) {:meme/order (vec children)})
 
            meme/quote
            (with-meta (list 'quote (first children)) {:meme/sugar true})

@@ -210,8 +210,9 @@
                           (not= :open-paren (tok-type tokens paren-pos)))
                   (errors/meme-error (str "Expected ( after " (:value token))
                                      (select-keys token [:line :col])))
-              [items new-pos] (build-collection tokens (inc paren-pos) :close-paren)]
-          [(apply list (if splicing? 'meme/reader-cond-splicing 'meme/reader-cond) items) new-pos])
+              [items new-pos] (build-collection tokens (inc paren-pos) :close-paren)
+              rc-form (apply list (if splicing? 'meme/reader-cond-splicing 'meme/reader-cond) items)]
+          (build-call-or-atom tokens new-pos rc-form))
 
         :namespaced-map-start
         (let [ns-prefix (:value token)

@@ -96,7 +96,7 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 - `meme.alpha.rewrite.tree` (.cljc) — Token→tagged tree builder. `tokens->tree`, `build-tree`, `rewrite-parser` (drop-in replacement for the standard parser). Portable.
 - `meme.alpha.rewrite.emit` (.cljc) — Serializes m-call tagged trees to meme text. `emit`, `emit-forms`. Portable.
 - `meme.alpha.platform.registry` (.cljc) — Guest language registration. `register!` (name + config with `:extension`, `:prelude`, `:rules`, `:parser`), `resolve-lang` (file path → language keyword), `lang-config`, `registered-langs`, `clear!`. Portable.
-- `meme.alpha.collapsar` (.cljc) — Declarative rewrite engine with phases, pipelines, head analysis, verified termination, and tower collapse. Portable.
+- `meme.alpha.collapsar` (.cljc) — Declarative rewrite engine with phases, pipelines, head analysis, verified termination, and tower collapse. Experimental — faster than classic (31%) but not yet the default pipeline. Portable.
 - `meme.alpha.collapsar.meme` (.cljc) — meme↔clj conversion expressed as collapsar rule phases and procedural phases. Portable.
 - `meme.alpha.convert` (.cljc) — Unified dispatch for three conversion pipelines: `:classic`, `:rewrite`, `:collapsar`. `meme->clj`, `clj->meme` (JVM only). Portable.
 - `meme.alpha.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.

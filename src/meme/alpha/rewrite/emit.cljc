@@ -28,6 +28,17 @@
     (and (seq? form) (= 'm-call (first form)))
     (emit-seq form)
 
+    ;; Tagged reader conditional from tree builder: (meme/reader-cond :clj x :cljs y)
+    (and (seq? form) (= 'meme/reader-cond (first form)))
+    (let [pairs (partition 2 (rest form))
+          body (str/join " " (mapcat (fn [[k v]] [(emit k) (emit v)]) pairs))]
+      (str "#?(" body ")"))
+
+    (and (seq? form) (= 'meme/reader-cond-splicing (first form)))
+    (let [pairs (partition 2 (rest form))
+          body (str/join " " (mapcat (fn [[k v]] [(emit k) (emit v)]) pairs))]
+      (str "#?@(" body ")"))
+
     (seq? form)
     (emit-seq form)
 
@@ -45,7 +56,8 @@
     (str "{" (str/join " " (map (fn [[k v]] (str (emit k) " " (emit v))) form)) "}")
 
     (set? form)
-    (str "#{" (str/join " " (map emit form)) "}")
+    (let [elements (or (:meme/order (meta form)) (seq form))]
+      (str "#{" (str/join " " (map emit (or elements []))) "}"))
 
     (string? form)
     (pr-str form)

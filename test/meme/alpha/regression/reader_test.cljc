@@ -833,3 +833,21 @@
        (is (= "{:a 1}" (convert/meme->clj "{:a 1 #_ :b #_ 2}" :collapsar))))
      (testing "double #_ at top level"
        (is (= "c" (convert/meme->clj "#_ #_ a b c" :rewrite))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: reader conditional as call head
+;; ---------------------------------------------------------------------------
+;; (#?(:clj instance? :cljs implements?) X Y) — the RC resolves to the
+;; function in head position. The rewrite tree builder didn't call
+;; build-call-or-atom after parsing an RC, so the call wasn't tagged
+;; as m-call and the arguments were separated from the head.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest reader-cond-as-call-head-rewrite
+     (testing "RC as call head through rewrite pipeline"
+       (is (= "(#?(:clj instance? :cljs implements?) MyProto x)"
+              (convert/meme->clj "#?(:clj instance? :cljs implements?)(MyProto x)" :rewrite))))
+     (testing "RC as call head through collapsar pipeline"
+       (is (= "(#?(:clj instance? :cljs implements?) MyProto x)"
+              (convert/meme->clj "#?(:clj instance? :cljs implements?)(MyProto x)" :collapsar))))))

@@ -46,10 +46,10 @@
     (is (= "42" (emit/emit 42))))
   (testing "float"
     (is (= "3.14" (emit/emit 3.14))))
-  (testing "ratio"
-    (is (= "1/3" (emit/emit 1/3))))
   #?(:clj
      (do
+       (testing "ratio"
+         (is (= "1/3" (emit/emit 1/3))))
        (testing "BigDecimal"
          (is (= "3.14M" (emit/emit 3.14M))))
        (testing "BigInt"

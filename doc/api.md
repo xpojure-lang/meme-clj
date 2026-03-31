@@ -498,7 +498,7 @@ Unified CLI for meme. Implemented in meme syntax (`cli.meme`), loaded by a `.clj
 | `meme repl` | Start the meme REPL |
 | `meme convert <file\|dir>` | Convert between `.meme` and `.clj` (direction detected from extension) |
 | `meme convert --pipeline classic\|rewrite\|collapsar` | Select conversion pipeline (default: classic) |
-| `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print) |
+| `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
 | `meme inspect [--pipeline]` | Show pipeline structure |
 | `meme version` | Print version |
 

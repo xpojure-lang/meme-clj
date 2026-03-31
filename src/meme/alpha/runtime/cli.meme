@@ -75,20 +75,36 @@ defn-(process-file-to-disk
         binding([*out* *err*] println(errors/format-error(e src))))
       :fail)))
 
+defn-(process-file-check
+  [transform path]
+  try(
+    let(
+      [src slurp(path)
+       formatted str(transform(path) "\n")]
+      if(=(src formatted)
+        :ok
+        do(println(str("would reformat: " path)) :fail)))
+    catch(Exception e
+      let(
+        [src try(slurp(path) catch(Exception _ nil))]
+        binding([*out* *err*] println(errors/format-error(e src))))
+      :fail)))
+
 defn-(process-files
-  [{:keys [inputs pred transform output-fn stdout verb]}]
+  [{:keys [inputs pred transform output-fn stdout check verb]}]
   let(
     [expanded expand-inputs(inputs pred)]
     when(empty?(expanded) println("No matching files found.") System/exit(1))
     let(
       [
         results
-        if(stdout
-          doall(map(fn([p] process-file-to-stdout(transform p)) expanded))
-          doall(
-            map(
-              fn([p] process-file-to-disk(transform output-fn verb p))
-              expanded)))
+        cond(
+          stdout doall(map(fn([p] process-file-to-stdout(transform p)) expanded))
+          check  doall(map(fn([p] process-file-check(transform p)) expanded))
+          :else  doall(
+                   map(
+                     fn([p] process-file-to-disk(transform output-fn verb p))
+                     expanded)))
         total
         count(results)
         failed
@@ -187,13 +203,14 @@ defn(convert
       })))
 
 defn(format-cmd
-  [{:keys [file files stdout]}]
+  [{:keys [file files stdout check]}]
   let(
     [inputs or(files when(file [file]))]
     when(empty?(inputs)
       println("Usage: meme format <file|dir> [file...]")
       println("  Formats .meme files in-place by default")
-      println("  --stdout  print to stdout instead")
+      println("  --stdout   print to stdout instead")
+      println("  --check    exit 1 if any file would change (CI mode)")
       System/exit(1))
     process-files(
       {
@@ -206,6 +223,7 @@ defn(format-cmd
                        core/format-meme(core/meme->forms(src))))
         :output-fn nil
         :stdout stdout
+        :check check
         :verb "formatted"
       })))
 
@@ -256,6 +274,7 @@ defn(help
     "  meme convert <file|dir>    Convert between meme and Clojure (by extension)")
   println("    --pipeline classic|rewrite|collapsar  Select pipeline (default: classic)")
   println("  meme format <file|dir>     Format .meme files (normalize syntax)")
+  println("    --check                  Exit 1 if any file would change (CI mode)")
   println("  meme inspect [--pipeline]  Show pipeline structure")
   println("  meme version               Print version"))
 
@@ -269,6 +288,8 @@ defn-(collect-file-args
     cond->(if(=(1 count(all)) {:file first(all)} {:files all})
       :stdout(opts)
       assoc(:stdout true)
+      :check(opts)
+      assoc(:check true)
       :pipeline(opts)
       assoc(:pipeline :pipeline(opts)))))
 
@@ -291,7 +312,7 @@ defn(-main
           file+stdout+pipeline)
         merge(
           {:cmds ["format"] :fn fn([m] format-cmd(collect-file-args(m)))}
-          {:args->opts [:file] :spec {:stdout {:coerce :boolean}}})
+          {:args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}}})
         {:cmds ["inspect"] :fn fn([{:keys [opts]}] inspect-cmd(opts)) :spec {:pipeline {:coerce :string}}}
         {:cmds ["version"] :fn fn([_] version(nil))}
         {:cmds [] :fn fn([{:keys [args]}]

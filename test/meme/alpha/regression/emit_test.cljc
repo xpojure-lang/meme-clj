@@ -3,6 +3,7 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
+            [meme.alpha.convert :as convert]
             [meme.alpha.core :as core]
             [meme.alpha.emit.formatter.flat :as fmt-flat]
             [meme.alpha.emit.formatter.canon :as fmt-canon]
@@ -494,3 +495,23 @@
           printed (core/forms->meme (core/meme->forms src))]
       (is (str/includes? printed "'x")
           "quote sugar must survive metadata stripping"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: set/map ordering in rewrite/collapsar pipelines
+;; ---------------------------------------------------------------------------
+;; Sets lost insertion order and maps lost key order in the rewrite and
+;; collapsar pipelines because transform-structures used hash-map/bare set.
+;; Fix: use array-map for maps and attach :meme/order metadata for sets,
+;; and respect :meme/order in the emit module.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest rewrite-preserves-collection-order
+     (testing "set insertion order preserved through rewrite pipeline"
+       (is (= "#{1 2 3}" (convert/meme->clj "#{1 2 3}" :rewrite))))
+     (testing "map key order preserved through rewrite pipeline"
+       (is (= "{:a 1 :b 2}" (convert/meme->clj "{:a 1 :b 2}" :rewrite))))
+     (testing "set insertion order preserved through collapsar pipeline"
+       (is (= "#{1 2 3}" (convert/meme->clj "#{1 2 3}" :collapsar))))
+     (testing "map key order preserved through collapsar pipeline"
+       (is (= "{:a 1 :b 2}" (convert/meme->clj "{:a 1 :b 2}" :collapsar))))))
