@@ -1,4 +1,4 @@
-; Core rule: f(x y) => (f x y)
+; M-expression call syntax: f(x y) => (f x y)
 
 ; simple call
 assert(=(+(1 2 3) 6))
@@ -18,7 +18,7 @@ assert(=(assoc({} :a 1, :b 2) {:a 1 :b 2}))
 ; deeply nested
 assert(=(inc(inc(inc(0))) 3))
 
-;; Keyword as function via Rule 1 — :key(expr) => (:key expr)
+;; Keyword as function — :key(expr) => (:key expr)
 
 def(person {:name "Andriy" :address {:city "Kyiv" :country "UA"}})
 

@@ -129,7 +129,7 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 |------|-------------------|
 | `scan/tokenizer_test` | Tokenizer behavior in isolation (token types, column tracking) |
 | `scan/source_test` | Source-position contract: `line-col->offset` |
-| `parse/reader/rule1_test` | Rule 1 (call syntax): head type x spacing x arity matrix |
+| `parse/reader/call_syntax_test` | M-expression call syntax: head type x spacing x arity matrix |
 | `parse/reader/calls_test` | All Clojure forms as calls: def, defn, fn, let, loop, for, if, when, cond, try, threading, ns, protocols, records, multimethods, concurrency, "everything is a call" |
 | `parse/reader/interop_test` | Java interop: .method, Class/static, .-field, constructors |
 | `parse/reader/data_literals_test` | Data literal passthrough: vectors, maps, sets, keywords, numbers |

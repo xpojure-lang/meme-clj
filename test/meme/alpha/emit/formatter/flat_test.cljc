@@ -3,7 +3,7 @@
             [meme.alpha.emit.formatter.flat :as flat]))
 
 ;; ---------------------------------------------------------------------------
-;; Rule 1: Generic call printing — everything is f(args...)
+;; Call printing — everything is f(args...)
 ;; ---------------------------------------------------------------------------
 
 (deftest print-simple-call

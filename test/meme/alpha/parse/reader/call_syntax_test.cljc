@@ -1,5 +1,5 @@
-(ns meme.alpha.parse.reader.rule1-test
-  "Systematic tests for Rule 1: head outside parens.
+(ns meme.alpha.parse.reader.call-syntax-test
+  "Systematic tests for M-expression call syntax: head outside parens.
    Organized as a matrix across three dimensions:
      1. Head type: symbol, keyword, vector, set, map
      2. Spacing: adjacent, space, tab, newline, multiple newlines

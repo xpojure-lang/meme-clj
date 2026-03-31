@@ -138,8 +138,8 @@
 ;; Syntax safety: meme operators must occupy dead Clojure syntax.
 ;; ---------------------------------------------------------------------------
 
-(deftest rule1-call-syntax-trade-off
-  (testing "Rule 1: f(x) → (f x) — head outside parens is a call"
+(deftest call-syntax-trade-off
+  (testing "M-expression call: f(x) → (f x) — head outside parens"
     (is (= '[(f x)] (core/meme->forms "f(x)"))))
   (testing "bare symbol without parens is just a symbol"
     (is (= '[f] (core/meme->forms "f"))))
