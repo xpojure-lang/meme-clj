@@ -110,7 +110,8 @@
                         ["chained" "f(x)(y)"]
                         ["vec-head" "[x](+(x 1))"]
                         ["anon-fn" "#(inc(%))"]
-                        ["var" "#'x"]]]
+                        ["var" "#'x"]
+                        ["reader-cond" "#?(:clj 1 :cljs 2)"]]]
     (testing label
       (let [parser-result (core/meme->forms src)
             rewrite-result (rewrite-parse src)]

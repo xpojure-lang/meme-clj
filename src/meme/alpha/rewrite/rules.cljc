@@ -121,8 +121,17 @@
         #?(:clj  (tagged-literal (first children) (second children))
            :cljs (first children))
 
-        meme/reader-cond          (forms/make-reader-conditional (vec children) false)
-        meme/reader-cond-splicing (forms/make-reader-conditional (vec children) true)
+        meme/reader-cond
+        (let [platform #?(:clj :clj :cljs :cljs)
+              pairs (partition 2 children)
+              matched (some (fn [[k v]] (when (or (= k platform) (= k :default)) v)) pairs)]
+          (if matched matched (forms/make-reader-conditional (vec children) false)))
+
+        meme/reader-cond-splicing
+        (let [platform #?(:clj :clj :cljs :cljs)
+              pairs (partition 2 children)
+              matched (some (fn [[k v]] (when (or (= k platform) (= k :default)) v)) pairs)]
+          (if matched matched (forms/make-reader-conditional (vec children) true)))
 
         meme/ns-map
         (let [ns-sym (first children)
