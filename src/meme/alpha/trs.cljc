@@ -2,15 +2,24 @@
   "Token-stream term rewriting system.
 
    Three stages:
-   1. Nest: group balanced delimiters into nested vectors (cheap pre-pass)
-   2. Rewrite: apply rules on nested structure, forward-matching
+   1. Nest: group balanced delimiters into nested vectors
+   2. Rewrite: apply declarative rules on nested structure
    3. Flatten: unnest back to flat token vector for emission
 
-   Rules are data: a pattern that matches a window of sibling nodes,
-   and a rewrite function that produces replacement nodes.
+   Rules are pure data — patterns and replacements that the engine
+   interprets. No lambdas in rule definitions.
 
-   On nested structures, patterns match forward — no backward scanning
-   needed. A nested vector is just a vector in the pattern."
+   Pattern language (matches consecutive sibling nodes):
+     {:bind :name}                          — match any node, bind
+     {:bind :name :pred fn}                 — match node satisfying fn, bind
+     {:bind :name :paren-group true :adj true} — match adjacent paren group, bind
+
+   Replacement language (produces sibling nodes):
+     {:ref :name}                           — emit bound node
+     {:ref :name :strip-ws true}            — emit bound node, strip :ws
+     {:paren-group [...] :ws-from :name}    — build paren group from parts
+     {:body-of :name}                       — emit inner children of bound group
+     {:body-of :name :ensure-ws str}        — emit inner children, ensure :ws on first"
   (:require [meme.alpha.scan.tokenizer :as tokenizer]))
 
 ;; ============================================================
@@ -79,26 +88,24 @@
   (if (node-ws node) node (set-ws node ws)))
 
 ;; ============================================================
-;; Stage 2: Rule engine on nested structures
+;; Node predicates (used in rules via :pred)
 ;; ============================================================
 
-;; A rule is {:match (fn [children i] -> match-or-nil) :rewrite (fn [match] -> nodes)}
-;; A match is a map with whatever the rule needs to perform the rewrite.
-;; The rule engine scans right-to-left, applies the first matching rule,
-;; splices the rewrite result, and adjusts the index.
+(def ^:private prefix-types
+  #{:quote :deref :meta :syntax-quote :unquote :unquote-splicing
+    :var-quote :discard :tagged-literal :reader-cond-start
+    :namespaced-map-start})
 
-(defn rule
-  "Create a rewrite rule.
-   match-fn: (fn [children i] -> {:width n ...} or nil)
-     Called at each position. Returns a match map with at least :width
-     (number of nodes consumed) or nil if no match.
-   rewrite-fn: (fn [match] -> [replacement-nodes...])
-     Produces the replacement nodes to splice in."
-  [match-fn rewrite-fn]
-  {:match match-fn :rewrite rewrite-fn})
+(defn valid-head?
+  "Can this node be the head of an M-expression call?"
+  [node]
+  (if (map? node)
+    (not (or (contains? prefix-types (:type node))
+             (openers (:type node))))
+    true))
 
 ;; ============================================================
-;; M-call rule: the one rule
+;; Pattern matching (data-driven)
 ;; ============================================================
 
 (defn- paren-group?
@@ -106,61 +113,106 @@
   [node]
   (and (vector? node) (map? (first node)) (= :open-paren (:type (first node)))))
 
-(defn- adjacent-paren-group?
-  "Is this node an adjacent paren group (no :ws on opener)?"
-  [node]
-  (and (paren-group? node) (nil? (node-ws node))))
+(defn- match-element
+  "Match a single pattern element against a node. Returns bindings map or nil."
+  [pat node]
+  (cond
+    ;; Paren-group matcher with adjacency
+    (:paren-group pat)
+    (when (paren-group? node)
+      (when (or (not (:adj pat))
+                (nil? (node-ws node)))
+        (if (:bind pat)
+          {(:bind pat) node}
+          {})))
 
-(def ^:private prefix-types
-  "Token types that are prefix operators — not valid call heads."
-  #{:quote :deref :meta :syntax-quote :unquote :unquote-splicing
-    :var-quote :discard :tagged-literal :reader-cond-start
-    :namespaced-map-start})
+    ;; General node matcher
+    (:bind pat)
+    (let [pred (:pred pat)]
+      (when (or (nil? pred) (pred node))
+        {(:bind pat) node}))
 
-(defn- valid-head?
-  "Can this node be the head of an M-expression call?
-   Any node except prefix tokens and open delimiters."
-  [node]
-  (if (map? node)
-    (not (or (contains? prefix-types (:type node))
-             (openers (:type node))))
-    ;; Nested group (vector) — always a valid head
-    true))
+    ;; Bare :any
+    (= pat :any)
+    {}))
+
+(defn- match-pattern
+  "Match a pattern against consecutive children starting at index i.
+   Returns {:width n :bindings {...}} or nil."
+  [pattern children i]
+  (let [n (count pattern)]
+    (when (<= (+ i n) (count children))
+      (loop [pi 0
+             bindings {}]
+        (if (>= pi n)
+          {:width n :bindings bindings}
+          (when-let [b (match-element (nth pattern pi) (nth children (+ i pi)))]
+            (recur (inc pi) (merge bindings b))))))))
+
+;; ============================================================
+;; Replacement emission (data-driven)
+;; ============================================================
+
+(defn- group-body
+  "Extract the inner children of a paren group (between opener and closer)."
+  [group]
+  (subvec group 1 (dec (count group))))
+
+(defn- emit-element
+  "Emit one replacement element given bindings. Returns a seq of nodes."
+  [elem bindings]
+  (cond
+    ;; Reference: emit bound node
+    (:ref elem)
+    (let [node (get bindings (:ref elem))]
+      (cond
+        (:strip-ws elem) [(strip-ws node)]
+        (:ensure-ws elem) [(ensure-ws node (:ensure-ws elem))]
+        :else [node]))
+
+    ;; Body-of: emit inner children of a bound paren group
+    (:body-of elem)
+    (let [body (group-body (get bindings (:body-of elem)))]
+      (if (and (:ensure-ws elem) (seq body))
+        (into [(ensure-ws (first body) (:ensure-ws elem))] (rest body))
+        body))
+
+    ;; Paren-group: build a new paren group from parts
+    (:paren-group elem)
+    (let [parts (:paren-group elem)
+          inner-nodes (into [] (mapcat #(emit-element % bindings)) parts)
+          ws (when-let [ws-var (:ws-from elem)]
+               (node-ws (get bindings ws-var)))
+          opener (if ws
+                   {:type :open-paren :value "(" :ws ws}
+                   {:type :open-paren :value "("})
+          closer {:type :close-paren :value ")"}]
+      [(into [opener] (conj inner-nodes closer))])))
+
+(defn- emit-replacement
+  "Produce replacement nodes from a replacement template and bindings."
+  [replacement bindings]
+  (into [] (mapcat #(emit-element % bindings)) replacement))
+
+;; ============================================================
+;; Rules (pure data)
+;; ============================================================
+
+(defn rule
+  "Create a rewrite rule from pattern and replacement data."
+  [pattern replacement]
+  {:pattern pattern :replacement replacement})
 
 (def m-call-rule
-  "M-expression call: a valid head followed by an adjacent paren-group.
+  "M-expression call: valid head followed by adjacent paren-group.
    head(args...) → (head args...)
-   [x](args...)  → ([x] args...)
-
-   The head is moved inside the paren group after the opener.
-   The head's :ws transfers to the opener (the group takes the head's
-   position in the sibling list). A space is ensured between head and
-   first arg."
+   [x](args...)  → ([x] args...)"
   (rule
-    ;; match: two adjacent siblings — valid head + adjacent paren-group
-    (fn [children i]
-      (when (< (inc i) (count children))
-        (let [node (nth children i)
-              next-node (nth children (inc i))]
-          (when (and (valid-head? node) (adjacent-paren-group? next-node))
-            {:width 2
-             :head node
-             :group next-node}))))
-    ;; rewrite: move head inside paren group
-    (fn [{:keys [head group]}]
-      (let [opener (first group)
-            closer (peek group)
-            inner (subvec group 1 (dec (count group)))
-            ;; Transfer head's :ws to opener
-            opener (if-let [ws (node-ws head)]
-                     (assoc opener :ws ws)
-                     (dissoc opener :ws))
-            head-inside (strip-ws head)
-            ;; Ensure space between head and first arg
-            inner (if (seq inner)
-                    (into [(ensure-ws (first inner) " ")] (rest inner))
-                    inner)]
-        [(into [opener head-inside] (conj inner closer))]))))
+    [{:bind :head :pred valid-head?}
+     {:bind :group :paren-group true :adj true}]
+    [{:paren-group [{:ref :head :strip-ws true}
+                    {:body-of :group :ensure-ws " "}]
+      :ws-from :head}]))
 
 ;; ============================================================
 ;; Rewrite engine
@@ -186,11 +238,12 @@
            children children]
       (if (neg? i)
         children
-        (let [match (some (fn [r] (when-let [m ((:match r) children i)]
-                                    (assoc m :rule r)))
+        (let [match (some (fn [{:keys [pattern] :as r}]
+                            (when-let [m (match-pattern pattern children i)]
+                              (assoc m :rule r)))
                           rules)]
           (if match
-            (let [result ((:rewrite (:rule match)) match)
+            (let [result (emit-replacement (:replacement (:rule match)) (:bindings match))
                   width (:width match)
                   before (subvec children 0 i)
                   after (subvec children (+ i width))
@@ -229,7 +282,7 @@
    Nest → rewrite → flatten."
   ([tokens] (rewrite-meme->sexp tokens default-rules))
   ([tokens rules]
-   (-> tokens nest-tokens ((->> rules (partial rewrite-level))) flatten-nested)))
+   (->> tokens nest-tokens (#(rewrite-level rules %)) flatten-nested)))
 
 (defn tokens->text
   "Reconstruct source text from a token vector, preserving whitespace."
