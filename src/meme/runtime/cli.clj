@@ -14,5 +14,6 @@
       (meme-run/run-string src)
       (catch Exception e
         (binding [*out* *err*]
-          (println ((requiring-resolve 'meme.errors/format-error) e src)))
-        (throw (ex-info "Failed to load cli.meme" {} e))))))
+          (println ((requiring-resolve 'meme.errors/format-error) e src))
+          (println "Fatal: failed to load cli.meme"))
+        (System/exit 1)))))

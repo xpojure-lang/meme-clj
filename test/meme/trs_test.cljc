@@ -2,7 +2,7 @@
   "Tests for the token-stream term rewriting system."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.trs :as trs]
-            [meme.convert :as convert]))
+            [meme.lang :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Token-stream rewriting: meme→sexp
@@ -114,6 +114,6 @@
                      ;; calls inside collections
                      "[f(x) g(y)]"
                      "{:a f(x) :b g(y)}"]]
-         (is (= (convert/meme->clj src :meme-classic)
-                (convert/meme->clj src :meme-trs))
+         (is (= ((:to-clj (lang/resolve-lang :meme-classic)) src)
+                ((:to-clj (lang/resolve-lang :meme-trs)) src))
              (str "disagreement on: " src))))))

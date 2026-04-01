@@ -92,7 +92,7 @@ the CLI itself is written in `.meme`.
 | R23 | Signed numbers: `-1` is number, `-(1 2)` is call to `-` | Done |
 | R24 | `#:ns{...}` namespaced maps parsed natively (no read-string) | Done |
 | R25 | `#()` uses meme syntax inside, `%` params → `fn` form | Done |
-| R26 | `run-pipeline` exposes intermediate pipeline state for tooling | Done |
+| R26 | `run-stages` exposes intermediate stage state for tooling | Done |
 | R28 | `()` is the empty list (no head required) | Done |
 | R29 | No S-expression escape hatch — `'(...)` uses meme syntax inside | Done |
 | R30 | Syntax-quote parsed natively — meme syntax inside `` ` `` | Done |
@@ -142,7 +142,7 @@ during design iteration. IDs are stable references and are not renumbered.
                   source      resolve    expander ──→ rewrite ──→ eval
                (shared line/col                │
                 → offset contract)       printer ──→ .meme text
-                  pipeline.contract    formatter ──→ .meme text
+                  stages.contract      formatter ──→ .meme text
                (spec validation at
                 stage boundaries)
 ```
@@ -226,8 +226,8 @@ meme rules inside. No opaque regions.
 | PL5 | `run-string` accepts `:prelude`, `:rewrite-rules`, `:rewrite-max-iters` | Done |
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
 | PL7 | `step-rewrite` pipeline stage applies rules after expansion | Done |
-| PL8 | Pipeline contract: spec validation at stage boundaries (`pipeline.contract`) | Done |
-| PL9 | Two conversion pipelines: classic, rewrite (`meme.convert`) | Done |
+| PL8 | Stage contract: spec validation at stage boundaries (`stages.contract`) | Done |
+| PL9 | Three conversion langs: meme-classic, meme-rewrite, meme-trs (via `meme.lang` `:to-clj` / `:to-meme`) | Done |
 | PL10 | `meme convert --lang` CLI selector and `meme inspect` command | Done |
 | PL11 | Comparative benchmark across all three langs | Done |
 

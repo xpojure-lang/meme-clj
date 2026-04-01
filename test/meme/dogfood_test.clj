@@ -185,7 +185,6 @@
                 "src/meme/lang/meme_classic.cljc"
                 "src/meme/lang/meme_rewrite.cljc"
                 "src/meme/lang/meme_trs.cljc"
-                "src/meme/convert.cljc"
                 "src/meme/trs.cljc"]]
     (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)

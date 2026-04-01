@@ -3,7 +3,7 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [meme.convert :as convert]
+            [meme.lang :as lang]
             [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]
             [meme.emit.formatter.canon :as fmt-canon]
@@ -508,6 +508,6 @@
 #?(:clj
    (deftest rewrite-preserves-collection-order
      (testing "set insertion order preserved through meme-rewrite lang"
-       (is (= "#{1 2 3}" (convert/meme->clj "#{1 2 3}" :meme-rewrite))))
+       (is (= "#{1 2 3}" ((:to-clj (lang/resolve-lang :meme-rewrite)) "#{1 2 3}"))))
      (testing "map key order preserved through meme-rewrite lang"
-       (is (= "{:a 1 :b 2}" (convert/meme->clj "{:a 1 :b 2}" :meme-rewrite))))))
+       (is (= "{:a 1 :b 2}" ((:to-clj (lang/resolve-lang :meme-rewrite)) "{:a 1 :b 2}"))))))

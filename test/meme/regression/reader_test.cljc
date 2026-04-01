@@ -2,7 +2,7 @@
   "Scar tissue: parser/reader regression tests.
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.convert :as convert]
+            [meme.lang :as lang]
             [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]
             [meme.forms :as forms]
@@ -819,16 +819,17 @@
 
 #?(:clj
    (deftest build-tree-discard-before-closer
-     (testing "#_ as last discarded form in vector"
-       (is (= "[1 2]" (convert/meme->clj "[1 2 #_ 3]" :meme-rewrite))))
-     (testing "#_ as last discarded form in call"
-       (is (= "(f)" (convert/meme->clj "f(#_ x)" :meme-rewrite))))
-     (testing "#_ as last discarded form in set"
-       (is (= "#{}" (convert/meme->clj "#{#_ 1}" :meme-rewrite))))
-     (testing "#_ discards one of two map pairs"
-       (is (= "{:a 1}" (convert/meme->clj "{:a 1 #_ :b #_ 2}" :meme-rewrite))))
-     (testing "double #_ at top level"
-       (is (= "c" (convert/meme->clj "#_ #_ a b c" :meme-rewrite))))))
+     (let [to-clj (:to-clj (lang/resolve-lang :meme-rewrite))]
+       (testing "#_ as last discarded form in vector"
+         (is (= "[1 2]" (to-clj "[1 2 #_ 3]"))))
+       (testing "#_ as last discarded form in call"
+         (is (= "(f)" (to-clj "f(#_ x)"))))
+       (testing "#_ as last discarded form in set"
+         (is (= "#{}" (to-clj "#{#_ 1}"))))
+       (testing "#_ discards one of two map pairs"
+         (is (= "{:a 1}" (to-clj "{:a 1 #_ :b #_ 2}"))))
+       (testing "double #_ at top level"
+         (is (= "c" (to-clj "#_ #_ a b c")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: reader conditional as call head
@@ -843,4 +844,4 @@
    (deftest reader-cond-as-call-head-rewrite
      (testing "RC as call head through rewrite pipeline"
        (is (= "(#?(:clj instance? :cljs implements?) MyProto x)"
-              (convert/meme->clj "#?(:clj instance? :cljs implements?)(MyProto x)" :meme-rewrite))))))
+              ((:to-clj (lang/resolve-lang :meme-rewrite)) "#?(:clj instance? :cljs implements?)(MyProto x)"))))))

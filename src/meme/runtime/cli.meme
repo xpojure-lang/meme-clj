@@ -138,13 +138,13 @@ defn-(get-lang
 
     ; Explicit keyword name
     lang-str
-    let([name keyword(lang-str)]
+    let([lang-kw keyword(lang-str)]
       try(
-        let([l lang/resolve-lang(name)]
-          [name l])
+        let([l lang/resolve-lang(lang-kw)]
+          [lang-kw l])
         catch(Exception _
           binding([*out* *err*]
-            println(str("Unknown lang: " name))
+            println(str("Unknown lang: " lang-kw))
             println(str("Available: " str/join(", " map(name keys(deref(lang/builtin)))))))
           System/exit(1))))
 

@@ -28,7 +28,7 @@
                               [:license
                                [:name "MIT License"]
                                [:url "https://opensource.org/licenses/MIT"]]]]})
-    (b/copy-dir {:src-dirs ["src"]
+    (b/copy-dir {:src-dirs ["src" "resources"]
                  :target-dir class-dir})
     (b/jar {:class-dir class-dir
             :jar-file jar-file})))

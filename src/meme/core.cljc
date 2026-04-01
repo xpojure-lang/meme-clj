@@ -7,7 +7,7 @@
      text-to-text:  meme->clj (all platforms), clj->meme (JVM only)
 
    Stages:
-     meme.stages/run — full ctx->ctx stages with intermediate state"
+     meme.stages/run — scan + parse stages with intermediate state (no expand/rewrite)"
   (:require [meme.emit.formatter.flat :as fmt-flat]
             [meme.emit.formatter.canon :as fmt-canon]
             [meme.parse.expander :as expander]
@@ -57,7 +57,7 @@
 #?(:clj
    (defn clj->forms
      "Read Clojure source string, return a vector of forms.
-   JVM/Babashka only — Clojure's reader is needed for full form support."
+     JVM/Babashka only — Clojure's reader is needed for full form support."
      [clj-src]
      (binding [*read-eval* false]
        (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))]
@@ -65,7 +65,7 @@
            (let [form (try
                         (read {:read-cond :preserve :eof eof-sentinel} rdr)
                         (catch Exception e
-                          (throw (ex-info (str "Clojure read error: " (ex-message e)) {} e))))]
+                          (throw (ex-info (str "Clojure read error: " (ex-message e)) {:source clj-src} e))))]
              (if (identical? form eof-sentinel)
                forms
                (recur (conj forms form)))))))))
@@ -83,7 +83,7 @@
 #?(:clj
    (defn clj->meme
      "Convert Clojure source string to meme source string.
-   JVM/Babashka only."
+     JVM/Babashka only."
      [clj-src]
      (forms->meme (clj->forms clj-src))))
 
@@ -92,8 +92,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-stages
-  "Run the full stage pipeline: source → scan → parse.
+  "Run the reader stages: source → scan → parse (no syntax-quote expansion or rewrite).
    Returns a context map with :source, :opts, :raw-tokens, :tokens, :forms.
    Useful for tooling that needs intermediate state."
   ([source] (stages/run source))
   ([source opts] (stages/run source opts)))
+
+;; ---------------------------------------------------------------------------
+;; Version
+;; ---------------------------------------------------------------------------
+
+(def version
+  "The meme library version string. Deref to get the value: @meme.core/version.
+   Reads from meme/version.txt on the classpath (JVM/Babashka). nil on CLJS."
+  #?(:clj (delay (.trim ^String (slurp (clojure.java.io/resource "meme/version.txt"))))
+     :cljs nil))

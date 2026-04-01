@@ -98,9 +98,15 @@
 
 (defrecord MemeRaw [value raw])
 
-(defn raw? [x] (instance? MemeRaw x))
-(defn raw-value [x] (:value x))
-(defn raw-text [x] (:raw x))
+(defn raw?
+  "True if x is a MemeRaw wrapper (preserves alternate notation for roundtrip)."
+  [x] (instance? MemeRaw x))
+(defn raw-value
+  "Extract the resolved Clojure value from a MemeRaw wrapper."
+  [x] (:value x))
+(defn raw-text
+  "Extract the original source text from a MemeRaw wrapper."
+  [x] (:raw x))
 
 (defrecord MemeSyntaxQuote [form])
 (defrecord MemeUnquote [form])

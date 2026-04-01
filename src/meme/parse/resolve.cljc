@@ -22,9 +22,10 @@
       (errors/meme-error (str "Invalid unicode escape in string — expected 4 hex digits after \\u, got " consumed)
                          loc))
     (let [hex (subs raw (inc idx) end)
-          ;; Hex digit validation: parseInt/parseInt throws for non-hex chars
           code (try #?(:clj (Integer/parseInt hex 16)
-                       :cljs (let [n (js/parseInt hex 16)]
+                       :cljs (let [n (if (re-matches #"[0-9a-fA-F]{4}" hex)
+                                       (js/parseInt hex 16)
+                                       js/NaN)]
                                (when (js/isNaN n) (throw (ex-info "NaN" {})))
                                n))
                     (catch #?(:clj Exception :cljs :default) _
@@ -274,5 +275,5 @@
   [tag data loc]
   #?(:clj (tagged-literal tag data)
      :cljs (errors/meme-error
-            (str "Tagged literals (#" tag ") are not supported in ClojureScript meme reader.")
+            (str "Tagged literals (#" tag ") are not supported in ClojureScript meme reader")
             loc)))

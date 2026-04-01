@@ -10,7 +10,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [meme.convert :as convert]
+            [meme.lang :as lang]
             [meme.core :as core]))
 
 ;; ============================================================
@@ -79,9 +79,10 @@
    ts-trs is compared at form level (different text reconstruction)."
   [file]
   (let [src (slurp file)
-        [classic-result classic-ms] (timed (convert/meme->clj src :meme-classic))
-        [rewrite-result rewrite-ms] (timed (convert/meme->clj src :meme-rewrite))
-        [ts-trs-result ts-trs-ms] (timed (convert/meme->clj src :meme-trs))
+        to-clj (fn [lang-name] (:to-clj (lang/resolve-lang lang-name)))
+        [classic-result classic-ms] (timed ((to-clj :meme-classic) src))
+        [rewrite-result rewrite-ms] (timed ((to-clj :meme-rewrite) src))
+        [ts-trs-result ts-trs-ms] (timed ((to-clj :meme-trs) src))
         ;; ts-trs reconstructs text from tokens (different whitespace),
         ;; so compare at form level via clj->forms + pr-str
         classic-forms (pr-str (core/clj->forms classic-result))
@@ -144,12 +145,13 @@
 
 (defn- roundtrip-form
   "Roundtrip a single Clojure form through clj→meme→clj using the public API.
-   End-to-end: pr-str → convert/clj->meme → convert/meme->clj → clj->forms."
+   End-to-end: pr-str → :to-meme → :to-clj → clj->forms."
   [form lang-name]
   (try
-    (let [clj-src (pr-str form)
-          meme-text (convert/clj->meme clj-src lang-name)
-          clj-back (convert/meme->clj meme-text lang-name)
+    (let [l (lang/resolve-lang lang-name)
+          clj-src (pr-str form)
+          meme-text ((:to-meme l) clj-src)
+          clj-back ((:to-clj l) meme-text)
           back-forms (core/clj->forms clj-back)]
       (if (form= [form] back-forms)
         {:ok true}

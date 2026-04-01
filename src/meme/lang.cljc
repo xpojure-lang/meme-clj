@@ -133,14 +133,19 @@
    (defn- load-resource-edn
      "Load a lang from a classpath resource EDN file."
      [resource-path]
-     (let [edn-data (edn/read-string (slurp (io/resource resource-path)))]
-       (resolve-edn edn-data))))
+     (let [url (io/resource resource-path)]
+       (when-not url
+         (throw (ex-info (str "Lang resource not found on classpath: " resource-path)
+                         {:resource-path resource-path})))
+       (let [edn-data (edn/read-string (slurp url))]
+         (resolve-edn edn-data)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Built-in langs (loaded from EDN resources)
 ;; ---------------------------------------------------------------------------
 
-(def builtin
+(def ^{:doc "Built-in lang maps, keyed by :meme-classic, :meme-rewrite, :meme-trs.
+  JVM: delay of EDN-loaded maps. CLJS: plain map with portable functions only."} builtin
   #?(:clj (delay
             {:meme-classic (load-resource-edn "meme/lang/meme-classic.edn")
              :meme-rewrite (load-resource-edn "meme/lang/meme-rewrite.edn")
@@ -154,7 +159,7 @@
             :meme-trs     {:format meme.lang.meme-trs/format-meme
                            :to-clj meme.lang.meme-trs/to-clj}}))
 
-(def default-lang :meme-classic)
+(def default-lang "The default lang used when none is specified." :meme-classic)
 
 ;; ---------------------------------------------------------------------------
 ;; User lang registration (JVM only)
@@ -205,11 +210,16 @@
 
 (defn resolve-lang
   "Resolve a lang by keyword name. Returns the lang map.
-   Accepts legacy names (:classic, :rewrite, :ts-trs).
+   Deprecated names (:classic, :rewrite, :ts-trs) are accepted but emit a warning.
    Checks user-registered langs first, then built-ins. Throws on unknown name."
   [lang-name]
   (let [n (or lang-name default-lang)
+        legacy? (contains? legacy-names n)
         n (get legacy-names n n)
+        _ (when legacy?
+            #?(:clj (binding [*out* *err*]
+                      (println (str "WARNING: :" (name lang-name) " is deprecated, use :" (name n))))
+               :cljs (js/console.warn (str "WARNING: :" (name lang-name) " is deprecated, use :" (name n)))))
         user #?(:clj @user-langs :cljs nil)
         b #?(:clj @builtin :cljs builtin)]
     (or (get user n)

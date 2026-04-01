@@ -314,7 +314,8 @@
 
     ;; Tagged literal (JVM only)
     #?@(:clj [(tagged-literal? form)
-              (render/cat (render/text (str "#" (.-tag form) " ")) (to-doc (.-form form) mode))])
+              (let [^clojure.lang.TaggedLiteral tl form]
+                (render/cat (render/text (str "#" (.-tag tl) " ")) (to-doc (.-form tl) mode)))])
 
     ;; Fallback
     :else (render/text (pr-str form))))

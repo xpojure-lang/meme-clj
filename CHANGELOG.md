@@ -4,6 +4,29 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0] — 2026-04-01
+
+### Changed
+- **Graduated to 1.0.0**: all namespaces are `meme.*` (no more `meme.alpha.*`)
+- **JAR packaging**: resources directory now included in JAR (lang EDN files were missing)
+- **CLI `get-lang`**: fixed variable shadowing that broke "Available langs" display
+- **CLJS unicode escapes**: `\uNNNN` with invalid hex digits now throws instead of silently producing wrong values
+- **Error messages**: `load-resource-edn` gives clear message when resource not found on classpath; `clj->forms` preserves source context in error ex-data; removed inconsistent trailing period in CLJS tagged-literal error
+- **Reflection warnings**: eliminated in `meme.emit.printer` (tagged literal field access)
+- **CLI load failure**: shows friendly error without extra stack trace
+- **Docstrings**: added missing docstrings to public vars in `meme.lang`, `meme.forms`, `meme.emit.render`; fixed `run-stages` "full pipeline" misrepresentation; fixed indentation on `clj->` function docstrings
+- **Documentation**: fixed stale `pipeline` namespace references in api.md, PRD.md, design-decisions.md; fixed wrong REPL launch command in api.md; removed phantom `lang.util` from platform tiers; corrected convert lang count in PRD.md
+- **CI**: pinned Babashka and Clojure CLI versions for reproducibility
+
+### Removed
+- **`meme.convert` module**: removed in favor of `:to-clj` / `:to-meme` commands on lang maps. Use `((:to-clj (meme.lang/resolve-lang :meme-rewrite)) src)` for multi-lang conversion, or `meme.core/meme->clj` for the classic path.
+
+### Added
+- **`meme.core/version`**: runtime version access — `@meme.core/version` returns `"1.0.0"`
+
+### Deprecated
+- **Legacy lang aliases**: `:classic`, `:rewrite`, `:ts-trs` in `meme.lang/resolve-lang` now emit a deprecation warning. Use `:meme-classic`, `:meme-rewrite`, `:meme-trs` instead.
+
 ## [0.13.0] — 2026-04-01
 
 ### Added

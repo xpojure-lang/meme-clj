@@ -100,14 +100,13 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 - `meme.lang.meme-rewrite` (.cljc) — Meme-rewrite lang implementation: `format-meme`, `to-clj`, `to-meme`, `start-repl`. Uses tree builder + rewrite rules. Portable.
 - `meme.lang.meme-trs` (.cljc) — Meme-trs lang implementation: `format-meme`, `to-clj`, `to-meme`. Uses token-stream term rewriting. Portable.
 - `meme.trs` (.cljc) — Token-stream term rewriting: `meme->clj-text`, `clj->meme-text`. Converts via token-level S↔M rewrite rules without building a full parse tree. Portable.
-- `meme.convert` (.cljc) — Unified dispatch for three conversion langs: `:meme-classic`, `:meme-rewrite`, `:meme-trs` (legacy aliases `:classic`, `:rewrite`, `:ts-trs` also accepted). `meme->clj`, `clj->meme` (JVM only). Portable.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
 ### Platform tiers
 
 | Tier | Modules | Platforms |
 |------|---------|-----------|
-| Core translation | tokenizer, reader, expander, resolve, printer, render, formatter.flat, formatter.canon, stages, stages.contract, core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree, rewrite.emit, lang, lang.meme-classic, lang.meme-rewrite, lang.meme-trs, trs, convert | JVM, Babashka, ClojureScript |
+| Core translation | tokenizer, reader, expander, resolve, printer, render, formatter.flat, formatter.canon, stages, stages.contract, core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree, rewrite.emit, lang, lang.meme-classic, lang.meme-rewrite, lang.meme-trs, trs | JVM, Babashka, ClojureScript |
 | Runtime | repl, run, runtime.resolve | JVM, Babashka (CLJS possible with injected eval) |
 | Test infra | test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
@@ -162,7 +161,6 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 | `rewrite_test` | Rewrite engine: pattern matching, substitution, splice variables, cycle detection |
 | `rewrite/rules_test` | Rewrite rules: S→M and M→S transformations |
 | `rewrite/tree_test` | Rewrite tree builder: tokens→tagged tree, cross-test vs main parser |
-| `convert_test` | Unified convert: meme↔clj via all three langs, legacy name aliases, roundtrip, error cases. |
 | `rewrite/emit_test` | Rewrite tree serialization: m-call nodes, edge types (BigDecimal, regex, tagged literals). |
 | `lang_test` | Lang command maps, EDN loading, user lang registration, extension dispatch, prelude injection, custom parser, check-support!. JVM only. |
 | `trs_test` | Token-stream term rewriting: meme→clj, clj→meme, lang agreement with classic. |

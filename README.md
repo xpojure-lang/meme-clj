@@ -43,7 +43,7 @@ Add to `deps.edn`:
 
 <!-- Update version below when releasing — source of truth is src/meme/version.txt -->
 ```clojure
-io.github.xpojure-lang/meme-clj {:mvn/version "0.12.0"}
+io.github.xpojure-lang/meme-clj {:mvn/version "1.0.0"}
 ```
 
 Or clone and use directly:
@@ -52,8 +52,6 @@ Or clone and use directly:
 git clone https://github.com/xpojure-lang/meme-clj.git
 cd meme-clj
 ```
-
-All namespaces live under `meme.alpha` to signal that the API is pre-1.0 and may change. When the API stabilizes, namespaces will move to `meme`.
 
 ## Getting Started
 
@@ -104,7 +102,9 @@ Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sit
 ## Documentation
 
 - [Language Reference](doc/language-reference.md) — complete syntax guide
+- [Language Maker Cookbook](doc/LANGBOOK.md) — building guest languages on the meme platform
 - [API Reference](doc/api.md) — public functions
-- [Development](CLAUDE.md) — testing, architecture
 - [Design Decisions](doc/design-decisions.md) — rationale behind each choice
 - [Product Requirements](doc/PRD.md) — requirements and known limitations
+- [Changelog](CHANGELOG.md) — release history
+- [Development](CLAUDE.md) — testing, architecture

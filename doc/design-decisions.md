@@ -239,7 +239,7 @@ The codebase is split into three platform tiers:
   render, formatter.flat, formatter.canon, stages, stages.contract,
   core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree,
   rewrite.emit, lang, lang.meme-classic, lang.meme-rewrite, lang.meme-trs,
-  lang.util, trs, convert) — portable `.cljc`, runs on JVM,
+  trs) — portable `.cljc`, runs on JVM,
   Babashka, and ClojureScript. Pure functions with no eval or I/O
   dependency. `rewrite` macros (`defrule`, `defrule-guard`, `ruleset`)
   are JVM/Babashka only.

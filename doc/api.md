@@ -291,7 +291,7 @@ Options:
 On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's syntax-quote resolution) unless explicitly provided.
 
 ```
-$ bb meme
+$ bb meme repl
 meme REPL. Type meme expressions, balanced input to eval. Ctrl-D to exit.
 user=> +(1 2)
 3
@@ -467,7 +467,7 @@ A guest parser replacing the `parse` stage must produce a context map conforming
 
 (binding [contract/*validate* true]
   (let [ctx (-> {:source src :opts opts}
-                pipeline/step-scan
+                stages/step-scan
                 my-custom-parse)]
     ctx))
 ```
@@ -793,31 +793,3 @@ List all registered user language names (keywords).
 
 Clear all registered user languages. For testing.
 
-## meme.convert
-
-Unified dispatch for three conversion langs: `:meme-classic`, `:meme-rewrite`, `:meme-trs`.
-Legacy aliases `:classic`, `:rewrite`, `:ts-trs` are also accepted.
-
-### meme->clj
-
-```clojure
-(meme.convert/meme->clj src)
-(meme.convert/meme->clj src lang-name)
-```
-
-Convert meme source to Clojure source using the named lang. Default: `:meme-classic`.
-
-- `:meme-classic` — recursive-descent parser + Wadler-Lindig printer (default)
-- `:meme-rewrite` — tree builder + `meme.rewrite` rules
-- `:meme-trs` — token-stream term rewriting
-
-All platforms.
-
-### clj->meme
-
-```clojure
-(meme.convert/clj->meme src)
-(meme.convert/clj->meme src lang-name)
-```
-
-Convert Clojure source to meme source using the named lang. Default: `:meme-classic`. JVM/Babashka only.

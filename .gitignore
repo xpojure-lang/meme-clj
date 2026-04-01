@@ -7,3 +7,7 @@ cljs-test-runner-out/
 *.class
 *.jar
 .DS_Store
+node_modules/
+out/
+.calva/
+.clover/

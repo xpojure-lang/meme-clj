@@ -29,24 +29,33 @@
 ;; Smart constructors
 ;; ---------------------------------------------------------------------------
 
-(def line  (->DocLine " "))    ; space when flat, newline+indent when broken
-(def line0 (->DocLine ""))     ; empty when flat, newline+indent when broken
-(def hardline (->DocLine nil)) ; always breaks — never flat
+(def line  "Space when flat, newline+indent when broken." (->DocLine " "))
+(def line0 "Empty when flat, newline+indent when broken." (->DocLine ""))
+(def hardline "Always breaks — never renders flat." (->DocLine nil))
 
-(defn text [s]
+(defn text
+  "Literal string doc node. Returns nil for nil or empty string."
+  [s]
   (when (and s (not= s ""))
     (->DocText s)))
 
-(defn nest [i doc]
+(defn nest
+  "Increase indent by i for doc. Returns nil if doc is nil."
+  [i doc]
   (when doc (->DocNest i doc)))
 
-(defn group [doc]
+(defn group
+  "Try to render doc flat; break to multi-line if too wide. Returns nil if doc is nil."
+  [doc]
   (when doc (->DocGroup doc)))
 
-(defn if-break [break-doc flat-doc]
+(defn if-break
+  "Render break-doc when broken, flat-doc when flat."
+  [break-doc flat-doc]
   (->DocIfBreak break-doc flat-doc))
 
 (defn cat
+  "Concatenate doc nodes. Nils are ignored."
   ([] nil)
   ([a] a)
   ([a b] (cond (nil? a) b (nil? b) a :else (->DocCat a b)))
