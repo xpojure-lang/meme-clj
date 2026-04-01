@@ -56,7 +56,7 @@
        (let [run-string-fn (resolve-symbol 'meme.alpha.runtime.run/run-string)]
          (case command
            :run (fn [source opts]
-                  (run-string-fn (slurp value) opts)
+                  (run-string-fn (slurp value) (dissoc opts :rewrite-rules :prelude))
                   (run-string-fn source opts))
            (throw (ex-info (str "String value not supported for :" (name command)
                                 " — use a qualified symbol or keyword")

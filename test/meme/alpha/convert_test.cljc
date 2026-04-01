@@ -46,6 +46,22 @@
                            (convert/clj->meme "(f x)" :nonexistent)))))
 
 ;; ---------------------------------------------------------------------------
+;; Legacy name backward compatibility
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest legacy-name-aliases
+     (testing ":classic produces same output as :meme-classic"
+       (is (= (convert/meme->clj "f(x y)" :meme-classic)
+              (convert/meme->clj "f(x y)" :classic))))
+     (testing ":rewrite produces same output as :meme-rewrite"
+       (is (= (convert/meme->clj "f(x y)" :meme-rewrite)
+              (convert/meme->clj "f(x y)" :rewrite))))
+     (testing ":ts-trs produces same output as :meme-trs"
+       (is (= (convert/meme->clj "f(x y)" :meme-trs)
+              (convert/meme->clj "f(x y)" :ts-trs))))))
+
+;; ---------------------------------------------------------------------------
 ;; Cross-lang agreement: all langs produce same output for basic inputs
 ;; ---------------------------------------------------------------------------
 

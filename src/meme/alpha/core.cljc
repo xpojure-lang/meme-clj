@@ -26,7 +26,7 @@
      :read-cond       — :preserve to return ReaderConditional objects instead of
                         evaluating. Default: evaluate for current platform.
    Note: returns only parsed forms. Use run-pipeline when you need
-   access to intermediate pipeline state (raw tokens, grouped tokens)."
+   access to intermediate pipeline state (raw tokens, tokens, or forms)."
   ([s] (:forms (pipeline/run s)))
   ([s opts] (:forms (pipeline/run s opts))))
 

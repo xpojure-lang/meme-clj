@@ -179,7 +179,14 @@
                 "src/meme/alpha/parse/reader.cljc" "src/meme/alpha/emit/printer.cljc"
                 "src/meme/alpha/scan/tokenizer.cljc"
                 "src/meme/alpha/parse/resolve.cljc" "src/meme/alpha/pipeline.cljc"
-                "src/meme/alpha/errors.cljc"]]
+                "src/meme/alpha/errors.cljc"
+                "src/meme/alpha/lang.cljc"
+                "src/meme/alpha/lang/meme_classic.cljc"
+                "src/meme/alpha/lang/meme_rewrite.cljc"
+                "src/meme/alpha/lang/meme_trs.cljc"
+                "src/meme/alpha/lang/util.cljc"
+                "src/meme/alpha/convert.cljc"
+                "src/meme/alpha/trs.cljc"]]
     (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)
             tmp (roundtrip-to-tmp path)

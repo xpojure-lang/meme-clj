@@ -1,0 +1,2 @@
+{:run "examples/languages/superficie/core.meme"
+ :format :meme-classic}

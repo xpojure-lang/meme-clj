@@ -91,11 +91,11 @@
     (is (= "#?(:clj x :cljs y)" (trs/meme->clj-text "#?(:clj x :cljs y)")))))
 
 ;; ---------------------------------------------------------------------------
-;; Pipeline integration: ts-trs agrees with classic
+;; Lang integration: ts-trs agrees with classic
 ;; ---------------------------------------------------------------------------
 
 #?(:clj
-   (deftest pipeline-agreement
+   (deftest lang-agreement
      (testing "ts-trs agrees with classic on basic cases"
        (doseq [src ["f(x y)"
                      "+(1 2)"

@@ -814,7 +814,7 @@
 ;; build-tree's :discard handler recursed into closing delimiters, crashing
 ;; with "Unexpected token type: :close-bracket" (and paren/brace variants).
 ;; build-collection also didn't filter discard-sentinel from results.
-;; Affects :rewrite pipeline; classic pipeline was unaffected.
+;; Affects :meme-rewrite lang; :meme-classic was unaffected.
 ;; ---------------------------------------------------------------------------
 
 #?(:clj

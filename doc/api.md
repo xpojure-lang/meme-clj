@@ -497,9 +497,9 @@ Unified CLI for meme. Implemented in meme syntax (`cli.meme`), loaded by a `.clj
 | `meme run <file>` | Run a `.meme` file |
 | `meme repl` | Start the meme REPL |
 | `meme convert <file\|dir>` | Convert between `.meme` and `.clj` (direction detected from extension) |
-| `meme convert --pipeline classic\|rewrite` | Select conversion pipeline (default: classic) |
+| `meme convert --lang meme-classic\|meme-rewrite\|meme-trs` | Select conversion lang (default: meme-classic) |
 | `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
-| `meme inspect [--pipeline]` | Show pipeline structure |
+| `meme inspect [--lang]` | Show lang info and supported commands |
 | `meme version` | Print version |
 
 All file commands accept directories (processed recursively) and multiple paths. `convert` and `format` accept `--stdout` to print to stdout instead of writing files.
@@ -803,19 +803,21 @@ Clear all registered languages. For testing.
 
 ## meme.alpha.convert
 
-Unified dispatch for two conversion pipelines: `:classic`, `:rewrite`.
+Unified dispatch for three conversion langs: `:meme-classic`, `:meme-rewrite`, `:meme-trs`.
+Legacy aliases `:classic`, `:rewrite`, `:ts-trs` are also accepted.
 
 ### meme->clj
 
 ```clojure
 (meme.alpha.convert/meme->clj src)
-(meme.alpha.convert/meme->clj src pipeline-name)
+(meme.alpha.convert/meme->clj src lang-name)
 ```
 
-Convert meme source to Clojure source using the named pipeline. Default: `:classic`.
+Convert meme source to Clojure source using the named lang. Default: `:meme-classic`.
 
-- `:classic` — recursive-descent parser + Wadler-Lindig printer (default)
-- `:rewrite` — tree builder + `meme.alpha.rewrite` rules
+- `:meme-classic` — recursive-descent parser + Wadler-Lindig printer (default)
+- `:meme-rewrite` — tree builder + `meme.alpha.rewrite` rules
+- `:meme-trs` — token-stream term rewriting
 
 All platforms.
 
@@ -823,7 +825,7 @@ All platforms.
 
 ```clojure
 (meme.alpha.convert/clj->meme src)
-(meme.alpha.convert/clj->meme src pipeline-name)
+(meme.alpha.convert/clj->meme src lang-name)
 ```
 
-Convert Clojure source to meme source using the named pipeline. Default: `:classic`. JVM/Babashka only.
+Convert Clojure source to meme source using the named lang. Default: `:meme-classic`. JVM/Babashka only.

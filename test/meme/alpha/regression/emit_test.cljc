@@ -497,9 +497,9 @@
           "quote sugar must survive metadata stripping"))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: set/map ordering in rewrite pipeline
+;; Scar tissue: set/map ordering in meme-rewrite lang
 ;; ---------------------------------------------------------------------------
-;; Sets lost insertion order and maps lost key order in the rewrite pipeline
+;; Sets lost insertion order and maps lost key order in the meme-rewrite lang
 ;; because transform-structures used hash-map/bare set.
 ;; Fix: use array-map for maps and attach :meme/order metadata for sets,
 ;; and respect :meme/order in the emit module.
@@ -507,7 +507,7 @@
 
 #?(:clj
    (deftest rewrite-preserves-collection-order
-     (testing "set insertion order preserved through rewrite pipeline"
+     (testing "set insertion order preserved through meme-rewrite lang"
        (is (= "#{1 2 3}" (convert/meme->clj "#{1 2 3}" :meme-rewrite))))
-     (testing "map key order preserved through rewrite pipeline"
+     (testing "map key order preserved through meme-rewrite lang"
        (is (= "{:a 1 :b 2}" (convert/meme->clj "{:a 1 :b 2}" :meme-rewrite))))))

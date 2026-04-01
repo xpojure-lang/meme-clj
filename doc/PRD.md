@@ -199,9 +199,9 @@ meme rules inside. No opaque regions.
 
 ## Completed work (post-initial release)
 
-- **Syntax highlighting grammars.** TextMate grammar in `vscode-beme/`,
-  Tree-sitter grammar in `tree-sitter-beme/` (both in the `xpojure-lang` org).
-  Both cover `.beme` and `.meme` extensions.
+- **Syntax highlighting grammars.** TextMate grammar in `vscode-meme/`,
+  Tree-sitter grammar in `tree-sitter-meme/` (both in the `xpojure-lang` org).
+  Both cover `.meme` extension.
 
 - **Platform / guest language system.** See `doc/platform-roadmap.md` and
   `doc/LANGBOOK.md`. Includes:
@@ -228,8 +228,8 @@ meme rules inside. No opaque regions.
 | PL7 | `step-rewrite` pipeline stage applies rules after expansion | Done |
 | PL8 | Pipeline contract: spec validation at stage boundaries (`pipeline.contract`) | Done |
 | PL9 | Two conversion pipelines: classic, rewrite (`meme.alpha.convert`) | Done |
-| PL10 | `meme convert --pipeline` CLI selector and `meme inspect` command | Done |
-| PL11 | Comparative benchmark across both pipelines | Done |
+| PL10 | `meme convert --lang` CLI selector and `meme inspect` command | Done |
+| PL11 | Comparative benchmark across all three langs | Done |
 
 ## Future work
 

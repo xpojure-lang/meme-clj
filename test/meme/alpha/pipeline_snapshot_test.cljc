@@ -1,8 +1,7 @@
 (ns meme.alpha.pipeline-snapshot-test
   "Characterization tests: captures exact tokenizer and reader output
-   for a broad set of inputs. Used as a fast-fail regression net during
-   the pipeline refactoring. If any of these break, the refactor changed
-   observable behavior."
+   for a broad set of inputs. Regression net for tokenizer and reader
+   output — if any of these break, something changed observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.core :as core]
             [meme.alpha.forms :as forms]

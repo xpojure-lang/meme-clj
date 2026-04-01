@@ -1,12 +1,12 @@
 (ns meme.alpha.benchmark-test
-  "Comparative benchmark: classic vs rewrite vs ts-trs pipelines.
+  "Comparative benchmark: classic vs rewrite vs ts-trs langs.
 
    Two benchmark axes:
-     1. meme→clj roundtrip — .meme fixture files through each pipeline
+     1. meme→clj roundtrip — .meme fixture files through each lang
      2. clj→meme→clj vendor roundtrip — real-world .clj files per-form
 
-   Reports timing, correctness (agreement between pipelines), and
-   roundtrip fidelity (clj→meme→clj identity) for each pipeline."
+   Reports timing, correctness (agreement between langs), and
+   roundtrip fidelity (clj→meme→clj identity) for each lang."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -74,7 +74,7 @@
 ;; ============================================================
 
 (defn- bench-meme->clj-file
-  "Convert a .meme file through each pipeline, return timing and agreement.
+  "Convert a .meme file through each lang, return timing and agreement.
    Classic and rewrite are compared as text (same formatter).
    ts-trs is compared at form level (different text reconstruction)."
   [file]
@@ -145,11 +145,11 @@
 (defn- roundtrip-form
   "Roundtrip a single Clojure form through clj→meme→clj using the public API.
    End-to-end: pr-str → convert/clj->meme → convert/meme->clj → clj->forms."
-  [form pipeline-name]
+  [form lang-name]
   (try
     (let [clj-src (pr-str form)
-          meme-text (convert/clj->meme clj-src pipeline-name)
-          clj-back (convert/meme->clj meme-text pipeline-name)
+          meme-text (convert/clj->meme clj-src lang-name)
+          clj-back (convert/meme->clj meme-text lang-name)
           back-forms (core/clj->forms clj-back)]
       (if (form= [form] back-forms)
         {:ok true}
@@ -158,8 +158,8 @@
       {:error (.getMessage e)})))
 
 (defn- bench-vendor-project
-  "Roundtrip all forms in a vendor project through each pipeline.
-   Returns per-pipeline summary."
+  "Roundtrip all forms in a vendor project through each lang.
+   Returns per-lang summary."
   [project-dir]
   (let [project (.getName project-dir)
         files (find-clj-files project-dir)
@@ -168,13 +168,13 @@
                                   (read-clj-forms f)))
                           files)
         n (count all-forms)
-        bench-pipeline (fn [pipeline-name]
-                         (let [[results ms] (timed
-                                              (mapv #(roundtrip-form (:form %) pipeline-name)
-                                                    all-forms))
-                               ok (count (filter :ok results))
-                               errors (count (filter :error results))]
-                           {:pipeline pipeline-name
+        bench-lang (fn [lang-name]
+                     (let [[results ms] (timed
+                                          (mapv #(roundtrip-form (:form %) lang-name)
+                                                all-forms))
+                           ok (count (filter :ok results))
+                           errors (count (filter :error results))]
+                       {:lang lang-name
                             :forms n
                             :ok ok
                             :errors errors
@@ -182,9 +182,9 @@
     {:project project
      :files (count files)
      :forms n
-     :classic (bench-pipeline :meme-classic)
-     :rewrite (bench-pipeline :meme-rewrite)
-     :ts-trs (bench-pipeline :meme-trs)}))
+     :classic (bench-lang :meme-classic)
+     :rewrite (bench-lang :meme-rewrite)
+     :ts-trs (bench-lang :meme-trs)}))
 
 ;; ============================================================
 ;; Reporting
@@ -266,7 +266,7 @@
 ;; ============================================================
 
 (deftest benchmark-meme->clj-fixtures
-  (testing "meme→clj conversion across all pipelines"
+  (testing "meme→clj conversion across all langs"
     (let [files (meme-fixtures)
           results (mapv bench-meme->clj-file files)]
       (report-meme->clj results)
@@ -276,13 +276,13 @@
         (is classic=ts-trs (str file " classic and ts-trs must agree"))))))
 
 (deftest benchmark-vendor-roundtrip
-  (testing "clj→meme→clj vendor roundtrip across all pipelines"
+  (testing "clj→meme→clj vendor roundtrip across all langs"
     (let [projects (vendor-projects)]
       (if (empty? projects)
         (println "SKIP — vendor submodules not initialized (git submodule update --init)")
         (let [results (mapv bench-vendor-project projects)]
           (report-vendor results)
-          ;; All pipelines should agree on roundtrip success count.
+          ;; All langs should agree on roundtrip success count.
           (doseq [{:keys [project classic rewrite ts-trs]} results]
             (is (= (:ok classic) (:ok rewrite))
                 (str project " classic and rewrite should agree"))

@@ -296,7 +296,7 @@
   ([rules expr max-iters]
    (loop [expr expr
           i 0]
-     (when (> i max-iters)
+     (when (>= i max-iters)
        (throw (ex-info "Rewrite did not reach fixed point (possible cycle)"
                        {:iterations max-iters :expr expr})))
      (let [[changed? result] (rewrite-once rules expr)]
@@ -311,7 +311,7 @@
   ([rules expr max-iters]
    (loop [expr expr
           i 0]
-     (when (> i max-iters)
+     (when (>= i max-iters)
        (throw (ex-info "Rewrite did not reach fixed point"
                        {:iterations max-iters :expr expr})))
      (if-let [result (apply-rules rules expr)]

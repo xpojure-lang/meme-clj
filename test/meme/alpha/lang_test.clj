@@ -63,6 +63,12 @@
     (lang/check-support! l lang-name cmd)
     (is true)))
 
+(deftest check-support-passes-for-repl
+  (testing "meme-classic supports :repl"
+    (is (lang/supports? (:meme-classic all-langs) :repl)))
+  (testing "meme-rewrite supports :repl"
+    (is (lang/supports? (:meme-rewrite all-langs) :repl))))
+
 (deftest check-support-fails-for-missing
   (testing "meme-trs has no :repl"
     (is (thrown-with-msg? Exception #"does not support :repl"

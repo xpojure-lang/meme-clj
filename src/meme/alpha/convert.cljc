@@ -27,27 +27,26 @@
     (merge b (zipmap (keys legacy-names)
                      (map #(get b %) (vals legacy-names))))))
 
-(def pipelines
-  "Available langs by keyword. Includes both legacy and new names.
-   Kept as `pipelines` for backward compatibility with existing callers."
+(def ^:private langs
+  "Available langs by keyword. Includes both legacy and new names."
   #?(:clj (delay (all-langs))
      :cljs (all-langs)))
 
-(defn resolve-pipeline
+(defn- resolve-lang
   "Look up a lang by keyword. Supports both legacy names (:classic, :rewrite, :ts-trs)
    and new names (:meme-classic, :meme-rewrite, :meme-trs).
    Throws on unknown name."
   [lang-name]
-  (let [p #?(:clj @pipelines :cljs pipelines)]
+  (let [p #?(:clj @langs :cljs langs)]
     (or (get p lang-name)
-        (throw (ex-info (str "Unknown pipeline: " lang-name
+        (throw (ex-info (str "Unknown lang: " lang-name
                              " — must be one of: " (pr-str (keys p))) {})))))
 
 (defn meme->clj
   "Convert meme source to Clojure source using the named lang."
   ([src] (meme->clj src :classic))
   ([src lang-name]
-   (let [l (resolve-pipeline (normalize-name lang-name))]
+   (let [l (resolve-lang (normalize-name lang-name))]
      (lang/check-support! l lang-name :convert)
      ((:convert l) src {:read-cond :preserve :direction :to-clj}))))
 
@@ -57,6 +56,6 @@
    JVM/Babashka only."
      ([src] (clj->meme src :classic))
      ([src lang-name]
-      (let [l (resolve-pipeline (normalize-name lang-name))]
+      (let [l (resolve-lang (normalize-name lang-name))]
         (lang/check-support! l lang-name :convert)
         ((:convert l) src {:direction :to-meme})))))
