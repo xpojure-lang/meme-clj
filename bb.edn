@@ -1,5 +1,5 @@
 {:paths ["src" "resources" "test"]
- :tasks {meme {:doc "meme CLI: run, repl, convert, format, version"
+ :tasks {meme {:doc "meme CLI: run, repl, to-clj, to-meme, format, inspect, version"
               :task (do (require '[meme.runtime.cli])
                         (apply (resolve 'meme.runtime.cli/-main) *command-line-args*))}
          test-meme {:doc "Run all .meme tests (eval + fixture)"

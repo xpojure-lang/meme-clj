@@ -364,3 +364,29 @@ via metadata):
 - `#()` vs `fn()`: preserved via `:meme/sugar` (see above section).
 
 
+## Three lang backends
+
+meme provides three independent implementations of the meme↔Clojure translation, each with different trade-offs:
+
+### meme-classic (default)
+
+Full-fidelity recursive-descent parser (`meme.parse.reader`) combined with a Wadler-Lindig document printer (`meme.emit.printer`). This is the reference implementation and the only path that preserves all metadata, sugar flags (`:meme/sugar`), whitespace annotations, and comment positions through roundtrips.
+
+**Use for:** formatting, tooling integration, roundtrip-sensitive workflows, and as the correctness oracle for the other two backends.
+
+### meme-rewrite
+
+Injects `meme.rewrite.tree/rewrite-parser` as a custom `:parser` in the stage pipeline. The tree parser builds explicit tagged nodes (`m-call`, `bracket`, `brace`, etc.), then applies `meme.rewrite.rules/tree->s-rules` followed by `transform-structures` to produce the same Clojure forms as meme-classic.
+
+**Use for:** testing the rewrite engine as a viable parsing mechanism, guest languages that need tree-level transformations, and as a demonstration that the stage pipeline's pluggable parser design works correctly.
+
+### meme-trs
+
+Token-stream term rewriting (`meme.trs`). For the meme→clj direction, bypasses the parser entirely: tokenize → nest balanced delimiters → apply m-call rules at the token level → flatten → emit text. The lightest-weight path. Whitespace is preserved exactly because transformations operate on tokens, not forms.
+
+**Use for:** fast text-to-text conversion (`to-clj` direction) when no semantic analysis is needed. Not suitable for tooling that requires parsed forms or metadata.
+
+### Agreement testing
+
+All three backends are cross-checked: `benchmark_test.clj` verifies they produce the same Clojure forms for all fixture files and vendor roundtrip forms. `trs_test.cljc` explicitly tests agreement between meme-classic and meme-trs for representative inputs.
+

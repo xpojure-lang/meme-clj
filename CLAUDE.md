@@ -31,9 +31,9 @@ bb meme run file.meme
 # Start meme REPL
 bb meme repl
 
-# Convert between meme and Clojure (by extension)
-bb meme convert file.meme    # .meme → Clojure
-bb meme convert file.clj     # .clj → meme
+# Convert between meme and Clojure
+bb meme to-clj file.meme     # .meme → Clojure
+bb meme to-meme file.clj     # .clj → meme
 
 # Format .meme files (normalize syntax via canonical formatter)
 bb meme format file.meme     # in-place
@@ -90,7 +90,7 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 - `meme.runtime.resolve` (.cljc) — Default symbol resolution for syntax-quote. Matches Clojure's `SyntaxQuoteReader`: special forms stay unqualified, vars resolve to their defining namespace, unresolved symbols get current-ns qualification. JVM/Babashka only.
 - `meme.runtime.repl` (.cljc) — REPL. Requires `eval`; JVM/Babashka only by default, CLJS with injected `:eval`/`:read-line`.
 - `meme.runtime.run` (.cljc) — File runner. Requires `eval` + `slurp`; JVM/Babashka only by default.
-- `meme.runtime.cli` (.clj) — Unified CLI: `run`, `repl`, `convert`, `format`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
+- `meme.runtime.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
 - `meme.rewrite` (.cljc) — Pattern matching and term rewriting engine. `match-pattern`, `substitute`, `make-rule`, `rewrite` (bottom-up to fixpoint), `rewrite-top`. JVM-only macros: `defrule`, `defrule-guard`, `ruleset`. Portable core, JVM macros.
 - `meme.rewrite.rules` (.cljc) — S↔M transformation rule sets: `s->m-rules`, `m->s-rules`, `tree->s-rules`, `transform-structures`. Portable.
 - `meme.rewrite.tree` (.cljc) — Token→tagged tree builder. `tokens->tree`, `build-tree`, `rewrite-parser` (drop-in replacement for the standard parser). Portable.

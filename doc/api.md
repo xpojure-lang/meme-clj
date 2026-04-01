@@ -496,13 +496,13 @@ Unified CLI for meme. Implemented in meme syntax (`cli.meme`), loaded by a `.clj
 |---------|-------------|
 | `meme run <file>` | Run a `.meme` file |
 | `meme repl` | Start the meme REPL |
-| `meme convert <file\|dir>` | Convert between `.meme` and `.clj` (direction detected from extension) |
-| `meme convert --lang meme-classic\|meme-rewrite\|meme-trs` | Select conversion lang (default: meme-classic) |
+| `meme to-clj <file\|dir>` | Convert `.meme` files to `.clj` |
+| `meme to-meme <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.meme` |
 | `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
 | `meme inspect [--lang]` | Show lang info and supported commands |
 | `meme version` | Print version |
 
-All file commands accept directories (processed recursively) and multiple paths. `convert` and `format` accept `--stdout` to print to stdout instead of writing files.
+All file commands accept directories (processed recursively) and multiple paths. `to-clj`, `to-meme`, and `format` accept `--stdout` to print to stdout instead of writing files. Use `--lang` to select a lang backend (default: meme-classic).
 
 Entry point: `-main` dispatches via `babashka.cli`. For Clojure JVM, use `-T:meme` (e.g., `clojure -T:meme run :file '"hello.meme"'`).
 
@@ -703,7 +703,7 @@ Walk a tree and convert structural tags to Clojure data/AST nodes.
 
 ## meme.rewrite.tree
 
-Token vector → tagged tree builder for the rewrite-based pipeline.
+Token vector → tagged tree builder for the rewrite-based lang.
 
 ### tokens->tree
 
@@ -727,7 +727,7 @@ Build a tagged tree node from tokens starting at `pos`. Returns `[node new-pos]`
 (meme.rewrite.tree/rewrite-parser tokens opts source)
 ```
 
-Parser that conforms to the pipeline contract: `(fn [tokens opts source] → forms)`. Uses the rewrite-based pipeline: tokens → tagged tree → rules → structures. Drop-in replacement for `meme.parse.reader/read-meme-string-from-tokens`.
+Parser that conforms to the stage contract: `(fn [tokens opts source] → forms)`. Uses the rewrite-based approach: tokens → tagged tree → rules → structures. Drop-in replacement for `meme.parse.reader/read-meme-string-from-tokens`.
 
 
 ## meme.rewrite.emit

@@ -65,7 +65,7 @@ A guest language needs:
 
 ## Roadmap
 
-### Phase 0: Prelude injection
+### Phase 0: Prelude injection — DONE
 
 **What:** A slot in `run-string` and `repl/start` for forms to eval before
 user code.
@@ -88,7 +88,7 @@ prelude.
 untouched.
 
 
-### Phase 1: Language dispatch
+### Phase 1: Language dispatch — DONE
 
 **What:** Given a file or input, determine which guest language to use and
 load its configuration.
@@ -116,7 +116,7 @@ one syntax" model — useful before any parser pluggability exists.
 `load-edn`. Guest language dispatch integrated into `runtime/run.cljc` and `runtime/cli.meme`.
 
 
-### Phase 2: Pluggable parser
+### Phase 2: Pluggable parser — DONE
 
 **What:** Guest languages can provide their own `tokens → forms` parser,
 while reusing meme's tokenizer and being able to delegate back to meme's
@@ -158,10 +158,17 @@ The parser stage itself becomes dispatch-aware.
 `meme.platform.parser` for the plugin protocol.
 
 
-### Phase 3: Rewrite infrastructure
+### Phase 3: Rewrite infrastructure — PARTIALLY DONE
 
 **What:** A pattern language, rule engine, and strategy combinator library
 that guest languages can use to define semantics via term rewriting.
+
+**Implementation status:**
+- Pattern matching (`meme.rewrite/match-pattern`): **DONE** — `_`, `?x`, `??x` patterns, guard functions
+- Rules + substitution (`defrule`, `ruleset`, `make-rule`): **DONE**
+- Bottom-up rewriting (`rewrite`, `rewrite-once`, `rewrite-top`): **DONE** — with 100-iteration safety cap
+- Token-stream rewriting (`meme.trs`): **DONE** — lightweight token-level S↔M conversion
+- Strategy combinators (topdown, innermost, etc.): **NOT YET** — still future work
 
 **Why this is the deep work:** This is what makes "build a language" feel
 like "define some rules" rather than "write a compiler." It's the hardest

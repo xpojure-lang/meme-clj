@@ -73,12 +73,12 @@ user=> map(inc [1 2 3])
 (2 3 4)
 ```
 
-Convert between meme and Clojure (direction detected from extension):
+Convert between meme and Clojure:
 
 ```bash
-$ bb meme convert hello.meme                            # .meme → Clojure
-$ bb meme convert hello.clj                             # .clj → meme
-$ clojure -T:meme convert :file '"hello.meme"'          # Clojure JVM
+$ bb meme to-clj hello.meme                             # .meme → Clojure
+$ bb meme to-meme hello.clj                             # .clj → meme
+$ bb meme to-clj hello.meme --stdout                    # print to stdout
 ```
 
 Format `.meme` files (normalize syntax via canonical formatter):

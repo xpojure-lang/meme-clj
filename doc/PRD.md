@@ -126,7 +126,8 @@ the CLI itself is written in `.meme`.
 |----|-------------|--------|
 | C1 | `meme run <file>` — run a .meme file | Done |
 | C2 | `meme repl` — start interactive REPL | Done |
-| C3 | `meme convert <file\|dir>` — convert between .meme and .clj (by extension) | Done |
+| C3a | `meme to-clj <file\|dir>` — convert .meme files to .clj | Done |
+| C3b | `meme to-meme <file\|dir>` — convert .clj/.cljc/.cljs files to .meme | Done |
 | C4 | `meme format <file\|dir>` — normalize .meme files via canonical formatter (in-place or stdout) | Done |
 
 Note: Requirement IDs are not sequential — gaps (R2–R4, R11–R12, R14,
@@ -228,7 +229,7 @@ meme rules inside. No opaque regions.
 | PL7 | `step-rewrite` pipeline stage applies rules after expansion | Done |
 | PL8 | Stage contract: spec validation at stage boundaries (`stages.contract`) | Done |
 | PL9 | Three conversion langs: meme-classic, meme-rewrite, meme-trs (via `meme.lang` `:to-clj` / `:to-meme`) | Done |
-| PL10 | `meme convert --lang` CLI selector and `meme inspect` command | Done |
+| PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
 | PL11 | Comparative benchmark across all three langs | Done |
 
 ## Future work
