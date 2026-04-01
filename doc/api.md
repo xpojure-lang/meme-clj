@@ -497,7 +497,7 @@ Unified CLI for meme. Implemented in meme syntax (`cli.meme`), loaded by a `.clj
 | `meme run <file>` | Run a `.meme` file |
 | `meme repl` | Start the meme REPL |
 | `meme convert <file\|dir>` | Convert between `.meme` and `.clj` (direction detected from extension) |
-| `meme convert --pipeline classic\|rewrite\|collapsar` | Select conversion pipeline (default: classic) |
+| `meme convert --pipeline classic\|rewrite` | Select conversion pipeline (default: classic) |
 | `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
 | `meme inspect [--pipeline]` | Show pipeline structure |
 | `meme version` | Print version |
@@ -803,7 +803,7 @@ Clear all registered languages. For testing.
 
 ## meme.alpha.convert
 
-Unified dispatch for three conversion pipelines: `:classic`, `:rewrite`, `:collapsar`.
+Unified dispatch for two conversion pipelines: `:classic`, `:rewrite`.
 
 ### meme->clj
 
@@ -816,7 +816,6 @@ Convert meme source to Clojure source using the named pipeline. Default: `:class
 
 - `:classic` — recursive-descent parser + Wadler-Lindig printer (default)
 - `:rewrite` — tree builder + `meme.alpha.rewrite` rules
-- `:collapsar` — tree builder + `meme.alpha.collapsar` phases
 
 All platforms.
 
@@ -828,9 +827,3 @@ All platforms.
 ```
 
 Convert Clojure source to meme source using the named pipeline. Default: `:classic`. JVM/Babashka only.
-
-## meme.alpha.collapsar
-
-Declarative rewrite engine with phases, pipelines, head analysis, verified termination, and tower collapse. Used by the `:collapsar` conversion pipeline.
-
-See `meme.alpha.collapsar.meme` for the meme↔clj pipeline built on this engine.

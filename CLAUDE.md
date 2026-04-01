@@ -96,16 +96,14 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 - `meme.alpha.rewrite.tree` (.cljc) — Token→tagged tree builder. `tokens->tree`, `build-tree`, `rewrite-parser` (drop-in replacement for the standard parser). Portable.
 - `meme.alpha.rewrite.emit` (.cljc) — Serializes m-call tagged trees to meme text. `emit`, `emit-forms`. Portable.
 - `meme.alpha.platform.registry` (.cljc) — Guest language registration. `register!` (name + config with `:extension`, `:prelude`, `:rules`, `:parser`), `resolve-lang` (file path → language keyword), `lang-config`, `registered-langs`, `clear!`. Portable.
-- `meme.alpha.collapsar` (.cljc) — Declarative rewrite engine with phases, pipelines, head analysis, verified termination, and tower collapse. Experimental — faster than classic (31%) but not yet the default pipeline. Portable.
-- `meme.alpha.collapsar.meme` (.cljc) — meme↔clj conversion expressed as collapsar rule phases and procedural phases. Portable.
-- `meme.alpha.convert` (.cljc) — Unified dispatch for three conversion pipelines: `:classic`, `:rewrite`, `:collapsar`. `meme->clj`, `clj->meme` (JVM only). Portable.
+- `meme.alpha.convert` (.cljc) — Unified dispatch for two conversion pipelines: `:classic`, `:rewrite`. `meme->clj`, `clj->meme` (JVM only). Portable.
 - `meme.alpha.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
 ### Platform tiers
 
 | Tier | Modules | Platforms |
 |------|---------|-----------|
-| Core translation | tokenizer, reader, expander, resolve, printer, render, formatter.flat, formatter.canon, pipeline, pipeline.contract, core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree, rewrite.emit, platform.registry, collapsar, collapsar.meme, convert | JVM, Babashka, ClojureScript |
+| Core translation | tokenizer, reader, expander, resolve, printer, render, formatter.flat, formatter.canon, pipeline, pipeline.contract, core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree, rewrite.emit, platform.registry, convert | JVM, Babashka, ClojureScript |
 | Runtime | repl, run, runtime.resolve | JVM, Babashka (CLJS possible with injected eval) |
 | Test infra | test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
@@ -161,10 +159,9 @@ The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `
 | `rewrite/rules_test` | Rewrite rules: S→M and M→S transformations |
 | `rewrite/tree_test` | Rewrite tree builder: tokens→tagged tree, cross-test vs main parser |
 | `platform/registry_test` | Language registration, extension dispatch, prelude injection, custom parser. JVM only. |
-| `convert_test` | Unified convert: meme↔clj via all three pipelines (classic, rewrite, collapsar), roundtrip, error cases. JVM only. |
-| `collapsar_test` | Collapsar engine: phases, pipelines, termination, meme↔clj conversion. JVM only. |
+| `convert_test` | Unified convert: meme↔clj via both pipelines (classic, rewrite), roundtrip, error cases. JVM only. |
 | `rewrite/emit_test` | Rewrite tree serialization: m-call nodes, edge types (BigDecimal, regex, tagged literals). |
-| `benchmark_test` | Performance: all three pipelines across 11 meme fixtures and 7,526 vendor forms. JVM only. |
+| `benchmark_test` | Performance: both pipelines across 11 meme fixtures and 7,526 vendor forms. JVM only. |
 
 ## Development tools
 

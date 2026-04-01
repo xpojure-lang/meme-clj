@@ -7,11 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.12.0] — 2026-04-01
 
 ### Added
-- **Collapsar engine** (`meme.alpha.collapsar`): self-contained declarative rewrite engine (584 LOC) with phases, pipelines, head analysis, verified termination, and tower collapse
-- **Collapsar meme↔clj pipeline** (`meme.alpha.collapsar.meme`): meme-to-Clojure and Clojure-to-meme conversion expressed as collapsar rule phases and procedural phases
-- **Unified convert CLI**: `meme convert --pipeline classic|rewrite|collapsar` selects the conversion pipeline; `meme inspect --pipeline` shows pipeline structure
-- **Unified convert module** (`meme.alpha.convert`): single dispatch point for all three pipelines
-- **Comparative benchmark** (`benchmark_test.clj`): benchmarks all three pipelines across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
+- **Unified convert CLI**: `meme convert --pipeline classic|rewrite` selects the conversion pipeline; `meme inspect --pipeline` shows pipeline structure
+- **Unified convert module** (`meme.alpha.convert`): single dispatch point for both pipelines
+- **Comparative benchmark** (`benchmark_test.clj`): benchmarks both pipelines across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
 - **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.alpha.platform.registry`)
 - **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.alpha.rewrite`)
 - **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.alpha.rewrite.tree`)

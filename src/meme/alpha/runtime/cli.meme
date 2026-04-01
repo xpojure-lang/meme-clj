@@ -5,7 +5,6 @@ ns(meme.alpha.runtime.cli
   :require(
     [meme.alpha.core :as core]
     [meme.alpha.convert :as convert]
-    [meme.alpha.collapsar.meme :as collapsar-meme]
     [meme.alpha.errors :as errors]
     [meme.alpha.pipeline :as pipeline]
     [meme.alpha.rewrite :as rewrite]
@@ -184,7 +183,7 @@ defn(convert
     [inputs or(files when(file [file]))
      pipe resolve-pipeline(pipeline)]
     when(empty?(inputs)
-      println("Usage: meme convert <file|dir> [file...] [--pipeline classic|rewrite|collapsar]")
+      println("Usage: meme convert <file|dir> [file...] [--pipeline classic|rewrite]")
       println("  Writes sibling files (.meme↔.clj) by default")
       println("  --stdout    print to stdout instead")
       println("  --pipeline  select pipeline (default: classic)")
@@ -233,8 +232,7 @@ defn(format-cmd
                        [src slurp(path)
                         parser-opts case(pipe
                                      :classic {}
-                                     :rewrite {:parser tree/rewrite-parser}
-                                     :collapsar {:parser tree/rewrite-parser})
+                                     :rewrite {:parser tree/rewrite-parser})
                         forms :forms(pipeline/run(src parser-opts))]
                        core/format-meme(forms)))
         :output-fn nil
@@ -247,19 +245,6 @@ defn(inspect-cmd
   [{:keys [pipeline]}]
   let([pipe resolve-pipeline(pipeline)]
     case(pipe
-      :collapsar
-      let([info collapsar-meme/inspect()]
-        println("Collapsar pipelines:")
-        println()
-        doseq([pl [:meme->clj :clj->meme]]
-          let([p pl(info)]
-            println(str("  " :name(p) " (" :phase-count(p) " phases):"))
-            doseq([phase :phases(p)]
-              println(str("    " :name(phase)
-                if(:procedural?(phase) " [procedural]" str(" [rules: " :rule-count(phase) "]"))
-                when(seq(:consumes(phase)) str(" consumes: " :consumes(phase)))
-                when(:head-eliminating?(phase) " ✓ head-eliminating"))))
-            println())))
       :classic
       do(
         println("Classic pipeline:")
@@ -272,7 +257,7 @@ defn(inspect-cmd
         println("  clj→meme: Clojure reader → rewrite rules (s→m) → emitter"))
       do(
         println(str("Unknown pipeline: " pipe))
-        println("Available: classic, rewrite, collapsar")))))
+        println("Available: classic, rewrite")))))
 
 defn(version
   [_]
@@ -283,7 +268,7 @@ defn(help
   [_]
   println("meme — M-expressions for Clojure")
   println()
-  println("All commands require --pipeline classic|rewrite|collapsar")
+  println("All commands require --pipeline classic|rewrite")
   println()
   println("Commands:")
   println("  meme run <file> --pipeline <name> [--lang name] [--prelude p.meme] [--rules r.meme]")

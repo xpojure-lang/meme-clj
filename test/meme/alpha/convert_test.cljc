@@ -1,5 +1,5 @@
 (ns meme.alpha.convert-test
-  "Tests for meme.alpha.convert: unified meme↔clj conversion via three pipelines."
+  "Tests for meme.alpha.convert: unified meme↔clj conversion via two pipelines."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.alpha.convert :as convert]))
 
@@ -24,14 +24,6 @@
     (is (= "[1 2 3]" (convert/meme->clj "[1 2 3]" :rewrite))))
   (testing "discard in collection"
     (is (= "[1 2]" (convert/meme->clj "[1 2 #_ 3]" :rewrite)))))
-
-(deftest meme->clj-collapsar
-  (testing "basic call syntax"
-    (is (= "(f x y)" (convert/meme->clj "f(x y)" :collapsar))))
-  (testing "nested calls"
-    (is (= "(+ 1 (* 2 3))" (convert/meme->clj "+(1 *(2 3))" :collapsar))))
-  (testing "discard in collection"
-    (is (= "[1 2]" (convert/meme->clj "[1 2 #_ 3]" :collapsar)))))
 
 (deftest meme->clj-default-is-classic
   (testing "no pipeline arg defaults to :classic"
@@ -60,11 +52,6 @@
        (is (= "f(x y)" (convert/clj->meme "(f x y)" :rewrite))))))
 
 #?(:clj
-   (deftest clj->meme-collapsar
-     (testing "basic S-expression"
-       (is (= "f(x y)" (convert/clj->meme "(f x y)" :collapsar))))))
-
-#?(:clj
    (deftest clj->meme-unknown-pipeline-throws
      (testing "unknown pipeline name throws"
        (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -76,15 +63,12 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest pipelines-produce-equivalent-clojure
-  (testing "all three pipelines produce same Clojure for simple inputs"
+  (testing "both pipelines produce same Clojure for simple inputs"
     (doseq [src ["f(x y)"
                  "+(1 2)"
                  "defn(foo [x] +(x 1))"
                  "[1 2 3]"]]
-      (let [classic   (convert/meme->clj src :classic)
-            rewrite   (convert/meme->clj src :rewrite)
-            collapsar (convert/meme->clj src :collapsar)]
+      (let [classic (convert/meme->clj src :classic)
+            rewrite (convert/meme->clj src :rewrite)]
         (is (= classic rewrite)
-            (str "rewrite diverges from classic for: " src))
-        (is (= classic collapsar)
-            (str "collapsar diverges from classic for: " src))))))
+            (str "rewrite diverges from classic for: " src))))))

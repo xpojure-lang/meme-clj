@@ -1,5 +1,5 @@
 (ns meme.alpha.benchmark-test
-  "Comparative benchmark: classic vs rewrite vs collapsar pipelines.
+  "Comparative benchmark: classic vs rewrite pipelines.
 
    Two benchmark axes:
      1. meme→clj roundtrip — .meme fixture files through each pipeline
@@ -78,14 +78,11 @@
   [file]
   (let [src (slurp file)
         [classic-result classic-ms] (timed (convert/meme->clj src :classic))
-        [rewrite-result rewrite-ms] (timed (convert/meme->clj src :rewrite))
-        [collapsar-result collapsar-ms] (timed (convert/meme->clj src :collapsar))]
+        [rewrite-result rewrite-ms] (timed (convert/meme->clj src :rewrite))]
     {:file (.getName file)
      :classic-ms classic-ms
      :rewrite-ms rewrite-ms
-     :collapsar-ms collapsar-ms
-     :classic=rewrite (= classic-result rewrite-result)
-     :classic=collapsar (= classic-result collapsar-result)}))
+     :classic=rewrite (= classic-result rewrite-result)}))
 
 ;; ============================================================
 ;; Structural equality — handles regex (Pattern lacks .equals)
@@ -177,8 +174,7 @@
      :files (count files)
      :forms n
      :classic (bench-pipeline :classic)
-     :rewrite (bench-pipeline :rewrite)
-     :collapsar (bench-pipeline :collapsar)}))
+     :rewrite (bench-pipeline :rewrite)}))
 
 ;; ============================================================
 ;; Reporting
@@ -190,54 +186,47 @@
     (format "%.2fs" (/ ms 1000.0))))
 
 (defn- report-meme->clj [results]
-  (println "\n╔══════════════════════════════════════════════════════════════╗")
-  (println "║              meme→clj Fixture Benchmark                     ║")
-  (println "╠══════════════════════════════════════════════════════════════╣")
-  (println (format "║ %-22s %8s %8s %10s  C=R C=X ║" "file" "classic" "rewrite" "collapsar"))
-  (println "╠══════════════════════════════════════════════════════════════╣")
-  (doseq [{:keys [file classic-ms rewrite-ms collapsar-ms
-                  classic=rewrite classic=collapsar]} results]
-    (println (format "║ %-22s %8s %8s %10s   %s   %s  ║"
+  (println "\n╔════════════════════════════════════════════════════╗")
+  (println "║          meme→clj Fixture Benchmark               ║")
+  (println "╠════════════════════════════════════════════════════╣")
+  (println (format "║ %-22s %8s %8s  C=R ║" "file" "classic" "rewrite"))
+  (println "╠════════════════════════════════════════════════════╣")
+  (doseq [{:keys [file classic-ms rewrite-ms classic=rewrite]} results]
+    (println (format "║ %-22s %8s %8s   %s  ║"
                      (subs file 0 (min 22 (count file)))
                      (format-ms classic-ms)
                      (format-ms rewrite-ms)
-                     (format-ms collapsar-ms)
-                     (if classic=rewrite "✓" "✗")
-                     (if classic=collapsar "✓" "✗"))))
+                     (if classic=rewrite "✓" "✗"))))
   (let [totals (reduce (fn [acc r]
                          (-> acc
                              (update :classic + (:classic-ms r))
                              (update :rewrite + (:rewrite-ms r))
-                             (update :collapsar + (:collapsar-ms r))
-                             (update :agree-r + (if (:classic=rewrite r) 1 0))
-                             (update :agree-c + (if (:classic=collapsar r) 1 0))))
-                       {:classic 0 :rewrite 0 :collapsar 0 :agree-r 0 :agree-c 0}
+                             (update :agree-r + (if (:classic=rewrite r) 1 0))))
+                       {:classic 0 :rewrite 0 :agree-r 0}
                        results)
         n (count results)]
-    (println "╠══════════════════════════════════════════════════════════════╣")
-    (println (format "║ %-22s %8s %8s %10s %d/%d %d/%d ║"
+    (println "╠════════════════════════════════════════════════════╣")
+    (println (format "║ %-22s %8s %8s %d/%d ║"
                      "TOTAL"
                      (format-ms (:classic totals))
                      (format-ms (:rewrite totals))
-                     (format-ms (:collapsar totals))
-                     (:agree-r totals) n
-                     (:agree-c totals) n)))
-  (println "╚══════════════════════════════════════════════════════════════╝")
-  (println "  C=R: classic agrees with rewrite    C=X: classic agrees with collapsar"))
+                     (:agree-r totals) n)))
+  (println "╚════════════════════════════════════════════════════╝")
+  (println "  C=R: classic agrees with rewrite"))
 
 (defn- report-vendor [results]
-  (println "\n╔════════════════════════════════════════════════════════════════════════════╗")
-  (println "║                  clj→meme→clj Vendor Roundtrip Benchmark                  ║")
-  (println "╠════════════════════════════════════════════════════════════════════════════╣")
-  (println (format "║ %-14s %5s │ %14s │ %14s │ %14s ║"
-                   "project" "forms" "classic" "rewrite" "collapsar"))
-  (println "╠════════════════════════════════════════════════════════════════════════════╣")
-  (doseq [{:keys [project forms classic rewrite collapsar]} results]
+  (println "\n╔══════════════════════════════════════════════════════════╗")
+  (println "║          clj→meme→clj Vendor Roundtrip Benchmark        ║")
+  (println "╠══════════════════════════════════════════════════════════╣")
+  (println (format "║ %-14s %5s │ %14s │ %14s ║"
+                   "project" "forms" "classic" "rewrite"))
+  (println "╠══════════════════════════════════════════════════════════╣")
+  (doseq [{:keys [project forms classic rewrite]} results]
     (let [fmt-p (fn [{:keys [ok errors ms]}]
                   (format "%4d/%4d %6s" ok (+ ok errors) (format-ms ms)))]
-      (println (format "║ %-14s %5d │ %14s │ %14s │ %14s ║"
+      (println (format "║ %-14s %5d │ %14s │ %14s ║"
                        project forms
-                       (fmt-p classic) (fmt-p rewrite) (fmt-p collapsar)))))
+                       (fmt-p classic) (fmt-p rewrite)))))
   (let [sum (fn [k] (reduce (fn [acc r] (let [p (get r k)]
                                            (-> acc
                                                (update :ok + (:ok p))
@@ -248,41 +237,34 @@
         total-forms (reduce + (map :forms results))
         fmt-p (fn [{:keys [ok errors ms]}]
                 (format "%4d/%4d %6s" ok (+ ok errors) (format-ms ms)))]
-    (println "╠════════════════════════════════════════════════════════════════════════════╣")
-    (println (format "║ %-14s %5d │ %14s │ %14s │ %14s ║"
+    (println "╠══════════════════════════════════════════════════════════╣")
+    (println (format "║ %-14s %5d │ %14s │ %14s ║"
                      "TOTAL" total-forms
                      (fmt-p (sum :classic))
-                     (fmt-p (sum :rewrite))
-                     (fmt-p (sum :collapsar)))))
-  (println "╚════════════════════════════════════════════════════════════════════════════╝"))
+                     (fmt-p (sum :rewrite)))))
+  (println "╚══════════════════════════════════════════════════════════╝"))
 
 ;; ============================================================
 ;; Tests
 ;; ============================================================
 
 (deftest benchmark-meme->clj-fixtures
-  (testing "meme→clj conversion across all three pipelines"
+  (testing "meme→clj conversion across both pipelines"
     (let [files (meme-fixtures)
           results (mapv bench-meme->clj-file files)]
       (report-meme->clj results)
-      ;; All pipelines should produce valid output (no exceptions)
       (is (seq results) "Should have fixture files to benchmark")
-      ;; All pipelines must agree on output
-      (doseq [{:keys [file classic=rewrite classic=collapsar]} results]
-        (is classic=rewrite (str file " classic and rewrite must agree"))
-        (is classic=collapsar (str file " classic and collapsar must agree"))))))
+      (doseq [{:keys [file classic=rewrite]} results]
+        (is classic=rewrite (str file " classic and rewrite must agree"))))))
 
 (deftest benchmark-vendor-roundtrip
-  (testing "clj→meme→clj vendor roundtrip across all three pipelines"
+  (testing "clj→meme→clj vendor roundtrip across both pipelines"
     (let [projects (vendor-projects)]
       (if (empty? projects)
         (println "SKIP — vendor submodules not initialized (git submodule update --init)")
         (let [results (mapv bench-vendor-project projects)]
           (report-vendor results)
-          ;; Rewrite and collapsar should agree with each other.
-          ;; Classic may be better on reader-conditional-heavy code
-          ;; (it supports :read-cond :preserve; rewrite/collapsar
-          ;; evaluate reader conditionals in the meme→clj direction).
-          (doseq [{:keys [project rewrite collapsar]} results]
-            (is (= (:ok rewrite) (:ok collapsar))
-                (str project " rewrite and collapsar should agree"))))))))
+          ;; Both pipelines should agree on roundtrip success count.
+          (doseq [{:keys [project classic rewrite]} results]
+            (is (= (:ok classic) (:ok rewrite))
+                (str project " classic and rewrite should agree"))))))))
