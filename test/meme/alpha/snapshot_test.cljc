@@ -1,4 +1,4 @@
-(ns meme.alpha.pipeline-snapshot-test
+(ns meme.alpha.snapshot-test
   "Characterization tests: captures exact tokenizer and reader output
    for a broad set of inputs. Regression net for tokenizer and reader
    output — if any of these break, something changed observable behavior."

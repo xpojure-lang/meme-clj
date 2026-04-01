@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **CLJS generative parity**: 5 property-based tests (matrix roundtrip, mixed forms, error locations, unclosed-is-incomplete, formatter idempotency) now run on ClojureScript
 - **Formatter idempotency tests**: deterministic + property-based (300 trials) asserting `format(format(x)) == format(x)`
 - **Comment preservation fixture**: comprehensive `.meme` fixture covering Clojure/meme code in comments, multiple semicolons, commented-out code, mid-expression and trailing comments
-- **Three-pipeline benchmark**: `benchmark_test` now exercises classic, rewrite, and ts-trs across 11 fixtures and 7,526 vendor forms
+- **Three-lang benchmark**: `benchmark_test` now exercises classic, rewrite, and ts-trs across 11 fixtures and 7,526 vendor forms
 
 ### Fixed
 - **Tokenizer EOF-after-backslash**: `"hello\` now reports "Incomplete escape sequence" instead of misleading "Unterminated string"
@@ -25,13 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.12.0] — 2026-04-01
 
 ### Added
-- **Unified convert CLI**: `meme convert --pipeline classic|rewrite` selects the conversion pipeline; `meme inspect --pipeline` shows pipeline structure
-- **Unified convert module** (`meme.alpha.convert`): single dispatch point for both pipelines
-- **Comparative benchmark** (`benchmark_test.clj`): benchmarks both pipelines across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
-- **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.alpha.platform.registry`)
+- **Unified convert CLI**: `meme convert --lang meme-classic|meme-rewrite` selects the conversion lang; `meme inspect --lang` shows lang info
+- **Unified convert module** (`meme.alpha.convert`): single dispatch point for all three langs
+- **Comparative benchmark** (`benchmark_test.clj`): benchmarks all three langs across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
+- **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.alpha.lang`)
 - **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.alpha.rewrite`)
 - **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.alpha.rewrite.tree`)
-- **Pipeline contracts**: opt-in spec validation at stage boundaries (`meme.alpha.pipeline.contract`)
+- **Stage contracts**: opt-in spec validation at stage boundaries (`meme.alpha.stages.contract`)
 - **LANGBOOK.md**: language maker cookbook — patterns for building guest languages on the meme platform
 - **Superficie example**: surface-syntax renderer reimplemented as a guest language (212 lines vs ~2000 original)
 
@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **nil/true/false as call heads**: the M-expression rule is purely syntactic — `nil(1 2)` → `(nil 1 2)`. Any value can be a head. Previously these were rejected artificially.
 - **Tokenizer ns// symbols**: `clojure.core//` now reads as one symbol (namespace `clojure.core`, name `/`). Previously split into two tokens.
 - **Rewrite emitter type gaps**: BigDecimal `M` suffix, BigInt `N` suffix, `##NaN`/`##Inf`/`##-Inf`, tagged literals, named chars (`\newline` etc.), `pr-str` fallback for UUID/Date
-- **Reader conditional preservation**: all three pipelines now pass `:read-cond :preserve` during conversion, preserving `#?(:clj ...)` branches in output
+- **Reader conditional preservation**: all three langs now pass `:read-cond :preserve` during conversion, preserving `#?(:clj ...)` branches in output
 - **Prelude expansion**: prelude forms are now expanded through `step-expand-syntax-quotes` before eval, matching the user-code path
 - **build-tree delimiter validation**: `build-tree` now validates expected delimiters after `#?` and `#:ns` prefixes
 - **load-prelude docstring**: corrected to reflect actual behavior (parse-only, not eval)
@@ -64,7 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 Initial public alpha release.
 
 ### Added
-- Three-stage pipeline: scan (tokenizer) -> group -> parse (reader)
+- Three-stage reader: scan (tokenizer) -> group -> parse (reader)
 - Printer and pretty-printer (width-aware, comment-preserving)
 - Full Clojure syntax support: all special forms, reader macros, dispatch forms
 - Syntactic transparency via `:meme/sugar` metadata preservation

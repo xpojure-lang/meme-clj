@@ -1,5 +1,5 @@
 (ns meme.alpha.stages.contract-test
-  "Tests for the pipeline contract: specs, runtime validation, and explain."
+  "Tests for the stage contract: specs, runtime validation, and explain."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.spec.alpha :as s]
             [meme.alpha.stages :as stages]
@@ -80,7 +80,7 @@
     (is (not (s/valid? ::contract/ctx-input {:source 42})))))
 
 ;; ---------------------------------------------------------------------------
-;; Specs match actual pipeline output
+;; Specs match actual stage output
 ;; ---------------------------------------------------------------------------
 
 (deftest actual-scan-output-conforms
@@ -100,12 +100,12 @@
       (is (s/valid? ::contract/ctx-after-parse ctx)
           (s/explain-str ::contract/ctx-after-parse ctx)))))
 
-(deftest actual-pipeline-empty-source
+(deftest actual-stages-empty-source
   (testing "empty source passes all stage specs"
     (let [ctx (stages/run "")]
       (is (s/valid? ::contract/ctx-after-parse ctx)))))
 
-(deftest actual-pipeline-complex-source
+(deftest actual-stages-complex-source
   (testing "complex source with multiple forms"
     (let [ctx (stages/run "def(x 42)\nprintln(x)")]
       (is (s/valid? ::contract/ctx-after-parse ctx)))))
@@ -144,7 +144,7 @@
             (is (= :input (:phase data)))
             (is (seq (:problems data)))))))))
 
-(deftest validate-in-full-pipeline
+(deftest validate-in-full-stages
   (testing "valid input passes with *validate* true"
     (binding [contract/*validate* true]
       (let [ctx (stages/run "+(1 2)")]

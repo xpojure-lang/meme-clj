@@ -1,5 +1,5 @@
 (ns meme.alpha.stages
-  "Explicit pipeline composition: source → step-scan → step-parse → step-expand-syntax-quotes → forms.
+  "Explicit stage composition: source → step-scan → step-parse → step-expand-syntax-quotes → forms.
    Each stage is a ctx → ctx function operating on a shared context map.
 
    Context map contract:
@@ -25,7 +25,7 @@
    See meme.alpha.stages.contract for formal clojure.spec definitions of
    the context map at each stage boundary. Enable runtime validation with:
      (binding [meme.alpha.stages.contract/*validate* true]
-       (pipeline/run source))"
+       (stages/run source))"
   (:require [meme.alpha.forms :as forms]
             [meme.alpha.scan.tokenizer :as tokenizer]
             [meme.alpha.parse.reader :as reader]
@@ -119,7 +119,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run
-  "Run the reader pipeline: source → tokens → forms.
+  "Run the reader stages: source → tokens → forms.
    Returns the context map with :source, :raw-tokens, :tokens, :forms.
    Does NOT expand syntax-quote nodes — call expand separately for eval,
    or use run-string which includes expansion.

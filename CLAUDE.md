@@ -57,8 +57,8 @@ clojure -T:build deploy
 .meme file → tokenizer → parser → Clojure forms → Babashka / Clojure JVM / ClojureScript
 ```
 
-The pipeline has composable stages (composed by `meme.alpha.stages`), each a `ctx → ctx` function:
-1. **step-strip-shebang** — remove `#!` line from `:source` (for executable scripts). Defined in `runtime/run`, not part of the core pipeline.
+The reader has composable stages (composed by `meme.alpha.stages`), each a `ctx → ctx` function:
+1. **step-strip-shebang** — remove `#!` line from `:source` (for executable scripts). Defined in `runtime/run`, not part of the core stages.
 2. **step-scan** (`meme.alpha.scan.tokenizer`) — characters → flat token vector. Compound forms emit marker tokens.
 3. **step-parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure forms. Value resolution delegated to `meme.alpha.parse.resolve`.
 4. **step-expand-syntax-quotes** (`meme.alpha.parse.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
@@ -66,7 +66,7 @@ The pipeline has composable stages (composed by `meme.alpha.stages`), each a `ct
 
 - The reader is a **pure function** from meme text to Clojure forms. No runtime dependency. No `read-string` delegation — everything is parsed natively.
 - A printer (`meme.alpha.emit.printer`) converts Clojure forms back to meme syntax (also pure). Supports `:meme` and `:clj` output modes.
-- **Syntactic transparency:** meme is a syntactic lens — the pipeline must preserve the user's syntax choices. When two notations produce the same Clojure form (e.g., `'x` sugar vs `quote(x)` call), the reader tags the form with `:meme/sugar` metadata so the printer can reconstruct the original notation. See `doc/design-decisions.md` for the full principle. Any new syntax feature with multiple representations MUST preserve the distinction via metadata.
+- **Syntactic transparency:** meme is a syntactic lens — the stages must preserve the user's syntax choices. When two notations produce the same Clojure form (e.g., `'x` sugar vs `quote(x)` call), the reader tags the form with `:meme/sugar` metadata so the printer can reconstruct the original notation. See `doc/design-decisions.md` for the full principle. Any new syntax feature with multiple representations MUST preserve the distinction via metadata.
 - File extension: `.meme`
 - `()` is the empty list. Every `(content)` requires a head: `head(content)`. Any value can be a head — `nil(1 2)` → `(nil 1 2)`, `true(:a)` → `(true :a)`.
 - All `#` dispatch forms (`#?`, `#?@`, `#:ns{}`, `#{}`, `#""`, `#'`, `#_`, `#()`, tagged literals) and syntax-quote (`` ` ``) are parsed natively with meme rules inside. No opaque regions.
@@ -155,7 +155,7 @@ The pipeline has composable stages (composed by `meme.alpha.stages`), each a `ct
 | `runtime/run_test` | File runner: `run-string`, `run-file`, shebang handling, custom eval-fn |
 | `examples_test` | Integration scenarios, multi-feature examples |
 | `dogfood_test` | Meta: meme roundtrips its own source files |
-| `pipeline_snapshot_test` | Characterization tests: exact token and form snapshots. Regression net for stage refactoring. |
+| `snapshot_test` | Characterization tests: exact token and form snapshots. Regression net for stage refactoring. |
 | `generative_test` | Property-based tests with test.check. Print→read roundtrip on generated forms. JVM only. |
 | `errors_test` | Error infrastructure: `source-context`, `meme-error`, `format-error` |
 | `vendor_roundtrip_test` | Vendor roundtrip: real-world Clojure libraries (git submodules in `test/vendor/`) roundtripped per-form through clj→meme→clj. JVM only. |

@@ -17,9 +17,9 @@ The head of a list is written outside the parens: `f(x y)` → `(f x y)`.
 Everything else is Clojure.
 
 
-## Pipeline stages
+## Reader stages
 
-The reader pipeline has two core stages and two optional stages:
+The reader has two core stages and two optional stages:
 
 1. **step-scan** (`meme.alpha.scan.tokenizer`) — character scanning → flat token vector.
    Compound forms (reader conditionals, namespaced maps, syntax-quote)
@@ -33,19 +33,19 @@ The reader pipeline has two core stages and two optional stages:
    No-op if no `:rewrite-rules` in opts. Used by `run-string` for guest
    language transforms.
 
-The core `pipeline/run` calls only stages 1–2, returning AST nodes for
+The core `stages/run` calls only stages 1–2, returning AST nodes for
 tooling. `runtime/run-string` chains all four stages before eval.
 
-The split makes each stage independently testable and the pipeline extensible.
+The split makes each stage independently testable and the composition extensible.
 The tokenizer handles all character-level concerns (strings, chars, comments
 are individual tokens, so `\)` inside a string is just a `:string` token,
 not a closing paren). The parser handles all structural concerns.
 
-`meme.alpha.pipeline` composes the stages as `ctx → ctx` functions, threading a
+`meme.alpha.stages` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:raw-tokens`, `:tokens`, `:forms`. Each stage
-boundary is validated by `meme.alpha.pipeline.contract` when `*validate*` is
+boundary is validated by `meme.alpha.stages.contract` when `*validate*` is
 true. This makes intermediate state visible to tooling via
-`meme.alpha.core/run-pipeline`.
+`meme.alpha.core/run-stages`.
 
 
 ## Centralized value resolution (meme.alpha.parse.resolve)
@@ -236,9 +236,10 @@ behavior to the host platform without depending on its reader.
 The codebase is split into three platform tiers:
 
 - **Core translation** (tokenizer, reader, resolve, expander, printer,
-  render, formatter.flat, formatter.canon, pipeline, pipeline.contract,
+  render, formatter.flat, formatter.canon, stages, stages.contract,
   core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree,
-  rewrite.emit, platform.registry) — portable `.cljc`, runs on JVM,
+  rewrite.emit, lang, lang.meme-classic, lang.meme-rewrite, lang.meme-trs,
+  lang.util, trs, convert) — portable `.cljc`, runs on JVM,
   Babashka, and ClojureScript. Pure functions with no eval or I/O
   dependency. `rewrite` macros (`defrule`, `defrule-guard`, `ruleset`)
   are JVM/Babashka only.
@@ -326,14 +327,14 @@ diagnostics as the error system grows.
 
 ## Syntactic transparency — sugar preservation
 
-meme is a **syntactic lens**, not a compiler. The read→print pipeline
+meme is a **syntactic lens**, not a compiler. The read→print path
 must be transparent: if the user writes `'x` (sugar), it prints back as
 `'x`; if they write `quote(x)` (explicit call), it prints back as
 `quote(x)`. The same applies to `@`/`clojure.core/deref` and
 `#'`/`var`.
 
 **Principle:** Every piece of user syntax that has more than one
-representation must be preserved through the pipeline. When the reader
+representation must be preserved through the stages. When the reader
 collapses two notations into the same Clojure form, it must tag the form
 with metadata recording which notation was used. The printer checks that
 metadata to reconstruct the original syntax.
@@ -344,7 +345,7 @@ this: sugar-tagged forms emit sugar; untagged forms emit the explicit
 call. The `:meme/sugar` key is stripped from display metadata (alongside
 `:line`, `:column`, `:file`, `:ws`) so it never appears in output.
 
-**Why this matters:** Without this, the pipeline silently normalizes
+**Why this matters:** Without this, the stages silently normalize
 user code. `var(x)` becomes `#'x`. `quote(list)` becomes `'list`.
 A syntactic lens that rewrites your code is not a lens — it's a
 formatter with opinions. Every new syntax feature should be checked:

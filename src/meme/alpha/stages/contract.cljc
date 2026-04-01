@@ -1,10 +1,10 @@
 (ns meme.alpha.stages.contract
-  "Formal contract for the meme pipeline context map.
+  "Formal contract for the meme stage context map.
 
    Defines clojure.spec.alpha specs for the context at each stage boundary,
    a toggleable runtime validator, and explain functions for debugging.
 
-   The pipeline is composable ctx → ctx stages:
+   Composable ctx → ctx stages:
 
      scan → parse → expand
 
@@ -24,7 +24,7 @@
    development:
 
      (binding [contract/*validate* true]
-       (pipeline/run source))"
+       (stages/run source))"
   (:require [clojure.spec.alpha :as s]))
 
 ;; ---------------------------------------------------------------------------
@@ -128,13 +128,13 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:dynamic *validate*
-  "When true, pipeline stages validate their input and output context maps
+  "When true, stages validate their input and output context maps
    against the formal contract. Default: false (zero overhead).
    Bind to true for development, testing, or debugging guest parsers.
 
    Example:
      (binding [contract/*validate* true]
-       (pipeline/run source))"
+       (stages/run source))"
   false)
 
 ;; ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@
    Throws ex-info with `:stage`, `:phase`, and `:problems` when
    *validate* is true and ctx fails spec. No-op when *validate* is false.
 
-   Called automatically by pipeline stages when *validate* is true.
+   Called automatically by stages when *validate* is true.
    Can also be called directly by guest language parsers."
   [stage phase ctx]
   (when *validate*
