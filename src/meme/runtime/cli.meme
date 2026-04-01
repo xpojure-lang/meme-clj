@@ -162,14 +162,24 @@ defn-(get-lang
 ;; ---------------------------------------------------------------------------
 ;; Commands — dispatch through lang map
 ;; ---------------------------------------------------------------------------
+
+def(^:private cli-keys
+  "Keys consumed by the CLI infrastructure, not passed to lang functions."
+  #{:file :files :stdout :check :lang})
+
+defn-(lang-opts
+  "Extract lang-level options by removing CLI-level keys."
+  [m]
+  apply(dissoc m cli-keys))
+
 defn(run
-  [{:keys [file lang]}]
+  [{:keys [file lang] :as opts}]
   when-not(file binding([*out* *err*] println("Usage: meme run <file> [--lang meme-classic]")) System/exit(1))
   let([[lang-name l] get-lang(lang file)]
     lang/check-support!(l lang-name :run)
     try(
       let([src slurp(file)]
-        :run(l)(src {}))
+        :run(l)(src lang-opts(opts)))
       catch(Exception e
         let(
           [src try(slurp(file) catch(Exception _ nil))]
@@ -177,16 +187,17 @@ defn(run
         System/exit(1)))))
 
 defn(repl
-  [{:keys [lang]}]
+  [{:keys [lang] :as opts}]
   let([[lang-name l] get-lang(lang nil)]
     lang/check-support!(l lang-name :repl)
-    :repl(l)({})))
+    :repl(l)(lang-opts(opts))))
 
 defn(convert
-  [{:keys [file files stdout lang]}]
+  [{:keys [file files stdout lang] :as opts}]
   let(
     [inputs or(files when(file [file]))
-     [lang-name l] get-lang(lang file)]
+     [lang-name l] get-lang(lang file)
+     lopts lang-opts(opts)]
     when(empty?(inputs)
       println("Usage: meme convert <file|dir> [file...] [--lang meme-classic]")
       println("  Writes sibling files (.meme↔.clj) by default")
@@ -215,10 +226,11 @@ defn(convert
       })))
 
 defn(format-cmd
-  [{:keys [file files stdout check lang]}]
+  [{:keys [file files stdout check lang] :as opts}]
   let(
     [inputs or(files when(file [file]))
-     [lang-name l] get-lang(lang file)]
+     [lang-name l] get-lang(lang file)
+     lopts lang-opts(opts)]
     when(empty?(inputs)
       println("Usage: meme format <file|dir> [--lang meme-classic] [file...]")
       println("  Formats .meme files in-place by default")
@@ -233,7 +245,7 @@ defn(format-cmd
         :transform fn(
                      [path]
                      let([src slurp(path)]
-                       :format(l)(src {})))
+                       :format(l)(src lopts)))
         :output-fn nil
         :stdout stdout
         :check check
@@ -253,17 +265,26 @@ defn(version
 
 defn(help
   [_]
-  println("meme — M-expressions for Clojure")
-  println()
-  println("Commands:")
-  println("  meme run <file> [--lang meme-classic]")
-  println("  meme repl [--lang meme-classic]")
-  println("  meme convert <file|dir> [--lang meme-classic] [--stdout]")
-  println("  meme format <file|dir> [--lang meme-classic] [--stdout] [--check]")
-  println("  meme inspect [--lang meme-classic]")
-  println("  meme version")
-  println()
-  println(str("Available langs: " str/join(", " map(name keys(deref(lang/builtin)))))))
+  let(
+    [l lang/resolve-lang(lang/default-lang)
+     has? fn([cmd] lang/supports?(l cmd))]
+    println("meme — M-expressions for Clojure")
+    println()
+    println(str("Default lang: " name(lang/default-lang)))
+    println()
+    println("Commands:")
+    when(has?(:run)
+      println("  meme run <file> [--lang name]"))
+    when(has?(:repl)
+      println("  meme repl [--lang name]"))
+    when(or(has?(:to-clj) has?(:to-meme))
+      println("  meme convert <file|dir> [--lang name] [--stdout]"))
+    when(has?(:format)
+      println("  meme format <file|dir> [--lang name] [--stdout] [--check]"))
+    println("  meme inspect [--lang name]")
+    println("  meme version")
+    println()
+    println(str("Available langs: " str/join(", " map(name keys(deref(lang/builtin))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; bb entry point — babashka.cli loaded dynamically so this file works on JVM too
@@ -271,14 +292,9 @@ defn(help
 defn-(collect-file-args
   [{:keys [opts args]}]
   let(
-    [all into(if(:file(opts) [:file(opts)] []) args)]
-    cond->(if(=(1 count(all)) {:file first(all)} {:files all})
-      :stdout(opts)
-      assoc(:stdout true)
-      :check(opts)
-      assoc(:check true)
-      :lang(opts)
-      assoc(:lang :lang(opts)))))
+    [all into(if(:file(opts) [:file(opts)] []) args)
+     base if(=(1 count(all)) {:file first(all)} {:files all})]
+    merge(dissoc(opts :file) base)))
 
 defn(-main
   [& args]
@@ -299,7 +315,7 @@ defn(-main
           file+stdout+lang)
         merge(
           {:cmds ["format"] :fn fn([m] format-cmd(collect-file-args(m)))}
-          {:args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean} :lang {:coerce :string}}})
+          {:args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean} :lang {:coerce :string} :width {:coerce :long}}})
         {:cmds ["inspect"] :fn fn([{:keys [opts]}] inspect-cmd(opts)) :spec {:lang {:coerce :string}}}
         {:cmds ["version"] :fn fn([_] version(nil))}
         {:cmds [] :fn fn([{:keys [args]}]
