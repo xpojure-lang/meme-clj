@@ -19,22 +19,27 @@
 
 (defn format-meme [source opts]
   (let [forms (core/meme->forms source rewrite-opts)]
-    (if (= (:style opts) "flat")
-      (fmt-flat/format-forms forms)
+    (case (:style opts)
+      "flat" (fmt-flat/format-forms forms)
+      "clj"  (fmt-flat/format-clj forms)
       (fmt-canon/format-forms forms opts))))
 
-(defn to-clj [source]
-  (core/forms->clj
-   (:forms (stages/run source (merge rewrite-opts {:read-cond :preserve})))))
+(defn to-clj
+  ([source]
+   (core/forms->clj
+     (:forms (stages/run source (merge rewrite-opts {:read-cond :preserve})))))
+  ([source _opts] (to-clj source)))
 
 #?(:clj
-   (defn to-meme [source]
-     (let [forms (core/clj->forms source)
-           tagged (mapv #(rw/rewrite rules/s->m-rules %) forms)
-           tagged (mapv #(rules/rewrite-inside-reader-conditionals
-                           (fn [f] (rw/rewrite rules/s->m-rules f)) %)
-                        tagged)]
-       (remit/emit-forms tagged))))
+   (defn to-meme
+     ([source]
+      (let [forms (core/clj->forms source)
+            tagged (mapv #(rw/rewrite rules/s->m-rules %) forms)
+            tagged (mapv #(rules/rewrite-inside-reader-conditionals
+                            (fn [f] (rw/rewrite rules/s->m-rules f)) %)
+                         tagged)]
+        (remit/emit-forms tagged)))
+     ([source _opts] (to-meme source))))
 
 #?(:clj
    (defn run-source [source opts]
