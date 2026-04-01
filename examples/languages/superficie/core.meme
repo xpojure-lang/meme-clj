@@ -8,8 +8,8 @@
 ; The reverse direction (superficie → Clojure) needs a parser — the
 ; original's instaparse grammar could be wired in via Phase 2.
 
-require('[meme.alpha.rewrite :as rw])
-require('[meme.alpha.core :as core])
+require('[meme.rewrite :as rw])
+require('[meme.core :as core])
 require('[clojure.string :as str])
 
 ;; ============================================================

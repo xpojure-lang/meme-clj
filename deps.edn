@@ -11,10 +11,10 @@
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test
          :exec-args {:dirs ["test"]
-                     :patterns ["meme\\.alpha\\..*-test"]}}
+                     :patterns ["meme\\..*-test"]}}
   :meme {:replace-paths ["src"]
          :replace-deps {}
-         :ns-default meme.alpha.runtime.cli}
+         :ns-default meme.runtime.cli}
   :cljs-test {:extra-paths ["test"]
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}

@@ -147,26 +147,26 @@ during design iteration. IDs are stable references and are not renumbered.
                 stage boundaries)
 ```
 
-The pipeline has composable stages (composed by `meme.alpha.pipeline`), each a `ctx → ctx` function with a `step-` prefix:
+The pipeline has composable stages (composed by `meme.stages`), each a `ctx → ctx` function with a `step-` prefix:
 1. **step-strip-shebang** — remove `#!` line from `:source` (for executable scripts).
    Defined in `runtime/run`, not part of the core pipeline.
-2. **step-scan** (`meme.alpha.scan.tokenizer`) — character stream → flat token vector.
+2. **step-scan** (`meme.scan.tokenizer`) — character stream → flat token vector.
    Compound forms (dispatch, syntax-quote) emit marker tokens.
-3. **step-parse** (`meme.alpha.parse.reader`) — recursive-descent parser, tokens → Clojure
+3. **step-parse** (`meme.parse.reader`) — recursive-descent parser, tokens → Clojure
    forms. Value resolution (numbers, strings, chars, regex, keywords, tagged
-   literals) is delegated to `meme.alpha.parse.resolve`. Volatile position
+   literals) is delegated to `meme.parse.resolve`. Volatile position
    counter for portability. No intermediate AST — forms are emitted as
    standard Clojure data. No `read-string` delegation. Accepts an optional
    `:parser` in opts for guest language plug-in parsers.
-4. **step-expand-syntax-quotes** (`meme.alpha.parse.expander`) — syntax-quote AST nodes →
+4. **step-expand-syntax-quotes** (`meme.parse.expander`) — syntax-quote AST nodes →
    plain Clojure forms. Only needed before eval, not for tooling.
-   `meme.alpha.pipeline/run` intentionally omits this stage, returning AST
+   `meme.stages/run` intentionally omits this stage, returning AST
    nodes for tooling access.
-5. **step-rewrite** (`meme.alpha.rewrite`) — apply rewrite rules to `:forms`.
+5. **step-rewrite** (`meme.rewrite`) — apply rewrite rules to `:forms`.
    No-op if no `:rewrite-rules` in opts. Used by `run-string` for guest
    language transforms.
 
-Stage boundaries are validated by `meme.alpha.pipeline.contract` (clojure.spec)
+Stage boundaries are validated by `meme.stages.contract` (clojure.spec)
 when `contract/*validate*` is bound to true.
 
 The printer pattern-matches on form structure to reverse the transformation.
@@ -205,9 +205,9 @@ meme rules inside. No opaque regions.
 
 - **Platform / guest language system.** See `doc/platform-roadmap.md` and
   `doc/LANGBOOK.md`. Includes:
-  - **Rewrite engine** (`meme.alpha.rewrite`) — pattern matching, rule
+  - **Rewrite engine** (`meme.rewrite`) — pattern matching, rule
     application, bottom-up rewriting to fixpoint. `defrule`, `ruleset` macros.
-  - **Lang registration** (`meme.alpha.lang`) — `register!` a guest language
+  - **Lang registration** (`meme.lang`) — `register!` a guest language
     with `:extension`, `:run`, `:rules`, `:parser`, `:format`, `:to-clj`, `:to-meme`.
     `run-file` and CLI auto-detect guest languages from file extension.
   - **Pipeline integration** — `step-rewrite` stage, pluggable `:parser` in
@@ -227,7 +227,7 @@ meme rules inside. No opaque regions.
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
 | PL7 | `step-rewrite` pipeline stage applies rules after expansion | Done |
 | PL8 | Pipeline contract: spec validation at stage boundaries (`pipeline.contract`) | Done |
-| PL9 | Two conversion pipelines: classic, rewrite (`meme.alpha.convert`) | Done |
+| PL9 | Two conversion pipelines: classic, rewrite (`meme.convert`) | Done |
 | PL10 | `meme convert --lang` CLI selector and `meme inspect` command | Done |
 | PL11 | Comparative benchmark across all three langs | Done |
 

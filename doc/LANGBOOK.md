@@ -58,7 +58,7 @@ println(double(square(3)))
 bb meme run app.ml --lang my-lang/lang.edn
 
 # Or register at runtime and auto-detect from extension
-bb -e '(require (quote [meme.alpha.lang :as lang])) (lang/register! :my-lang (lang/load-edn "my-lang/lang.edn"))'
+bb -e '(require (quote [meme.lang :as lang])) (lang/register! :my-lang (lang/load-edn "my-lang/lang.edn"))'
 bb meme run app.ml    # auto-detected from .ml extension
 ```
 
@@ -85,7 +85,7 @@ Rules rewrite the user's code after parsing, before eval. They are pattern → r
 **Rules:**
 
 ```
-require('[meme.alpha.rewrite :as rw])
+require('[meme.rewrite :as rw])
 
 ; pattern → replacement
 rw/rule(list('+ '?a 0) '?a)           ; (+ x 0) → x
@@ -99,7 +99,7 @@ rw/rule(list('+ '?a '?b) '?result
 **Rules file** — eval'd, must return a vector of rules:
 
 ```
-require('[meme.alpha.rewrite :as rw])
+require('[meme.rewrite :as rw])
 
 [rw/rule(list('+ '?a 0) '?a)
  rw/rule(list('+ 0 '?a) '?a)
@@ -192,7 +192,7 @@ It receives meme's flat token vector (all atoms already tokenized with source po
 
 ```edn
 {:extension ".mys"
- :run meme.alpha.runtime.run/run-string
+ :run meme.runtime.run/run-string
  :parser my.ns/my-parser-fn}
 ```
 
@@ -202,8 +202,8 @@ The `:parser` key accepts a qualified symbol that resolves to a parser function.
 
 ```edn
 {:extension ".rwm"
- :run meme.alpha.runtime.run/run-string
- :parser meme.alpha.rewrite.tree/rewrite-parser}
+ :run meme.runtime.run/run-string
+ :parser meme.rewrite.tree/rewrite-parser}
 ```
 
 This uses the rewrite engine instead of the recursive-descent parser. Same output, different implementation. Useful as a starting point for custom parsers — fork `tree.cljc` and modify.
@@ -293,7 +293,7 @@ See `examples/languages/` in this repo:
 
 ```clojure
 ;; --- Lang registration ---
-(require '[meme.alpha.lang :as lang])
+(require '[meme.lang :as lang])
 
 ;; Load from EDN file
 (lang/load-edn "my-lang/lang.edn")    ; → lang map
@@ -310,7 +310,7 @@ See `examples/languages/` in this repo:
 (lang/registered-langs)                ; → (:name ...)
 
 ;; --- Rewrite engine ---
-(require '[meme.alpha.rewrite :as rw])
+(require '[meme.rewrite :as rw])
 
 (rw/rule pattern replacement)              ; create a rule
 (rw/rule pattern replacement guard-fn)     ; with guard

@@ -26,12 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - **Unified convert CLI**: `meme convert --lang meme-classic|meme-rewrite` selects the conversion lang; `meme inspect --lang` shows lang info
-- **Unified convert module** (`meme.alpha.convert`): single dispatch point for all three langs
+- **Unified convert module** (`meme.convert`): single dispatch point for all three langs
 - **Comparative benchmark** (`benchmark_test.clj`): benchmarks all three langs across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
-- **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.alpha.lang`)
-- **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.alpha.rewrite`)
-- **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.alpha.rewrite.tree`)
-- **Stage contracts**: opt-in spec validation at stage boundaries (`meme.alpha.stages.contract`)
+- **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.lang`)
+- **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.rewrite`)
+- **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.rewrite.tree`)
+- **Stage contracts**: opt-in spec validation at stage boundaries (`meme.stages.contract`)
 - **LANGBOOK.md**: language maker cookbook — patterns for building guest languages on the meme platform
 - **Superficie example**: surface-syntax renderer reimplemented as a guest language (212 lines vs ~2000 original)
 
@@ -55,8 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Nested syntax-quote semantics**: `` ``x `` now correctly produces double-quoting (code that generates the inner expansion), matching Clojure's behavior. Previously the inner expansion was returned directly, losing one nesting level.
 
 ### Changed
-- **Expander extracted**: Syntax-quote expansion (`expand-sq`, `expand-syntax-quotes`, `expand-forms`) moved from `meme.alpha.parse.reader` to new `meme.alpha.parse.expander` namespace.
-- **Shared utilities**: Metadata exclusion key set (`strip-internal-meta`) and `percent-param-type` extracted to `meme.alpha.forms` to prevent drift between reader and printer.
+- **Expander extracted**: Syntax-quote expansion (`expand-sq`, `expand-syntax-quotes`, `expand-forms`) moved from `meme.parse.reader` to new `meme.parse.expander` namespace.
+- **Shared utilities**: Metadata exclusion key set (`strip-internal-meta`) and `percent-param-type` extracted to `meme.forms` to prevent drift between reader and printer.
 - **CI deploy gate**: ClojureScript tests now required before deployment (added `test-cljs` to deploy job dependencies).
 
 ## [0.5.0-alpha] — 2025-03-30

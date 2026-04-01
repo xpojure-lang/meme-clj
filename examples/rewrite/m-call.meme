@@ -3,7 +3,7 @@
 ; Demonstrates the core M-to-S rule as a single rewrite rule.
 ; Run: bb meme run examples/rewrite/m-call.meme
 
-require('[meme.alpha.rewrite :as rw])
+require('[meme.rewrite :as rw])
 
 ; The ONE rule: (m-call f args...) to (f args...)
 def(m->s [rw/rule(list('m-call '?f '??args) list('?f '??args))])

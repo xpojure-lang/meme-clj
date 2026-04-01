@@ -1,10 +1,10 @@
 {:paths ["src" "resources" "test"]
  :tasks {meme {:doc "meme CLI: run, repl, convert, format, version"
-              :task (do (require '[meme.alpha.runtime.cli])
-                        (apply (resolve 'meme.alpha.runtime.cli/-main) *command-line-args*))}
+              :task (do (require '[meme.runtime.cli])
+                        (apply (resolve 'meme.runtime.cli/-main) *command-line-args*))}
          test-meme {:doc "Run all .meme tests (eval + fixture)"
-                   :task (do (require '[meme.alpha.test-runner])
-                             (let [fails ((resolve 'meme.alpha.test-runner/run-all-meme-tests))]
+                   :task (do (require '[meme.test-runner])
+                             (let [fails ((resolve 'meme.test-runner/run-all-meme-tests))]
                                (System/exit (if (zero? fails) 0 1))))}
          test-cljs {:doc "Run ClojureScript tests under Node.js"
                     :task (try

@@ -1,4 +1,4 @@
-{:run     meme.alpha.lang.meme-trs/run-source
- :format  meme.alpha.lang.meme-trs/format-meme
- :to-clj  meme.alpha.lang.meme-trs/to-clj
- :to-meme meme.alpha.lang.meme-trs/to-meme}
+{:run     meme.lang.meme-trs/run-source
+ :format  meme.lang.meme-trs/format-meme
+ :to-clj  meme.lang.meme-trs/to-clj
+ :to-meme meme.lang.meme-trs/to-meme}

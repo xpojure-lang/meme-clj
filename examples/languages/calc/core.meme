@@ -1,7 +1,7 @@
 ; calc — a tiny arithmetic language built on meme.
 ; Prelude: defines simplification rules and a `simplify` function.
 
-require('[meme.alpha.rewrite :as rw])
+require('[meme.rewrite :as rw])
 
 def(rules
   [rw/rule(list('+ '?a 0) '?a)

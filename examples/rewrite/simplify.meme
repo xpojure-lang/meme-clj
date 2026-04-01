@@ -2,7 +2,7 @@
 ; Algebraic simplification via rewrite rules.
 ; Run: bb meme run examples/rewrite/simplify.meme
 
-require('[meme.alpha.rewrite :as rw])
+require('[meme.rewrite :as rw])
 
 ; Define simplification rules
 def(rules

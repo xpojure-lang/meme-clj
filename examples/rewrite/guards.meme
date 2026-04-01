@@ -2,7 +2,7 @@
 ; Rewrite rules with guards — conditional pattern matching.
 ; Run: bb meme run examples/rewrite/guards.meme
 
-require('[meme.alpha.rewrite :as rw])
+require('[meme.rewrite :as rw])
 
 ; Constant folding: only fire when both args are numbers
 def(const-fold

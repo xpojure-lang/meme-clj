@@ -1,5 +1,5 @@
-{:run     meme.alpha.runtime.run/run-string
- :repl    meme.alpha.runtime.repl/start
- :format  meme.alpha.lang.meme-classic/format-meme
- :to-clj  meme.alpha.lang.meme-classic/to-clj
- :to-meme meme.alpha.lang.meme-classic/to-meme}
+{:run     meme.runtime.run/run-string
+ :repl    meme.runtime.repl/start
+ :format  meme.lang.meme-classic/format-meme
+ :to-clj  meme.lang.meme-classic/to-clj
+ :to-meme meme.lang.meme-classic/to-meme}

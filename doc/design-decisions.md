@@ -21,15 +21,15 @@ Everything else is Clojure.
 
 The reader has two core stages and two optional stages:
 
-1. **step-scan** (`meme.alpha.scan.tokenizer`) — character scanning → flat token vector.
+1. **step-scan** (`meme.scan.tokenizer`) — character scanning → flat token vector.
    Compound forms (reader conditionals, namespaced maps, syntax-quote)
    emit marker tokens.
-2. **step-parse** (`meme.alpha.parse.reader`) — recursive-descent parser → Clojure forms.
+2. **step-parse** (`meme.parse.reader`) — recursive-descent parser → Clojure forms.
    No `read-string` delegation — all values resolved natively. Accepts an
    optional `:parser` in opts for guest language plug-in parsers.
-3. **step-expand-syntax-quotes** (`meme.alpha.parse.expander`) — syntax-quote AST
+3. **step-expand-syntax-quotes** (`meme.parse.expander`) — syntax-quote AST
    nodes → plain Clojure forms. Only needed before eval, not for tooling.
-4. **step-rewrite** (`meme.alpha.rewrite`) — apply rewrite rules to forms.
+4. **step-rewrite** (`meme.rewrite`) — apply rewrite rules to forms.
    No-op if no `:rewrite-rules` in opts. Used by `run-string` for guest
    language transforms.
 
@@ -41,17 +41,17 @@ The tokenizer handles all character-level concerns (strings, chars, comments
 are individual tokens, so `\)` inside a string is just a `:string` token,
 not a closing paren). The parser handles all structural concerns.
 
-`meme.alpha.stages` composes the stages as `ctx → ctx` functions, threading a
+`meme.stages` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:raw-tokens`, `:tokens`, `:forms`. Each stage
-boundary is validated by `meme.alpha.stages.contract` when `*validate*` is
+boundary is validated by `meme.stages.contract` when `*validate*` is
 true. This makes intermediate state visible to tooling via
-`meme.alpha.core/run-stages`.
+`meme.core/run-stages`.
 
 
-## Centralized value resolution (meme.alpha.parse.resolve)
+## Centralized value resolution (meme.parse.resolve)
 
 All value resolution — numbers, strings, chars, regex, auto-resolve
-keywords, tagged literals — is centralized in `meme.alpha.parse.resolve`.
+keywords, tagged literals — is centralized in `meme.parse.resolve`.
 The parser deals only with structural parsing; value interpretation is
 delegated to resolve.
 
@@ -225,7 +225,7 @@ it has a scar tissue test.
 
 Numbers, strings, character literals, and regex patterns are tokenized as
 raw text by meme's tokenizer, then resolved natively by
-`meme.alpha.parse.resolve`. The goal is zero delegation to `read-string` —
+`meme.parse.resolve`. The goal is zero delegation to `read-string` —
 meme parses numeric formats (hex, octal, ratios, BigDecimal), string
 escape sequences, and character names itself, guaranteeing identical
 behavior to the host platform without depending on its reader.
@@ -284,7 +284,7 @@ This prevents stack overflow from deeply nested or malicious input.
 default stack sizes.
 
 
-## Shared source-position contract (meme.alpha.scan.source)
+## Shared source-position contract (meme.scan.source)
 
 The tokenizer records `(line, col)` on each token. The tokenizer also
 needs to map those positions back to character offsets in the source
@@ -292,7 +292,7 @@ string for whitespace attachment. If position tracking is inconsistent,
 whitespace metadata is wrong: off-by-one truncation, stray characters,
 or outright garbled output.
 
-`meme.alpha.scan.source/line-col->offset` is the single definition that
+`meme.scan.source/line-col->offset` is the single definition that
 ensures the mapping is consistent. The tokenizer uses it in
 `attach-whitespace`. Because it's one function in one namespace, the
 mapping can't diverge. The alternative — each stage carrying its own
@@ -302,7 +302,7 @@ attachment disagreed after a newline.
 The shared contract is important for the tokenizer's whitespace attachment.
 
 
-## Centralized error infrastructure (meme.alpha.errors)
+## Centralized error infrastructure (meme.errors)
 
 All error throw sites go through `meme-error`, which constructs `ex-info`
 with a consistent structure: `:line`, `:col` (1-indexed), optional

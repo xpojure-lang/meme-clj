@@ -112,7 +112,7 @@ Phase 0 + Phase 1 together already let people build guest languages that
 share meme's syntax but have their own core. This is the "many semantics,
 one syntax" model — useful before any parser pluggability exists.
 
-**Scope:** Consolidated into `meme.alpha.lang` — `register!`, `resolve-by-extension`,
+**Scope:** Consolidated into `meme.lang` — `register!`, `resolve-by-extension`,
 `load-edn`. Guest language dispatch integrated into `runtime/run.cljc` and `runtime/cli.meme`.
 
 
@@ -153,9 +153,9 @@ source → scan (shared) → [guest parser | meme parser] → forms → [prelude
 
 The parser stage itself becomes dispatch-aware.
 
-**Scope:** `pipeline.cljc` refactored to accept parser as parameter.
+**Scope:** `stages.cljc` refactored to accept parser as parameter.
 `parse/reader.cljc` exposes entry points for delegation. New namespace
-`meme.alpha.platform.parser` for the plugin protocol.
+`meme.platform.parser` for the plugin protocol.
 
 
 ### Phase 3: Rewrite infrastructure
@@ -288,9 +288,9 @@ that decides whether to call `eval` on the result or keep rewriting.
 - Can strategies be typed/checked? (A strategy that claims to be
   type-preserving, for instance.)
 
-**Scope:** New namespaces: `meme.alpha.platform.pattern` (matching),
-`meme.alpha.platform.rule` (rule construction and application),
-`meme.alpha.platform.strategy` (combinators and traversal).
+**Scope:** New namespaces: `meme.platform.pattern` (matching),
+`meme.platform.rule` (rule construction and application),
+`meme.platform.strategy` (combinators and traversal).
 This is likely the first guest language built on the platform: a
 term-rewriting language that uses Phases 0–2 and validates Phase 3.
 
