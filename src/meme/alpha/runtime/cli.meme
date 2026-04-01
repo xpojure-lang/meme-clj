@@ -3,8 +3,6 @@
 ns(meme.alpha.runtime.cli
   "Unified CLI. Functions accept a map — works with both clj -T and bb."
   :require(
-    [meme.alpha.core :as core]
-    [meme.alpha.convert :as convert]
     [meme.alpha.errors :as errors]
     [meme.alpha.lang :as lang]
     [clojure.java.io :as io]
@@ -122,23 +120,23 @@ defn-(process-files
 ;; Lang resolution
 ;; ---------------------------------------------------------------------------
 defn-(get-lang
-  "Resolve pipeline and return [name pipeline-map].
-   pipeline-str can be: nil (default), a keyword name, or a path to .edn file."
-  [pipeline-str]
-  if(and(pipeline-str str/ends-with?(pipeline-str ".edn"))
-    ; EDN pipeline file
+  "Resolve lang and return [name lang-map].
+   lang-str can be: nil (default), a keyword name, or a path to .edn file."
+  [lang-str]
+  if(and(lang-str str/ends-with?(lang-str ".edn"))
+    ; EDN lang file
     try(
-      let([p lang/load-edn(pipeline-str)]
-        [pipeline-str p])
+      let([l lang/load-edn(lang-str)]
+        [lang-str l])
       catch(Exception e
         binding([*out* *err*]
-          println(str("Error loading lang " pipeline-str ": " ex-message(e))))
+          println(str("Error loading lang " lang-str ": " ex-message(e))))
         System/exit(1)))
-    ; Built-in pipeline by keyword
-    let([name if(pipeline-str keyword(pipeline-str) :meme-classic)]
+    ; Built-in lang by keyword
+    let([name if(lang-str keyword(lang-str) :meme-classic)]
       try(
-        let([p lang/resolve-lang(name)]
-          [name p])
+        let([l lang/resolve-lang(name)]
+          [name l])
         catch(Exception _
           binding([*out* *err*]
             println(str("Unknown lang: " name))
