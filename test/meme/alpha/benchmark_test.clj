@@ -266,7 +266,11 @@
           results (mapv bench-meme->clj-file files)]
       (report-meme->clj results)
       ;; All pipelines should produce valid output (no exceptions)
-      (is (seq results) "Should have fixture files to benchmark"))))
+      (is (seq results) "Should have fixture files to benchmark")
+      ;; All pipelines must agree on output
+      (doseq [{:keys [file classic=rewrite classic=collapsar]} results]
+        (is classic=rewrite (str file " classic and rewrite must agree"))
+        (is classic=collapsar (str file " classic and collapsar must agree"))))))
 
 (deftest benchmark-vendor-roundtrip
   (testing "clj→meme→clj vendor roundtrip across all three pipelines"

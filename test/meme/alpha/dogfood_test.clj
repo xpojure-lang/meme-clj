@@ -165,7 +165,8 @@
    Uses :read-cond :preserve so ReaderConditional forms roundtrip correctly.
    Returns the temp file path."
   [path]
-  (let [forms (read-clj-forms path)
+  (let [read-results (read-clj-forms path)
+        forms (mapv :form (filterv :form read-results))
         meme-text (fmt-flat/format-forms forms)
         roundtripped (core/meme->forms meme-text {:read-cond :preserve})
         tmp (java.io.File/createTempFile "dogfood" ".clj")]

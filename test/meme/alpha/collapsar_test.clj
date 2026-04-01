@@ -109,3 +109,41 @@
     (let [rules [(c/rule '(double ?x) '(+ ?x ?x))]
           result (c/rewrite rules '(double 3))]
       (is (= '(+ 3 3) result)))))
+
+;; ---------------------------------------------------------------------------
+;; collapsar engine: pipeline validation
+;; ---------------------------------------------------------------------------
+
+(deftest collapsar-pipeline-validation
+  (testing "valid pipeline accepted"
+    (let [p1 (c/make-phase :p1 [(c/rule '(a ?x) '(b ?x))])
+          p2 (c/make-phase :p2 [(c/rule '(b ?x) '(c ?x))])]
+      (is (some? (c/make-pipeline :test [p1 p2])))))
+  (testing "invalid pipeline rejected — phase raises earlier head"
+    (let [p1 (c/make-phase :p1 [(c/rule '(a ?x) '(b ?x))])
+          p2 (c/make-phase :p2 [(c/rule '(b ?x) '(a ?x))])]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Invalid pipeline"
+                            (c/make-pipeline :test [p1 p2]))))))
+
+;; ---------------------------------------------------------------------------
+;; collapsar engine: iteration cap enforcement
+;; ---------------------------------------------------------------------------
+
+(deftest collapsar-iteration-cap
+  (testing "non-terminating phase throws after max-iters"
+    (let [rules [(c/rule '(loop ?x) '(loop (inc ?x)))]
+          phase (c/make-phase :loopy rules {:max-iters 5})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"did not reach fixed point"
+                            (c/run-phase phase '(loop 0)))))))
+
+;; ---------------------------------------------------------------------------
+;; collapsar engine: head-eliminating detection
+;; ---------------------------------------------------------------------------
+
+(deftest collapsar-head-eliminating
+  (testing "rules that eliminate consumed heads"
+    (is (c/head-eliminating? [(c/rule '(a ?x) '(b ?x))])))
+  (testing "rules that re-introduce consumed heads"
+    (is (not (c/head-eliminating? [(c/rule '(a ?x) '(a (inc ?x)))])))))
