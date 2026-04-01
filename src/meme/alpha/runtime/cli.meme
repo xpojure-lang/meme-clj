@@ -121,24 +121,29 @@ defn-(process-files
 ;; ---------------------------------------------------------------------------
 ;; Pipeline resolution
 ;; ---------------------------------------------------------------------------
-defn-(resolve-pipeline-name
-  "Resolve pipeline keyword from string option. Default: :meme-classic."
-  [pipeline-str]
-  let([p if(pipeline-str keyword(pipeline-str) :meme-classic)]
-    try(pipelines/resolve-pipeline(p)
-      catch(Exception _
-        binding([*out* *err*]
-          println(str("Unknown pipeline: " p))
-          println(str("Available: " str/join(", " map(name keys(pipelines/builtin))))))
-        System/exit(1)))
-    p))
-
 defn-(get-pipeline
-  "Resolve pipeline and return [name pipeline-map]."
+  "Resolve pipeline and return [name pipeline-map].
+   pipeline-str can be: nil (default), a keyword name, or a path to .edn file."
   [pipeline-str]
-  let([name resolve-pipeline-name(pipeline-str)
-       p pipelines/resolve-pipeline(name)]
-    [name p]))
+  if(and(pipeline-str str/ends-with?(pipeline-str ".edn"))
+    ; EDN pipeline file
+    try(
+      let([p pipelines/load-edn-pipeline(pipeline-str)]
+        [pipeline-str p])
+      catch(Exception e
+        binding([*out* *err*]
+          println(str("Error loading pipeline " pipeline-str ": " ex-message(e))))
+        System/exit(1)))
+    ; Built-in pipeline by keyword
+    let([name if(pipeline-str keyword(pipeline-str) :meme-classic)]
+      try(
+        let([p pipelines/resolve-pipeline(name)]
+          [name p])
+        catch(Exception _
+          binding([*out* *err*]
+            println(str("Unknown pipeline: " name))
+            println(str("Available: " str/join(", " map(name keys(pipelines/builtin))))))
+          System/exit(1))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Commands — dispatch through pipeline map

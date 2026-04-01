@@ -1,0 +1,2 @@
+{:run "examples/languages/prefix/core.meme"
+ :format :meme-classic}
