@@ -183,7 +183,7 @@ defn(convert
     [inputs or(files when(file [file]))
      pipe resolve-pipeline(pipeline)]
     when(empty?(inputs)
-      println("Usage: meme convert <file|dir> [file...] [--pipeline classic|rewrite]")
+      println("Usage: meme convert <file|dir> [file...] [--pipeline classic|rewrite|ts-trs]")
       println("  Writes sibling files (.meme↔.clj) by default")
       println("  --stdout    print to stdout instead")
       println("  --pipeline  select pipeline (default: classic)")
@@ -232,7 +232,8 @@ defn(format-cmd
                        [src slurp(path)
                         parser-opts case(pipe
                                      :classic {}
-                                     :rewrite {:parser tree/rewrite-parser})
+                                     :rewrite {:parser tree/rewrite-parser}
+                                     :ts-trs {})
                         forms :forms(pipeline/run(src parser-opts))]
                        core/format-meme(forms)))
         :output-fn nil
@@ -255,9 +256,14 @@ defn(inspect-cmd
         println("Rewrite pipeline:")
         println("  meme→clj: tokenizer → tree builder → rewrite rules (m→s) → transform → printer")
         println("  clj→meme: Clojure reader → rewrite rules (s→m) → emitter"))
+      :ts-trs
+      do(
+        println("Token-stream TRS pipeline:")
+        println("  meme→clj: tokenizer → nest → declarative rewrite rules → flatten → text")
+        println("  clj→meme: Clojure reader → rewrite rules (s→m) → emitter"))
       do(
         println(str("Unknown pipeline: " pipe))
-        println("Available: classic, rewrite")))))
+        println("Available: classic, rewrite, ts-trs")))))
 
 defn(version
   [_]
@@ -268,7 +274,7 @@ defn(help
   [_]
   println("meme — M-expressions for Clojure")
   println()
-  println("All commands require --pipeline classic|rewrite")
+  println("All commands require --pipeline classic|rewrite|ts-trs")
   println()
   println("Commands:")
   println("  meme run <file> --pipeline <name> [--lang name] [--prelude p.meme] [--rules r.meme]")
