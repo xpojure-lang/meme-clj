@@ -102,55 +102,45 @@
                   [close-tok]
                   after])))
 
-(defn- rewrite-m-calls-pass
-  "Single left-to-right pass. Rewrites the LAST m-call found so that
-   inner calls are rewritten before outer calls on subsequent passes.
-   Returns the rewritten token vector, or the same vector if no rewrite.
-   Handles both atom heads (symbol, keyword, etc.) and delimiter-group
-   heads (vector-as-head: [x](body) → ([x] body))."
+(defn rewrite-m-calls
+  "Rewrite M-expression calls in a token vector. Single right-to-left pass.
+   Innermost calls are rewritten first naturally — by the time we reach an
+   outer head, its arguments are already in S-expression form. O(n)."
   [tokens]
   (let [n (count tokens)]
-    (loop [i 0
-           last-match nil]
-      (if (>= i (- n 1))
-        (if last-match
-          (let [{:keys [head-start head-end open-idx close-idx]} last-match]
-            (apply-group-m-call-rewrite tokens head-start head-end open-idx close-idx))
-          tokens)
-        (let [next-tok (nth tokens (inc i))]
-          (if (and (= :open-paren (:type next-tok))
-                   (adjacent? next-tok))
-            ;; Adjacent open-paren — check what precedes it
-            (let [tok (nth tokens i)]
-              (cond
-                ;; Atom head: symbol(args)
-                (atom-head? tok)
-                (if-let [close-idx (find-matching-close tokens (inc i))]
-                  (recur (inc i) {:head-start i :head-end i
-                                  :open-idx (inc i) :close-idx close-idx})
-                  (recur (inc i) last-match))
-
-                ;; Close-delimiter head: ](args) or )(args) — find matching opener
-                (closers (:type tok))
-                (if-let [open-of-head (find-matching-open tokens i)]
+    (if (< n 2)
+      tokens
+      ;; Scan right-to-left looking for adjacent open-parens
+      (loop [i (- n 2)
+             tokens tokens]
+        (if (neg? i)
+          tokens
+          (let [next-tok (nth tokens (inc i))]
+            (if (and (= :open-paren (:type next-tok))
+                     (adjacent? next-tok))
+              ;; Adjacent open-paren at (inc i) — check what precedes it
+              (let [tok (nth tokens i)]
+                (cond
+                  ;; Atom head: symbol(args)
+                  (atom-head? tok)
                   (if-let [close-idx (find-matching-close tokens (inc i))]
-                    (recur (inc i) {:head-start open-of-head :head-end i
-                                    :open-idx (inc i) :close-idx close-idx})
-                    (recur (inc i) last-match))
-                  (recur (inc i) last-match))
+                    (let [rewritten (apply-group-m-call-rewrite tokens i i (inc i) close-idx)]
+                      ;; After rewrite, head is gone from position i, so continue at i-1
+                      (recur (dec i) rewritten))
+                    (recur (dec i) tokens))
 
-                :else (recur (inc i) last-match)))
-            (recur (inc i) last-match)))))))
+                  ;; Close-delimiter head: ](args) — find matching opener
+                  (closers (:type tok))
+                  (if-let [open-of-head (find-matching-open tokens i)]
+                    (if-let [close-idx (find-matching-close tokens (inc i))]
+                      (let [rewritten (apply-group-m-call-rewrite tokens open-of-head i (inc i) close-idx)]
+                        ;; Head group moved inside; continue before where it started
+                        (recur (dec open-of-head) rewritten))
+                      (recur (dec i) tokens))
+                    (recur (dec i) tokens))
 
-(defn rewrite-m-calls
-  "Rewrite M-expression calls in a token vector to fixpoint.
-   Each pass rewrites the rightmost (innermost) m-call found."
-  [tokens]
-  (loop [tokens tokens]
-    (let [result (rewrite-m-calls-pass tokens)]
-      (if (= result tokens)
-        result
-        (recur result)))))
+                  :else (recur (dec i) tokens)))
+              (recur (dec i) tokens))))))))
 
 ;; ============================================================
 ;; Public API
