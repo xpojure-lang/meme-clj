@@ -1,81 +1,49 @@
 (ns meme.alpha.convert
   "Unified convert: meme↔clj via named pipelines.
 
-   Each pipeline is a map with :name, :parse, :meme->clj, and :clj->meme.
-   The CLI and public API look up the pipeline by keyword and call through it."
-  (:require [meme.alpha.core :as core]
-            [meme.alpha.pipeline :as pipeline]
-            [meme.alpha.rewrite :as rw]
-            [meme.alpha.rewrite.tree :as tree]
-            [meme.alpha.rewrite.rules :as rules]
-            [meme.alpha.rewrite.emit :as remit]
-            [meme.alpha.trs :as trs]))
+   Delegates to meme.alpha.pipelines — each pipeline is a command map.
+   This module provides the public API for conversion, maintaining backward
+   compatibility with the legacy :classic/:rewrite/:ts-trs pipeline names."
+  (:require [meme.alpha.pipelines :as pipelines]))
 
 ;; ---------------------------------------------------------------------------
-;; Pipeline constants
+;; Legacy name mapping: :classic → :meme-classic, etc.
 ;; ---------------------------------------------------------------------------
 
-(def classic-pipeline
-  "Classic: recursive-descent parser + Wadler-Lindig printer."
-  {:name     :classic
-   :parse    (fn [src opts] (:forms (pipeline/run src opts)))
-   :meme->clj (fn [src opts] (core/meme->clj src opts))
-   #?@(:clj [:clj->meme (fn [src] (core/clj->meme src))])})
+(def ^:private legacy-names
+  {:classic :meme-classic
+   :rewrite :meme-rewrite
+   :ts-trs  :meme-trs})
 
-(def rewrite-pipeline
-  "Rewrite: tree builder + rewrite rules."
-  {:name     :rewrite
-   :parse    (fn [src opts] (:forms (pipeline/run src (assoc opts :parser tree/rewrite-parser))))
-   :meme->clj (fn [src opts]
-                (core/forms->clj
-                  (:forms (pipeline/run src (merge opts {:parser tree/rewrite-parser
-                                                         :read-cond :preserve})))))
-   #?@(:clj [:clj->meme (fn [src]
-                           (let [forms (core/clj->forms src)
-                                 tagged (mapv #(rw/rewrite rules/s->m-rules %) forms)
-                                 tagged (mapv #(rules/rewrite-inside-reader-conditionals
-                                                 (fn [f] (rw/rewrite rules/s->m-rules f)) %)
-                                              tagged)]
-                             (remit/emit-forms tagged)))])})
+(defn- normalize-name [pipeline-name]
+  (get legacy-names pipeline-name pipeline-name))
 
-(def ts-trs-pipeline
-  "Token-stream TRS: tokenizer → token-stream rewriting → text → forms."
-  {:name :ts-trs
-   :parse (fn [src opts]
-            (let [clj-text (trs/meme->clj-text src)]
-              #?(:clj (core/clj->forms clj-text)
-                 :cljs (core/meme->forms clj-text opts))))
-   :meme->clj (fn [src _opts] (trs/meme->clj-text src))
-   #?@(:clj [:clj->meme (fn [src]
-                           (let [forms (core/clj->forms src)
-                                 tagged (mapv #(rw/rewrite rules/s->m-rules %) forms)
-                                 tagged (mapv #(rules/rewrite-inside-reader-conditionals
-                                                 (fn [f] (rw/rewrite rules/s->m-rules f)) %)
-                                              tagged)]
-                             (remit/emit-forms tagged)))])})
+;; ---------------------------------------------------------------------------
+;; Public API (stable — callers don't need to change)
+;; ---------------------------------------------------------------------------
 
 (def pipelines
-  "Available pipelines by keyword."
-  {:classic        classic-pipeline
-   :rewrite        rewrite-pipeline
-   :ts-trs ts-trs-pipeline})
-
-;; ---------------------------------------------------------------------------
-;; Public API
-;; ---------------------------------------------------------------------------
+  "Available pipelines by keyword. Includes both legacy and new names."
+  (merge pipelines/builtin
+         (zipmap (keys legacy-names)
+                 (map #(get pipelines/builtin %) (vals legacy-names)))))
 
 (defn resolve-pipeline
-  "Look up a pipeline by keyword. Throws on unknown name."
+  "Look up a pipeline by keyword. Supports both legacy names (:classic, :rewrite, :ts-trs)
+   and new names (:meme-classic, :meme-rewrite, :meme-trs).
+   Throws on unknown name."
   [pipeline-name]
   (or (get pipelines pipeline-name)
       (throw (ex-info (str "Unknown pipeline: " pipeline-name
-                           " — must be one of: classic, rewrite, ts-trs") {}))))
+                           " — must be one of: " (pr-str (keys pipelines))) {}))))
 
 (defn meme->clj
   "Convert meme source to Clojure source using the named pipeline."
   ([src] (meme->clj src :classic))
   ([src pipeline-name]
-   ((:meme->clj (resolve-pipeline pipeline-name)) src {:read-cond :preserve})))
+   (let [p (resolve-pipeline (normalize-name pipeline-name))]
+     (pipelines/check-support! p pipeline-name :convert)
+     ((:convert p) src {:read-cond :preserve :direction :to-clj}))))
 
 #?(:clj
    (defn clj->meme
@@ -83,4 +51,6 @@
    JVM/Babashka only."
      ([src] (clj->meme src :classic))
      ([src pipeline-name]
-      ((:clj->meme (resolve-pipeline pipeline-name)) src))))
+      (let [p (resolve-pipeline (normalize-name pipeline-name))]
+        (pipelines/check-support! p pipeline-name :convert)
+        ((:convert p) src {:direction :to-meme})))))
