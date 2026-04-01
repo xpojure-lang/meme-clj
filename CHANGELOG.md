@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **CLI load failure**: shows friendly error without extra stack trace
 - **Docstrings**: added missing docstrings to public vars in `meme.lang`, `meme.forms`, `meme.emit.render`; fixed `run-stages` "full pipeline" misrepresentation; fixed indentation on `clj->` function docstrings
 - **Documentation**: fixed stale `pipeline` namespace references in api.md, PRD.md, design-decisions.md; fixed wrong REPL launch command in api.md; removed phantom `lang.util` from platform tiers; corrected convert lang count in PRD.md
+- **CLI rewrite**: replaced `.clj` shim + `.meme` bootstrap with plain Clojure; generic dispatcher delegates to lang map functions; CLI opts (e.g. `--width`) pass through to langs
 - **CI**: pinned Babashka and Clojure CLI versions for reproducibility
 
 ### Removed

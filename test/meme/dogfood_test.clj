@@ -6,7 +6,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]
-            [meme.runtime.run :as run]
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -185,7 +184,8 @@
                 "src/meme/lang/meme_classic.cljc"
                 "src/meme/lang/meme_rewrite.cljc"
                 "src/meme/lang/meme_trs.cljc"
-                "src/meme/trs.cljc"]]
+                "src/meme/trs.cljc"
+                "src/meme/runtime/cli.clj"]]
     (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)
             tmp (roundtrip-to-tmp path)
@@ -227,27 +227,6 @@
      :succeeded (count succeeded)
      :failed failed}))
 
-(deftest self-hosting-cli-meme
-  (testing "cli.meme roundtrips through meme→forms→meme→forms"
-    (let [{:keys [total succeeded failed]} (roundtrip-meme-file "src/meme/runtime/cli.meme")]
-      (is (pos? total) "cli.meme should have forms")
-      (is (= total succeeded)
-          (str total " forms, " (count failed) " failed roundtrip"))
-      (is (empty? failed)))))
-
-(deftest self-hosting-cli-meme-evals
-  (testing "roundtripped cli.meme can be eval'd without error"
-    (let [src (slurp "src/meme/runtime/cli.meme")
-          forms (core/meme->forms src)
-          meme-text (fmt-flat/format-forms forms)
-          ;; Save and restore *ns* — cli.meme contains an ns form that
-          ;; would change the current namespace and break later tests.
-          original-ns *ns*]
-      (try
-        (is (some? (run/run-string meme-text))
-            "roundtripped cli.meme should eval without error")
-        (finally
-          (in-ns (.getName original-ns)))))))
 
 (deftest self-hosting-example-meme-files
   (doseq [path ["examples/rewrite/simplify.meme"
