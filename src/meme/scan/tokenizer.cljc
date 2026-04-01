@@ -1,7 +1,8 @@
 (ns meme.scan.tokenizer
   "meme tokenizer: character scanning and token production.
    Transforms meme source text into a flat vector of typed tokens."
-  (:require [meme.errors :as errors]
+  (:require [clojure.string :as str]
+            [meme.errors :as errors]
             [meme.scan.source :as source]))
 
 ;; ---------------------------------------------------------------------------
@@ -260,6 +261,36 @@
   [sc type value start-loc]
   (tok type value start-loc (sloc sc)))
 
+;; ---------------------------------------------------------------------------
+;; Clojure dispatch characters that are reserved and must not be treated as
+;; tagged-literal tag prefixes. #= is the eval reader, #< is unreadable form,
+;; #% is undefined. Accepting these produces Clojure output that Clojure's
+;; own reader rejects or misinterprets.
+;; ---------------------------------------------------------------------------
+
+(def ^:private reserved-dispatch-chars
+  #{\= \< \%})
+
+(defn- validate-keyword!
+  "Validate scanned keyword name syntax. Rejects:
+   - Empty name after :: (bare :: at EOF)
+   - Name starting with : after :: (e.g. :::)
+   - Name containing :: (e.g. ::a::b)
+   - Name ending with / (e.g. ::a/ — namespace with no name)"
+  [kw-name auto? loc]
+  (when (and auto? (str/blank? kw-name))
+    (errors/meme-error
+      "Invalid keyword: :: — auto-resolve keyword requires a name after ::" loc))
+  (when (and auto? (pos? (count kw-name)) (= \: (nth kw-name 0)))
+    (errors/meme-error
+      (str "Invalid keyword: ::" kw-name " — too many colons") loc))
+  (when (str/includes? kw-name "::")
+    (errors/meme-error
+      (str "Invalid keyword: " (if auto? "::" ":") kw-name " — contains invalid :: sequence") loc))
+  (when (and (pos? (count kw-name)) (str/ends-with? kw-name "/"))
+    (errors/meme-error
+      (str "Invalid keyword: " (if auto? "::" ":") kw-name " — trailing / with no name") loc)))
+
 (defn tokenize
   "Tokenize meme source string into a vector of tokens."
   [s]
@@ -315,16 +346,20 @@
                                  (conj! tokens (tok-at sc :number (str "##" name) loc))
                                  (recur)))
                 ;; B8/B9: # followed by non-tag char — clear error instead of empty tagged literal
+                ;; F1: reject reserved Clojure dispatch characters (#=, #<, #%)
                 :else (if (nil? nxt)
                         (do (sadvance! sc)
                             (errors/meme-error "Unexpected # at end of input — expected a dispatch form like #{}, #\"\", #', #_, or a tagged literal" loc))
-                        (if (symbol-start? nxt)
+                        (if (reserved-dispatch-chars nxt)
                           (do (sadvance! sc)
-                              (let [tag (read-symbol-str sc)]
-                                (conj! tokens (tok-at sc :tagged-literal (str "#" tag) loc))
-                                (recur)))
-                          (do (sadvance! sc)
-                              (errors/meme-error (str "Invalid dispatch: #" nxt " — # must be followed by {, \", ', _, ?, :, or a tag name") loc))))))
+                              (errors/meme-error (str "Invalid dispatch: #" nxt " — Clojure reserves #" nxt " and it cannot be used as a tagged literal") loc))
+                          (if (symbol-start? nxt)
+                            (do (sadvance! sc)
+                                (let [tag (read-symbol-str sc)]
+                                  (conj! tokens (tok-at sc :tagged-literal (str "#" tag) loc))
+                                  (recur)))
+                            (do (sadvance! sc)
+                                (errors/meme-error (str "Invalid dispatch: #" nxt " — # must be followed by {, \", ', _, ?, :, or a tag name") loc)))))))
 
             (= ch \@) (do (sadvance! sc) (conj! tokens (tok-at sc :deref "@" loc)) (recur))
             (= ch \^) (do (sadvance! sc) (conj! tokens (tok-at sc :meta "^" loc)) (recur))
@@ -349,12 +384,13 @@
             (= ch \{) (do (sadvance! sc) (conj! tokens (tok-at sc :open-brace "{" loc)) (recur))
             (= ch \}) (do (sadvance! sc) (conj! tokens (tok-at sc :close-brace "}" loc)) (recur))
 
-            ;; keyword
+            ;; keyword (F2: validate syntax after scanning)
             (= ch \:)
             (do (sadvance! sc)
                 (let [auto? (and (not (seof? sc)) (= (speek sc) \:))
                       _ (when auto? (sadvance! sc))
                       kw-name (read-symbol-str sc)
+                      _ (validate-keyword! kw-name auto? loc)
                       value (str (if auto? "::" ":") kw-name)]
                   (conj! tokens (tok-at sc :keyword value loc))
                   (recur)))

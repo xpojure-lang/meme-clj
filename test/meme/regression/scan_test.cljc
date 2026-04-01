@@ -526,3 +526,57 @@
 ;; This scar tissue is retained as a note; the original bug is no longer
 ;; possible since scan validates :source and writes both :raw-tokens and :tokens.
 ;; ---------------------------------------------------------------------------
+
+;; ---------------------------------------------------------------------------
+;; F1: #=, #<, #% were silently accepted as tagged literal tag prefixes.
+;; Bug: tokenizer treated any symbol-start? char after # as a tag name,
+;; including =, <, %. This produced Clojure output that Clojure's reader
+;; misinterprets (#= triggers eval reader, #< is unreadable).
+;; Fix: reject reserved Clojure dispatch characters before symbol-start? check.
+;; ---------------------------------------------------------------------------
+
+(deftest reserved-dispatch-chars-rejected
+  (testing "#= is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid dispatch: #="
+                          (core/meme->forms "#=foo bar"))))
+  (testing "#< is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid dispatch: #<"
+                          (core/meme->forms "#<foo bar"))))
+  (testing "#% is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid dispatch: #%"
+                          (core/meme->forms "#%foo"))))
+  #?(:clj
+     (testing "valid tagged literals still work"
+       (is (some? (core/meme->forms "#inst \"2024-01-01T00:00:00Z\"")))
+       (is (some? (core/meme->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\"")))
+       (is (some? (core/meme->forms "#foo/bar [1 2 3]"))))))
+
+;; ---------------------------------------------------------------------------
+;; F2: ::a::b, :::, ::a/ were silently accepted as valid keywords.
+;; Bug: tokenizer's read-symbol-str consumed : as a symbol-char, producing
+;; keyword tokens that Clojure's reader rejects as invalid tokens.
+;; Fix: validate keyword syntax after scanning — reject embedded ::,
+;; trailing /, and bare :: with no name.
+;; ---------------------------------------------------------------------------
+
+(deftest invalid-keyword-syntax-rejected
+  (testing "::: (triple colon) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid keyword"
+                          (core/meme->forms ":::"))))
+  (testing "::a::b (double auto-resolve) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid keyword"
+                          (core/meme->forms "::a::b"))))
+  (testing "::a/ (trailing slash) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid keyword"
+                          (core/meme->forms "::a/"))))
+  (testing "valid keywords still work"
+    #?(:clj (is (some? (core/meme->forms "::foo"))))
+    #?(:clj (is (some? (core/meme->forms "::ns/name"))))
+    (is (= [:regular] (core/meme->forms ":regular")))
+    (is (= [:ns/name] (core/meme->forms ":ns/name")))))

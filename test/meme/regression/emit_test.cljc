@@ -360,7 +360,7 @@
      (testing "#() with short body stays flat"
        (let [form (first (core/meme->forms "#(inc(%))"))
              result (fmt-canon/format-form form {:width 80})]
-         (is (= "#(inc(%1))" result))))))
+         (is (= "#(inc(%))" result))))))
 
 #?(:clj
    (deftest canon-preserves-namespaced-map
@@ -511,3 +511,27 @@
        (is (= "#{1 2 3}" ((:to-clj (lang/resolve-lang :meme-rewrite)) "#{1 2 3}"))))
      (testing "map key order preserved through meme-rewrite lang"
        (is (= "{:a 1 :b 2}" ((:to-clj (lang/resolve-lang :meme-rewrite)) "{:a 1 :b 2}"))))))
+
+;; ---------------------------------------------------------------------------
+;; F7: bare % was normalized to %1, losing the user's notation choice.
+;; Bug: normalize-bare-percent converted % to %1 in the body for eval
+;; correctness, but the printer always emitted %1 even when the user wrote %.
+;; Fix: reader tags :meme/bare-percent in metadata; printer restores % from %1.
+;; ---------------------------------------------------------------------------
+
+(deftest bare-percent-notation-preserved
+  (testing "#(inc(%)) roundtrips preserving bare %"
+    (let [src "#(inc(%))"
+          forms (core/meme->forms src)
+          back (core/forms->meme forms)]
+      (is (= src back))))
+  (testing "#(+(%1 %2)) roundtrips preserving explicit %1"
+    (let [src "#(+(%1 %2))"
+          forms (core/meme->forms src)
+          back (core/forms->meme forms)]
+      (is (= src back))))
+  (testing "#(+(% %2)) roundtrips preserving bare % mixed with %2"
+    (let [src "#(+(% %2))"
+          forms (core/meme->forms src)
+          back (core/forms->meme forms)]
+      (is (= src back)))))

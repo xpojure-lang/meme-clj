@@ -68,6 +68,16 @@
        (= 3 (count form))
        (vector? (second form))))
 
+(defn- restore-bare-percent
+  "Replace %1 with % in a form tree. Used when :meme/bare-percent metadata
+   indicates the user wrote bare % (normalized to %1 for eval correctness)."
+  [form]
+  (cond
+    (and (symbol? form) (= (name form) "%1") (nil? (namespace form))) (symbol "%")
+    (seq? form) (with-meta (apply list (map restore-bare-percent form)) (meta form))
+    (vector? form) (with-meta (mapv restore-bare-percent form) (meta form))
+    :else form))
+
 ;; ---------------------------------------------------------------------------
 ;; Doc helpers for building common structures
 ;; ---------------------------------------------------------------------------
@@ -208,13 +218,18 @@
     ;; Anon-fn shorthand #()
     ;; In :clj mode, only use #() when the body is a list (call).
     ;; #(42) in Clojure means (fn [] (42)) — calling 42 — not (fn [] 42).
+    ;; F7: when :meme/bare-percent, restore % from %1 in body before printing.
     (and (anon-fn-shorthand? form)
          (or (not= mode :clj) (seq? (nth form 2))))
-    (if (and (= mode :clj) (seq? (nth form 2)))
-      ;; :clj mode: unwrap body list to avoid double parens.
-      ;; (fn [%1] (+ %1 1)) → #(+ %1 1), not #((+ %1 1))
-      (collection-doc "#(" ")" (seq (nth form 2)) mode)
-      (collection-doc "#(" ")" [(nth form 2)] mode))
+    (let [raw-body (nth form 2)
+          body (if (:meme/bare-percent (meta form))
+                 (restore-bare-percent raw-body)
+                 raw-body)]
+      (if (and (= mode :clj) (seq? body))
+        ;; :clj mode: unwrap body list to avoid double parens.
+        ;; (fn [%1] (+ %1 1)) → #(+ %1 1), not #((+ %1 1))
+        (collection-doc "#(" ")" (seq body) mode)
+        (collection-doc "#(" ")" [body] mode)))
 
     ;; Sequences — check sugar then call
     (seq? form)

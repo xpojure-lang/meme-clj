@@ -15,7 +15,7 @@
             [meme.rewrite :as rewrite]
             [meme.rewrite.rules :as rules]))
 
-(def ^:private discard-sentinel ::discarded)
+(def ^:private tree-discard-sentinel ::discarded)
 (def ^:private ^:const max-depth 512)
 (def ^:private ^:dynamic *depth* nil)
 
@@ -80,7 +80,7 @@
 
       :else
       (let [[item new-pos] (build-tree tokens pos)]
-        (if (= item discard-sentinel)
+        (if (= item tree-discard-sentinel)
           (recur new-pos items)
           (recur new-pos (conj items item)))))))
 
@@ -194,7 +194,7 @@
                    (not (#{:close-paren :close-bracket :close-brace}
                           (tok-type tokens new-pos))))
             (build-tree tokens new-pos)
-            [discard-sentinel new-pos]))
+            [tree-discard-sentinel new-pos]))
 
         ;; Tagged literals: #tag form
         :tagged-literal
@@ -240,7 +240,7 @@
       (if (>= pos (count tokens))
         forms
         (let [[form new-pos] (build-tree tokens pos)]
-          (recur new-pos (if (= form discard-sentinel) forms (conj forms form))))))))
+          (recur new-pos (if (= form tree-discard-sentinel) forms (conj forms form))))))))
 
 (defn rewrite-parser
   "Parser that conforms to the pipeline contract: (fn [tokens opts source] → forms).

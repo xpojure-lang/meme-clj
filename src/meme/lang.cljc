@@ -40,6 +40,10 @@
 ;; EDN value resolution
 ;; ---------------------------------------------------------------------------
 
+;; NOTE: resolve-symbol creates invisible runtime dependencies via requiring-resolve.
+;; Key consumers: resolve-value uses it for lang EDN symbols, which can reference
+;; meme.runtime.run/run-string, meme.lang.*/format-meme, etc. These dependencies
+;; are NOT reflected in the :require block and will fail at runtime if targets move.
 #?(:clj
    (defn- resolve-symbol
      "Resolve a qualified symbol to a var's value via requiring-resolve."
@@ -171,9 +175,18 @@
    (defn register!
      "Register a user lang at runtime. config is an EDN-style map — symbols
       are resolved via requiring-resolve, strings and keywords follow the same
-      rules as load-edn. Pre-resolved functions are passed through."
+      rules as load-edn. Pre-resolved functions are passed through.
+      Warns to stderr if the new lang's :extension collides with an existing registration."
      [lang-name config]
-     (swap! user-langs assoc lang-name (resolve-edn config))))
+     (let [resolved (resolve-edn config)]
+       (when-let [ext (:extension resolved)]
+         (doseq [[existing-name existing-lang] @user-langs]
+           (when (and (not= existing-name lang-name)
+                      (= ext (:extension existing-lang)))
+             (binding [*out* *err*]
+               (println (str "WARNING: lang " (pr-str lang-name)
+                             " extension ." ext " collides with " (pr-str existing-name)))))))
+       (swap! user-langs assoc lang-name resolved))))
 
 #?(:clj
    (defn resolve-by-extension
@@ -220,12 +233,14 @@
             #?(:clj (binding [*out* *err*]
                       (println (str "WARNING: :" (name lang-name) " is deprecated, use :" (name n))))
                :cljs (js/console.warn (str "WARNING: :" (name lang-name) " is deprecated, use :" (name n)))))
-        user #?(:clj @user-langs :cljs nil)
-        b #?(:clj @builtin :cljs builtin)]
+        user #?(:clj @user-langs :cljs nil)]
+    ;; F4: deref @builtin lazily — short-circuit when user-langs match
     (or (get user n)
-        (get b n)
+        (get #?(:clj @builtin :cljs builtin) n)
         (throw (ex-info (str "Unknown lang: " (pr-str n)
-                             " — available: " (pr-str (concat (keys user) (keys b))))
+                             " — available: "
+                             (pr-str (concat (keys user)
+                                            (keys #?(:clj @builtin :cljs builtin)))))
                         {:lang n})))))
 
 (defn supports?

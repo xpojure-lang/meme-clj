@@ -101,12 +101,6 @@
 (defn raw?
   "True if x is a MemeRaw wrapper (preserves alternate notation for roundtrip)."
   [x] (instance? MemeRaw x))
-(defn raw-value
-  "Extract the resolved Clojure value from a MemeRaw wrapper."
-  [x] (:value x))
-(defn raw-text
-  "Extract the original source text from a MemeRaw wrapper."
-  [x] (:raw x))
 
 (defrecord MemeSyntaxQuote [form])
 (defrecord MemeUnquote [form])
@@ -138,13 +132,13 @@
 (def internal-meta-keys
   "Metadata keys used internally by the meme pipeline.
    Excluded when checking for user-visible metadata."
-  #{:line :col :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain})
+  #{:line :col :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain :meme/bare-percent})
 
 (def notation-meta-keys
   "Internal metadata keys that encode the user's notation choices.
    Must survive metadata stripping so the printer can reconstruct
    the original syntax (e.g. #:ns{} maps, set insertion order, quote sugar)."
-  #{:meme/ns :meme/order :meme/sugar})
+  #{:meme/ns :meme/order :meme/sugar :meme/bare-percent})
 
 (defn strip-internal-meta
   "Remove internal meme metadata keys, returning only user-visible metadata."

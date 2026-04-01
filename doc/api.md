@@ -40,6 +40,8 @@ Options:
 ;=> [(def x 42) (println x)]
 ```
 
+**Note:** `meme->forms` may return internal record types for forms that preserve source notation: `MemeRaw` (for hex numbers, unicode escapes, etc.) wraps a `:value` and `:raw` text; `MemeAutoKeyword` (for `::` keywords) wraps a `:raw` string. These are unwrapped to plain values by `step-expand-syntax-quotes` (which `run-string`/`run-file` call before eval). If you need plain Clojure values from `meme->forms`, compose with `meme.stages/step-expand-syntax-quotes`.
+
 #### forms->meme
 
 ```clojure
@@ -47,6 +49,8 @@ Options:
 ```
 
 Print a sequence of Clojure forms as meme text. All platforms.
+
+**Note:** Reference types (atoms, refs, agents) print as `#object[...]` which cannot be round-tripped. This matches Clojure's own behavior.
 
 ```clojure
 (forms->meme ['(+ 1 2 3)])

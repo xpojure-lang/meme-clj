@@ -4,7 +4,7 @@
    location tracking and message formatting."
   (:require [clojure.string :as str]))
 
-(defn source-context
+(defn ^:no-doc source-context
   "Extract the source line at the given 1-indexed line number for display.
    Uses str/split-lines which splits on \\n and \\r\\n (stripping \\r from
    CRLF pairs). This is the *display* line model — it may differ from the

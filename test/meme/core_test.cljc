@@ -2,7 +2,8 @@
   "Tests for the meme.core public API."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.core :as core]
-            [meme.forms :as forms]))
+            [meme.forms :as forms]
+            [meme.stages :as stages]))
 
 ;; ---------------------------------------------------------------------------
 ;; Text-to-form track
@@ -143,7 +144,7 @@
 (deftest run-stages-error-has-location
   (testing "parse error through run-stages carries :line and :col in ex-data"
     (try
-      (core/run-stages "(bare parens)")
+      (stages/run "(bare parens)")
       (is false "should have thrown")
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (let [data (ex-data e)]
@@ -165,7 +166,7 @@
 
 (deftest run-stages-test
   (testing "returns context with all intermediate state"
-    (let [ctx (core/run-stages "foo(1 2)")]
+    (let [ctx (stages/run "foo(1 2)")]
       (is (string? (:source ctx)))
       (is (vector? (:raw-tokens ctx)))
       (is (vector? (:tokens ctx)))
@@ -173,16 +174,16 @@
       (is (= "foo(1 2)" (:source ctx)))))
   (testing "forms match meme->forms"
     (let [src "def(x 42)\nprintln(x)"
-          ctx (core/run-stages src)]
+          ctx (stages/run src)]
       (is (= (core/meme->forms src) (:forms ctx))))))
 
 (deftest run-stages-nil-source-error
   (testing "nil source throws instead of silently returning empty"
-    (is (thrown? #?(:clj Exception :cljs :default) (core/run-stages nil)))))
+    (is (thrown? #?(:clj Exception :cljs :default) (stages/run nil)))))
 
 (deftest run-stages-empty-source
   (testing "empty string produces empty vectors, not nil"
-    (let [ctx (core/run-stages "")]
+    (let [ctx (stages/run "")]
       (is (= [] (:forms ctx)))
       (is (= [] (:tokens ctx)))
       (is (= [] (:raw-tokens ctx)))
@@ -190,26 +191,26 @@
       (is (vector? (:tokens ctx)))
       (is (vector? (:raw-tokens ctx)))))
   (testing "whitespace-only source produces empty vectors"
-    (let [ctx (core/run-stages "   \n  ")]
+    (let [ctx (stages/run "   \n  ")]
       (is (= [] (:forms ctx)))
       (is (= [] (:tokens ctx)))
       (is (= [] (:raw-tokens ctx))))))
 
 (deftest run-stages-whitespace-test
   (testing "raw-tokens carry :ws from pipeline"
-    (let [ctx (core/run-stages "  foo(x)")]
+    (let [ctx (stages/run "  foo(x)")]
       (is (= "  " (:ws (first (:raw-tokens ctx)))))))
   (testing "whitespace between forms preserved"
-    (let [ctx (core/run-stages "foo\n\nbar")]
+    (let [ctx (stages/run "foo\n\nbar")]
       (is (= "\n\n" (:ws (second (:raw-tokens ctx))))))))
 
 #?(:clj
    (deftest run-stages-jvm-test
      (testing "raw-tokens and tokens are identical"
-       (let [ctx (core/run-stages "`foo")]
+       (let [ctx (stages/run "`foo")]
          (is (= (:raw-tokens ctx) (:tokens ctx)))))
      (testing "opts pass through"
-       (let [ctx (core/run-stages "::foo"
+       (let [ctx (stages/run "::foo"
                                     {:resolve-keyword #(clojure.core/read-string %)})]
          (is (= [:user/foo] (:forms ctx)))))))
 
@@ -218,17 +219,17 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest meme-raw-accessors
-  (testing "run-stages exposes MemeRaw nodes with raw-value and raw-text"
-    (let [ctx (core/run-stages "42")
+  (testing "stages/run exposes MemeRaw nodes with :value and :raw fields"
+    (let [ctx (stages/run "42")
           form (first (:forms ctx))]
       (when (forms/raw? form)
-        (is (= 42 (forms/raw-value form)))
-        (is (= "42" (forms/raw-text form))))))
+        (is (= 42 (:value form)))
+        (is (= "42" (:raw form))))))
   (testing "MemeRaw constructed directly"
     (let [r (forms/->MemeRaw 3.14 "3.14")]
       (is (forms/raw? r))
-      (is (= 3.14 (forms/raw-value r)))
-      (is (= "3.14" (forms/raw-text r))))))
+      (is (= 3.14 (:value r)))
+      (is (= "3.14" (:raw r))))))
 
 ;; ---------------------------------------------------------------------------
 ;; format-meme (canonical formatter)
@@ -263,7 +264,7 @@
   (testing "var sugar"
     (is (= "#'foo" (core/meme->clj "#'foo"))))
   (testing "anon-fn sugar"
-    (is (= "#(inc %1)" (core/meme->clj "#(inc(%))")))))
+    (is (= "#(inc %)" (core/meme->clj "#(inc(%))")))))
 
 (deftest meme->clj-nested-forms
   (testing "nested let + arithmetic"

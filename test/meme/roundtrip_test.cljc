@@ -759,7 +759,7 @@
 
 (deftest roundtrip-anon-fn-sugar-preserved
   (testing "#() sugar roundtrips as #()"
-    (is (= "#(inc(%1))" (roundtrip-syntax "#(inc(%))"))))
+    (is (= "#(inc(%))" (roundtrip-syntax "#(inc(%))"))))
   (testing "fn() explicit call roundtrips as fn()"
     (is (= "fn([%1] inc(%1))" (roundtrip-syntax "fn([%1] inc(%1))")))))
 

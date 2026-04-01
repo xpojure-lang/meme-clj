@@ -34,7 +34,8 @@
   ([tokens opts] (make-parser tokens opts nil))
   ([tokens opts source]
    {:tokens tokens :pos (volatile! 0) :depth (volatile! 0)
-    :opts opts :source source :sq-depth (volatile! 0)}))
+    :opts opts :source source :sq-depth (volatile! 0)
+    :anon-fn-depth (volatile! 0)}))
 
 (defn- peof? [{:keys [tokens pos]}]
   (>= @pos (count tokens)))
@@ -333,6 +334,17 @@
                 (recur form)
                 (recur matched)))))))))
 
+(defn- parse-simple-prefix
+  "Parse a prefix-sugar form: advance past prefix, parse target, check sentinel,
+   wrap in (wrapper-sym target) with :meme/sugar metadata.
+   Used by :deref, :quote, :var-quote — they share identical structure."
+  [p tok wrapper-sym discard-msg]
+  (padvance! p)
+  (let [inner (parse-form p)]
+    (when (discard-sentinel? inner)
+      (errors/meme-error discard-msg (error-data p (select-keys tok [:line :col]))))
+    (with-meta (list wrapper-sym inner) {:meme/sugar true})))
+
 (defn- parse-form-base
   "Parse a single meme form."
   [p]
@@ -395,12 +407,8 @@
       :open-set (maybe-call p (parse-set p))
 
       :deref
-      (do (padvance! p)
-          (let [inner (parse-form p)]
-            (when (discard-sentinel? inner)
-              (errors/meme-error "Deref target was discarded by #_ — nothing to dereference"
-                                 (error-data p (select-keys tok [:line :col]))))
-            (with-meta (list 'clojure.core/deref inner) {:meme/sugar true})))
+      (parse-simple-prefix p tok 'clojure.core/deref
+        "Deref target was discarded by #_ — nothing to dereference")
 
       :meta
       (do (padvance! p)
@@ -426,12 +434,8 @@
       :quote
       ;; ' quotes the next meme form. No S-expression escape hatch.
       ;; '() quotes the empty list, 'f(x) quotes the call (f x).
-      (do (padvance! p)
-          (let [inner (parse-form p)]
-            (when (discard-sentinel? inner)
-              (errors/meme-error "Quote target was discarded by #_ — nothing to quote"
-                                 (error-data p (select-keys tok [:line :col]))))
-            (with-meta (list 'quote inner) {:meme/sugar true})))
+      (parse-simple-prefix p tok 'quote
+        "Quote target was discarded by #_ — nothing to quote")
 
       :syntax-quote
       ;; ` — parse next form with meme rules, preserve as AST node.
@@ -470,12 +474,8 @@
                            (error-data p (select-keys tok [:line :col]))))
 
       :var-quote
-      (do (padvance! p)
-          (let [inner (parse-form p)]
-            (when (discard-sentinel? inner)
-              (errors/meme-error "Var-quote target was discarded by #_ — nothing to reference"
-                                 (error-data p (select-keys tok [:line :col]))))
-            (with-meta (list 'var inner) {:meme/sugar true})))
+      (parse-simple-prefix p tok 'var
+        "Var-quote target was discarded by #_ — nothing to reference")
 
       :discard
       ;; #_ discards the next form and, if a non-boundary form follows,
@@ -483,18 +483,25 @@
       ;; (@, ^, #', #()) transparently skip over #_-discarded forms.
       ;; At a boundary (EOF / closing delimiter), returns discard-sentinel
       ;; so callers that accumulate forms skip the gap.
-      ;; #_ #_ chains work because each outer #_ discards the return
-      ;; value of the inner #_ (itself a form or sentinel) and recurses.
+      ;; F13: consecutive #_ tokens consumed iteratively to avoid hitting
+      ;; the depth limit on long sequences of discards.
       (do (padvance! p)
-          (when (peof? p)
-            (errors/meme-error "Missing form after #_ — expected a form to discard"
-                               (error-data p (assoc (select-keys tok [:line :col]) :incomplete true))))
-          (parse-form p) ; parse and discard
-          (let [nxt (ppeek p)]
-            (if (or (nil? nxt)
-                    (#{:close-paren :close-bracket :close-brace} (:type nxt)))
-              discard-sentinel
-              (parse-form p))))
+          (loop [discard-loc (select-keys tok [:line :col])]
+            (when (peof? p)
+              (errors/meme-error "Missing form after #_ — expected a form to discard"
+                                 (error-data p (assoc discard-loc :incomplete true))))
+            (parse-form p) ; parse and discard the target form
+            (let [nxt (ppeek p)]
+              (if (and nxt (= :discard (:type nxt)))
+                ;; another #_ follows — consume iteratively instead of recursing
+                (let [next-loc (select-keys nxt [:line :col])]
+                  (padvance! p)
+                  (recur next-loc))
+                ;; not a #_ — return next form or sentinel
+                (if (or (nil? nxt)
+                        (#{:close-paren :close-bracket :close-brace} (:type nxt)))
+                  discard-sentinel
+                  (parse-form p))))))
 
       :tagged-literal
       (let [tag (symbol (subs (:value tok) 1))]
@@ -526,7 +533,12 @@
 
       :open-anon-fn
       ;; #() — parse body as meme, collect % params, emit (fn [params] body)
-      (do (padvance! p)
+      ;; F3: reject nested #() — Clojure forbids this
+      (do (when (pos? @(:anon-fn-depth p))
+            (errors/meme-error "Nested #() is not allowed — use fn([args] ...) for nested anonymous functions"
+                               (error-data p (select-keys tok [:line :col]))))
+          (padvance! p)
+          (vswap! (:anon-fn-depth p) inc)
           (let [body (parse-form p)
                 _ (when (discard-sentinel? body)
                     (errors/meme-error "#() body was discarded — #() requires a non-discarded expression"
@@ -542,13 +554,17 @@
                                  (error-data p (assoc (select-keys nxt [:line :col])
                                                       :secondary [{:line (:line tok) :col (:col tok) :label "#( opened here"}]))))
             (padvance! p)
+            (vswap! (:anon-fn-depth p) dec)
             (let [params (forms/find-percent-params body)
                   _ (when (contains? params 0)
                       (errors/meme-error "%0 is not a valid parameter — use %1 or % for the first argument"
                                          (error-data p (select-keys tok [:line :col]))))
+                  has-bare? (contains? params :bare)
                   param-vec (forms/build-anon-fn-params params)
                   body' (forms/normalize-bare-percent body)]
-              (with-meta (list 'fn param-vec body') {:meme/sugar true}))))
+              (with-meta (list 'fn param-vec body')
+                (cond-> {:meme/sugar true}
+                  has-bare? (assoc :meme/bare-percent true))))))
 
       :reader-cond-start
       ;; #?(...) or #?@(...) — parse natively.

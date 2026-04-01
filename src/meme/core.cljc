@@ -87,23 +87,3 @@
      [clj-src]
      (forms->meme (clj->forms clj-src))))
 
-;; ---------------------------------------------------------------------------
-;; Stage access
-;; ---------------------------------------------------------------------------
-
-(defn run-stages
-  "Run the reader stages: source → scan → parse (no syntax-quote expansion or rewrite).
-   Returns a context map with :source, :opts, :raw-tokens, :tokens, :forms.
-   Useful for tooling that needs intermediate state."
-  ([source] (stages/run source))
-  ([source opts] (stages/run source opts)))
-
-;; ---------------------------------------------------------------------------
-;; Version
-;; ---------------------------------------------------------------------------
-
-(def version
-  "The meme library version string. Deref to get the value: @meme.core/version.
-   Reads from meme/version.txt on the classpath (JVM/Babashka). nil on CLJS."
-  #?(:clj (delay (.trim ^String (slurp (clojure.java.io/resource "meme/version.txt"))))
-     :cljs nil))

@@ -46,7 +46,7 @@
   (let [source (:source ctx)]
     (when-not (string? source)
       (throw (ex-info (str "Pipeline :source must be a string, got " (if (nil? source) "nil" (type source)))
-                      {})))
+                      {:type :meme/pipeline-error :stage :scan})))
     (let [tokens (tokenizer/attach-whitespace (tokenizer/tokenize source) source)
           result (assoc ctx :raw-tokens tokens :tokens tokens)]
       (contract/validate! :scan :output result)
@@ -60,7 +60,7 @@
   [ctx]
   (contract/validate! :parse :input ctx)
   (when-not (:tokens ctx)
-    (throw (ex-info "Pipeline :tokens missing — run scan before parse" {})))
+    (throw (ex-info "Pipeline :tokens missing — run scan before parse" {:type :meme/pipeline-error :stage :parse})))
   (let [parse-fn (or (get-in ctx [:opts :parser])
                      reader/read-meme-string-from-tokens)
         result (assoc ctx :forms (parse-fn (:tokens ctx) (:opts ctx) (:source ctx)))]
@@ -99,7 +99,7 @@
   [ctx]
   (contract/validate! :expand :input ctx)
   (when-not (:forms ctx)
-    (throw (ex-info "Pipeline :forms missing — run parse before expand" {})))
+    (throw (ex-info "Pipeline :forms missing — run parse before expand" {:type :meme/pipeline-error :stage :expand})))
   (let [expanded (expander/expand-forms (:forms ctx) (:opts ctx))
         result (assoc ctx :forms (mapv expand-auto-keywords expanded))]
     (contract/validate! :expand :output result)

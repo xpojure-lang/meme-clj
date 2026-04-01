@@ -94,6 +94,10 @@
   "Match a pattern against an expression.
    Returns a bindings map {symbol value} on success, nil on failure.
 
+   Map patterns: keys are **literal anchors** (not pattern variables).
+   `{:a ?v}` matches `{:a 42}` binding ?v=42, but `{?k ?v}` looks for
+   a literal key named `?k` — it does NOT bind ?k as a variable.
+
    Examples:
      (match-pattern '?x 42)           => {x 42}
      (match-pattern '(f ?x) '(f 1))   => {x 1}
@@ -209,12 +213,19 @@
 
 (defn apply-rule
   "Try to apply a single rule to an expression.
-   Returns the rewritten expression, or nil if the rule doesn't match."
+   Returns the rewritten expression, or nil if the rule doesn't match.
+   Guard exceptions are wrapped in ExceptionInfo with rule context."
   [rule expr]
   (when-let [bindings (match-pattern (:pattern rule) expr)]
     (if-let [guard (:guard rule)]
-      (when (guard bindings)
-        (substitute (:replacement rule) bindings))
+      (let [ok? (try (guard bindings)
+                  (catch #?(:clj Exception :cljs :default) e
+                    (throw (ex-info (str "Guard function failed for rule "
+                                        (pr-str (:name rule)) ": "
+                                        #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
+                                   {:rule (:name rule) :expr expr :bindings bindings}
+                                   e))))]
+        (when ok? (substitute (:replacement rule) bindings)))
       (substitute (:replacement rule) bindings))))
 
 (defn apply-rules

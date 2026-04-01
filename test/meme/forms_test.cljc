@@ -26,8 +26,8 @@
 (deftest raw-wrapper
   (let [r (forms/->MemeRaw 42 "0x2A")]
     (is (forms/raw? r))
-    (is (= 42 (forms/raw-value r)))
-    (is (= "0x2A" (forms/raw-text r)))))
+    (is (= 42 (:value r)))
+    (is (= "0x2A" (:raw r)))))
 
 (deftest raw-predicate
   (is (not (forms/raw? 42)))

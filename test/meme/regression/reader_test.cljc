@@ -845,3 +845,41 @@
      (testing "RC as call head through rewrite pipeline"
        (is (= "(#?(:clj instance? :cljs implements?) MyProto x)"
               ((:to-clj (lang/resolve-lang :meme-rewrite)) "#?(:clj instance? :cljs implements?)(MyProto x)"))))))
+
+;; ---------------------------------------------------------------------------
+;; F3: Nested #() anonymous functions were silently accepted.
+;; Bug: parser had no tracking of anon-fn nesting depth, so #(#(+ %1 %2))
+;; was accepted and produced (fn [] (fn [%1 %2] (+ %1 %2))). Clojure's
+;; reader rejects nested #(). The meme->clj output was also unreadable.
+;; Fix: track :anon-fn-depth in parser state, reject when > 0.
+;; ---------------------------------------------------------------------------
+
+(deftest nested-anon-fn-rejected
+  (testing "direct nested #() is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)nested #\(\)"
+                          (core/meme->forms "#(#(+(% %2)))"))))
+  (testing "nested #() inside a call is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)nested #\(\)"
+                          (core/meme->forms "#(map(#(inc(%)) xs))"))))
+  (testing "non-nested #() still works"
+    (is (some? (core/meme->forms "#(+(% %2))"))))
+  (testing "fn inside #() still works (not #() nesting)"
+    (is (some? (core/meme->forms "#(map(fn([x] inc(x)) xs))")))))
+
+;; ---------------------------------------------------------------------------
+;; F13: Sequential #_ discards hit the 512 depth limit.
+;; Bug: each #_ recursively called parse-form for its replacement, so
+;; 512 consecutive #_ x forms exhausted the depth counter.
+;; Fix: consume consecutive #_ tokens iteratively in a loop.
+;; ---------------------------------------------------------------------------
+
+(deftest sequential-discards-no-depth-limit
+  (testing "1000 sequential #_ x forms parse without hitting depth limit"
+    (let [src (str (apply str (repeat 1000 "#_ x ")) "final")]
+      (is (= '[final] (core/meme->forms src)))))
+  (testing "#_ #_ double discard still works"
+    (is (= '[c] (core/meme->forms "#_ #_ a b c"))))
+  (testing "#_ at boundary returns sentinel correctly"
+    (is (= '[] (core/meme->forms "#_ a")))))

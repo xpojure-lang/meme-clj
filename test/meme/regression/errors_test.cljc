@@ -232,3 +232,23 @@
                     (catch Exception e e))]
          (is (re-find #"got 2" (ex-message e))
              "should report how many hex digits were found")))))
+
+;; ---------------------------------------------------------------------------
+;; F9: Unpaired surrogates (\uD800-\uDFFF) were silently accepted.
+;; Bug: parse-unicode-escape accepted any 4-hex-digit code point, including
+;; surrogates. This diverged from valid Unicode and produced replacement chars.
+;; Fix: reject code points in the surrogate range with a clear error.
+;; ---------------------------------------------------------------------------
+
+(deftest surrogate-unicode-escape-rejected
+  (testing "\\uD800 (low surrogate start) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)surrogate"
+                          (core/meme->forms "\"\\uD800\""))))
+  (testing "\\uDFFF (high surrogate end) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)surrogate"
+                          (core/meme->forms "\"\\uDFFF\""))))
+  (testing "valid unicode escapes still work"
+    (is (some? (core/meme->forms "\"\\u0041\"")))
+    (is (some? (core/meme->forms "\"\\uFFFF\"")))))
