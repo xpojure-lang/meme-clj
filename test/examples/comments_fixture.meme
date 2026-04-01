@@ -1,0 +1,29 @@
+; Clojure code in comment: (defn foo [x] (+ x 1))
+def(x 42)
+
+;; Meme code in comment: defn(foo [x] +(x 1))
+def(y 99)
+
+; Mixed: (+ 1 2) and defn(bar [y] *(y 2))
+def(z 0)
+
+;; double semicolon comment
+;;; triple semicolon comment
+def(a 1)
+
+; comment with parens () [] {} and special chars #"regex" @deref 'quote
+def(b 2)
+
+;; Commented-out Clojure: (defn old-fn [x] (str x " world"))
+;; Commented-out meme: defn(old-fn [x] str(x " world"))
+def(c 3)
+
+; multiple comments
+; before a single
+; form
+defn(process
+  ; comment inside function body
+  [items]
+  map(inc items))
+
+; end of file comment

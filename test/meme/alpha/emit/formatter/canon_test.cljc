@@ -232,6 +232,44 @@
       (is (= (pr-str forms) (pr-str re-read))))))
 
 ;; ---------------------------------------------------------------------------
+;; Comment preservation fixture: comments.meme
+;; Covers: Clojure code in comments, meme code in comments, mixed, multiple
+;; semicolons (;, ;;, ;;;), commented-out code, multi-line comment blocks,
+;; mid-expression comments, trailing comment after all forms.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest comment-preservation-fixture
+     (let [src (slurp "test/examples/comments_fixture.meme")
+           forms (core/meme->forms src)
+           formatted (canon/format-forms forms {:width 80})
+           expected-comments
+           ["; Clojure code in comment: (defn foo [x] (+ x 1))"
+            ";; Meme code in comment: defn(foo [x] +(x 1))"
+            "; Mixed: (+ 1 2) and defn(bar [y] *(y 2))"
+            ";; double semicolon comment"
+            ";;; triple semicolon comment"
+            "; comment with parens () [] {} and special chars"
+            ";; Commented-out Clojure: (defn old-fn [x] (str x \" world\"))"
+            ";; Commented-out meme: defn(old-fn [x] str(x \" world\"))"
+            "; multiple comments"
+            "; before a single"
+            "; form"
+            "; comment inside function body"
+            "; end of file comment"]]
+       (testing "all comments survive parse→format"
+         (doseq [comment expected-comments]
+           (is (re-find (re-pattern (java.util.regex.Pattern/quote comment)) formatted)
+               (str "missing comment: " comment))))
+       (testing "forms survive roundtrip through commented source"
+         (let [re-read (core/meme->forms formatted)]
+           (is (= (pr-str forms) (pr-str re-read)))))
+       (testing "formatting is idempotent with comments"
+         (let [re-read (core/meme->forms formatted)
+               re-formatted (canon/format-forms re-read {:width 80})]
+           (is (= formatted re-formatted)))))))
+
+;; ---------------------------------------------------------------------------
 ;; Idempotency: format(format(x)) == format(x)
 ;; ---------------------------------------------------------------------------
 
