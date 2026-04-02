@@ -1,8 +1,7 @@
 (ns meme.emit.formatter.flat
   "Flat formatter: single-line meme output.
    Composes printer (form → Doc) with render (layout @ infinite width)."
-  (:require [clojure.string :as str]
-            [meme.emit.printer :as printer]
+  (:require [meme.emit.printer :as printer]
             [meme.emit.render :as render]))
 
 (defn format-form
@@ -27,4 +26,6 @@
    Always produces flat (single-line per form) output — no width-aware breaking.
    For width-aware meme formatting, use canon/format-forms."
   [forms]
-  (str/join "\n\n" (map #(render/layout (printer/to-doc % :clj) ##Inf) forms)))
+  (printer/join-with-trailing-comments
+   #(render/layout (printer/to-doc % :clj) ##Inf)
+   forms))

@@ -26,7 +26,8 @@
    the context map at each stage boundary. Enable runtime validation with:
      (binding [meme.stages.contract/*validate* true]
        (stages/run source))"
-  (:require [meme.scan.tokenizer :as tokenizer]
+  (:require [clojure.string :as str]
+            [meme.scan.tokenizer :as tokenizer]
             [meme.parse.reader :as reader]
             [meme.parse.expander :as expander]
             [meme.rewrite :as rewrite]
@@ -42,7 +43,11 @@
    Writes both :tokens (for parse) and :raw-tokens (backward compat / tooling)."
   [ctx]
   (contract/validate! :scan :input ctx)
-  (let [source (:source ctx)]
+  (let [source (:source ctx)
+        source (if (and (string? source) (str/starts-with? source "\uFEFF"))
+                 (subs source 1)
+                 source)
+        ctx (assoc ctx :source source)]
     (when-not (string? source)
       (throw (ex-info (str "Pipeline :source must be a string, got "
                           (if (nil? source) "nil" #?(:clj (.getName (class source)) :cljs (pr-str (type source)))))

@@ -23,6 +23,8 @@
    opts: {:width 80}"
   ([forms] (format-forms forms nil))
   ([forms opts]
+   (when (nil? forms)
+     (throw (ex-info "format-forms expects a sequence of forms, not nil" {})))
    (when (string? forms)
      (throw (ex-info "format-forms expects a sequence of forms, not a string"
                      {:input (subs forms 0 (min 50 (count forms)))})))

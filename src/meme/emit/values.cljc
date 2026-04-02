@@ -18,7 +18,10 @@
                   (char 32) "space" (char 8) "backspace" (char 12) "formfeed"}]
        (if-let [n (get named form)]
          (str \\ n)
-         (str \\ form)))))
+         (let [cp (int form)]
+           (if (or (< cp 32) (= cp 127))
+             (format "\\u%04X" cp)
+             (str \\ form)))))))
 
 (defn emit-number-str
   "Serialize a number, preserving BigDecimal M, BigInt N, and symbolic values."

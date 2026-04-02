@@ -7,6 +7,7 @@
             [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]
             [meme.emit.formatter.canon :as fmt-canon]
+            [meme.emit.values :as values]
             [meme.forms :as forms]
             [meme.rewrite.emit :as remit]))
 
@@ -682,3 +683,51 @@
        (let [rewrite-clj ((:to-clj (lang/resolve-lang :meme-rewrite)) "#(+(% %2))")]
          (is (= "#(+ % %2)" rewrite-clj)
              (str "expected #(+ % %2) but got: " rewrite-clj))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: non-printable chars must emit as \uXXXX, not raw bytes
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest non-printable-chars-emit-as-unicode
+     (testing "NUL emits as \\u0000"
+       (is (= "\\u0000" (values/emit-char-str (char 0)))))
+     (testing "BEL emits as \\u0007"
+       (is (= "\\u0007" (values/emit-char-str (char 7)))))
+     (testing "DEL emits as \\u007F"
+       (is (= "\\u007F" (values/emit-char-str (char 127)))))
+     (testing "regular chars still emit normally"
+       (is (= "\\a" (values/emit-char-str \a)))
+       (is (= "\\newline" (values/emit-char-str \newline))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: format-clj must preserve trailing comments
+;; ---------------------------------------------------------------------------
+
+(deftest format-clj-preserves-trailing-comments
+  (testing "inline comment on last form"
+    (let [forms (core/meme->forms "f(x) ;; trailing")
+          clj (fmt-flat/format-clj forms)]
+      (is (str/includes? clj "trailing"))))
+  (testing "standalone comment after last form"
+    (let [forms (core/meme->forms "f(x)\n;; EOF comment")
+          clj (fmt-flat/format-clj forms)]
+      (is (str/includes? clj "EOF comment"))))
+  (testing "comment between forms"
+    (let [forms (core/meme->forms "f(x) ;; mid\ng(y)")
+          clj (fmt-flat/format-clj forms)]
+      (is (str/includes? clj "mid")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: format-forms nil must throw consistently
+;; ---------------------------------------------------------------------------
+
+(deftest format-forms-nil-throws-consistently
+  (testing "flat format-forms rejects nil"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"expects a sequence"
+                          (fmt-flat/format-forms nil))))
+  (testing "canon format-forms rejects nil"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"expects a sequence"
+                          (fmt-canon/format-forms nil)))))

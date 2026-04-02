@@ -198,6 +198,10 @@
                      (substitute v bindings)])
                   template))
 
+    ;; set — substitute each element
+    (set? template)
+    (set (map #(substitute % bindings) template))
+
     ;; literal — pass through
     :else
     template))

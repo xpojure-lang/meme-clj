@@ -227,13 +227,21 @@
   (let [loc (select-keys (ppeek p) [:line :col])]
     (padvance! p) ; #{
     (let [forms (parse-forms-until p :close-brace loc "set")
-          s (set forms)]
-      (when (not= (count s) (count forms))
-        (let [seen (volatile! #{})
-              dup (first (filter (fn [x] (if (contains? @seen x) true (do (vswap! seen conj x) false))) forms))]
-          (errors/meme-error (str "Duplicate element in set literal: " (pr-str dup))
-                             (error-data p loc))))
-      (with-meta s {:meme/order (vec forms)}))))
+          ;; NaN duplicate check — NaN != NaN so (set ...) won't deduplicate
+          nan-count (count (filter (fn [x] (and (number? x)
+                                                 #?(:clj (Double/isNaN (double x))
+                                                    :cljs (js/isNaN x))))
+                                   forms))]
+      (when (> nan-count 1)
+        (errors/meme-error "Duplicate element in set literal: ##NaN"
+                           (error-data p loc)))
+      (let [s (set forms)]
+        (when (not= (count s) (count forms))
+          (let [seen (volatile! #{})
+                dup (first (filter (fn [x] (if (contains? @seen x) true (do (vswap! seen conj x) false))) forms))]
+            (errors/meme-error (str "Duplicate element in set literal: " (pr-str dup))
+                               (error-data p loc))))
+        (with-meta s {:meme/order (vec forms)})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Call: f(args...)

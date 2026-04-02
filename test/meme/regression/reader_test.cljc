@@ -154,6 +154,36 @@
     (is (= 0 (first (core/meme->forms "0"))))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: #{##NaN ##NaN} must throw duplicate error.
+;; NaN != NaN by IEEE 754, so (set ...) doesn't deduplicate.
+;; ---------------------------------------------------------------------------
+
+(deftest nan-duplicate-in-set-rejected
+  (testing "duplicate NaN in set literal throws"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate element"
+                          (core/meme->forms "#{##NaN ##NaN}"))))
+  (testing "single NaN in set is fine"
+    (let [forms (core/meme->forms "#{##NaN 1 2}")]
+      (is (= 1 (count forms)))
+      (is (set? (first forms)))))
+  (testing "duplicate non-NaN still caught"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate element"
+                          (core/meme->forms "#{1 2 1}")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: BOM (U+FEFF) at start of source must be stripped, not error.
+;; ---------------------------------------------------------------------------
+
+(deftest bom-stripped-from-source
+  (testing "BOM prefix is stripped by meme->forms"
+    (is (= [42] (core/meme->forms (str "\uFEFF" "42")))))
+  (testing "BOM in the middle is still an error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (core/meme->forms (str "42 " "\uFEFF" " 43"))))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: deeply nested input must not crash with StackOverflowError.
 ;; ---------------------------------------------------------------------------
 

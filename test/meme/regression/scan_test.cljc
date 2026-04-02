@@ -695,9 +695,8 @@
   (testing "RTL override in symbol produces error"
     (is (thrown? #?(:clj Exception :cljs js/Error)
                  (core/meme->forms (str "f(" \u202E "x)")))))
-  (testing "BOM character in source produces error"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (core/meme->forms (str \uFEFF "f(x)"))))))
+  (testing "BOM character at start of source is silently stripped"
+    (is (= '[(f x)] (core/meme->forms (str \uFEFF "f(x)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L9: read-number greedy — 1N.5 was one token, should be two.

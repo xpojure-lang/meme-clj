@@ -59,7 +59,11 @@
   (testing "splice in middle"
     (is (= '(f 0 1 2 3 4) (rw/substitute '(f 0 ??xs 4) '{xs [1 2 3]}))))
   (testing "nested substitution"
-    (is (= '(g (h 1) 2) (rw/substitute '(g (h ?x) ?y) '{x 1 y 2})))))
+    (is (= '(g (h 1) 2) (rw/substitute '(g (h ?x) ?y) '{x 1 y 2}))))
+  (testing "set template substitution"
+    (is (= #{1 2} (rw/substitute '#{?x ?y} '{x 1 y 2}))))
+  (testing "map template substitution"
+    (is (= {:a 1} (rw/substitute '{:a ?x} '{x 1})))))
 
 ;; ============================================================
 ;; Rule Application
