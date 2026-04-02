@@ -238,6 +238,12 @@
      []
      (reset! user-langs {})))
 
+(defn available-langs
+  "Return a set of all available lang names (built-in + user-registered)."
+  []
+  (into (set (keys #?(:clj @builtin :cljs builtin)))
+        (keys #?(:clj @user-langs :cljs nil))))
+
 ;; ---------------------------------------------------------------------------
 ;; Resolution
 ;; ---------------------------------------------------------------------------
@@ -275,7 +281,7 @@
   [lang command]
   (contains? lang command))
 
-(defn check-support!
+(defn check-support
   "Assert that the lang supports the given command. Throws if not."
   [lang lang-name command]
   (when-not (supports? lang command)

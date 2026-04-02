@@ -305,7 +305,7 @@
 (def ^:private reserved-dispatch-chars
   #{\= \< \%})
 
-(defn- validate-keyword!
+(defn- validate-keyword
   "Validate scanned keyword name syntax. Rejects:
    - Bare : with no name (non-auto)
    - Empty name after :: (bare :: at EOF)
@@ -330,7 +330,7 @@
     (errors/meme-error
       (str "Invalid keyword: " (if auto? "::" ":") kw-name " — trailing / with no name") loc)))
 
-(defn- validate-symbol-name!
+(defn- validate-symbol-name
   "Validate scanned symbol/keyword name for Clojure-compatible syntax.
    Rejects trailing /, digit-starting name after /, and multi-slash.
    Allows ns// (e.g. clojure.core//) — the name part is '/'."
@@ -463,9 +463,9 @@
                 (let [auto? (and (not (seof? sc)) (= (speek sc) \:))
                       _ (when auto? (sadvance! sc))
                       kw-name (read-symbol-str sc)
-                      _ (validate-keyword! kw-name auto? loc)
+                      _ (validate-keyword kw-name auto? loc)
                       _ (when (pos? (count kw-name))
-                          (validate-symbol-name! kw-name loc))
+                          (validate-symbol-name kw-name loc))
                       value (str (if auto? "::" ":") kw-name)]
                   (conj! tokens (tok-at sc :keyword value loc))
                   (recur)))
@@ -487,7 +487,7 @@
             ;; symbol (includes operators like +, -, ->, ->>, >=, etc.)
             (symbol-start? ch)
             (let [sym (read-symbol-str sc)
-                  _ (validate-symbol-name! sym loc)]
+                  _ (validate-symbol-name sym loc)]
               (conj! tokens (tok-at sc :symbol sym loc))
               (recur))
 

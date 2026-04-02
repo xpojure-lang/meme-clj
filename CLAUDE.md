@@ -80,6 +80,7 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 - `meme.parse.reader` (.cljc) — Recursive-descent parser (tokens → Clojure forms). Delegates value resolution to `meme.parse.resolve`. Portable.
 - `meme.parse.expander` (.cljc) — Syntax-quote expansion: `MemeSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Called by runtime paths (run, repl) before eval. Also unwraps `MemeRaw` to plain values. Portable.
 - `meme.parse.resolve` (.cljc) — Native value resolution: converts raw token text to Clojure values. No `read-string` delegation — numbers, strings, chars, regex, keywords, tagged literals all resolved natively. Handles platform asymmetries (JVM vs CLJS). Portable.
+- `meme.emit.values` (.cljc) — Shared value → string serialization for the printer and rewrite emitter. Handles atomic Clojure values (strings, numbers, chars, regex). Portable.
 - `meme.emit.printer` (.cljc) — Wadler-Lindig Doc tree builder: `to-doc` (form → Doc tree) + `extract-comments`. Single source of truth for meme and Clojure output modes. Delegates layout to `render`. Portable.
 - `meme.emit.render` (.cljc) — Doc algebra and layout engine: `DocText`, `DocLine`, `DocCat`, `DocNest`, `DocGroup`, `DocIfBreak`, `layout` (Doc tree → string at given width). Pure, no meme-specific logic. Portable.
 - `meme.emit.formatter.flat` (.cljc) — Flat formatter: composes printer + render at infinite width. `format-form`, `format-forms`, `format-clj`. Single-line output. Portable.
@@ -95,11 +96,12 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 - `meme.rewrite.rules` (.cljc) — S↔M transformation rule sets: `s->m-rules`, `m->s-rules`, `tree->s-rules`, `transform-structures`. Portable.
 - `meme.rewrite.tree` (.cljc) — Token→tagged tree builder. `tokens->tree`, `build-tree`, `rewrite-parser` (drop-in replacement for the standard parser). Portable.
 - `meme.rewrite.emit` (.cljc) — Serializes m-call tagged trees to meme text. `emit`, `emit-forms`. Portable.
-- `meme.lang` (.cljc) — Lang registry, EDN loading, resolution, and user lang registration. `builtin` (delay of built-in lang maps), `default-lang`, `resolve-lang`, `supports?`, `check-support!`, `load-edn`, `register!`, `resolve-by-extension`, `registered-langs`, `clear-user-langs!`. Built-in langs loaded from `resources/meme/lang/*.edn`. User langs support `:extension` for file-based auto-detection. Portable (EDN loading and registration JVM only).
+- `meme.lang.shared` (.cljc) — Shared implementations for lang backends. Contains `clj->meme-text` used by meme-rewrite and meme-trs langs. Portable (`clj->meme-text` JVM only).
+- `meme.lang` (.cljc) — Lang registry, EDN loading, resolution, and user lang registration. `builtin` (delay of built-in lang maps), `default-lang`, `resolve-lang`, `supports?`, `check-support`, `load-edn`, `register!`, `resolve-by-extension`, `registered-langs`, `clear-user-langs!`. Built-in langs loaded from `resources/meme/lang/*.edn`. User langs support `:extension` for file-based auto-detection. Portable (EDN loading and registration JVM only).
 - `meme.lang.meme-classic` (.cljc) — Meme-classic lang implementation: `format-meme`, `to-clj`, `to-meme`. Uses recursive-descent parser + Wadler-Lindig printer. Portable.
 - `meme.lang.meme-rewrite` (.cljc) — Meme-rewrite lang implementation: `format-meme`, `to-clj`, `to-meme`, `start-repl`. Uses tree builder + rewrite rules. Portable.
 - `meme.lang.meme-trs` (.cljc) — Meme-trs lang implementation: `format-meme`, `to-clj`, `to-meme`. Uses token-stream term rewriting. Portable.
-- `meme.trs` (.cljc) — Token-stream term rewriting: `meme->clj-text`, `clj->meme-text`. Converts via token-level S↔M rewrite rules without building a full parse tree. Portable.
+- `meme.trs` (.cljc) — Token-stream term rewriting: `meme->clj-text`. Converts via token-level S↔M rewrite rules without building a full parse tree. Portable.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
 ### Platform tiers
@@ -151,6 +153,7 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 | `core_test` | Public API surface (`meme->forms`, `forms->meme`, `format-meme`, etc.) |
 | `runtime/repl_test` | REPL infrastructure (`input-state`, `read-input`) |
 | `runtime/run_test` | File runner: `run-string`, `run-file`, shebang handling, custom eval-fn |
+| `runtime/resolve_test` | Default symbol resolution for syntax-quote expansion. JVM only. |
 | `examples_test` | Integration scenarios, multi-feature examples |
 | `dogfood_test` | Meta: meme roundtrips its own source files |
 | `snapshot_test` | Characterization tests: exact token and form snapshots. Regression net for stage refactoring. |
@@ -162,7 +165,7 @@ The reader has composable stages (composed by `meme.stages`), each a `ctx → ct
 | `rewrite/rules_test` | Rewrite rules: S→M and M→S transformations |
 | `rewrite/tree_test` | Rewrite tree builder: tokens→tagged tree, cross-test vs main parser |
 | `rewrite/emit_test` | Rewrite tree serialization: m-call nodes, edge types (BigDecimal, regex, tagged literals). |
-| `lang_test` | Lang command maps, EDN loading, user lang registration, extension dispatch, prelude injection, custom parser, check-support!. JVM only. |
+| `lang_test` | Lang command maps, EDN loading, user lang registration, extension dispatch, prelude injection, custom parser, check-support. JVM only. |
 | `trs_test` | Token-stream term rewriting: meme→clj, clj→meme, lang agreement with classic. |
 | `benchmark_test` | Performance: all three langs across 11 meme fixtures and 7,526 vendor forms. JVM only. |
 

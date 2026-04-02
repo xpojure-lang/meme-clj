@@ -58,11 +58,11 @@
   ([form] (transform-structures form nil))
   ([form opts]
    (let [preserve? (= :preserve (:read-cond opts))
-         xf #(transform-structures % opts)]
+         recurse #(transform-structures % opts)]
      (cond
        (and (seq? form) (seq form))
        (let [head (first form)
-             children (mapv xf (rest form))]
+             children (mapv recurse (rest form))]
          (case head
            bracket    (vec children)
            brace      (apply array-map children)
@@ -158,12 +158,12 @@
                                          head)))
                  (throw (ex-info (str "Unrecognized structural tag: " head)
                                  {:tag head :form form})))
-               (apply list (xf head) (seq children)))))
+               (apply list (recurse head) (seq children)))))
 
-       (vector? form) (mapv xf form)
+       (vector? form) (mapv recurse form)
        (record? form) form
-       (map? form) (into {} (map (fn [[k v]] [(xf k) (xf v)]) form))
-       (set? form) (set (map xf form))
+       (map? form) (into {} (map (fn [[k v]] [(recurse k) (recurse v)]) form))
+       (set? form) (set (map recurse form))
        :else form))))
 
 (defn rewrite-inside-reader-conditionals

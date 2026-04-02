@@ -3,84 +3,10 @@
    Each git submodule in test/vendor/ is a real-world Clojure project.
    Every .clj/.cljc file is roundtripped per-form with precise accounting."
   (:require [clojure.test :refer [deftest is]]
-            [meme.core :as core]
-            [meme.emit.formatter.flat :as fmt-flat]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
-
-;; ---------------------------------------------------------------------------
-;; Helpers (shared pattern with dogfood_test.clj)
-;; ---------------------------------------------------------------------------
-
-(defn- read-clj-forms
-  "Read all Clojure forms from a .clj/.cljc file using Clojure's reader.
-   Returns vector of {:form f} or {:read-error msg}."
-  [path]
-  (binding [*read-eval* false]
-    (let [rdr (java.io.PushbackReader. (io/reader path))]
-      (loop [forms []]
-        (let [result (try {:form (read {:read-cond :preserve :eof ::eof} rdr)}
-                          (catch Exception e {:read-error (.getMessage e)}))]
-          (cond
-            (:read-error result) (conj forms result)
-            (= (:form result) ::eof) forms
-            :else (recur (conj forms result))))))))
-
-(defn- form-name
-  "Extract a readable name for a form."
-  [form]
-  (when (seq? form)
-    (let [head (first form)]
-      (cond
-        (#{'defn 'defn- 'def 'defmacro 'defmulti 'defmethod
-           'defprotocol 'defrecord 'deftype} head)
-        (str head " " (second form))
-        (= 'ns head) (str "ns " (second form))
-        :else (str head "...")))))
-
-(defn- try-roundtrip-form
-  "Try to roundtrip a single form. Returns {:ok form} or {:error msg}.
-   Uses :read-cond :preserve so ReaderConditional objects roundtrip correctly."
-  [form]
-  (try
-    (let [meme-text (fmt-flat/format-form form)
-          forms2 (core/meme->forms meme-text {:read-cond :preserve})]
-      {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
-    (catch Exception e
-      {:error (.getMessage e)})))
-
-(defn- roundtrip-file-forms
-  "Roundtrip every form in a file individually.
-   Returns {:path p :total n :succeeded [...] :failed [...] :read-errors [...]}."
-  [path]
-  (let [read-results (read-clj-forms path)
-        read-errors (filterv :read-error read-results)
-        forms (mapv :form (filterv :form read-results))
-        results (mapv (fn [form]
-                        (merge (try-roundtrip-form form)
-                               {:name (form-name form)}))
-                      forms)]
-    {:path (str path)
-     :total (+ (count results) (count read-errors))
-     :succeeded (filterv :ok results)
-     :failed (filterv :error results)
-     :read-errors read-errors}))
-
-;; ---------------------------------------------------------------------------
-;; File discovery
-;; ---------------------------------------------------------------------------
+            [meme.test-util :as tu]
+            [clojure.java.io :as io]))
 
 (def ^:private vendor-dir "test/vendor")
-
-(defn- find-clj-files
-  "Find all .clj and .cljc files under a directory, sorted."
-  [dir]
-  (->> (file-seq (io/file dir))
-       (filter #(.isFile %))
-       (filter #(let [name (.getName %)]
-                  (or (str/ends-with? name ".clj")
-                      (str/ends-with? name ".cljc"))))
-       (sort-by str)))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-project roundtrip test
@@ -90,8 +16,8 @@
   "Roundtrip all files in a vendor project. Returns summary map."
   [project-dir]
   (let [project-name (.getName project-dir)
-        files (find-clj-files project-dir)
-        results (mapv roundtrip-file-forms files)
+        files (tu/find-clj-files project-dir)
+        results (mapv #(tu/roundtrip-file-forms % {:include-path true}) files)
         total-files (count results)
         total-forms (reduce + (map :total results))
         total-succeeded (reduce + (map #(count (:succeeded %)) results))

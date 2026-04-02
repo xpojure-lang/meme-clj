@@ -32,7 +32,7 @@
 ;; Parser state
 ;; ---------------------------------------------------------------------------
 
-(def ^:private ^:const max-depth 512)
+(def ^:private max-depth forms/max-parse-depth)
 
 (defn- make-parser
   ([tokens] (make-parser tokens nil nil))

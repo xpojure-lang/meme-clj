@@ -306,8 +306,8 @@
 
 (deftest format-forms-rejects-string-input
   (testing "forms->meme rejects a string"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+    (is (thrown? #?(:clj AssertionError :cljs js/Error)
                  (core/forms->meme "hello"))))
   (testing "format-meme rejects a string"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+    (is (thrown? #?(:clj AssertionError :cljs js/Error)
                  (core/format-meme "hello")))))

@@ -11,7 +11,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [meme.lang :as lang]
-            [meme.core :as core]))
+            [meme.core :as core]
+            [meme.test-util :as tu]))
 
 ;; ============================================================
 ;; Timing
@@ -44,16 +45,9 @@
            (filter #(.isDirectory %))
            (sort-by str)))))
 
-(defn- find-clj-files [dir]
-  (->> (file-seq (io/file dir))
-       (filter #(.isFile %))
-       (filter #(let [n (.getName %)]
-                  (or (str/ends-with? n ".clj")
-                      (str/ends-with? n ".cljc"))))
-       (sort-by str)))
-
 ;; ============================================================
 ;; Clojure reader (per-form, with :read-cond :preserve)
+;; Note: returns plain forms (not {:form f} maps), unlike tu/read-clj-forms.
 ;; ============================================================
 
 (def ^:private eof-sentinel (Object.))
@@ -164,7 +158,7 @@
    Returns per-lang summary."
   [project-dir]
   (let [project (.getName project-dir)
-        files (find-clj-files project-dir)
+        files (tu/find-clj-files project-dir)
         all-forms (mapcat (fn [f]
                             (mapv (fn [form] {:form form :file (.getName f)})
                                   (read-clj-forms f)))

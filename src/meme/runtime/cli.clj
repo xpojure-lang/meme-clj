@@ -87,7 +87,7 @@
            (catch Exception _
              (binding [*out* *err*]
                (println (str "Unknown lang: " kw))
-               (println (str "Available: " (str/join ", " (map name (keys @lang/builtin))))))
+               (println (str "Available: " (str/join ", " (map name (lang/available-langs))))))
              (System/exit 1))))
 
     file
@@ -108,7 +108,7 @@
     (when (empty? inputs) (println usage) (System/exit 1))
     (let [[lang-name l] (get-lang lang file)
           lopts (lang-opts opts)]
-      (lang/check-support! l lang-name cmd)
+      (lang/check-support l lang-name cmd)
       (process-files
         {:inputs    inputs
          :pred      pred
@@ -125,7 +125,7 @@
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name]"))
     (System/exit 1))
   (let [[lang-name l] (get-lang lang file)]
-    (lang/check-support! l lang-name :run)
+    (lang/check-support l lang-name :run)
     (try ((:run l) (slurp file) (lang-opts opts))
          (catch Exception e
            (binding [*out* *err*]
@@ -136,7 +136,7 @@
   "Start an interactive meme REPL."
   [{:keys [lang] :as opts}]
   (let [[lang-name l] (get-lang lang nil)]
-    (lang/check-support! l lang-name :repl)
+    (lang/check-support l lang-name :repl)
     ((:repl l) (lang-opts opts))))
 
 (defn to-clj
@@ -153,14 +153,14 @@
     {:cmd :to-meme, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
      :verb "converted", :usage "Usage: meme to-meme <file|dir> [--lang name] [--stdout]"}))
 
-(defn format-cmd
+(defn format-files
   "Format meme source files in canonical style."
   [opts]
   (file-command opts
     {:cmd :format, :pred meme-file?, :output-fn nil
      :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"}))
 
-(defn inspect-cmd
+(defn inspect-lang
   "Print diagnostic info about the current lang configuration."
   [{:keys [lang]}]
   (let [[lang-name l] (get-lang lang nil)]
@@ -189,7 +189,7 @@
     (println "  meme inspect [--lang name]")
     (println "  meme version")
     (println)
-    (println (str "Langs: " (str/join ", " (map name (keys @lang/builtin)))))))
+    (println (str "Langs: " (str/join ", " (map name (lang/available-langs)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; bb entry point
@@ -214,11 +214,11 @@
        {:cmds ["repl"]    :fn (comp repl :opts) :spec {:lang {:coerce :string}}}
        (assoc file-spec :cmds ["to-clj"]  :fn (file-cmd to-clj))
        (assoc file-spec :cmds ["to-meme"] :fn (file-cmd to-meme))
-       {:cmds ["format"]  :fn (file-cmd format-cmd)
+       {:cmds ["format"]  :fn (file-cmd format-files)
         :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
                                    :lang {:coerce :string} :style {:coerce :string}
                                    :width {:coerce :long}}}
-       {:cmds ["inspect"] :fn (comp inspect-cmd :opts) :spec {:lang {:coerce :string}}}
+       {:cmds ["inspect"] :fn (comp inspect-lang :opts) :spec {:lang {:coerce :string}}}
        {:cmds ["version"] :fn (fn [_] (version nil))}
        {:cmds [] :fn (fn [{:keys [args]}]
                        (when (seq args)

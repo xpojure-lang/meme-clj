@@ -13,7 +13,7 @@
    tokenize → build-tree → apply tree->s rules → transform structures."
   [s]
   (let [tokens (tokenizer/attach-whitespace (tokenizer/tokenize s) s)
-        tagged (tree/tokens->tree tokens)
+        tagged (#'tree/tokens->tree tokens)
         rewritten (mapv #(rw/rewrite rules/tree->s-rules %) tagged)
         forms (mapv rules/transform-structures rewritten)]
     forms))
@@ -24,24 +24,24 @@
 
 (deftest tree-builder-basic
   (testing "simple call produces m-call"
-    (let [tree (tree/tokens->tree
+    (let [tree (#'tree/tokens->tree
                 (tokenizer/attach-whitespace
                  (tokenizer/tokenize "f(x)") "f(x)"))]
       (is (= '[(m-call f x)] tree))))
   (testing "non-adjacent is not a call"
-    (let [tree (tree/tokens->tree
+    (let [tree (#'tree/tokens->tree
                 (tokenizer/attach-whitespace
                  (tokenizer/tokenize "f (x)") "f (x)"))]
       ;; f and (paren x) are separate
       (is (= 2 (count tree)))
       (is (= 'f (first tree)))))
   (testing "vector produces bracket"
-    (let [tree (tree/tokens->tree
+    (let [tree (#'tree/tokens->tree
                 (tokenizer/attach-whitespace
                  (tokenizer/tokenize "[1 2 3]") "[1 2 3]"))]
       (is (= '[(bracket 1 2 3)] tree))))
   (testing "nested call"
-    (let [tree (tree/tokens->tree
+    (let [tree (#'tree/tokens->tree
                 (tokenizer/attach-whitespace
                  (tokenizer/tokenize "f(g(x))") "f(g(x))"))]
       (is (= '[(m-call f (m-call g x))] tree)))))
@@ -87,12 +87,12 @@
 
 (deftest build-tree-reader-cond-delimiter-validation
   (testing "reader conditional with correct delimiter parses normally"
-    (let [tree (tree/tokens->tree
+    (let [tree (#'tree/tokens->tree
                 (tokenizer/attach-whitespace
                  (tokenizer/tokenize "#?(:clj 1 :cljs 2)") "#?(:clj 1 :cljs 2)"))]
       (is (= 1 (count tree)))))
   (testing "namespaced map with correct delimiter parses normally"
-    (let [tree (tree/tokens->tree
+    (let [tree (#'tree/tokens->tree
                 (tokenizer/attach-whitespace
                  (tokenizer/tokenize "#:user{:a 1}") "#:user{:a 1}"))]
       (is (= 1 (count tree))))))

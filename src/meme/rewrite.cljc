@@ -20,7 +20,7 @@
 ;; Pattern Matching
 ;; ============================================================
 
-(defn pattern-var?
+(defn- pattern-var?
   "Is this a pattern variable like ?x"
   [x]
   (and (symbol? x)
@@ -28,18 +28,18 @@
        (not (str/starts-with? (name x) "??"))
        (not= x '?)))
 
-(defn splice-var?
+(defn- splice-var?
   "Is this a splice variable like ??x (matches zero or more)"
   [x]
   (and (symbol? x)
        (str/starts-with? (name x) "??")))
 
-(defn wildcard?
+(defn- wildcard?
   "Is this the wildcard _ (matches anything, no binding)"
   [x]
   (= x '_))
 
-(defn var-name
+(defn- var-name
   "Extract the name from ?x or ??x"
   [x]
   (let [n (name x)]
@@ -50,7 +50,7 @@
 
 (declare match-pattern)
 
-(defn match-seq
+(defn- match-seq
   "Match a pattern sequence against an expression sequence.
    Handles splice variables (??x).
    Returns bindings map or nil on failure.
@@ -69,15 +69,15 @@
 
     ;; splice variable — try matching 0..n expressions
     (splice-var? (first patterns))
-    (let [var (var-name (first patterns))
+    (let [pat-var (var-name (first patterns))
           rest-pats (rest patterns)]
       (loop [n 0]
         (when (<= n (count exprs))
           (let [taken (vec (take n exprs))
                 remaining (drop n exprs)
-                new-bindings (if (contains? bindings var)
-                               (when (= (get bindings var) taken) bindings)
-                               (assoc bindings var taken))]
+                new-bindings (if (contains? bindings pat-var)
+                               (when (= (get bindings pat-var) taken) bindings)
+                               (assoc bindings pat-var taken))]
             (or (when new-bindings
                   (match-seq rest-pats remaining new-bindings))
                 (recur (inc n)))))))
@@ -114,10 +114,10 @@
 
      ;; pattern variable — bind or check consistency
      (pattern-var? pattern)
-     (let [var (var-name pattern)]
-       (if (contains? bindings var)
-         (when (= (get bindings var) expr) bindings)
-         (assoc bindings var expr)))
+     (let [pat-var (var-name pattern)]
+       (if (contains? bindings pat-var)
+         (when (= (get bindings pat-var) expr) bindings)
+         (assoc bindings pat-var expr)))
 
      ;; both are sequential and same type — match element by element.
      ;; List patterns match lists/seqs, vector patterns match vectors.
@@ -167,13 +167,13 @@
   (cond
     ;; pattern variable — replace
     (pattern-var? template)
-    (let [var (var-name template)]
-      (get bindings var template))
+    (let [pat-var (var-name template)]
+      (get bindings pat-var template))
 
     ;; splice variable at top level — just return the value
     (splice-var? template)
-    (let [var (var-name template)]
-      (get bindings var []))
+    (let [pat-var (var-name template)]
+      (get bindings pat-var []))
 
     ;; sequential — rebuild, handling splices
     (sequential? template)
@@ -181,8 +181,8 @@
           result (reduce
                   (fn [acc item]
                     (if (splice-var? item)
-                      (let [var (var-name item)
-                            vals (get bindings var [])]
+                      (let [pat-var (var-name item)
+                            vals (get bindings pat-var [])]
                         (into acc vals))
                       (conj acc (substitute item bindings))))
                   []
@@ -220,7 +220,7 @@
 
 (defn make-rule
   "Create a rule from a pattern and replacement template.
-   Optionally takes a guard function."
+   Optionally takes a guard function. See also `rule` for a shorthand."
   ([rule-name pattern replacement]
    (check-suspicious-vars! pattern rule-name)
    {:name rule-name :pattern pattern :replacement replacement})
@@ -245,18 +245,18 @@
   (let [bindings (match-pattern (:pattern rule) expr)]
     (if bindings
       (if-let [guard (:guard rule)]
-        (let [ok? (try (guard bindings)
-                    (catch #?(:clj Exception :cljs :default) e
-                      (throw (ex-info (str "Guard function failed for rule "
-                                          (pr-str (:name rule)) ": "
-                                          #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
-                                     {:rule (:name rule) :expr expr :bindings bindings}
-                                     e))))]
-          (if ok? (substitute (:replacement rule) bindings) no-match))
+        (let [guard-passed? (try (guard bindings)
+                               (catch #?(:clj Exception :cljs :default) e
+                                 (throw (ex-info (str "Guard function failed for rule "
+                                                     (pr-str (:name rule)) ": "
+                                                     #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
+                                                {:rule (:name rule) :expr expr :bindings bindings}
+                                                e))))]
+          (if guard-passed? (substitute (:replacement rule) bindings) no-match))
         (substitute (:replacement rule) bindings))
       no-match)))
 
-(defn apply-rule
+(defn- apply-rule
   "Try to apply a single rule to an expression.
    Returns the rewritten expression, or nil if the rule doesn't match."
   [rule expr]
@@ -308,10 +308,10 @@
     (let [any-changed? (volatile! false)
           rewritten (with-meta
                       (into {} (map (fn [[k v]]
-                                      (let [[chk rk] (rewrite-once rules k)
-                                            [chv rv] (rewrite-once rules v)]
-                                        (when (or chk chv) (vreset! any-changed? true))
-                                        [rk rv]))
+                                      (let [[key-changed? new-key] (rewrite-once rules k)
+                                            [val-changed? new-val] (rewrite-once rules v)]
+                                        (when (or key-changed? val-changed?) (vreset! any-changed? true))
+                                        [new-key new-val]))
                                     expr))
                       (meta expr))
           result (apply-rules rules rewritten)]
@@ -344,14 +344,14 @@
         [false expr]
         [true result]))))
 
-(def ^:const default-max-iters
+(def ^:private ^:const default-max-iters
   "Default safety cap on rewrite iterations. This is a guard against
    non-terminating rule sets, not structural cycle detection. If a
    legitimate transformation needs more passes, pass a higher value
    as the max-iters argument."
   100)
 
-(def ^:const default-max-size
+(def ^:private ^:const default-max-size
   "M8: maximum expression tree size (node count) to prevent size-exploding rules."
   100000)
 
@@ -403,7 +403,7 @@
          expr
          (recur result (inc i)))))))
 
-(defn rewrite-once-top
+(defn- rewrite-once-top
   "Try rules at top level only, return first match or original."
   [rules expr]
   (let [result (apply-rules rules expr)]
@@ -414,7 +414,7 @@
 ;; ============================================================
 
 (defn rule
-  "Shorthand: (rule '(+ ?a 0) '?a)"
+  "Shorthand for `make-rule` with auto-generated name: (rule '(+ ?a 0) '?a)"
   ([pattern replacement]
    (make-rule (gensym "rule_") pattern replacement))
   ([pattern replacement guard]

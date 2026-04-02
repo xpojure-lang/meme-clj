@@ -7,9 +7,6 @@
             [meme.forms :as forms]
             [meme.scan.tokenizer :as tokenizer]))
 
-(defn- tokenize [s]
-  (tokenizer/tokenize s))
-
 ;; ---------------------------------------------------------------------------
 ;; Syntax-quote is parsed natively with meme rules inside.
 ;; ---------------------------------------------------------------------------
@@ -58,13 +55,13 @@
 
 (deftest comment-inside-reader-conditional
   (testing "#? with ; comment containing ) inside"
-    (let [tokens (tokenize "#?(:clj ; comment with )\n 1)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj ; comment with )\n 1)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with ; comment containing ] inside"
-    (let [tokens (tokenize "#?(:clj ; ] in comment\n x)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj ; ] in comment\n x)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#:ns{} with ; comment containing } inside — parses correctly"
-    (let [tokens (tokenize "#:user{:name ; } tricky\n \"x\"}")]
+    (let [tokens (tokenizer/tokenize "#:user{:name ; } tricky\n \"x\"}")]
       (is (= :namespaced-map-start (:type (first tokens)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -74,19 +71,19 @@
 
 (deftest char-literal-inside-reader-conditional
   (testing "#? with \\) char literal — passes through correctly"
-    (let [tokens (tokenize "#?(:clj \\) :cljs \\x)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj \\) :cljs \\x)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with \\( char literal — passes through correctly"
-    (let [tokens (tokenize "#?(:clj \\( :cljs nil)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj \\( :cljs nil)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with \\[ and \\] char literals"
-    (let [tokens (tokenize "#?(:clj [\\[ \\]] :cljs nil)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj [\\[ \\]] :cljs nil)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#? with \\{ and \\} char literals"
-    (let [tokens (tokenize "#?(:clj {\\{ \\}} :cljs nil)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj {\\{ \\}} :cljs nil)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   (testing "#:ns{} with \\} char literal — parses correctly"
-    (let [tokens (tokenize "#:user{:ch \\}}")]
+    (let [tokens (tokenizer/tokenize "#:user{:ch \\}}")]
       (is (= :namespaced-map-start (:type (first tokens))))))
   #?(:clj
      (testing "#? with bracket char literals parses to matched value"
@@ -105,7 +102,7 @@
       (is (instance? meme.forms.MemeUnquote (:form form)))
       (is (= 'foo (:form (:form form))))))
   (testing "` + ~ tokenize as separate prefix tokens"
-    (let [tokens (tokenize "`~foo")]
+    (let [tokens (tokenizer/tokenize "`~foo")]
       (is (= :syntax-quote (:type (first tokens))))
       (is (= :unquote (:type (second tokens)))))))
 
@@ -163,7 +160,7 @@
 
 (deftest backslash-terminates-symbol
   (testing "foo\\a tokenizes as symbol + char"
-    (let [tokens (tokenize "foo\\a")]
+    (let [tokens (tokenizer/tokenize "foo\\a")]
       (is (= 2 (count tokens)))
       (is (= :symbol (:type (first tokens))))
       (is (= "foo" (:value (first tokens))))
@@ -181,7 +178,7 @@
 
 (deftest syntax-quote-unquote-string
   (testing "`~\"foo\" starts with :syntax-quote prefix"
-    (let [tokens (tokenize "`~\"foo\"")]
+    (let [tokens (tokenizer/tokenize "`~\"foo\"")]
       (is (= :syntax-quote (:type (first tokens))))))
   (testing "`~\"foo\" produces MemeSyntaxQuote wrapping MemeUnquote of string"
     (let [form (first (core/meme->forms "`~\"foo\""))]
@@ -195,12 +192,12 @@
 
 (deftest unicode-octal-char-literals
   (testing "\\u0041 tokenizes as single char token"
-    (let [tokens (tokenize "\\u0041")]
+    (let [tokens (tokenizer/tokenize "\\u0041")]
       (is (= 1 (count tokens)))
       (is (= :char (:type (first tokens))))
       (is (= "\\u0041" (:value (first tokens))))))
   (testing "\\o101 tokenizes as single char token"
-    (let [tokens (tokenize "\\o101")]
+    (let [tokens (tokenizer/tokenize "\\o101")]
       (is (= 1 (count tokens)))
       (is (= :char (:type (first tokens))))
       (is (= "\\o101" (:value (first tokens))))))
@@ -229,11 +226,11 @@
                           #"expected octal digits"
                           (core/meme->forms "\\og"))))
   (testing "valid \\u0041 still works"
-    (is (= 1 (count (tokenize "\\u0041"))))
-    (is (= :char (:type (first (tokenize "\\u0041"))))))
+    (is (= 1 (count (tokenizer/tokenize "\\u0041"))))
+    (is (= :char (:type (first (tokenizer/tokenize "\\u0041"))))))
   (testing "valid \\o101 still works"
-    (is (= 1 (count (tokenize "\\o101"))))
-    (is (= :char (:type (first (tokenize "\\o101")))))))
+    (is (= 1 (count (tokenizer/tokenize "\\o101"))))
+    (is (= :char (:type (first (tokenizer/tokenize "\\o101")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Incomplete \uXX at EOF — malformed :char token instead of :incomplete.
@@ -323,18 +320,18 @@
 
 (deftest anon-fn-inside-reader-conditional
   (testing "#?(:clj #(inc(%)) :cljs identity) starts with reader-cond-start"
-    (let [tokens (tokenize "#?(:clj #(inc(%)) :cljs identity)")]
+    (let [tokens (tokenizer/tokenize "#?(:clj #(inc(%)) :cljs identity)")]
       (is (= :reader-cond-start (:type (first tokens))))))
   #?(:clj
      (testing "#?(:clj #(inc(%)) :cljs identity) parses without error"
        (is (some? (core/meme->forms "#?(:clj #(inc(%)) :cljs identity)")))))
   (testing "#?@(:clj [#(+(%1 %2))] :cljs [identity]) starts with reader-cond-start"
-    (let [tokens (tokenize "#?@(:clj [#(+(%1 %2))] :cljs [identity])")]
+    (let [tokens (tokenizer/tokenize "#?@(:clj [#(+(%1 %2))] :cljs [identity])")]
       (is (= :reader-cond-start (:type (first tokens)))))))
 
 (deftest anon-fn-inside-syntax-quote
   (testing "` prefix token appears"
-    (let [tokens (tokenize "`#(inc(%))")]
+    (let [tokens (tokenizer/tokenize "`#(inc(%))")]
       (is (= :syntax-quote (:type (first tokens))))))
   (testing "`#(inc(%)) parses without error"
     (is (some? (core/meme->forms "`#(inc(%))")))))
@@ -342,7 +339,7 @@
 #?(:clj
    (deftest anon-fn-inside-namespaced-map
      (testing "#:user{:f #(inc(%))} tokenizes with namespaced-map-start"
-       (let [tokens (tokenize "#:user{:f #(inc(%))}")]
+       (let [tokens (tokenizer/tokenize "#:user{:f #(inc(%))}")]
          (is (= :namespaced-map-start (:type (first tokens))))))
      (testing "#:user{:f #(inc(%))} parses without error"
        (is (some? (core/meme->forms "#:user{:f #(inc(%))}"))))))
@@ -385,15 +382,15 @@
 
 (deftest symbol-single-slash-only
   (testing "a/b is a single namespace-qualified symbol"
-    (let [tokens (tokenize "a/b")]
+    (let [tokens (tokenizer/tokenize "a/b")]
       (is (= 1 (count tokens)))
       (is (= "a/b" (:value (first tokens))))))
   (testing "a/b/c stops at first slash — two tokens"
-    (let [tokens (tokenize "a/b/c")]
+    (let [tokens (tokenizer/tokenize "a/b/c")]
       (is (= 2 (count tokens)))
       (is (= "a/b" (:value (first tokens))))))
   (testing "clojure.string/join — dots are fine, one slash"
-    (let [tokens (tokenize "clojure.string/join")]
+    (let [tokens (tokenizer/tokenize "clojure.string/join")]
       (is (= 1 (count tokens)))
       (is (= "clojure.string/join" (:value (first tokens)))))))
 
@@ -408,12 +405,12 @@
 
 (deftest namespace-slash-symbol
   (testing "clojure.core// tokenizes as one symbol"
-    (let [tokens (tokenize "clojure.core//")]
+    (let [tokens (tokenizer/tokenize "clojure.core//")]
       (is (= 1 (count tokens)))
       (is (= :symbol (:type (first tokens))))
       (is (= "clojure.core//" (:value (first tokens))))))
   (testing "clojure.core// followed by space and form"
-    (let [tokens (tokenize "clojure.core// foo")]
+    (let [tokens (tokenizer/tokenize "clojure.core// foo")]
       (is (= 2 (count tokens)))
       (is (= "clojure.core//" (:value (first tokens))))
       (is (= "foo" (:value (second tokens))))))
@@ -432,19 +429,19 @@
 
 (deftest syntax-quote-char-literal
   (testing "`\\a starts with :syntax-quote prefix"
-    (is (= :syntax-quote (:type (first (tokenize "`\\a"))))))
+    (is (= :syntax-quote (:type (first (tokenizer/tokenize "`\\a"))))))
   (testing "`\\a parses without error"
     (is (some? (core/meme->forms "`\\a")))))
 
 (deftest syntax-quote-string-literal
   (testing "`\"foo\" starts with :syntax-quote prefix"
-    (is (= :syntax-quote (:type (first (tokenize "`\"foo\""))))))
+    (is (= :syntax-quote (:type (first (tokenizer/tokenize "`\"foo\""))))))
   (testing "`\"foo\" parses without error"
     (is (some? (core/meme->forms "`\"foo\"")))))
 
 (deftest syntax-quote-unquote-char-literal
   (testing "`~\\a starts with :syntax-quote prefix"
-    (is (= :syntax-quote (:type (first (tokenize "`~\\a"))))))
+    (is (= :syntax-quote (:type (first (tokenizer/tokenize "`~\\a"))))))
   (testing "`~\\a produces MemeSyntaxQuote wrapping MemeUnquote of char"
     (let [form (first (core/meme->forms "`~\\a"))]
       (is (instance? meme.forms.MemeSyntaxQuote form))
@@ -462,22 +459,22 @@
 
 (deftest symbolic-value-tokenization
   (testing "##Inf tokenizes as :number"
-    (let [tokens (tokenize "##Inf")]
+    (let [tokens (tokenizer/tokenize "##Inf")]
       (is (= 1 (count tokens)))
       (is (= :number (:type (first tokens))))
       (is (= "##Inf" (:value (first tokens))))))
   (testing "##-Inf tokenizes as :number"
-    (let [tokens (tokenize "##-Inf")]
+    (let [tokens (tokenizer/tokenize "##-Inf")]
       (is (= 1 (count tokens)))
       (is (= :number (:type (first tokens))))
       (is (= "##-Inf" (:value (first tokens))))))
   (testing "##NaN tokenizes as :number"
-    (let [tokens (tokenize "##NaN")]
+    (let [tokens (tokenizer/tokenize "##NaN")]
       (is (= 1 (count tokens)))
       (is (= :number (:type (first tokens))))
       (is (= "##NaN" (:value (first tokens))))))
   (testing "##Inf does not eat following form"
-    (let [tokens (tokenize "##Inf 42")]
+    (let [tokens (tokenizer/tokenize "##Inf 42")]
       (is (= 2 (count tokens)))
       (is (= "##Inf" (:value (first tokens))))
       (is (= "42" (:value (second tokens)))))))
@@ -657,7 +654,7 @@
 
 (deftest auto-resolve-namespaced-map
   (testing "#::{:a 1} tokenizes with correct prefix"
-    (let [tokens (tokenize "#::{:a 1}")]
+    (let [tokens (tokenizer/tokenize "#::{:a 1}")]
       (is (= :namespaced-map-start (:type (first tokens))))
       (is (= "#::" (:value (first tokens))))))
   #?(:clj
@@ -679,9 +676,9 @@
                           #"(?i)invalid symbolic value"
                           (core/meme->forms "##Bar"))))
   (testing "valid symbolic values still work"
-    (is (= 1 (count (tokenize "##Inf"))))
-    (is (= 1 (count (tokenize "##-Inf"))))
-    (is (= 1 (count (tokenize "##NaN"))))))
+    (is (= 1 (count (tokenizer/tokenize "##Inf"))))
+    (is (= 1 (count (tokenizer/tokenize "##-Inf"))))
+    (is (= 1 (count (tokenizer/tokenize "##NaN"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L5/L6/L7: Null byte, zero-width space, RTL override in symbols.
@@ -709,19 +706,19 @@
 
 (deftest number-suffix-terminates
   (testing "1N tokenizes as one :number token"
-    (let [tokens (tokenize "1N")]
+    (let [tokens (tokenizer/tokenize "1N")]
       (is (= 1 (count tokens)))
       (is (= "1N" (:value (first tokens))))))
   (testing "1N.5 tokenizes as two tokens (number + number)"
-    (let [tokens (tokenize "1N.5")]
+    (let [tokens (tokenizer/tokenize "1N.5")]
       (is (= 2 (count tokens)))
       (is (= "1N" (:value (first tokens))))))
   (testing "1M.5 tokenizes as two tokens"
-    (let [tokens (tokenize "1M.5")]
+    (let [tokens (tokenizer/tokenize "1M.5")]
       (is (= 2 (count tokens)))
       (is (= "1M" (:value (first tokens))))))
   (testing "1M still works as single token"
-    (let [tokens (tokenize "1M")]
+    (let [tokens (tokenizer/tokenize "1M")]
       (is (= 1 (count tokens)))
       (is (= "1M" (:value (first tokens)))))))
 
@@ -732,12 +729,12 @@
 
 (deftest bare-cr-line-tracking
   (testing "bare \\r increments line counter"
-    (let [tokens (tokenize (str "a" \return "b"))]
+    (let [tokens (tokenizer/tokenize (str "a" \return "b"))]
       (is (= 2 (count tokens)))
       (is (= 1 (:line (first tokens))))
       (is (= 2 (:line (second tokens))))))
   (testing "\\r\\n (CRLF) counts as one line break"
-    (let [tokens (tokenize (str "a" \return \newline "b"))]
+    (let [tokens (tokenizer/tokenize (str "a" \return \newline "b"))]
       (is (= 2 (count tokens)))
       (is (= 1 (:line (first tokens))))
       (is (= 2 (:line (second tokens)))))))

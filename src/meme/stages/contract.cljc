@@ -31,7 +31,7 @@
 ;; Token specs
 ;; ---------------------------------------------------------------------------
 
-(def token-types
+(def ^:private token-types
   "All token types emitted by the meme tokenizer."
   #{:symbol :number :string :keyword :char :regex
     :open-paren :close-paren :open-bracket :close-bracket

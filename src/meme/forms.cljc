@@ -131,9 +131,16 @@
 ;; Centralizing the set here prevents drift between modules.
 ;; ---------------------------------------------------------------------------
 
+(def ^:const max-parse-depth
+  "Maximum nesting depth for both the recursive-descent parser and the
+   rewrite tree builder. Guards against stack overflow on deeply nested input."
+  512)
+
 (def internal-meta-keys
   "Metadata keys used internally by the meme pipeline.
-   Excluded when checking for user-visible metadata."
+   Excluded when checking for user-visible metadata.
+   Both :col (meme tokenizer) and :column (Clojure reader) are included
+   so stripping works regardless of which reader produced the metadata."
   #{:line :col :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain :meme/bare-percent})
 
 (def notation-meta-keys

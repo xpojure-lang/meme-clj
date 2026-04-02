@@ -69,14 +69,13 @@
       (is (= "f(x y)" ((:to-meme l) "(f x y)"))))))
 
 ;; ============================================================
-;; check-support!
+;; check-support
 ;; ============================================================
 
 (deftest check-support-passes-for-all
   (doseq [[lang-name l] all-langs
           cmd (filter keyword? (keys l))]
-    (lang/check-support! l lang-name cmd)
-    (is true)))
+    (lang/check-support l lang-name cmd)))
 
 (deftest check-support-passes-for-repl
   (testing "meme-classic supports :repl"
@@ -87,7 +86,7 @@
 (deftest check-support-fails-for-missing
   (testing "meme-trs has no :repl"
     (is (thrown-with-msg? Exception #"does not support :repl"
-          (lang/check-support! (:meme-trs all-langs) :meme-trs :repl)))))
+          (lang/check-support (:meme-trs all-langs) :meme-trs :repl)))))
 
 ;; ============================================================
 ;; All langs agree on basic to-clj output

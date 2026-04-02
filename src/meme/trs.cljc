@@ -33,7 +33,7 @@
 ;; Stage 1: Nest — group balanced delimiters
 ;; ============================================================
 
-(defn nest-tokens
+(defn- nest-tokens
   "Group balanced delimiters into nested vectors.
    Each delimited group becomes [opener-tok ...children closer-tok].
    Children may themselves be nested groups or atom tokens.
@@ -108,7 +108,7 @@
     :var-quote :discard :tagged-literal :reader-cond-start
     :namespaced-map-start})
 
-(defn valid-head?
+(defn- valid-head?
   "Can this node be the head of an M-expression call?"
   [node]
   (if (map? node)
@@ -210,12 +210,12 @@
 ;; Rules (pure data)
 ;; ============================================================
 
-(defn rule
+(defn- rule
   "Create a rewrite rule from pattern and replacement data."
   [pattern replacement]
   {:pattern pattern :replacement replacement})
 
-(def m-call-rule
+(def ^:private m-call-rule
   "M-expression call: valid head followed by adjacent paren-group.
    head(args...) → (head args...)
    [x](args...)  → ([x] args...)"
@@ -230,7 +230,10 @@
 ;; Rewrite engine
 ;; ============================================================
 
-(defn rewrite-level
+(def ^:private ^:const max-retries-per-position 100)
+(def ^:private ^:const max-total-rewrites 10000)
+
+(defn- rewrite-level
   "Rewrite one level of nested children.
    Recurses into sub-groups first (bottom-up), then scans left-to-right
    applying rules at this level. After a match, re-checks the same position
@@ -257,8 +260,8 @@
     ;; Scan left-to-right, apply first matching rule.
     ;; After a successful match, re-check the same position — the replacement
     ;; may produce a new head for a chained call (e.g., f(x)(y) → ((f x) y)).
-    ;; Two-tier safety: per-position cap (100) catches local loops,
-    ;; global cap (10000) catches aggregate runaway across all positions.
+    ;; Two-tier safety: per-position cap catches local loops,
+    ;; global cap catches aggregate runaway across all positions.
     (loop [i 0
            children children
            retries 0
@@ -270,10 +273,10 @@
                               (assoc m :rule r)))
                           rules)]
           (if match
-            (do (when (>= retries 100)
+            (do (when (>= retries max-retries-per-position)
                   (throw (ex-info "TRS rewrite loop did not terminate at position"
                                   {:position i :retries retries})))
-                (when (>= total 10000)
+                (when (>= total max-total-rewrites)
                   (throw (ex-info "TRS rewrite exceeded global safety limit"
                                   {:position i :total total})))
                 (let [result (emit-replacement (:replacement (:rule match)) (:bindings match))
@@ -288,7 +291,7 @@
 ;; Default rule set
 ;; ============================================================
 
-(def default-rules
+(def ^:private default-rules
   "Default rule set for M-expression → S-expression rewriting."
   [m-call-rule])
 
@@ -310,14 +313,14 @@
 ;; Public API
 ;; ============================================================
 
-(defn rewrite-meme->sexp
+(defn- rewrite-meme->sexp
   "Rewrite a meme token stream to S-expression token structure.
    Nest → rewrite → flatten."
   ([tokens] (rewrite-meme->sexp tokens default-rules))
   ([tokens rules]
    (->> tokens nest-tokens (#(rewrite-level rules %)) flatten-nested)))
 
-(defn tokens->text
+(defn- tokens->text
   "Reconstruct source text from a token vector, preserving whitespace."
   [tokens]
   (apply str
@@ -327,7 +330,7 @@
                 [(:value tok)]))
             tokens)))
 
-(defn tokenize-and-rewrite
+(defn- tokenize-and-rewrite
   "Tokenize meme source and rewrite to S-expression token structure."
   [source]
   (let [tokens (tokenizer/attach-whitespace (tokenizer/tokenize source) source)]

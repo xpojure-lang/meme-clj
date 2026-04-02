@@ -12,7 +12,7 @@
 
    layout renders a Doc tree to a string at a given page width.
    Use ##Inf for single-line (flat) rendering."
-  (:refer-clojure :exclude [cat]))
+)
 
 ;; ---------------------------------------------------------------------------
 ;; Doc types — Lindig's strict-language variant of Wadler's algebra
@@ -49,18 +49,12 @@
   [doc]
   (when doc (->DocGroup doc)))
 
-(defn ^:no-doc if-break
-  "Render break-doc when broken, flat-doc when flat.
-   Currently unused by the printer — available for future use or extensions."
-  [break-doc flat-doc]
-  (->DocIfBreak break-doc flat-doc))
-
-(defn cat
+(defn doc-cat
   "Concatenate doc nodes. Nils are ignored."
   ([] nil)
   ([a] a)
   ([a b] (cond (nil? a) b (nil? b) a :else (->DocCat a b)))
-  ([a b & more] (reduce cat (cat a b) more)))
+  ([a b & more] (reduce doc-cat (doc-cat a b) more)))
 
 ;; ---------------------------------------------------------------------------
 ;; Portable string builder
@@ -130,6 +124,7 @@
   "Render a Doc tree as a string at the given page width.
    Use ##Inf for flat (single-line) rendering."
   [doc width]
+  {:pre [(or (= ##Inf width) (pos? width))]}
   (let [sb (make-sb)]
     (loop [col 0
            work (list [0 :break doc])]

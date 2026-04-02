@@ -7,6 +7,7 @@
 
 ;; Access private fns via var on JVM/Babashka.
 #?(:clj (def ^:private input-state meme.runtime.repl/input-state))
+;; read-input is private; deref the var to access it for testing.
 #?(:clj (def ^:private read-input @#'meme.runtime.repl/read-input))
 
 #?(:clj

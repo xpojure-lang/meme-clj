@@ -2,7 +2,7 @@
   "Tests for the token-stream term rewriting system."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.trs :as trs]
-            [meme.scan.tokenizer :as tok]
+            [meme.scan.tokenizer :as tokenizer]
             [meme.lang :as lang]))
 
 ;; ---------------------------------------------------------------------------
@@ -135,25 +135,25 @@
 
 (deftest nest-tokens-unclosed-delimiter
   (testing "unclosed paren throws"
-    (let [tokens (tok/tokenize "f(x")]
+    (let [tokens (tokenizer/tokenize "f(x")]
       (is (thrown-with-msg?
            #?(:clj Exception :cljs js/Error)
            #"Unclosed delimiter"
-           (trs/nest-tokens tokens)))))
+           (#'trs/nest-tokens tokens)))))
   (testing "unclosed bracket throws"
-    (let [tokens (tok/tokenize "[1 2")]
+    (let [tokens (tokenizer/tokenize "[1 2")]
       (is (thrown-with-msg?
            #?(:clj Exception :cljs js/Error)
            #"Unclosed delimiter"
-           (trs/nest-tokens tokens))))))
+           (#'trs/nest-tokens tokens))))))
 
 (deftest nest-tokens-extra-closer
   (testing "unmatched closer throws"
-    (let [tokens (tok/tokenize "x)")]
+    (let [tokens (tokenizer/tokenize "x)")]
       (is (thrown-with-msg?
            #?(:clj Exception :cljs js/Error)
            #"Unexpected closing delimiter"
-           (trs/nest-tokens tokens))))))
+           (#'trs/nest-tokens tokens))))))
 
 ;; ---------------------------------------------------------------------------
 ;; C2: rewrite-level must check last element as potential match start.

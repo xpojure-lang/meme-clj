@@ -45,8 +45,11 @@
      :rewrite-rules     — vector of rewrite rules (applied after expansion)
      :rewrite-max-iters — max rewrite iterations (default: 100)
      :prelude           — vector of forms to eval before user code"
-  ([s] (run-string s {}))
+  ([s]
+   {:pre [(string? s)]}
+   (run-string s {}))
   ([s eval-fn-or-opts]
+   {:pre [(string? s)]}
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})
          eval-fn (or (:eval opts)
                      #?(:clj eval
@@ -56,11 +59,8 @@
      ;; matching the user-code path — raw parsed forms contain AST nodes)
      ;; RT3-F18: provide full context map so stage contract validation succeeds
      (when-let [prelude (seq (:prelude opts))]
-       (let [expanded (:forms (stages/step-expand-syntax-quotes
-                                {:source "" :raw-tokens [] :tokens []
-                                 :forms (vec prelude) :opts reader-opts}))]
-         (doseq [form expanded]
-           (eval-fn form))))
+       (doseq [form (stages/expand-forms prelude reader-opts)]
+         (eval-fn form)))
      (let [forms (:forms (-> {:source s :opts reader-opts}
                              step-strip-bom
                              step-strip-shebang

@@ -12,7 +12,7 @@
 ;; Comment extraction from :ws metadata
 ;; ---------------------------------------------------------------------------
 
-(defn extract-comments
+(defn- extract-comments
   "Extract comment lines from a :ws metadata string.
    Returns a vector of trimmed comment strings, or nil."
   [ws]
@@ -45,7 +45,7 @@
    Each comment line is on its own line."
   [comments]
   (reduce (fn [acc c]
-            (render/cat acc (render/text c) render/hardline))
+            (render/doc-cat acc (render/text c) render/hardline))
           nil
           comments))
 
@@ -109,11 +109,6 @@
 
 (def ^:private doc-open-paren  (render/text "("))
 (def ^:private doc-close-paren (render/text ")"))
-(def ^:private doc-open-bracket  (render/text "["))
-(def ^:private doc-close-bracket (render/text "]"))
-(def ^:private doc-open-brace  (render/text "{"))
-(def ^:private doc-close-brace (render/text "}"))
-(def ^:private doc-open-set    (render/text "#{"))
 (def ^:private doc-space       (render/text " "))
 (def ^:private doc-caret       (render/text "^"))
 (def ^:private doc-at          (render/text "@"))
@@ -151,7 +146,7 @@
   "Interleave docs with separator, returning concatenated Doc."
   [sep docs]
   (when (seq docs)
-    (reduce (fn [acc d] (render/cat acc sep d)) (first docs) (rest docs))))
+    (reduce (fn [acc d] (render/doc-cat acc sep d)) (first docs) (rest docs))))
 
 ;; ---------------------------------------------------------------------------
 ;; Form → Doc — single source of truth for notation AND formatting
@@ -174,7 +169,7 @@
          (symbol? (:tag m)))
     (render/text (str "^" (:tag m)))
     :else
-    (render/cat doc-caret (to-doc-form m mode))))
+    (render/doc-cat doc-caret (to-doc-form m mode))))
 
 (defn- call-doc
   "Build Doc for a call form. Handles head-line-args and meme/clj modes."
@@ -184,38 +179,38 @@
     (if (= mode :clj)
       ;; Clojure mode: (head arg1 arg2)
       (if (empty? arg-docs)
-        (render/group (render/cat doc-open-paren head-doc doc-close-paren))
+        (render/group (render/doc-cat doc-open-paren head-doc doc-close-paren))
         (render/group
-         (render/cat
+         (render/doc-cat
           doc-open-paren head-doc
-          (render/nest 2 (render/cat render/line (intersperse render/line arg-docs)))
+          (render/nest 2 (render/doc-cat render/line (intersperse render/line arg-docs)))
           doc-close-paren)))
       ;; Meme mode: head(arg1 arg2) with head-line-args
       (let [n-head (get head-line-args head)]
           (cond
             ;; Zero args: head()
             (empty? arg-docs)
-            (render/group (render/cat head-doc doc-open-paren doc-close-paren))
+            (render/group (render/doc-cat head-doc doc-open-paren doc-close-paren))
 
             ;; Head-line args: keep n args on head line, rest in body
             (and n-head (pos? n-head) (> (count arg-docs) n-head))
-            (let [hl (subvec arg-docs 0 n-head)
+            (let [head-docs (subvec arg-docs 0 n-head)
                   body (subvec arg-docs n-head)]
               (render/group
-               (render/cat
+               (render/doc-cat
                 head-doc doc-open-paren
                 (render/nest 2
-                             (render/cat
-                              (render/group (render/cat render/line0 (intersperse render/line hl)))
-                              (reduce (fn [acc d] (render/cat acc render/line d)) nil body)))
+                             (render/doc-cat
+                              (render/group (render/doc-cat render/line0 (intersperse render/line head-docs)))
+                              (reduce (fn [acc d] (render/doc-cat acc render/line d)) nil body)))
                 doc-close-paren)))
 
             ;; Default: all args in body
             :else
             (render/group
-             (render/cat
+             (render/doc-cat
               head-doc doc-open-paren
-              (render/nest 2 (render/cat render/line0 (intersperse render/line arg-docs)))
+              (render/nest 2 (render/doc-cat render/line0 (intersperse render/line arg-docs)))
               doc-close-paren)))))))
 
 (defn- collection-doc
@@ -225,9 +220,9 @@
     (render/text (str open close))
     (let [child-docs (mapv #(to-doc % mode) children)]
       (render/group
-       (render/cat
+       (render/doc-cat
         (render/text open)
-        (render/nest 2 (render/cat render/line0 (intersperse render/line child-docs)))
+        (render/nest 2 (render/doc-cat render/line0 (intersperse render/line child-docs)))
         render/line0
         (render/text close))))))
 
@@ -237,12 +232,12 @@
   (if (empty? entries)
     (render/text (str open close))
     (let [pair-docs (mapv (fn [[k v]]
-                            (render/cat (to-doc k mode) doc-space (to-doc v mode)))
+                            (render/doc-cat (to-doc k mode) doc-space (to-doc v mode)))
                           entries)]
       (render/group
-       (render/cat
+       (render/doc-cat
         (render/text open)
-        (render/nest 2 (render/cat render/line0 (intersperse render/line pair-docs)))
+        (render/nest 2 (render/doc-cat render/line0 (intersperse render/line pair-docs)))
         render/line0
         (render/text close))))))
 
@@ -263,10 +258,10 @@
                         (mapv #(emit-meta-prefix-doc % mode) (reverse chain))
                         [(emit-meta-prefix-doc (forms/strip-internal-meta (meta form)) mode)])
           ;; L12: compose prefix Docs with spaces, then the form Doc
-          prefix-doc (reduce (fn [acc d] (render/cat acc doc-space d))
+          prefix-doc (reduce (fn [acc d] (render/doc-cat acc doc-space d))
                              (first prefix-docs)
                              (rest prefix-docs))]
-      (render/cat prefix-doc doc-space (to-doc-form stripped mode)))
+      (render/doc-cat prefix-doc doc-space (to-doc-form stripped mode)))
 
     ;; Raw value wrapper — emit original source text
     (forms/raw? form) (render/text (:raw form))
@@ -307,15 +302,15 @@
       (cond
         ;; @deref sugar
         (and (= head 'clojure.core/deref) (:meme/sugar (meta form)))
-        (render/cat doc-at (to-doc (second form) mode))
+        (render/doc-cat doc-at (to-doc (second form) mode))
 
         ;; 'quote sugar
         (and (= head 'quote) (:meme/sugar (meta form)))
-        (render/cat doc-quote (to-doc (second form) mode))
+        (render/doc-cat doc-quote (to-doc (second form) mode))
 
         ;; #'var sugar
         (and (= head 'var) (:meme/sugar (meta form)))
-        (render/cat doc-var-quote (to-doc (second form) mode))
+        (render/doc-cat doc-var-quote (to-doc (second form) mode))
 
         ;; Regular call — bounded realization for safety against infinite seqs
         :else
@@ -328,13 +323,13 @@
     ;; Syntax-quote / unquote / unquote-splicing AST nodes
     ;; Must be before map? (defrecords satisfy map?)
     (forms/syntax-quote? form)
-    (render/cat doc-backtick (to-doc (:form form) mode))
+    (render/doc-cat doc-backtick (to-doc (:form form) mode))
 
     (forms/unquote? form)
-    (render/cat doc-unquote (to-doc (:form form) mode))
+    (render/doc-cat doc-unquote (to-doc (:form form) mode))
 
     (forms/unquote-splicing? form)
-    (render/cat doc-unquote-splicing (to-doc (:form form) mode))
+    (render/doc-cat doc-unquote-splicing (to-doc (:form form) mode))
 
     ;; Reader conditional — must be before map?
     (forms/meme-reader-conditional? form)
@@ -375,7 +370,7 @@
     ;; Tagged literals need Doc-tree recursion, so handle separately.
     #?@(:clj [(tagged-literal? form)
               (let [^clojure.lang.TaggedLiteral tl form]
-                (render/cat (render/text (str "#" (.-tag tl) " ")) (to-doc (.-form tl) mode)))])
+                (render/doc-cat (render/text (str "#" (.-tag tl) " ")) (to-doc (.-form tl) mode)))])
 
     :else
     (if-let [s (values/emit-value-str form pr-str)]
@@ -392,5 +387,5 @@
    (let [doc (to-doc-form form mode)
          comments (form-comments form)]
      (if comments
-       (render/cat (comment-doc comments) doc)
+       (render/doc-cat (comment-doc comments) doc)
        doc))))

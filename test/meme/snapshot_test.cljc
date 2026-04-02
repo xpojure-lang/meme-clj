@@ -7,9 +7,6 @@
             [meme.forms :as forms]
             [meme.scan.tokenizer :as tokenizer]))
 
-(defn- tokenize [s]
-  (tokenizer/tokenize s))
-
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
@@ -20,7 +17,7 @@
   (select-keys tok [:type :value :line :col]))
 
 (defn- tokens-for [s]
-  (mapv tok-summary (tokenize s)))
+  (mapv tok-summary (tokenizer/tokenize s)))
 
 (defn- forms-for [s]
   (core/meme->forms s))

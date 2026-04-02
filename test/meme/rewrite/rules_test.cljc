@@ -5,7 +5,6 @@
             [meme.rewrite :as rw]
             [meme.rewrite.rules :as rules]
             [meme.rewrite.emit :as emit]
-            [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]))
 
 ;; ============================================================

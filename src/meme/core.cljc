@@ -30,21 +30,26 @@
                         evaluating. Default: evaluate for current platform.
    Note: returns only parsed forms. Use stages/run when you need
    access to intermediate state (raw tokens, tokens, or forms)."
-  ([s] (:forms (stages/run s)))
-  ([s opts] (:forms (stages/run s opts))))
+  ([s] (meme->forms s nil))
+  ([s opts]
+   {:pre [(string? s)]}
+   (:forms (stages/run s opts))))
 
 (defn forms->meme
   "Print Clojure forms as meme source string (single-line per form).
    Takes a SEQUENCE of forms (vector or seq), not a single form.
    To print a single form, wrap it: (forms->meme [my-form])."
   [forms]
+  {:pre [(sequential? forms)]}
   (fmt-flat/format-forms forms))
 
 (defn format-meme
   "Format Clojure forms as canonical meme source string (multi-line, indented).
    opts: {:width 80}"
-  ([forms] (fmt-canon/format-forms forms))
-  ([forms opts] (fmt-canon/format-forms forms opts)))
+  ([forms] (format-meme forms nil))
+  ([forms opts]
+   {:pre [(sequential? forms)]}
+   (fmt-canon/format-forms forms opts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Form-to-text track
@@ -64,6 +69,7 @@
      "Read Clojure source string, return a vector of forms.
      JVM/Babashka only — Clojure's reader is needed for full form support."
      [clj-src]
+     {:pre [(string? clj-src)]}
      (binding [*read-eval* false]
        (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))]
          (loop [forms []]
@@ -82,14 +88,17 @@
 (defn meme->clj
   "Convert meme source string to Clojure source string.
    opts map: same as meme->forms (e.g. :resolve-keyword)."
-  ([meme-src] (forms->clj (meme->forms meme-src)))
-  ([meme-src opts] (forms->clj (meme->forms meme-src opts))))
+  ([meme-src] (meme->clj meme-src nil))
+  ([meme-src opts]
+   {:pre [(string? meme-src)]}
+   (forms->clj (meme->forms meme-src opts))))
 
 #?(:clj
    (defn clj->meme
      "Convert Clojure source string to meme source string.
      JVM/Babashka only."
      [clj-src]
+     {:pre [(string? clj-src)]}
      (forms->meme (clj->forms clj-src))))
 
 ;; RT3-F40: expose run-stages in public API (documented in api.md but was missing)

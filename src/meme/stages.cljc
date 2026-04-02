@@ -101,6 +101,14 @@
       result)
     ctx))
 
+(defn expand-forms
+  "Expand syntax-quote AST nodes in a seq of forms. Convenience wrapper
+   around step-expand-syntax-quotes for callers that don't need the
+   full pipeline context map."
+  [forms opts]
+  (:forms (step-expand-syntax-quotes
+            {:source "" :raw-tokens [] :tokens [] :forms (vec forms) :opts opts})))
+
 ;; ---------------------------------------------------------------------------
 ;; Pipeline composition
 ;; ---------------------------------------------------------------------------

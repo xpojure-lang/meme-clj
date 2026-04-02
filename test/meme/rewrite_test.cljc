@@ -68,13 +68,13 @@
 (deftest apply-rule-test
   (testing "identity-plus rule"
     (let [r (rw/rule '(+ ?a 0) '?a)]
-      (is (= '(* x y) (rw/apply-rule r '(+ (* x y) 0))))))
+      (is (= '(* x y) (#'rw/apply-rule r '(+ (* x y) 0))))))
   (testing "rule doesn't match"
     (let [r (rw/rule '(* ?a 1) '?a)]
-      (is (nil? (rw/apply-rule r '(+ x 1))))))
+      (is (nil? (#'rw/apply-rule r '(+ x 1))))))
   (testing "swap rule"
     (let [r (rw/rule '(swap ?x ?y) '(swap ?y ?x))]
-      (is (= '(swap b a) (rw/apply-rule r '(swap a b)))))))
+      (is (= '(swap b a) (#'rw/apply-rule r '(swap a b)))))))
 
 ;; ============================================================
 ;; Rewriting to Fixed Point
@@ -195,11 +195,11 @@
                         (fn [bindings] (and (number? (get bindings 'x))
                                             (pos? (get bindings 'x)))))]
     (testing "guard passes"
-      (is (= 'positive (rw/apply-rule r 42))))
+      (is (= 'positive (#'rw/apply-rule r 42))))
     (testing "guard fails on negative"
-      (is (nil? (rw/apply-rule r -1))))
+      (is (nil? (#'rw/apply-rule r -1))))
     (testing "guard fails on symbol"
-      (is (nil? (rw/apply-rule r 'x))))))
+      (is (nil? (#'rw/apply-rule r 'x))))))
 
 ;; ============================================================
 ;; Cycle Detection

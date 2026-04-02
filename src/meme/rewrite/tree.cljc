@@ -16,7 +16,7 @@
             [meme.rewrite.rules :as rules]))
 
 (def ^:private tree-discard-sentinel ::discarded)
-(def ^:private ^:const max-depth 512)
+(def ^:private max-depth forms/max-parse-depth)
 (def ^:private ^:dynamic *depth* nil)
 
 ;; ============================================================
@@ -105,7 +105,7 @@
     ;; Not a call — just the atom
     [head pos]))
 
-(defn build-tree
+(defn- build-tree
   "Build a tagged tree node from tokens starting at pos.
    Returns [node new-pos]. When *depth* is bound (via tokens->tree),
    tracks recursion depth and throws at max-depth (512)."
@@ -230,7 +230,7 @@
     (finally
       (when *depth* (vswap! *depth* dec)))))
 
-(defn tokens->tree
+(defn- tokens->tree
   "Convert a flat token vector to a tagged tree.
    Returns a vector of top-level forms."
   [tokens]
