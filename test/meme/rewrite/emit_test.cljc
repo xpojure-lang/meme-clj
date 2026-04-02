@@ -1,6 +1,7 @@
 (ns meme.rewrite.emit-test
   "Tests for meme.rewrite.emit: serializes m-call tagged trees to meme text."
   (:require [clojure.test :refer [deftest is testing]]
+            [meme.forms :as forms]
             [meme.rewrite.emit :as emit]))
 
 ;; ---------------------------------------------------------------------------
@@ -88,3 +89,22 @@
            (emit/emit-forms ['(m-call f x) '(m-call g y)]))))
   (testing "empty input"
     (is (= "" (emit/emit-forms [])))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: emit handles AST node types instead of falling through to pr-str.
+;; Bug: MemeRaw, MemeAutoKeyword, MemeSyntaxQuote etc. hit the :else branch and
+;; were rendered as #meme.forms.MemeRaw{:value ...} — garbage output.
+;; Fix: explicit handlers unwrap AST nodes before the pr-str fallback.
+;; ---------------------------------------------------------------------------
+
+(deftest emit-ast-node-types
+  (testing "MemeRaw is unwrapped to its value"
+    (is (= "255" (emit/emit (forms/->MemeRaw 255 "0xFF")))))
+  (testing "MemeAutoKeyword emits raw text"
+    (is (= "::foo" (emit/emit (forms/->MemeAutoKeyword "::foo")))))
+  (testing "MemeSyntaxQuote emits with backtick"
+    (is (= "`x" (emit/emit (forms/->MemeSyntaxQuote 'x)))))
+  (testing "MemeUnquote emits with ~"
+    (is (= "~x" (emit/emit (forms/->MemeUnquote 'x)))))
+  (testing "MemeUnquoteSplicing emits with ~@"
+    (is (= "~@xs" (emit/emit (forms/->MemeUnquoteSplicing 'xs))))))

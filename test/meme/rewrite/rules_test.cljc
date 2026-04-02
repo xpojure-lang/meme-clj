@@ -103,3 +103,27 @@
             (str "divergence for " label
                  ": printer=" (pr-str printer-output)
                  " rules=" (pr-str rule-output)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: s->m-rules must tag nil/true/false-headed lists as m-call.
+;; Bug: guard (and (or (symbol? f) (keyword? f)) ...) excluded nil/true/false.
+;; Fix: extended guard to accept nil?, true?, false?.
+;; ---------------------------------------------------------------------------
+
+(deftest s->m-rules-non-symbol-heads
+  (testing "nil-headed list is tagged as m-call"
+    (let [result (rw/rewrite rules/s->m-rules '(nil 1 2))]
+      (is (= '(m-call nil 1 2) result))))
+  (testing "true-headed list is tagged as m-call"
+    (let [result (rw/rewrite rules/s->m-rules '(true :a))]
+      (is (= '(m-call true :a) result))))
+  (testing "false-headed list is tagged as m-call"
+    (let [result (rw/rewrite rules/s->m-rules '(false :b))]
+      (is (= '(m-call false :b) result))))
+  (testing "number-headed list is NOT tagged (data, not a call)"
+    (let [result (rw/rewrite rules/s->m-rules '(42 x y))]
+      (is (= '(42 x y) result)
+          "number heads remain plain lists — they are data, not calls")))
+  (testing "m-call itself is never re-tagged"
+    (let [result (rw/rewrite rules/s->m-rules '(m-call f x))]
+      (is (= '(m-call f x) result)))))

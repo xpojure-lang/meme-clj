@@ -327,3 +327,31 @@
       ;; resolver(x#) → my.ns/x# → sq-gensym checks if name ends in # → yes → gensym
       (is (re-find #"__auto__$" (name (second expanded)))
           "gensym should still work with a resolver"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: MemeReaderConditional must survive expand-syntax-quotes.
+;; Bug: on CLJS, MemeReaderConditional is a defrecord satisfying map?, so
+;; expand-syntax-quotes destructured it into a plain map {form: ... :splicing ...}.
+;; Fix: check meme-reader-conditional? before map? in both expand-sq and
+;; expand-syntax-quotes.
+;; ---------------------------------------------------------------------------
+
+(deftest reader-conditional-survives-expansion
+  (testing "reader conditional with :read-cond :preserve roundtrips through expander"
+    (let [forms (core/meme->forms "#?(:clj 1 :cljs 2)" {:read-cond :preserve})
+          expanded (expander/expand-forms forms)]
+      (is (= 1 (count expanded)))
+      (is (forms/meme-reader-conditional? (first expanded))
+          "reader conditional should survive expand-forms as its original type")))
+  (testing "reader conditional inside a list survives expansion"
+    (let [forms (core/meme->forms "f(#?(:clj 1 :cljs 2))" {:read-cond :preserve})
+          expanded (expander/expand-forms forms)
+          inner (second (first expanded))]
+      (is (forms/meme-reader-conditional? inner)
+          "nested reader conditional should survive expand-forms")))
+  (testing "reader conditional inside syntax-quote survives expand-sq"
+    ;; `#?(:clj x :cljs y) — the reader conditional inside backtick
+    (let [forms (core/meme->forms "`#?(:clj x :cljs y)" {:read-cond :preserve})
+          expanded (expander/expand-forms forms)]
+      ;; The expansion should not crash — reader conditional is passed through
+      (is (some? expanded)))))
