@@ -120,16 +120,16 @@
 (defn- sb-str [sb]
   #?(:clj (str sb) :cljs (.join sb "")))
 
-(defn- read-while [sc pred]
-  (let [sb (make-sb)]
-    (loop []
-      (when-not (seof? sc)
-        (let [ch (speek sc)]
-          (when (pred ch)
-            (sadvance! sc)
-            (sb-append! sb ch)
-            (recur)))))
-    (sb-str sb)))
+(defn- skip-while
+  "Advance scanner while pred holds. No string built — for discarded content like comments."
+  [sc pred]
+  (loop []
+    (when-not (seof? sc)
+      (let [ch (speek sc)]
+        (when (pred ch)
+          (sadvance! sc)
+          (recur))))))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Tokenizer helpers
@@ -364,7 +364,7 @@
             (do (sadvance! sc) (recur))
 
             (= ch \;)
-            (do (read-while sc #(not= % \newline)) (recur))
+            (do (skip-while sc #(not= % \newline)) (recur))
 
             (= ch \")
             (do (conj! tokens (tok-at sc :string (read-string-literal sc) loc)) (recur))
