@@ -93,10 +93,14 @@
 
            anon-fn
            (let [body (first children)
+                 params-before (forms/find-percent-params body)
+                 has-bare? (contains? params-before :bare)
                  body (forms/normalize-bare-percent body)
                  params (forms/find-percent-params body)
                  param-vec (forms/build-anon-fn-params params)]
-             (with-meta (list 'fn param-vec body) {:meme/sugar true}))
+             (with-meta (list 'fn param-vec body)
+               (cond-> {:meme/sugar true}
+                 has-bare? (assoc :meme/bare-percent true))))
 
            ;; RT3-F7: On CLJS, preserve tag+data as a map (CLJS has no TaggedLiteral type)
            meme/tagged

@@ -257,11 +257,13 @@
     ;; Scan left-to-right, apply first matching rule.
     ;; After a successful match, re-check the same position — the replacement
     ;; may produce a new head for a chained call (e.g., f(x)(y) → ((f x) y)).
-    ;; Per-position retry counter guards against non-terminating rules.
+    ;; Two-tier safety: per-position cap (100) catches local loops,
+    ;; global cap (10000) catches aggregate runaway across all positions.
     (loop [i 0
            children children
-           retries 0]
-      (if (>= i (dec (count children)))
+           retries 0
+           total 0]
+      (if (>= i (count children))
         children
         (let [match (some (fn [{:keys [pattern] :as r}]
                             (when-let [m (match-pattern pattern children i)]
@@ -271,13 +273,16 @@
             (do (when (>= retries 100)
                   (throw (ex-info "TRS rewrite loop did not terminate at position"
                                   {:position i :retries retries})))
+                (when (>= total 10000)
+                  (throw (ex-info "TRS rewrite exceeded global safety limit"
+                                  {:position i :total total})))
                 (let [result (emit-replacement (:replacement (:rule match)) (:bindings match))
                       width (:width match)
                       before (subvec children 0 i)
                       after (subvec children (+ i width))
                       new-children (into [] cat [before result after])]
-                  (recur i new-children (inc retries))))
-            (recur (inc i) children 0)))))))
+                  (recur i new-children (inc retries) (inc total))))
+            (recur (inc i) children 0 total)))))))
 
 ;; ============================================================
 ;; Default rule set

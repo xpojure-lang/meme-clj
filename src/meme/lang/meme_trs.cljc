@@ -11,6 +11,8 @@
             #?(:clj [meme.lang.shared :as shared])))
 
 (defn format-meme
+  "Format meme source via classic parser (TRS produces tokens, not forms).
+   Supports :style in opts: \"flat\", \"clj\", or canonical (default)."
   ;; NOTE: uses classic parser (core/meme->forms) because the canonical formatter
   ;; requires Clojure forms, not tokens. The TRS pipeline produces tokens, not forms.
   ;; If TRS and classic ever diverge on parsing, this would format using classic's
@@ -23,14 +25,18 @@
       (fmt-canon/format-forms forms opts))))
 
 (defn to-clj
+  "Convert meme source to Clojure text using token-stream rewriting."
   ([source] (trs/meme->clj-text source))
   ([source _opts] (to-clj source)))
 
 #?(:clj
-   (def to-meme shared/clj->meme-text))
+   (def ^{:doc "Convert Clojure source text to meme syntax via rewrite rules. JVM only."}
+     to-meme shared/clj->meme-text))
 
 #?(:clj
-   (defn run-source [source opts]
+   (defn run-source
+     "Eval meme source by converting to Clojure text, parsing, and evaluating. JVM only."
+     [source opts]
      (let [clj-text (trs/meme->clj-text source)
            forms (core/clj->forms clj-text)
            eval-fn (or (:eval opts) eval)]

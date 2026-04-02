@@ -307,3 +307,40 @@
     (let [r (rw/make-rule :no-match '(baz ?x) nil)]
       (is (= '(quux 1) (rw/rewrite [r] '(quux 1)))
           "non-matching rule should not change the form"))))
+
+;; ---------------------------------------------------------------------------
+;; C1: rewrite-once must track changed? explicitly for all container types.
+;; Previously: set/map/seq branches discarded the child changed? flag and
+;; relied on (not= rewritten expr) which can false-negative for sets.
+;; ---------------------------------------------------------------------------
+
+(deftest rewrite-once-set-changed-flag
+  (testing "changed? is true when set element is rewritten"
+    (let [rules [(rw/rule 'old 'new)]
+          [changed? result] (rw/rewrite-once rules #{:a 'old :b})]
+      (is changed? "set child rewrite must propagate changed? flag")
+      (is (= #{:a 'new :b} result))))
+  (testing "changed? is false when no set element matches"
+    (let [rules [(rw/rule 'old 'new)]
+          [changed? result] (rw/rewrite-once rules #{:a :b :c})]
+      (is (not changed?))
+      (is (= #{:a :b :c} result))))
+  (testing "changed? propagates from deeply nested set element"
+    (let [rules [(rw/rule 'old 'new)]
+          [changed? _] (rw/rewrite-once rules #{:a #{:b 'old}})]
+      (is changed? "nested set child rewrite must propagate changed?"))))
+
+;; ---------------------------------------------------------------------------
+;; I2: Repeated splice variables in patterns must match the same subsequence.
+;; Verifies the consistency check in match-seq (lines 78-80).
+;; ---------------------------------------------------------------------------
+
+(deftest match-pattern-repeated-splice
+  (testing "repeated ??xs matches same subsequence"
+    (is (= '{xs [1 2]} (rw/match-pattern '(f ??xs g ??xs) '(f 1 2 g 1 2)))))
+  (testing "repeated ??xs rejects different subsequences"
+    (is (nil? (rw/match-pattern '(f ??xs g ??xs) '(f 1 2 g 3 4)))))
+  (testing "repeated ??xs with empty match"
+    (is (= '{xs []} (rw/match-pattern '(f ??xs g ??xs) '(f g)))))
+  (testing "repeated ??xs with single element"
+    (is (= '{xs [42]} (rw/match-pattern '(a ??xs b ??xs c) '(a 42 b 42 c))))))

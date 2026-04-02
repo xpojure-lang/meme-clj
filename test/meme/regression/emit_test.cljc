@@ -665,3 +665,20 @@
           elapsed #?(:clj (/ (- (System/nanoTime) start) 1e6) :cljs (- (js/Date.now) start))]
       (is (string? result))
       (is (< elapsed 500) (str "flat formatting should be fast, took " elapsed "ms")))))
+
+;; ---------------------------------------------------------------------------
+;; C3: rewrite tree builder must set :meme/bare-percent metadata on #() forms
+;; so the printer restores % instead of emitting %1.
+;; Previously: rewrite/rules transform-structures only set {:meme/sugar true}.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest rewrite-bare-percent-metadata
+     (testing "rewrite-based to-clj preserves bare % (not %1)"
+       (let [rewrite-clj ((:to-clj (lang/resolve-lang :meme-rewrite)) "#(inc(%))")]
+         (is (= "#(inc %)" rewrite-clj)
+             (str "expected #(inc %) but got: " rewrite-clj))))
+     (testing "rewrite-based to-clj preserves bare % with %2"
+       (let [rewrite-clj ((:to-clj (lang/resolve-lang :meme-rewrite)) "#(+(% %2))")]
+         (is (= "#(+ % %2)" rewrite-clj)
+             (str "expected #(+ % %2) but got: " rewrite-clj))))))

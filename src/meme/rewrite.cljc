@@ -286,11 +286,14 @@
   [rules expr]
   (cond
     (sequential? expr)
-    ;; first, rewrite children
+    ;; first, rewrite children — track changed? explicitly (not just !=)
     (let [was-list (list? expr)
           children (if was-list (vec expr) expr)
+          any-child-changed? (volatile! false)
           rewritten-children (mapv (fn [child]
-                                    (let [[_ r] (rewrite-once rules child)] r))
+                                    (let [[ch r] (rewrite-once rules child)]
+                                      (when ch (vreset! any-child-changed? true))
+                                      r))
                                   children)
           rebuilt (if was-list
                     (with-meta (apply list rewritten-children) (meta expr))
@@ -298,32 +301,36 @@
           ;; then try to rewrite this node
           result (apply-rules rules rebuilt)]
       (if (no-match? result)
-        (let [changed (not= rebuilt expr)]
-          [changed rebuilt])
+        [(or @any-child-changed? (not= rebuilt expr)) rebuilt]
         [true result]))
 
     (and (map? expr) (not (record? expr)))
-    (let [rewritten (with-meta
+    (let [any-changed? (volatile! false)
+          rewritten (with-meta
                       (into {} (map (fn [[k v]]
-                                      (let [[_ rk] (rewrite-once rules k)
-                                            [_ rv] (rewrite-once rules v)]
+                                      (let [[chk rk] (rewrite-once rules k)
+                                            [chv rv] (rewrite-once rules v)]
+                                        (when (or chk chv) (vreset! any-changed? true))
                                         [rk rv]))
                                     expr))
                       (meta expr))
           result (apply-rules rules rewritten)]
       (if (no-match? result)
-        [(not= rewritten expr) rewritten]
+        [(or @any-changed? (not= rewritten expr)) rewritten]
         [true result]))
 
     (set? expr)
-    (let [rewritten (with-meta
+    (let [any-changed? (volatile! false)
+          rewritten (with-meta
                       (set (map (fn [el]
-                                  (let [[_ r] (rewrite-once rules el)] r))
+                                  (let [[ch r] (rewrite-once rules el)]
+                                    (when ch (vreset! any-changed? true))
+                                    r))
                                 expr))
                       (meta expr))
           result (apply-rules rules rewritten)]
       (if (no-match? result)
-        [(not= rewritten expr) rewritten]
+        [(or @any-changed? (not= rewritten expr)) rewritten]
         [true result]))
 
     ;; leaf node — try to rewrite

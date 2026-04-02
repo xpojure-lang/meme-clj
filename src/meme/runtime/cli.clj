@@ -118,7 +118,9 @@
          :check     check
          :verb      verb}))))
 
-(defn run [{:keys [file lang] :as opts}]
+(defn run
+  "Run a meme source file. Requires :file in opts."
+  [{:keys [file lang] :as opts}]
   (when-not file
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name]"))
     (System/exit 1))
@@ -130,36 +132,50 @@
              (println (errors/format-error e (try (slurp file) (catch Exception _ nil)))))
            (System/exit 1)))))
 
-(defn repl [{:keys [lang] :as opts}]
+(defn repl
+  "Start an interactive meme REPL."
+  [{:keys [lang] :as opts}]
   (let [[lang-name l] (get-lang lang nil)]
     (lang/check-support! l lang-name :repl)
     ((:repl l) (lang-opts opts))))
 
-(defn to-clj [opts]
+(defn to-clj
+  "Convert meme files to Clojure and print to stdout or write to .clj files."
+  [opts]
   (file-command opts
     {:cmd :to-clj, :pred meme-file?, :output-fn #(swap-ext % "meme" "clj")
      :verb "converted", :usage "Usage: meme to-clj <file|dir> [--lang name] [--stdout]"}))
 
-(defn to-meme [opts]
+(defn to-meme
+  "Convert Clojure files to meme and print to stdout or write to .meme files."
+  [opts]
   (file-command opts
     {:cmd :to-meme, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
      :verb "converted", :usage "Usage: meme to-meme <file|dir> [--lang name] [--stdout]"}))
 
-(defn format-cmd [opts]
+(defn format-cmd
+  "Format meme source files in canonical style."
+  [opts]
   (file-command opts
     {:cmd :format, :pred meme-file?, :output-fn nil
      :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"}))
 
-(defn inspect-cmd [{:keys [lang]}]
+(defn inspect-cmd
+  "Print diagnostic info about the current lang configuration."
+  [{:keys [lang]}]
   (let [[lang-name l] (get-lang lang nil)]
     (println (str "Lang: " (name lang-name)))
     (println (str "  Supported: " (str/join ", " (map name (filter keyword? (keys l))))))))
 
-(defn version [_]
+(defn version
+  "Print the meme version."
+  [_]
   (println (if-let [v (some-> (io/resource "meme/version.txt") slurp str/trim)]
              (str "meme " v) "meme (version unknown)")))
 
-(defn help [_]
+(defn help
+  "Print CLI usage help."
+  [_]
   (let [l (lang/resolve-lang lang/default-lang)
         has? #(lang/supports? l %)]
     (println "meme — M-expressions for Clojure")
@@ -187,7 +203,9 @@
 (def ^:private file-spec
   {:args->opts [:file] :spec {:stdout {:coerce :boolean} :lang {:coerce :string}}})
 
-(defn -main [& args]
+(defn -main
+  "CLI entry point. Parses args and dispatches to subcommands."
+  [& args]
   (require 'babashka.cli)
   (let [dispatch (resolve 'babashka.cli/dispatch)
         file-cmd (fn [f] (fn [m] (f (collect-file-args m))))]

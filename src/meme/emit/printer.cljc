@@ -5,6 +5,7 @@
    Delegates to render for Doc algebra and layout."
   (:require [clojure.string :as str]
             [meme.emit.render :as render]
+            [meme.emit.values :as values]
             [meme.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
@@ -18,6 +19,17 @@
   (when ws
     (let [lines (str/split-lines ws)]
       (not-empty (mapv str/triml (filterv #(re-find #"^\s*;" %) lines))))))
+
+(defn join-with-trailing-comments
+  "Join formatted form strings with blank lines. Appends trailing comments
+   from :trailing-ws metadata on the forms sequence."
+  [format-fn forms]
+  (let [trailing-ws (:trailing-ws (meta forms))
+        trailing-comments (when trailing-ws (extract-comments trailing-ws))
+        body (str/join "\n\n" (map format-fn forms))]
+    (if trailing-comments
+      (str body "\n\n" (str/join "\n" trailing-comments))
+      body)))
 
 (defn- form-comments
   "Get comment lines from a form's :ws metadata, or nil."
@@ -359,43 +371,16 @@
                    (str ":" (namespace form) "/" (name form))
                    (str ":" (name form))))
 
-    ;; String
-    (string? form) (render/text (pr-str form))
-
-    ;; Regex
-    (instance? #?(:clj java.util.regex.Pattern :cljs js/RegExp) form)
-    (let [raw #?(:clj (.pattern ^java.util.regex.Pattern form) :cljs (.-source form))]
-      (render/text (str "#\"" (str/replace raw #"\\.|\"" (fn [m] (if (= m "\"") "\\\"" m))) "\"")))
-
-    ;; Char (JVM only)
-    #?@(:clj [(char? form)
-              (let [named {(char 10) "newline" (char 13) "return" (char 9) "tab"
-                           (char 32) "space" (char 8) "backspace" (char 12) "formfeed"}]
-                (render/text (if-let [n (get named form)]
-                               (str \\ n)
-                               (str \\ form))))])
-
-    ;; Number — preserve BigDecimal M and BigInt N suffixes, symbolic values
-    #?@(:clj [(decimal? form) (render/text (str form "M"))
-              (instance? clojure.lang.BigInt form) (render/text (str form "N"))
-              (instance? java.math.BigInteger form) (render/text (str form "N"))])
-    (and (number? form)
-         #?(:clj (Double/isNaN (double form))
-            :cljs (js/isNaN form)))
-    (render/text "##NaN")
-    (and (number? form)
-         #?(:clj (Double/isInfinite (double form))
-            :cljs (and (not (js/isFinite form)) (not (js/isNaN form)))))
-    (render/text (if (pos? (double form)) "##Inf" "##-Inf"))
-    (number? form) (render/text (str form))
-
-    ;; Tagged literal (JVM only)
+    ;; String, regex, char, number, tagged literal — shared with rewrite emitter.
+    ;; Tagged literals need Doc-tree recursion, so handle separately.
     #?@(:clj [(tagged-literal? form)
               (let [^clojure.lang.TaggedLiteral tl form]
                 (render/cat (render/text (str "#" (.-tag tl) " ")) (to-doc (.-form tl) mode)))])
 
-    ;; Fallback
-    :else (render/text (pr-str form))))
+    :else
+    (if-let [s (values/emit-value-str form pr-str)]
+      (render/text s)
+      (render/text (pr-str form)))))
 
 (defn to-doc
   "Convert a Clojure form to a Doc tree, with comment attachment.

@@ -154,3 +154,38 @@
            #?(:clj Exception :cljs js/Error)
            #"Unexpected closing delimiter"
            (trs/nest-tokens tokens))))))
+
+;; ---------------------------------------------------------------------------
+;; C2: rewrite-level must check last element as potential match start.
+;; Previously: (>= i (dec (count children))) skipped last element.
+;; ---------------------------------------------------------------------------
+
+(deftest rewrite-level-last-element
+  (testing "last element participates in match attempt"
+    ;; With the default m-call-rule, the last element alone can't match
+    ;; (it's a 2-element pattern), but it should not be skipped.
+    ;; Verify that f(x) at the end of a sequence still rewrites.
+    (is (= "(f x) (g y)" (trs/meme->clj-text "f(x) g(y)"))
+        "both calls should be rewritten including the last one")))
+
+;; ---------------------------------------------------------------------------
+;; C3: all three langs must agree on bare-percent output.
+;; Previously: rewrite lang emitted %1 instead of % for #(inc(%)).
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest lang-agreement-bare-percent
+     (testing "all langs agree on bare % in #() forms"
+       (doseq [src ["#(inc(%))"
+                     "#(+(% %2))"
+                     "#(+(% 1 %2))"
+                     "#(vec(%&))"]]
+         (let [classic-clj ((:to-clj (lang/resolve-lang :meme-classic)) src)
+               rewrite-clj ((:to-clj (lang/resolve-lang :meme-rewrite)) src)
+               trs-clj ((:to-clj (lang/resolve-lang :meme-trs)) src)]
+           (is (= classic-clj rewrite-clj)
+               (str "classic vs rewrite disagreement on: " src
+                    " → " classic-clj " vs " rewrite-clj))
+           (is (= classic-clj trs-clj)
+               (str "classic vs trs disagreement on: " src
+                    " → " classic-clj " vs " trs-clj)))))))

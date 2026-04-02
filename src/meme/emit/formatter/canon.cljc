@@ -2,8 +2,7 @@
   "Canonical formatter: width-aware meme output.
    Composes printer (form → Doc) with render (layout @ target width).
    Used by `meme format` CLI command."
-  (:require [clojure.string :as str]
-            [meme.emit.printer :as printer]
+  (:require [meme.emit.printer :as printer]
             [meme.emit.render :as render]))
 
 (def ^:private default-width 80)
@@ -27,10 +26,4 @@
    (when (string? forms)
      (throw (ex-info "format-forms expects a sequence of forms, not a string"
                      {:input (subs forms 0 (min 50 (count forms)))})))
-   (let [trailing-ws (:trailing-ws (meta forms))
-         trailing-comments (when trailing-ws
-                             (printer/extract-comments trailing-ws))
-         body (str/join "\n\n" (map #(format-form % opts) forms))]
-     (if trailing-comments
-       (str body "\n\n" (str/join "\n" trailing-comments))
-       body))))
+   (printer/join-with-trailing-comments #(format-form % opts) forms)))

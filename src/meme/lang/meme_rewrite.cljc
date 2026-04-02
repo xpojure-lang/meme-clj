@@ -15,7 +15,9 @@
 
 (def ^:private rewrite-opts {:parser tree/rewrite-parser})
 
-(defn format-meme [source opts]
+(defn format-meme
+  "Format meme source via rewrite-based parser. Supports :style in opts."
+  [source opts]
   (let [forms (core/meme->forms source rewrite-opts)]
     (case (:style opts)
       "flat" (fmt-flat/format-forms forms)
@@ -23,18 +25,24 @@
       (fmt-canon/format-forms forms opts))))
 
 (defn to-clj
+  "Convert meme source to Clojure text using rewrite-based tree builder."
   ([source]
    (core/forms->clj
      (:forms (stages/run source (merge rewrite-opts {:read-cond :preserve})))))
   ([source _opts] (to-clj source)))
 
 #?(:clj
-   (def to-meme shared/clj->meme-text))
+   (def ^{:doc "Convert Clojure source text to meme syntax via rewrite rules. JVM only."}
+     to-meme shared/clj->meme-text))
 
 #?(:clj
-   (defn run-source [source opts]
+   (defn run-source
+     "Eval meme source text using the rewrite parser. JVM only."
+     [source opts]
      (run/run-string source (merge opts rewrite-opts))))
 
 #?(:clj
-   (defn start-repl [opts]
+   (defn start-repl
+     "Start an interactive REPL using the rewrite parser. JVM only."
+     [opts]
      (repl/start (merge opts rewrite-opts))))
