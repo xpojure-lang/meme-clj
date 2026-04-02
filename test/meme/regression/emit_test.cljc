@@ -7,7 +7,8 @@
             [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]
             [meme.emit.formatter.canon :as fmt-canon]
-            [meme.forms :as forms]))
+            [meme.forms :as forms]
+            [meme.rewrite.emit :as remit]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
@@ -617,3 +618,35 @@
           result (fmt-canon/format-form form 30)]
       (is (str/starts-with? result "letfn("))
       (is (str/includes? result "\n") "should break at narrow width"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: restore-bare-percent must skip nested fn bodies (D53)
+;; Previously: inner fn's %1 was incorrectly restored to % by the outer #().
+;; ---------------------------------------------------------------------------
+
+(deftest restore-bare-percent-skips-nested-fn
+  (testing "#() containing nested fn with %1 — inner %1 preserved"
+    (let [;; Simulates: #(map(fn([x] %1) %))
+          ;; The outer #() has bare-percent, inner fn has its own %1
+          form (with-meta
+                 '(fn [%1] (map (fn [x] %1) %1))
+                 {:meme/sugar true :meme/bare-percent true})
+          printed (fmt-flat/format-form form)]
+      ;; The outer %1 should become %, but the inner fn's %1 should stay as %1
+      (is (str/includes? printed "#(map(fn([x] %1) %)")
+          "inner fn's %1 must not be restored to %"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: rewrite/emit preserves hex/octal notation via :raw (D65)
+;; Previously: used (:value form) which lost notation (0xFF → 255).
+;; ---------------------------------------------------------------------------
+
+(deftest rewrite-emit-preserves-raw-notation
+  (testing "MemeRaw with hex notation preserved in rewrite emit"
+    (let [raw-form (meme.forms/->MemeRaw 255 "0xFF")
+          emitted (remit/emit raw-form)]
+      (is (= "0xFF" emitted) "should use :raw notation, not numeric value")))
+  (testing "MemeRaw with octal notation preserved"
+    (let [raw-form (meme.forms/->MemeRaw 15 "017")
+          emitted (remit/emit raw-form)]
+      (is (= "017" emitted) "should use :raw notation, not numeric value"))))

@@ -34,10 +34,12 @@
   (:raw form))
 
 (defn deferred-auto-keyword->form
-  "Convert a MemeAutoKeyword to an eval-able list form:
-   (clojure.core/read-string \"::foo\")."
+  "Convert a MemeAutoKeyword to an eval-able list form.
+   C65: use platform-appropriate read-string (clojure.core on JVM, cljs.reader on CLJS)."
   [^MemeAutoKeyword ak]
-  (list 'clojure.core/read-string (:raw ak)))
+  (list #?(:clj 'clojure.core/read-string
+           :cljs 'cljs.reader/read-string)
+        (:raw ak)))
 
 ;; ---------------------------------------------------------------------------
 ;; Portable reader conditional support

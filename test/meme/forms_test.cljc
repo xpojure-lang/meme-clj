@@ -11,7 +11,9 @@
   (let [ak (forms/deferred-auto-keyword "::foo")]
     (is (forms/deferred-auto-keyword? ak))
     (is (= "::foo" (forms/deferred-auto-keyword-raw ak)))
-    (is (= '(clojure.core/read-string "::foo")
+    ;; C65: platform-appropriate read-string
+    (is (= (list #?(:clj 'clojure.core/read-string
+                    :cljs 'cljs.reader/read-string) "::foo")
            (forms/deferred-auto-keyword->form ak)))))
 
 (deftest deferred-auto-keyword-predicate

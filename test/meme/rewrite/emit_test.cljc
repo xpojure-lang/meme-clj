@@ -98,8 +98,9 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest emit-ast-node-types
-  (testing "MemeRaw is unwrapped to its value"
-    (is (= "255" (emit/emit (forms/->MemeRaw 255 "0xFF")))))
+  ;; D65: MemeRaw now uses :raw to preserve notation (was :value → lost hex/octal)
+  (testing "MemeRaw emits raw notation text"
+    (is (= "0xFF" (emit/emit (forms/->MemeRaw 255 "0xFF")))))
   (testing "MemeAutoKeyword emits raw text"
     (is (= "::foo" (emit/emit (forms/->MemeAutoKeyword "::foo")))))
   (testing "MemeSyntaxQuote emits with backtick"

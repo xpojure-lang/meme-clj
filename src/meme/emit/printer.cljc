@@ -71,10 +71,13 @@
 (defn- restore-bare-percent
   "Replace %1 with % in a form tree. Used when :meme/bare-percent metadata
    indicates the user wrote bare % (normalized to %1 for eval correctness).
-   M15/B2: recurses into maps, sets, and AST nodes, mirroring normalize-bare-percent."
+   M15/B2: recurses into maps, sets, and AST nodes, mirroring normalize-bare-percent.
+   D53: skip nested (fn ...) bodies — matches normalize-bare-percent guard."
   [form]
   (cond
     (and (symbol? form) (= (name form) "%1") (nil? (namespace form))) (symbol "%")
+    ;; D53: skip nested fn bodies — inner %1 belongs to the inner fn, not the outer #()
+    (and (seq? form) (= 'fn (first form))) form
     (seq? form) (with-meta (apply list (map restore-bare-percent form)) (meta form))
     (vector? form) (with-meta (mapv restore-bare-percent form) (meta form))
     ;; AST node defrecords satisfy (map? x) — check before map?

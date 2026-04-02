@@ -53,8 +53,9 @@
       (str prefix body ")"))
 
     ;; I3: AST node types — must be before map? (defrecords satisfy map?)
+    ;; D65: use :raw to preserve hex/octal notation (was :value which loses it)
     (forms/raw? form)
-    (emit (:value form))
+    (:raw form)
 
     (forms/deferred-auto-keyword? form)
     (:raw form)

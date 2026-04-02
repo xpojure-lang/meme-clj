@@ -262,11 +262,17 @@
           val))
 
       ;; Plain integer — auto-promote to BigInt if too large for Long (JVM)
+      ;; C7: on CLJS, error if beyond MAX_SAFE_INTEGER to prevent silent precision loss
       :else
       #?(:clj (try (Long/parseLong raw)
                    (catch NumberFormatException _
                      (clojure.lang.BigInt/fromBigInteger (java.math.BigInteger. raw))))
-         :cljs (js/parseInt raw 10)))
+         :cljs (let [n (js/parseInt raw 10)]
+                 (when (> (js/Math.abs n) 9007199254740991)
+                   (errors/meme-error
+                    (str "Integer " raw " exceeds JavaScript safe integer range (Number.MAX_SAFE_INTEGER) — value would lose precision")
+                    loc))
+                 n)))
     (catch #?(:clj Exception :cljs :default) e
       (if (instance? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e)
         (throw e) ; re-throw meme errors
