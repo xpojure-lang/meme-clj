@@ -193,3 +193,31 @@
     (is (seq (lang/registered-langs)))
     (lang/clear-user-langs!)
     (is (empty? (lang/registered-langs)))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M14: register! should reject built-in lang name overrides.
+;; ---------------------------------------------------------------------------
+
+(deftest register-builtin-override-rejected
+  (testing ":meme-classic override is rejected"
+    (is (thrown-with-msg? Exception #"(?i)cannot override"
+                          (lang/register! :meme-classic {:to-clj identity}))))
+  (testing ":meme-rewrite override is rejected"
+    (is (thrown-with-msg? Exception #"(?i)cannot override"
+                          (lang/register! :meme-rewrite {:to-clj identity}))))
+  (testing ":meme-trs override is rejected"
+    (is (thrown-with-msg? Exception #"(?i)cannot override"
+                          (lang/register! :meme-trs {:to-clj identity}))))
+  (testing "custom name still works"
+    (lang/register! :my-custom-lang {:to-clj identity})
+    (lang/clear-user-langs!)))
+
+;; ---------------------------------------------------------------------------
+;; RT2-H5: EDN :run path with .. traversal should be rejected.
+;; ---------------------------------------------------------------------------
+
+(deftest edn-path-traversal-rejected
+  (testing ":run with .. is rejected"
+    (let [f (tmp-file "test-traversal" ".edn")]
+      (spit f "{:run \"../../etc/passwd\"}")
+      (is (thrown? Exception (lang/load-edn f))))))

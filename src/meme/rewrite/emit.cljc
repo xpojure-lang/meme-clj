@@ -103,6 +103,22 @@
     #?@(:clj [(tagged-literal? form)
               (str "#" (.-tag form) " " (emit (.-form form)))])
 
+    ;; I3: Handle AST node types that might leak into emit — unwrap instead of pr-str
+    (forms/raw? form)
+    (emit (:value form))
+
+    (forms/deferred-auto-keyword? form)
+    (:raw form)
+
+    (forms/syntax-quote? form)
+    (str "`" (emit (:form form)))
+
+    (forms/unquote? form)
+    (str "~" (emit (:form form)))
+
+    (forms/unquote-splicing? form)
+    (str "~@" (emit (:form form)))
+
     ;; Fallback — pr-str handles UUID, Date, and any other types
     ;; that have custom print-method implementations
     :else

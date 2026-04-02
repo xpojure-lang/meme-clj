@@ -91,8 +91,22 @@
          eval-fn (or (:eval opts)
                      #?(:clj eval
                         :cljs (throw (ex-info "REPL requires :eval option in ClojureScript" {}))))
+         ;; I5: resolve :: keywords using keyword constructor instead of read-string.
+         ;; read-string is the full Clojure reader which accepts arbitrary dispatch
+         ;; forms — using keyword constructor is sufficient and avoids eval risk.
          reader-opts (let [rk (or (:resolve-keyword opts)
-                                  #?(:clj #(clojure.core/read-string %)
+                                  #?(:clj (fn [raw]
+                                            (let [s (subs raw 2)] ; strip leading ::
+                                              (if-let [idx (clojure.string/index-of s "/")]
+                                                ;; ::alias/name — resolve alias via ns-aliases
+                                                (let [alias-str (subs s 0 idx)
+                                                      kw-name (subs s (inc idx))
+                                                      alias-ns (get (ns-aliases *ns*) (symbol alias-str))]
+                                                  (if alias-ns
+                                                    (keyword (str alias-ns) kw-name)
+                                                    (keyword alias-str kw-name)))
+                                                ;; ::name — resolve to current namespace
+                                                (keyword (str (ns-name *ns*)) s))))
                                      :cljs nil))
                            base (cond-> (if rk {:resolve-keyword rk} {})
                                   (:parser opts) (assoc :parser (:parser opts)))]

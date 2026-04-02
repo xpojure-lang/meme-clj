@@ -93,6 +93,12 @@
                                  n))
                       (catch #?(:clj Exception :cljs :default) _
                         (errors/meme-error (str "Invalid unicode character \\u" hex) loc)))]
+        ;; M10: reject surrogate range — same check as parse-unicode-escape for strings
+        (when (and (>= code 0xD800) (<= code 0xDFFF))
+          (errors/meme-error
+            (str "Invalid unicode character \\u" hex
+                 " — code point is in the surrogate range (U+D800..U+DFFF)")
+            loc))
         (forms/->MemeRaw (char code) raw))
 
       #?@(:clj [(and (str/starts-with? name-part "o")

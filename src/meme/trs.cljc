@@ -242,7 +242,15 @@
                            (let [opener (first c)
                                  closer (peek c)
                                  inner (subvec c 1 (dec (count c)))
-                                 rewritten (rewrite-level rules inner)]
+                                 rewritten (rewrite-level rules inner)
+                                 ;; H1: #() body unwrap — if inside an anon-fn group and
+                                 ;; rewriting produced a single paren group as the body,
+                                 ;; unwrap it to avoid #((f x)) → should be #(f x).
+                                 rewritten (if (and (= :open-anon-fn (:type opener))
+                                                    (= 1 (count rewritten))
+                                                    (paren-group? (first rewritten)))
+                                             (group-body (first rewritten))
+                                             rewritten)]
                              (into [opener] (conj rewritten closer)))
                            c))
                        children)]
@@ -321,6 +329,11 @@
     (rewrite-meme->sexp tokens)))
 
 (defn meme->clj-text
-  "Convert meme source to Clojure source text via token-stream rewriting."
+  "Convert meme source to Clojure source text via token-stream rewriting.
+   Known differences from classic parser:
+   - L1: syntax-quote (`) and unquote (~) pass through as tokens for Clojure's
+     reader to process. Classic expands them to seq/concat/list forms.
+   - L2: ~x outside syntax-quote is not rejected (no AST-level context tracking).
+     Classic rejects this at parse time."
   [source]
   (tokens->text (tokenize-and-rewrite source)))

@@ -303,6 +303,19 @@
     (let [expanded (first (expander/expand-forms (core/meme->forms "`foo")))]
       (is (= '(quote foo) expanded)
           "without resolver, `foo stays as foo, not current-ns/foo")))
+  #?(:clj
+     (testing "nested syntax-quote with resolver matches Clojure behavior"
+       ;; RT2-H2: ``x with resolver must produce same eval result as Clojure's ``x.
+       ;; Without resolver, symbols are unqualified — this is a documented deviation.
+       (require 'meme.runtime.resolve)
+       (let [resolver (resolve 'meme.runtime.resolve/default-resolve-symbol)
+             expanded (first (expander/expand-forms
+                               (core/meme->forms "``x")
+                               {:resolve-symbol resolver}))
+             meme-result (eval expanded)
+             clj-result (eval (read-string "``x"))]
+         (is (= meme-result clj-result)
+             "``x with resolver should match Clojure's eval result"))))
   (testing "resolver does not affect gensyms"
     (let [resolver (fn [sym] (symbol "my.ns" (name sym)))
           expanded (first (expander/expand-forms

@@ -6,7 +6,12 @@
             [meme.forms :as forms]
             [meme.parse.resolve :as resolve]))
 
-;; Sentinel for #_ discard. Contract:
+;; Sentinel for #_ discard.
+;; NOTE (RT1-F20): this uses an identity-based Object sentinel (not keyword).
+;; meme.rewrite.tree uses a separate value-based ::discarded keyword sentinel.
+;; The two are intentionally independent — reader sentinels need identity
+;; semantics (no collision with user data), tree sentinels need serializability.
+;; Contract:
 ;; - Returned by `parse-form-base` (via `:discard`) when the parsed form was a #_ discard
 ;; - `parse-form` passes it through (skips `parse-path-chain` for sentinels)
 ;; - Use `discard-sentinel?` to check — never use `identical?` directly
@@ -334,10 +339,16 @@
                 (recur form)
                 (recur matched)))))))))
 
+(defn- metadatable?
+  "Can this value carry Clojure metadata?"
+  [x]
+  #?(:clj  (instance? clojure.lang.IObj x)
+     :cljs (implements? IWithMeta x)))
+
 (defn- parse-simple-prefix
   "Parse a prefix-sugar form: advance past prefix, parse target, check sentinel,
    wrap in (wrapper-sym target) with :meme/sugar metadata.
-   Used by :deref, :quote, :var-quote — they share identical structure."
+   Used by :deref, :quote — they share identical structure."
   [p tok wrapper-sym discard-msg]
   (padvance! p)
   (let [inner (parse-form p)]
@@ -428,6 +439,12 @@
                         (errors/meme-error
                          (str "Metadata must be a keyword, symbol, or map — got " (pr-str m))
                          (error-data p (select-keys tok [:line :col]))))
+                ;; H4: guard against metadata on non-metadatable values (numbers, booleans, nil)
+                _ (when-not (metadatable? target)
+                    (errors/meme-error
+                      (str "Metadata cannot be applied to " (pr-str target)
+                           " — only symbols, collections, and functions support metadata")
+                      (error-data p (select-keys tok [:line :col]))))
                 chain (conj (or (:meme/meta-chain (meta target)) []) entry)]
             (vary-meta target merge entry {:meme/meta-chain chain})))
 
@@ -474,8 +491,18 @@
                            (error-data p (select-keys tok [:line :col]))))
 
       :var-quote
-      (parse-simple-prefix p tok 'var
-        "Var-quote target was discarded by #_ — nothing to reference")
+      ;; M5: #' requires a symbol target — reject calls like #'foo(bar)
+      ;; M6: preserve metadata on target (parse-form handles ^:foo bar)
+      (do (padvance! p)
+          (let [inner (parse-form p)]
+            (when (discard-sentinel? inner)
+              (errors/meme-error "Var-quote target was discarded by #_ — nothing to reference"
+                                 (error-data p (select-keys tok [:line :col]))))
+            (when (seq? inner)
+              (errors/meme-error
+                (str "#' (var-quote) requires a symbol, not a call expression — got " (pr-str inner))
+                (error-data p (select-keys tok [:line :col]))))
+            (with-meta (list 'var inner) {:meme/sugar true})))
 
       :discard
       ;; #_ discards the next form and, if a non-boundary form follows,
@@ -538,33 +565,37 @@
             (errors/meme-error "Nested #() is not allowed — use fn([args] ...) for nested anonymous functions"
                                (error-data p (select-keys tok [:line :col]))))
           (padvance! p)
+          ;; M9: use try/finally to ensure depth is decremented on error paths
           (vswap! (:anon-fn-depth p) inc)
-          (let [body (parse-form p)
-                _ (when (discard-sentinel? body)
-                    (errors/meme-error "#() body was discarded — #() requires a non-discarded expression"
-                                       (error-data p (select-keys tok [:line :col]))))
-                nxt (ppeek p)]
-            (cond
-              (nil? nxt)
-              (errors/meme-error "Unterminated #() — expected closing )"
-                                 (error-data p (assoc (select-keys tok [:line :col]) :incomplete true)))
+          (let [body (try
+                       (let [b (parse-form p)
+                             _ (when (discard-sentinel? b)
+                                 (errors/meme-error "#() body was discarded — #() requires a non-discarded expression"
+                                                    (error-data p (select-keys tok [:line :col]))))
+                             nxt (ppeek p)]
+                         (cond
+                           (nil? nxt)
+                           (errors/meme-error "Unterminated #() — expected closing )"
+                                              (error-data p (assoc (select-keys tok [:line :col]) :incomplete true)))
 
-              (not (tok-type? nxt :close-paren))
-              (errors/meme-error "#() body must be a single expression — use fn(args...) for multiple expressions"
-                                 (error-data p (assoc (select-keys nxt [:line :col])
-                                                      :secondary [{:line (:line tok) :col (:col tok) :label "#( opened here"}]))))
-            (padvance! p)
-            (vswap! (:anon-fn-depth p) dec)
-            (let [params (forms/find-percent-params body)
-                  _ (when (contains? params 0)
-                      (errors/meme-error "%0 is not a valid parameter — use %1 or % for the first argument"
-                                         (error-data p (select-keys tok [:line :col]))))
-                  has-bare? (contains? params :bare)
-                  param-vec (forms/build-anon-fn-params params)
-                  body' (forms/normalize-bare-percent body)]
-              (with-meta (list 'fn param-vec body')
-                (cond-> {:meme/sugar true}
-                  has-bare? (assoc :meme/bare-percent true))))))
+                           (not (tok-type? nxt :close-paren))
+                           (errors/meme-error "#() body must be a single expression — use fn(args...) for multiple expressions"
+                                              (error-data p (assoc (select-keys nxt [:line :col])
+                                                                   :secondary [{:line (:line tok) :col (:col tok) :label "#( opened here"}]))))
+                         (padvance! p)
+                         b)
+                       (finally
+                         (vswap! (:anon-fn-depth p) dec)))
+                params (forms/find-percent-params body)
+                _ (when (contains? params 0)
+                    (errors/meme-error "%0 is not a valid parameter — use %1 or % for the first argument"
+                                       (error-data p (select-keys tok [:line :col]))))
+                has-bare? (contains? params :bare)
+                param-vec (forms/build-anon-fn-params params)
+                body' (forms/normalize-bare-percent body)]
+            (with-meta (list 'fn param-vec body')
+              (cond-> {:meme/sugar true}
+                has-bare? (assoc :meme/bare-percent true)))))
 
       :reader-cond-start
       ;; #?(...) or #?@(...) — parse natively.
@@ -585,12 +616,6 @@
       ;; default
       (errors/meme-error (str "Unexpected " (describe-token tok))
                          (error-data p (select-keys tok [:line :col]))))))
-
-(defn- metadatable?
-  "Can this value carry Clojure metadata?"
-  [x]
-  #?(:clj  (instance? clojure.lang.IObj x)
-     :cljs (implements? IWithMeta x)))
 
 (defn- attach-ws
   "Attach :ws metadata from a token to a form, if the form supports metadata."

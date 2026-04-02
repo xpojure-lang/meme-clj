@@ -286,10 +286,13 @@
   "Generate compound meme text with reader macros and dispatch forms."
   (gen/one-of
    [gen-meme-call
-     ;; prefix + call: @atom, 'sym, #'var
+     ;; prefix + call: @atom, 'sym
     (gen/let [call gen-meme-call]
-      (gen/let [prefix (gen/elements ["@" "'" "#'"])]
+      (gen/let [prefix (gen/elements ["@" "'"])]
         (str prefix call)))
+     ;; #'var — var-quote requires a symbol, not a call
+    (gen/let [sym (gen/fmap str gen-simple-symbol)]
+      (str "#'" sym))
      ;; metadata + form
     (gen/let [sym (gen/fmap str gen-simple-symbol)]
       (str "^:private " sym))
@@ -352,7 +355,9 @@
       (str h "([)"))                        ; mismatched brackets
     (gen/return "^42 x")                    ; invalid metadata type
     (gen/return "^\"str\" x")               ; invalid metadata type
-    (gen/return "^[1 2] x")]))             ; invalid metadata type
+    (gen/return "^[1 2] x")                ; invalid metadata type
+    (gen/return "#'a(x)")                  ; var-quote on call
+    (gen/return "^:foo 42")]))             ; invalid metadata type
 
 ;; ===========================================================================
 ;; Roundtrip helpers

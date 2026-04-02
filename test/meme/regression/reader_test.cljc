@@ -883,3 +883,61 @@
     (is (= '[c] (core/meme->forms "#_ #_ a b c"))))
   (testing "#_ at boundary returns sentinel correctly"
     (is (= '[] (core/meme->forms "#_ a")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-H4: ^:foo 42 — metadata on non-metadatable caused ClassCastException.
+;; Fix: metadatable? guard before vary-meta in :meta handler.
+;; ---------------------------------------------------------------------------
+
+(deftest metadata-on-non-metadatable-rejected
+  (testing "^:foo 42 — metadata on number rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)metadata cannot be applied"
+                          (core/meme->forms "^:foo 42"))))
+  (testing "^:foo true — metadata on boolean rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)metadata cannot be applied"
+                          (core/meme->forms "^:foo true"))))
+  (testing "^:foo nil — metadata on nil rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)metadata cannot be applied"
+                          (core/meme->forms "^:foo nil"))))
+  (testing "^:foo \"str\" — metadata on string rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)metadata cannot be applied"
+                          (core/meme->forms "^:foo \"str\""))))
+  (testing "^:foo x — metadata on symbol still works"
+    (is (some? (core/meme->forms "^:foo x"))))
+  (testing "^:foo [1 2] — metadata on vector still works"
+    (is (some? (core/meme->forms "^:foo [1 2]")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M5: #'foo(bar) produced (var (foo bar)) — invalid Clojure.
+;; Fix: var-quote rejects call expressions.
+;; ---------------------------------------------------------------------------
+
+(deftest var-quote-requires-symbol
+  (testing "#'foo(bar) — var-quote on call rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)requires a symbol"
+                          (core/meme->forms "#'foo(bar)"))))
+  (testing "#'foo — var-quote on symbol works"
+    (is (= '[(var foo)] (core/meme->forms "#'foo"))))
+  #?(:clj
+     (testing "#'^:foo bar — metadata on var-quote target preserved"
+       (let [form (first (core/meme->forms "#'^:foo bar"))]
+         (is (= 'var (first form)))
+         (is (= 'bar (second form)))
+         (is (:foo (meta (second form))))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M9: anon-fn-depth not decremented on error paths.
+;; Fix: try/finally wrapper around anon-fn-depth inc/dec.
+;; ---------------------------------------------------------------------------
+
+(deftest anon-fn-depth-decremented-on-error
+  (testing "after error in #(), subsequent #() should work"
+    ;; Parse an invalid #() form (triggers error), then parse a valid one
+    ;; If depth wasn't decremented, the second would fail with "Nested #()"
+    (is (thrown? #?(:clj Exception :cljs js/Error) (core/meme->forms "#(")))
+    (is (some? (core/meme->forms "#(+(% 1))")))))

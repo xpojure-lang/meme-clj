@@ -113,4 +113,12 @@
      ;; Hint
      (when hint
        (vswap! parts conj (str "\nHint: " hint)))
+     ;; I4: for non-ExceptionInfo exceptions (e.g. user code eval errors),
+     ;; include the cause chain for diagnostics
+     (when (and (not data) #?(:clj (.getCause ^Throwable e) :cljs nil))
+       (let [cause #?(:clj (.getCause ^Throwable e) :cljs nil)]
+         (when cause
+           (vswap! parts conj (str "\nCaused by: "
+                                   #?(:clj (.getName (class cause)) :cljs "Error")
+                                   ": " (ex-message cause))))))
      (apply str @parts))))

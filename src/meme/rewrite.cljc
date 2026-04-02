@@ -53,7 +53,10 @@
 (defn match-seq
   "Match a pattern sequence against an expression sequence.
    Handles splice variables (??x).
-   Returns bindings map or nil on failure."
+   Returns bindings map or nil on failure.
+   L14: WARNING — complexity is O(n^k) where k is the number of splice variables
+   in the pattern. Patterns with more than one splice variable should be avoided
+   for large inputs."
   [patterns exprs bindings]
   (cond
     ;; both empty — success
@@ -203,12 +206,26 @@
 ;; Rule Application
 ;; ============================================================
 
+(defn- check-suspicious-vars!
+  "L8/L14: warn about confusing pattern variable usage."
+  [pattern rule-name]
+  (when (sequential? pattern)
+    (doseq [p pattern]
+      ;; L8: ?&foo looks like a splice var but isn't — user probably meant ??foo
+      (when (and (symbol? p) (str/starts-with? (name p) "?&"))
+        (throw (ex-info (str "Pattern variable " p " in rule " (pr-str rule-name)
+                             " starts with ?& — did you mean ?? for a splice variable?")
+                        {:rule rule-name :var p})))
+      (check-suspicious-vars! p rule-name))))
+
 (defn make-rule
   "Create a rule from a pattern and replacement template.
    Optionally takes a guard function."
   ([rule-name pattern replacement]
+   (check-suspicious-vars! pattern rule-name)
    {:name rule-name :pattern pattern :replacement replacement})
   ([rule-name pattern replacement guard]
+   (check-suspicious-vars! pattern rule-name)
    {:name rule-name :pattern pattern :replacement replacement :guard guard}))
 
 (defn apply-rule
@@ -291,9 +308,14 @@
 
     ;; leaf node — try to rewrite
     :else
-    (if-let [result (apply-rules rules expr)]
-      [true result]
-      [false expr])))
+    (let [result (try (apply-rules rules expr)
+                   (catch #?(:clj Exception :cljs :default) e
+                     (throw (ex-info (str "Rewrite error on leaf: "
+                                          #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
+                                     {:expr expr :stage :rewrite-leaf} e))))]
+      (if result
+        [true result]
+        [false expr]))))
 
 (def ^:const default-max-iters
   "Default safety cap on rewrite iterations. This is a guard against
@@ -302,11 +324,25 @@
    as the max-iters argument."
   100)
 
+(def ^:const default-max-size
+  "M8: maximum expression tree size (node count) to prevent size-exploding rules."
+  100000)
+
+(defn- tree-size
+  "Approximate node count of an expression tree."
+  [expr]
+  (cond
+    (sequential? expr) (reduce + 1 (map tree-size expr))
+    (map? expr) (reduce + 1 (mapcat (fn [[k v]] [(tree-size k) (tree-size v)]) expr))
+    (set? expr) (reduce + 1 (map tree-size expr))
+    :else 1))
+
 (defn rewrite
   "Apply rules repeatedly (bottom-up) until fixed point or max iterations.
    Returns the final expression. Default max-iters is 100 — a safety cap,
    not true cycle detection. Override with the 3-arity form if a rule set
-   needs more passes to converge."
+   needs more passes to converge.
+   M8: also guards against size-exploding rules via tree-size budget."
   ([rules expr] (rewrite rules expr default-max-iters))
   ([rules expr max-iters]
    (loop [expr expr
@@ -314,6 +350,12 @@
      (when (>= i max-iters)
        (throw (ex-info "Rewrite did not reach fixed point (possible cycle)"
                        {:iterations max-iters :expr expr})))
+     ;; M8: check size budget every 10 iterations to avoid O(n) counting overhead
+     (when (and (pos? i) (zero? (mod i 10)))
+       (let [size (tree-size expr)]
+         (when (> size default-max-size)
+           (throw (ex-info (str "Rewrite exceeded maximum expression size (" size " nodes)")
+                           {:iterations i :size size :max-size default-max-size})))))
      (let [[changed? result] (rewrite-once rules expr)]
        (if changed?
          (recur result (inc i))

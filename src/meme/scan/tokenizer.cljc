@@ -38,15 +38,33 @@
 (defn- octal-digit? [ch]
   (and ch (let [c (char-code ch)] (and (>= c code-0) (<= c code-7)))))
 
+(defn- unicode-control-char?
+  "Reject Unicode control characters and invisible formatting characters
+   that could create confusing or deceptive symbol names.
+   Ranges: C0 controls (U+0000-U+001F), DEL (U+007F), C1 controls (U+0080-U+009F),
+   zero-width/invisible (U+200B-U+200F), bidi overrides (U+202A-U+202E),
+   word joiners (U+2060-U+2064), BOM (U+FEFF)."
+  [ch]
+  (let [c (char-code ch)]
+    (or (<= 0x0000 c 0x001F)       ; C0 controls (includes null)
+        (= c 0x007F)               ; DEL
+        (<= 0x0080 c 0x009F)       ; C1 controls
+        (<= 0x200B c 0x200F)       ; zero-width space, ZWNJ, ZWJ, LRM, RLM
+        (<= 0x202A c 0x202E)       ; bidi overrides (LRE, RLE, PDF, LRO, RLO)
+        (<= 0x2060 c 0x2064)       ; word joiner, invisible times, etc.
+        (= c 0xFEFF))))            ; BOM / ZWNBSP
+
 (defn- symbol-start? [ch]
   (and ch
        (not (whitespace? ch))
        (not (digit? ch))
+       (not (unicode-control-char? ch))
        (not (#{\( \) \[ \] \{ \} \" \; \@ \^ \` \~ \\} ch))))
 
 (defn- symbol-char? [ch]
   (and ch
        (not (whitespace? ch))
+       (not (unicode-control-char? ch))
        (not (#{\( \) \[ \] \{ \} \" \; \@ \^ \` \~ \\} ch))))
 
 ;; ---------------------------------------------------------------------------
@@ -66,11 +84,24 @@
 
 (defn- sadvance!
   "Advance scanner by one character, returning the consumed char.
-   Callers MUST check (seof? sc) before calling — no bounds check is performed."
-  [{:keys [pos line col src]}]
+   Callers MUST check (seof? sc) before calling — no bounds check is performed.
+   L11: handles \\r (bare CR) as a line break — increments line unless \\r\\n pair."
+  [{:keys [pos line col src len]}]
   (let [ch (nth src @pos)]
-    (if (= ch \newline)
+    (cond
+      (= ch \newline)
       (do (vswap! line inc) (vreset! col 1))
+
+      ;; L11: \r is a line break unless followed by \n (CRLF handled by \n)
+      (= ch \return)
+      (let [next-pos (inc @pos)]
+        (if (and (< next-pos len) (= \newline (nth src next-pos)))
+          ;; \r\n pair — treat \r as column advance, \n will handle line break
+          (vswap! col inc)
+          ;; bare \r — line break
+          (do (vswap! line inc) (vreset! col 1))))
+
+      :else
       (vswap! col inc))
     (vswap! pos inc)
     ch))
@@ -202,12 +233,15 @@
     (loop []
       (when-not (seof? sc)
         (let [ch (speek sc)]
-          (when (or (digit? ch)
-                    (letter? ch)
-                    (#{\. \/ \+ \-} ch))
-            (sadvance! sc)
-            (sb-append! sb ch)
-            (recur)))))
+          (cond
+            ;; L9: N/M suffix terminates the number — don't consume further chars
+            (or (= ch \N) (= ch \M))
+            (do (sadvance! sc) (sb-append! sb ch))
+
+            (or (digit? ch)
+                (letter? ch)
+                (#{\. \/ \+ \-} ch))
+            (do (sadvance! sc) (sb-append! sb ch) (recur))))))
     (sb-str sb)))
 
 (defn- read-symbol-str
@@ -273,11 +307,16 @@
 
 (defn- validate-keyword!
   "Validate scanned keyword name syntax. Rejects:
+   - Bare : with no name (non-auto)
    - Empty name after :: (bare :: at EOF)
    - Name starting with : after :: (e.g. :::)
    - Name containing :: (e.g. ::a::b)
    - Name ending with / (e.g. ::a/ — namespace with no name)"
   [kw-name auto? loc]
+  ;; M11: bare : (non-auto, empty name)
+  (when (and (not auto?) (str/blank? kw-name))
+    (errors/meme-error
+      "Invalid keyword: bare : with no name" loc))
   (when (and auto? (str/blank? kw-name))
     (errors/meme-error
       "Invalid keyword: :: — auto-resolve keyword requires a name after ::" loc))
@@ -290,6 +329,25 @@
   (when (and (pos? (count kw-name)) (str/ends-with? kw-name "/"))
     (errors/meme-error
       (str "Invalid keyword: " (if auto? "::" ":") kw-name " — trailing / with no name") loc)))
+
+(defn- validate-symbol-name!
+  "Validate scanned symbol/keyword name for Clojure-compatible syntax.
+   Rejects trailing /, digit-starting name after /, and multi-slash.
+   Allows ns// (e.g. clojure.core//) — the name part is '/'."
+  [raw loc]
+  (when (and (pos? (count raw)) (not= raw "/"))
+    (when-let [idx (str/index-of raw "/")]
+      (let [name-part (subs raw (inc idx))]
+        ;; Trailing slash (but not ns// where name is /)
+        (when (and (str/ends-with? raw "/") (not= name-part "/"))
+          (errors/meme-error
+            (str "Invalid symbol: " raw " — trailing / with no name") loc))
+        ;; Digit-starting name after /
+        (when (and (pos? (count name-part))
+                   (not= name-part "/")
+                   (digit? (nth name-part 0)))
+          (errors/meme-error
+            (str "Invalid symbol: " raw " — name part after / cannot start with a digit") loc))))))
 
 (defn tokenize
   "Tokenize meme source string into a vector of tokens."
@@ -335,14 +393,29 @@
                                      prefix (if splice? "#?@" "#?")]
                                  (conj! tokens (tok-at sc :reader-cond-start prefix loc)))
                                (recur))
-                (= nxt \:) (do (sadvance! sc) (sadvance! sc)
-                               (let [ns-name (read-symbol-str sc)
-                                     prefix (str "#:" ns-name)]
+                ;; H3/M12: #: dispatch — handle #:: (auto-resolve) vs #:ns (explicit)
+                (= nxt \:) (do (sadvance! sc) (sadvance! sc) ;; consume #:
+                               (let [auto? (and (not (seof? sc)) (= (speek sc) \:))
+                                     _ (when auto? (sadvance! sc)) ;; consume second : for #::
+                                     ns-name (read-symbol-str sc)
+                                     _ (when (and (not auto?) (str/blank? ns-name))
+                                         (errors/meme-error
+                                           "Invalid namespaced map: #: requires a namespace name" loc))
+                                     prefix (str "#:" (when auto? ":") ns-name)]
                                  (conj! tokens (tok-at sc :namespaced-map-start prefix loc))
                                  (recur)))
-                ;; ##Inf, ##-Inf, ##NaN — symbolic numeric values
+                ;; ##Inf, ##-Inf, ##NaN — symbolic numeric values (L10: whitelist)
                 (= nxt \#) (do (sadvance! sc) (sadvance! sc)
-                               (let [name (read-symbol-str sc)]
+                               (let [;; ##-Inf: read-symbol-str won't consume -, so handle sign
+                                     sign (when (and (not (seof? sc)) (= (speek sc) \-))
+                                            (sadvance! sc) "-")
+                                     name-part (read-symbol-str sc)
+                                     name (str sign name-part)]
+                                 (when-not (#{"Inf" "-Inf" "NaN"} name)
+                                   (errors/meme-error
+                                     (str "Invalid symbolic value: ##" name
+                                          " — only ##Inf, ##-Inf, and ##NaN are valid")
+                                     loc))
                                  (conj! tokens (tok-at sc :number (str "##" name) loc))
                                  (recur)))
                 ;; B8/B9: # followed by non-tag char — clear error instead of empty tagged literal
@@ -391,6 +464,8 @@
                       _ (when auto? (sadvance! sc))
                       kw-name (read-symbol-str sc)
                       _ (validate-keyword! kw-name auto? loc)
+                      _ (when (pos? (count kw-name))
+                          (validate-symbol-name! kw-name loc))
                       value (str (if auto? "::" ":") kw-name)]
                   (conj! tokens (tok-at sc :keyword value loc))
                   (recur)))
@@ -411,7 +486,8 @@
 
             ;; symbol (includes operators like +, -, ->, ->>, >=, etc.)
             (symbol-start? ch)
-            (let [sym (read-symbol-str sc)]
+            (let [sym (read-symbol-str sc)
+                  _ (validate-symbol-name! sym loc)]
               (conj! tokens (tok-at sc :symbol sym loc))
               (recur))
 

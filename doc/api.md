@@ -130,6 +130,8 @@ Options: same as `meme->forms` (`:resolve-keyword`, `:read-cond`).
 
 Convert a Clojure source string to meme source string. JVM/Babashka only. Equivalent to `(forms->meme (clj->forms clj-src))`.
 
+**Known limitation:** Clojure's reader expands reader sugar before meme sees the forms. `'(f x)` becomes `(quote (f x))` → `quote(f(x))` instead of `'f(x)`. Similarly, `@atom` → `clojure.core/deref(atom)`, and `#(+ % 1)` → `fn*([p1__N#] +(p1__N# 1))`. The `meme->clj->meme` roundtrip preserves semantics but not notation for these forms.
+
 ```clojure
 (clj->meme "(defn f [x] (+ x 1))")
 ;=> "defn(f [x] +(x 1))"

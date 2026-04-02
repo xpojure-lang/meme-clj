@@ -4,6 +4,15 @@
             [meme.stages :as stages]
             #?(:clj [meme.runtime.resolve :as resolve])))
 
+(defn- step-strip-bom
+  "M7: Strip UTF-8 BOM (U+FEFF) from the start of :source, if present.
+   BOM markers from Windows editors corrupt Clojure output."
+  [ctx]
+  (let [source (:source ctx)]
+    (if (and (string? source) (str/starts-with? source "\uFEFF"))
+      (assoc ctx :source (subs source 1))
+      ctx)))
+
 (defn- step-strip-shebang
   "Strip a leading #! shebang line from a context's :source, if present."
   [ctx]
@@ -51,6 +60,7 @@
          (doseq [form expanded]
            (eval-fn form))))
      (let [forms (:forms (-> {:source s :opts reader-opts}
+                             step-strip-bom
                              step-strip-shebang
                              stages/step-scan
                              stages/step-parse

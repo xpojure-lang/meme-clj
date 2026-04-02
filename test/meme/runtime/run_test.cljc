@@ -157,3 +157,15 @@
        (is (thrown-with-msg? clojure.lang.ExceptionInfo
                              #"Unknown lang"
                              (run/run-file "/tmp/test.meme" {:lang :nonexistent}))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M7: BOM marker (U+FEFF) at start of source was passed through to
+;; tokenizer, corrupting the first token. Fix: step-strip-bom removes it.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest bom-stripping
+     (testing "BOM prefix is stripped before parsing"
+       (is (= 3 (run/run-string (str "\uFEFF" "+(1 2)")))))
+     (testing "source without BOM still works"
+       (is (= 3 (run/run-string "+(1 2)"))))))

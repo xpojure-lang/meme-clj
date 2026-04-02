@@ -114,7 +114,17 @@
                      "^:foo f(x)"
                      ;; calls inside collections
                      "[f(x) g(y)]"
-                     "{:a f(x) :b g(y)}"]]
+                     "{:a f(x) :b g(y)}"
+                     ;; H1: #() anonymous functions (was producing extra parens)
+                     "#(+(% 1))"
+                     "#(inc(%))"
+                     "#(str(% \" hello\"))"
+                     "#(+(% %2))"
+                     ;; H6: auto-resolve keywords
+                     "::foo"
+                     "f(::foo)"
+                     ;; metadata
+                     "^:private def(x 42)"]]
          (is (= ((:to-clj (lang/resolve-lang :meme-classic)) src)
                 ((:to-clj (lang/resolve-lang :meme-trs)) src))
              (str "disagreement on: " src))))))

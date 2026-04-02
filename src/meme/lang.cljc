@@ -125,12 +125,21 @@
 
 #?(:clj
    (defn load-edn
-     "Load a lang from an EDN file. Returns a lang map with functions."
+     "Load a lang from an EDN file. Returns a lang map with functions.
+      H5 WARNING: this function executes code. Symbols in the EDN are resolved
+      via requiring-resolve (loads namespaces from classpath). String values for
+      :run are slurp'd and eval'd. Only use with trusted EDN files."
      [path]
      (let [edn-data (edn/read-string (slurp path))]
        (when-not (map? edn-data)
          (throw (ex-info (str "Lang EDN must be a map, got " (type edn-data))
                          {:path path})))
+       ;; H5: validate :run string paths — reject path traversal via ..
+       (when-let [run-val (:run edn-data)]
+         (when (string? run-val)
+           (when (str/includes? run-val "..")
+             (throw (ex-info (str "Lang :run path must not contain ..: " (pr-str run-val))
+                             {:path path :run run-val})))))
        (resolve-edn edn-data))))
 
 #?(:clj
@@ -172,12 +181,23 @@
 #?(:clj (defonce ^:private user-langs (atom {})))
 
 #?(:clj
+   (def ^:private builtin-lang-names
+     "Names of built-in langs that cannot be overridden via register!."
+     #{:meme-classic :meme-rewrite :meme-trs}))
+
+#?(:clj
    (defn register!
      "Register a user lang at runtime. config is an EDN-style map — symbols
       are resolved via requiring-resolve, strings and keywords follow the same
       rules as load-edn. Pre-resolved functions are passed through.
+      M14: rejects attempts to override built-in lang names.
       Warns to stderr if the new lang's :extension collides with an existing registration."
      [lang-name config]
+     ;; M14: reject built-in name override
+     (when (builtin-lang-names lang-name)
+       (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
+                            " — choose a different name")
+                       {:lang lang-name})))
      (let [resolved (resolve-edn config)]
        (when-let [ext (:extension resolved)]
          (doseq [[existing-name existing-lang] @user-langs]
@@ -192,11 +212,14 @@
    (defn resolve-by-extension
      "Given a file path, find the lang whose :extension matches.
       Returns [lang-name lang-map] or nil. Checks user langs only
-      (built-in langs don't have :extension)."
+      (built-in langs don't have :extension).
+      F11: matches against '.ext' suffix to avoid false positives on partial matches."
      [path]
      (some (fn [[n l]]
              (when-let [ext (:extension l)]
-               (when (str/ends-with? path ext) [n l])))
+               ;; F11: ensure we match .ext as a file extension, not a bare suffix
+               (let [dot-ext (if (str/starts-with? ext ".") ext (str "." ext))]
+                 (when (str/ends-with? path dot-ext) [n l]))))
            @user-langs)))
 
 #?(:clj

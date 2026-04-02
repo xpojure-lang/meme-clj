@@ -580,3 +580,161 @@
     #?(:clj (is (some? (core/meme->forms "::ns/name"))))
     (is (= [:regular] (core/meme->forms ":regular")))
     (is (= [:ns/name] (core/meme->forms ":ns/name")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M11: Bare : (lone colon) was accepted as empty-name keyword.
+;; Clojure rejects it: "Invalid token: :".
+;; Fix: validate-keyword! now rejects empty non-auto keyword names.
+;; ---------------------------------------------------------------------------
+
+(deftest bare-colon-rejected
+  (testing ": alone is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid keyword"
+                          (core/meme->forms ":"))))
+  (testing ": before whitespace is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid keyword"
+                          (core/meme->forms ": foo"))))
+  (testing ":foo still works"
+    (is (= [:foo] (core/meme->forms ":foo")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M3: foo/ (trailing slash) was accepted as a valid symbol.
+;; Clojure rejects it: "Invalid token: foo/".
+;; Fix: validate-symbol-name! rejects trailing / (except ns// pattern).
+;; ---------------------------------------------------------------------------
+
+(deftest trailing-slash-symbol-rejected
+  (testing "foo/ is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid symbol.*trailing /"
+                          (core/meme->forms "foo/"))))
+  (testing "clojure.core// still works (name part is /)"
+    (is (= [(symbol "clojure.core" "/")]
+           (core/meme->forms "clojure.core//")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M4: foo/1bar (digit-starting name after /) was accepted.
+;; Clojure rejects it: "Invalid token: foo/1bar".
+;; Fix: validate-symbol-name! rejects digit-starting name after /.
+;; ---------------------------------------------------------------------------
+
+(deftest digit-starting-name-after-slash-rejected
+  (testing "foo/1bar is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid symbol.*digit"
+                          (core/meme->forms "foo/1bar"))))
+  (testing "foo/bar still works"
+    (is (= ['foo/bar] (core/meme->forms "foo/bar"))))
+  (testing ":foo/1bar keyword is also rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid symbol.*digit"
+                          (core/meme->forms ":foo/1bar")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M12: #:{:a 1} (empty namespace) was silently accepted.
+;; Clojure rejects: "Namespaced map must specify a namespace".
+;; Fix: tokenizer validates non-empty ns after #:.
+;; ---------------------------------------------------------------------------
+
+(deftest empty-namespace-map-rejected
+  (testing "#:{} (empty ns) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)namespace"
+                          (core/meme->forms "#:{:a 1}"))))
+  (testing "#:foo{} still works"
+    (is (some? (core/meme->forms "#:foo{:a 1}")))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-H3: #::{} auto-resolve namespaced map was broken — tokenizer
+;; consumed : as part of ns-name via read-symbol-str.
+;; Fix: dedicated auto-resolve handling in #: dispatch.
+;; ---------------------------------------------------------------------------
+
+(deftest auto-resolve-namespaced-map
+  (testing "#::{:a 1} tokenizes with correct prefix"
+    (let [tokens (tokenize "#::{:a 1}")]
+      (is (= :namespaced-map-start (:type (first tokens))))
+      (is (= "#::" (:value (first tokens))))))
+  #?(:clj
+     (testing "#::{:a 1} parses correctly"
+       (is (some? (core/meme->forms "#::{:a 1}"))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-L10: ##foo was silently accepted and produced confusing error.
+;; Fix: whitelist validation for ##Inf, ##-Inf, ##NaN only.
+;; ---------------------------------------------------------------------------
+
+(deftest invalid-symbolic-value-rejected
+  (testing "##foo is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid symbolic value"
+                          (core/meme->forms "##foo"))))
+  (testing "##Bar is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)invalid symbolic value"
+                          (core/meme->forms "##Bar"))))
+  (testing "valid symbolic values still work"
+    (is (= 1 (count (tokenize "##Inf"))))
+    (is (= 1 (count (tokenize "##-Inf"))))
+    (is (= 1 (count (tokenize "##NaN"))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-L5/L6/L7: Null byte, zero-width space, RTL override in symbols.
+;; Fix: unicode-control-char? predicate rejects control/invisible chars.
+;; ---------------------------------------------------------------------------
+
+(deftest unicode-control-chars-rejected
+  (testing "null byte in source produces error (not silent whitespace)"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (core/meme->forms (str "f" \u0000 "oo")))))
+  (testing "zero-width space in symbol produces error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (core/meme->forms (str "f" \u200B "(x)")))))
+  (testing "RTL override in symbol produces error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (core/meme->forms (str "f(" \u202E "x)")))))
+  (testing "BOM character in source produces error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (core/meme->forms (str \uFEFF "f(x)"))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-L9: read-number greedy — 1N.5 was one token, should be two.
+;; Fix: N/M suffix terminates number scanning.
+;; ---------------------------------------------------------------------------
+
+(deftest number-suffix-terminates
+  (testing "1N tokenizes as one :number token"
+    (let [tokens (tokenize "1N")]
+      (is (= 1 (count tokens)))
+      (is (= "1N" (:value (first tokens))))))
+  (testing "1N.5 tokenizes as two tokens (number + number)"
+    (let [tokens (tokenize "1N.5")]
+      (is (= 2 (count tokens)))
+      (is (= "1N" (:value (first tokens))))))
+  (testing "1M.5 tokenizes as two tokens"
+    (let [tokens (tokenize "1M.5")]
+      (is (= 2 (count tokens)))
+      (is (= "1M" (:value (first tokens))))))
+  (testing "1M still works as single token"
+    (let [tokens (tokenize "1M")]
+      (is (= 1 (count tokens)))
+      (is (= "1M" (:value (first tokens)))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-L11: \r-only line endings — all tokens reported on line 1.
+;; Fix: sadvance! treats bare \r as line break.
+;; ---------------------------------------------------------------------------
+
+(deftest bare-cr-line-tracking
+  (testing "bare \\r increments line counter"
+    (let [tokens (tokenize (str "a" \return "b"))]
+      (is (= 2 (count tokens)))
+      (is (= 1 (:line (first tokens))))
+      (is (= 2 (:line (second tokens))))))
+  (testing "\\r\\n (CRLF) counts as one line break"
+    (let [tokens (tokenize (str "a" \return \newline "b"))]
+      (is (= 2 (count tokens)))
+      (is (= 1 (:line (first tokens))))
+      (is (= 2 (:line (second tokens)))))))

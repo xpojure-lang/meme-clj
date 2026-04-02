@@ -178,6 +178,13 @@
   (testing "^{:doc ...} map metadata preserved"
     (let [form (with-meta '(defn foo [x] x) {:doc "hello"})
           result (fmt-canon/format-form form {:width 10})]
+      ;; L12: metadata maps now participate in width-aware layout, so at narrow
+      ;; widths the map may break across lines. The key assertion: ^{ is present.
+      (is (re-find #"^\^" result))
+      (is (re-find #":doc" result))))
+  (testing "^{:doc ...} map metadata flat at wide width"
+    (let [form (with-meta '(defn foo [x] x) {:doc "hello"})
+          result (fmt-canon/format-form form {:width 200})]
       (is (re-find #"^\^\{:doc" result))))
   (testing "metadata on non-call forms (vector)"
     (let [form (with-meta [1 2 3] {:tag 'ints})
@@ -535,3 +542,37 @@
           forms (core/meme->forms src)
           back (core/forms->meme forms)]
       (is (= src back)))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M15: restore-bare-percent didn't recurse into maps/sets.
+;; #(#{%}) roundtripped as #(#{%1}), losing the bare % notation.
+;; Fix: added map? and set? cases to restore-bare-percent.
+;; ---------------------------------------------------------------------------
+
+(deftest bare-percent-in-maps-and-sets
+  (testing "#({:a %}) roundtrips preserving bare %"
+    (let [src "#({:a %})"
+          forms (core/meme->forms src)
+          back (core/forms->meme forms)]
+      (is (= src back))))
+  (testing "#(#{%}) roundtrips preserving bare %"
+    (let [src "#(#{%})"
+          forms (core/meme->forms src)
+          back (core/forms->meme forms)]
+      (is (= src back)))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-L13: flat/format-forms dropped trailing file comments.
+;; canon/format-forms preserved them. Fix: flat now mirrors canon behavior.
+;; ---------------------------------------------------------------------------
+
+(deftest flat-format-preserves-trailing-comments
+  (testing "trailing comment after forms is preserved in flat output"
+    (let [forms (core/meme->forms "def(x 1)\n; trailing comment")
+          result (fmt-flat/format-forms forms)]
+      (is (re-find #"; trailing comment" result)
+          "trailing comment should appear in flat output")))
+  (testing "no trailing comment — no extra output"
+    (let [forms (core/meme->forms "def(x 1)")
+          result (fmt-flat/format-forms forms)]
+      (is (= "def(x 1)" result)))))

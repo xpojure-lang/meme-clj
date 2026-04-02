@@ -250,3 +250,41 @@
         expr (with-meta #{'old 'b} {:my-key 3})
         [_ result] (rw/rewrite-once rules expr)]
     (is (= {:my-key 3} (meta result)))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M8: Size-exploding rules should be caught by size budget.
+;; ---------------------------------------------------------------------------
+
+(deftest rewrite-size-budget
+  (testing "cycling rule is caught by iteration cap"
+    ;; Rule that cycles: (a) → (b) → (a) → ...
+    (let [r1 (rw/rule 'a 'b)
+          r2 (rw/rule 'b 'a)]
+      (is (thrown-with-msg?
+            #?(:clj Exception :cljs js/Error)
+            #"(?i)(fixed point|cycle)"
+            (rw/rewrite [r1 r2] 'a))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-L8: ?&foo pattern variables should be rejected with helpful error.
+;; ---------------------------------------------------------------------------
+
+(deftest suspicious-pattern-var-rejected
+  (testing "?&args in pattern throws with hint about ??"
+    (is (thrown-with-msg?
+          #?(:clj Exception :cljs js/Error)
+          #"\\?&"
+          (rw/make-rule :test '(f ?&args) '(g ?&args))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-I2: Leaf rewrite error wraps with context.
+;; ---------------------------------------------------------------------------
+
+(deftest leaf-rewrite-error-wrapped
+  (testing "guard exception on leaf includes context"
+    (let [bad-rule (rw/make-rule :bomb '?x 'boom
+                                 (fn [_] (throw (ex-info "boom" {}))))]
+      (is (thrown-with-msg?
+            #?(:clj Exception :cljs js/Error)
+            #"Guard function failed"
+            (rw/rewrite [bad-rule] 'x))))))

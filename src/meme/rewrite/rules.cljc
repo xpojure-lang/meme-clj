@@ -11,11 +11,16 @@
 
 (def s->m-rules
   "Rules that tag S-expression calls as m-call nodes.
-   List patterns only match lists (not vectors) — the engine distinguishes them."
+   List patterns only match lists (not vectors) — the engine distinguishes them.
+   M13: extended to accept nil, true, false as heads — meme spec says
+   'any value can be a head': nil(1 2) → (nil 1 2), true(:a) → (true :a).
+   Numbers and strings are NOT included because (42 x) in Clojure is data (not a call),
+   and tagging them would break clj→meme→clj vendor roundtrips."
   [(rw/rule '(?f ??args) '(m-call ?f ??args)
             (fn [bindings]
               (let [f (get bindings 'f)]
-                (and (or (symbol? f) (keyword? f))
+                (and (or (symbol? f) (keyword? f) (nil? f)
+                         (true? f) (false? f))
                      (not= f 'm-call)))))])
 
 ;; ============================================================

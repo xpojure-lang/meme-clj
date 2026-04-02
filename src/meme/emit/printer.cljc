@@ -70,12 +70,17 @@
 
 (defn- restore-bare-percent
   "Replace %1 with % in a form tree. Used when :meme/bare-percent metadata
-   indicates the user wrote bare % (normalized to %1 for eval correctness)."
+   indicates the user wrote bare % (normalized to %1 for eval correctness).
+   M15: recurses into maps and sets, mirroring normalize-bare-percent in forms.cljc."
   [form]
   (cond
     (and (symbol? form) (= (name form) "%1") (nil? (namespace form))) (symbol "%")
     (seq? form) (with-meta (apply list (map restore-bare-percent form)) (meta form))
     (vector? form) (with-meta (mapv restore-bare-percent form) (meta form))
+    (map? form) (with-meta
+                  (into {} (map (fn [[k v]] [(restore-bare-percent k) (restore-bare-percent v)]) form))
+                  (meta form))
+    (set? form) (with-meta (set (map restore-bare-percent form)) (meta form))
     :else form))
 
 ;; ---------------------------------------------------------------------------
@@ -94,21 +99,22 @@
 
 (declare to-doc to-doc-form)
 
-(defn- emit-meta-prefix
-  "Compute metadata prefix string: ^:key, ^Type, or ^{map}."
+(defn- emit-meta-prefix-doc
+  "Compute metadata prefix as a Doc node: ^:key, ^Type, or ^{map}.
+   L12: returns Doc (not string) so metadata maps participate in width-aware layout."
   [m mode]
   (cond
     (and (= 1 (count m))
          (keyword? (key (first m)))
          (true? (val (first m))))
     (let [kw (key (first m))]
-      (str "^" (pr-str kw)))
+      (render/text (str "^" (pr-str kw))))
     (and (= 1 (count m))
          (contains? m :tag)
          (symbol? (:tag m)))
-    (str "^" (:tag m))
+    (render/text (str "^" (:tag m)))
     :else
-    (str "^" (render/layout (to-doc-form m mode) ##Inf))))
+    (render/cat (render/text "^") (to-doc-form m mode))))
 
 (defn- call-doc
   "Build Doc for a call form. Handles head-line-args and meme/clj modes."
@@ -193,10 +199,14 @@
          (seq (forms/strip-internal-meta (meta form))))
     (let [chain (:meme/meta-chain (meta form))
           stripped (with-meta form (select-keys (meta form) forms/notation-meta-keys))
-          prefixes (if chain
-                     (mapv #(emit-meta-prefix % mode) (reverse chain))
-                     [(emit-meta-prefix (forms/strip-internal-meta (meta form)) mode)])]
-      (render/cat (render/text (str (str/join " " prefixes) " ")) (to-doc-form stripped mode)))
+          prefix-docs (if chain
+                        (mapv #(emit-meta-prefix-doc % mode) (reverse chain))
+                        [(emit-meta-prefix-doc (forms/strip-internal-meta (meta form)) mode)])
+          ;; L12: compose prefix Docs with spaces, then the form Doc
+          prefix-doc (reduce (fn [acc d] (render/cat acc (render/text " ") d))
+                             (first prefix-docs)
+                             (rest prefix-docs))]
+      (render/cat prefix-doc (render/text " ") (to-doc-form stripped mode)))
 
     ;; Raw value wrapper — emit original source text
     (forms/raw? form) (render/text (:raw form))

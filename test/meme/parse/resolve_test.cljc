@@ -123,3 +123,26 @@
       (is (some? e))
       (is (= 2 (:line (ex-data e))))
       (is (= 4 (:col (ex-data e)))))))
+
+;; ---------------------------------------------------------------------------
+;; RT2-M10: Surrogate char literals (\uD800-\uDFFF) were accepted.
+;; Clojure rejects them. Fix: surrogate range check in resolve-char.
+;; ---------------------------------------------------------------------------
+
+(deftest surrogate-char-literals-rejected
+  (testing "\\uD800 (low surrogate start) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)surrogate"
+                          (resolve/resolve-char "\\uD800" {:line 1 :col 1}))))
+  (testing "\\uDFFF (high surrogate end) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)surrogate"
+                          (resolve/resolve-char "\\uDFFF" {:line 1 :col 1}))))
+  (testing "\\uD900 (mid-surrogate) is rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"(?i)surrogate"
+                          (resolve/resolve-char "\\uD900" {:line 1 :col 1}))))
+  (testing "\\u0041 (A) still works"
+    (is (some? (resolve/resolve-char "\\u0041" {:line 1 :col 1}))))
+  (testing "\\uE000 (just above surrogate range) still works"
+    (is (some? (resolve/resolve-char "\\uE000" {:line 1 :col 1})))))
