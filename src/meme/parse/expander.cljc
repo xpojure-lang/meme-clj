@@ -111,6 +111,11 @@
                   (expand-sq (:form form) opts loc))]
       (expand-sq inner opts loc))
 
+    ;; MemeReaderConditional — pass through in syntax-quote context.
+    ;; Must be before map? since CLJS defrecords satisfy map?.
+    (forms/meme-reader-conditional? form)
+    form
+
     ;; Map — expand to (apply hash-map (concat ...))
     (map? form)
     (let [items (into [] (mapcat (fn [[k v]]
@@ -161,6 +166,13 @@
 
      (forms/unquote-splicing? form)
      (forms/->MemeUnquoteSplicing (expand-syntax-quotes (:form form) opts))
+
+     ;; MemeReaderConditional (CLJS defrecord) — recurse into :form while
+     ;; preserving the record type. Must be before map? since defrecords satisfy map?.
+     (forms/meme-reader-conditional? form)
+     (forms/make-reader-conditional
+       (mapv #(expand-syntax-quotes % opts) (forms/rc-form form))
+       (forms/rc-splicing? form))
 
      (seq? form)
      (with-meta (apply list (map #(expand-syntax-quotes % opts) form)) (meta form))
