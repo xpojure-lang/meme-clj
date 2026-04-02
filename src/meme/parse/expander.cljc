@@ -152,10 +152,13 @@
      (forms/raw? form)
      (:value form)
 
-     ;; MemeAutoKeyword — pass through for the printer to handle.
-     ;; Expansion to (read-string ...) happens in step-expand-syntax-quotes.
+     ;; MemeAutoKeyword — expand to (read-string "::foo") when :expand-auto-keywords
+     ;; is set in opts (eval path), otherwise pass through (text-to-text path).
      ;; Must be before map? because defrecords satisfy (map? x).
-     (forms/deferred-auto-keyword? form) form
+     (forms/deferred-auto-keyword? form)
+     (if (:expand-auto-keywords opts)
+       (forms/deferred-auto-keyword->form form)
+       form)
 
      (forms/syntax-quote? form)
      (binding [*gensym-env* (volatile! {})]

@@ -26,8 +26,7 @@
    the context map at each stage boundary. Enable runtime validation with:
      (binding [meme.stages.contract/*validate* true]
        (stages/run source))"
-  (:require [meme.forms :as forms]
-            [meme.scan.tokenizer :as tokenizer]
+  (:require [meme.scan.tokenizer :as tokenizer]
             [meme.parse.reader :as reader]
             [meme.parse.expander :as expander]
             [meme.rewrite :as rewrite]
@@ -67,41 +66,18 @@
     (contract/validate! :parse :output result)
     result))
 
-(defn- expand-auto-keywords
-  "Walk a form tree and expand MemeAutoKeyword records into eval-able
-   (clojure.core/read-string \"::foo\") list forms. Called after syntax-quote
-   expansion so the printer never sees the list encoding."
-  [form]
-  (cond
-    (forms/deferred-auto-keyword? form)
-    (forms/deferred-auto-keyword->form form)
-
-    (seq? form)
-    (with-meta (apply list (map expand-auto-keywords form)) (meta form))
-
-    (vector? form)
-    (with-meta (mapv expand-auto-keywords form) (meta form))
-
-    (map? form)
-    (with-meta (into {} (map (fn [[k v]] [(expand-auto-keywords k) (expand-auto-keywords v)]) form))
-      (meta form))
-
-    (set? form)
-    (with-meta (set (map expand-auto-keywords form)) (meta form))
-
-    :else form))
-
 (defn step-expand-syntax-quotes
   "Expand syntax-quote AST nodes, unwrap MemeRaw values, and convert
    MemeAutoKeyword records to eval-able (read-string ...) forms in :forms.
-   Produces plain Clojure forms ready for eval.
+   Produces plain Clojure forms ready for eval. Single-pass — auto-keyword
+   expansion is now handled inside expand-syntax-quotes.
    Not needed for tooling that works with AST nodes directly."
   [ctx]
   (contract/validate! :expand :input ctx)
   (when-not (:forms ctx)
     (throw (ex-info "Pipeline :forms missing — run parse before expand" {:type :meme/pipeline-error :stage :expand})))
-  (let [expanded (expander/expand-forms (:forms ctx) (:opts ctx))
-        result (assoc ctx :forms (mapv expand-auto-keywords expanded))]
+  (let [opts (assoc (:opts ctx) :expand-auto-keywords true)
+        result (assoc ctx :forms (expander/expand-forms (:forms ctx) opts))]
     (contract/validate! :expand :output result)
     result))
 
