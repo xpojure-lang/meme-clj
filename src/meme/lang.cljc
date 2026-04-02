@@ -68,15 +68,19 @@
        (resolve-symbol value)
 
        (string? value)
-       (let [run-string-fn (resolve-symbol 'meme.runtime.run/run-string)]
-         (case command
-           :run (fn [source opts]
-                  (run-string-fn (slurp value) (dissoc opts :rewrite-rules :prelude))
-                  (run-string-fn source opts))
-           :rules (run-string-fn (slurp value))
-           (throw (ex-info (str "String value not supported for :" (name command)
-                                " — use a qualified symbol or keyword")
-                           {:command command :value value}))))
+       ;; PT-F7: reject path traversal via .. in string paths (security)
+       (do (when (str/includes? value "..")
+             (throw (ex-info (str "Path must not contain '..': " (pr-str value))
+                             {:command command :value value})))
+           (let [run-string-fn (resolve-symbol 'meme.runtime.run/run-string)]
+             (case command
+               :run (fn [source opts]
+                      (run-string-fn (slurp value) (dissoc opts :rewrite-rules :prelude))
+                      (run-string-fn source opts))
+               :rules (run-string-fn (slurp value))
+               (throw (ex-info (str "String value not supported for :" (name command)
+                                    " — use a qualified symbol or keyword")
+                               {:command command :value value})))))
 
        (keyword? value)
        (let [base (get @builtin value)]

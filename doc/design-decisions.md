@@ -435,4 +435,10 @@ The token-stream term rewriting backend (`meme-trs`) operates at the text level 
 - Evaluate reader conditionals (`#?`) — preserves them verbatim
 - Normalize whitespace — preserves original formatting
 
+Additionally, the TRS `run-source` path converts meme→clj text, then reads that text with Clojure's reader. This means `::foo` auto-resolve keywords resolve in the namespace current when `clj->forms` calls `read-string`, NOT in the file's declared namespace. The classic path uses deferred `MemeAutoKeyword` records + `(read-string "::foo")` at eval time in the file's namespace, which is correct.
+
 These are inherent to the text-level rewriting approach. The classic backend (`meme-classic`) does expand syntax-quote and evaluate reader conditionals. Use classic for eval paths and TRS for text-to-text conversion.
+
+### U+00A0 NBSP in symbols
+
+The non-breaking space character (U+00A0, NBSP) is treated as part of a symbol name, not as whitespace. This matches Clojure's own behavior — `(read-string (str "f" \u00A0 "g"))` produces a single symbol `f\u00A0g` in Clojure too. This means NBSP is an invisible character attack vector: a symbol containing NBSP looks identical to one without it, but they are different symbols. Users should be aware of this when working with copy-pasted code from web pages or formatted documents that may contain NBSP characters.

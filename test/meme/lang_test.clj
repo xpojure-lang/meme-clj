@@ -217,7 +217,13 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest edn-path-traversal-rejected
-  (testing ":run with .. is rejected"
+  (testing ":run with .. is rejected in load-edn"
     (let [f (tmp-file "test-traversal" ".edn")]
       (spit f "{:run \"../../etc/passwd\"}")
-      (is (thrown? Exception (lang/load-edn f))))))
+      (is (thrown? Exception (lang/load-edn f)))))
+  ;; PT-F7: :rules path traversal also rejected (via resolve-value)
+  (testing ":rules with .. is rejected in load-edn"
+    (let [f (tmp-file "test-traversal-rules" ".edn")]
+      (spit f "{:to-clj meme.lang.meme-classic/to-clj :rules \"../../../etc/passwd\"}")
+      (is (thrown-with-msg? Exception #"must not contain"
+                            (lang/load-edn f))))))

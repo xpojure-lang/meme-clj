@@ -116,9 +116,11 @@
                           :cljs base))]
      ;; Expand and eval prelude before REPL loop (must expand syntax-quotes,
      ;; matching the user-input path — raw parsed forms contain AST nodes)
+     ;; PT-F6: provide full context map so stage contract validation succeeds
      (when-let [prelude (seq (:prelude opts))]
        (let [expanded (:forms (stages/step-expand-syntax-quotes
-                                {:forms (vec prelude) :opts reader-opts}))]
+                                {:source "" :raw-tokens [] :tokens []
+                                 :forms (vec prelude) :opts reader-opts}))]
          (doseq [form expanded]
            (eval-fn form))))
      (let [version #?(:clj (try (some-> (io/resource "meme/version.txt") slurp str/trim)
@@ -138,7 +140,10 @@
 
              (:forms parsed)
              (do (try
-                   (let [expanded (:forms (stages/step-expand-syntax-quotes {:forms (:forms parsed) :opts reader-opts}))]
+                   ;; PT-F6: provide full context map for *validate* compatibility
+                   (let [expanded (:forms (stages/step-expand-syntax-quotes
+                                           {:source "" :raw-tokens [] :tokens []
+                                            :forms (:forms parsed) :opts reader-opts}))]
                      (doseq [form expanded]
                        (let [result (eval-fn form)]
                          (prn result))))

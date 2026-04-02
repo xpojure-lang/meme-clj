@@ -288,3 +288,22 @@
             #?(:clj Exception :cljs js/Error)
             #"Guard function failed"
             (rw/rewrite [bad-rule] 'x))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: nil replacement is a valid rule result, not "no match" (PT-F4)
+;; Previously: (foo ?x) → nil was silently ignored because nil = no-match.
+;; ---------------------------------------------------------------------------
+
+(deftest nil-replacement-rule-applied
+  (testing "rule producing nil is applied (not confused with no-match)"
+    (let [r (rw/make-rule :to-nil '(foo ?x) nil)]
+      (is (nil? (rw/rewrite [r] '(foo 42)))
+          "rule should produce nil, not leave form unchanged")))
+  (testing "rule producing false is applied"
+    (let [r (rw/make-rule :to-false '(bar ?x) false)]
+      (is (false? (rw/rewrite [r] '(bar 42)))
+          "rule should produce false, not leave form unchanged")))
+  (testing "non-matching rule still leaves form unchanged"
+    (let [r (rw/make-rule :no-match '(baz ?x) nil)]
+      (is (= '(quux 1) (rw/rewrite [r] '(quux 1)))
+          "non-matching rule should not change the form"))))

@@ -212,6 +212,15 @@
                 dup (first (filter (fn [k] (if (contains? @seen k) true (do (vswap! seen conj k) false))) keys))]
             (errors/meme-error (str "Duplicate key in map literal: " (pr-str dup))
                                (error-data p loc))))
+        ;; PT-F3: NaN keys bypass set-based detection (NaN != NaN).
+        ;; Check separately: more than one NaN key is a duplicate.
+        (let [nan-count (count (filter (fn [k] (and (number? k)
+                                                     #?(:clj (Double/isNaN (double k))
+                                                        :cljs (js/isNaN k))))
+                                       keys))]
+          (when (> nan-count 1)
+            (errors/meme-error "Duplicate key in map literal: ##NaN"
+                               (error-data p loc))))
         m))))
 
 (defn- parse-set [p]

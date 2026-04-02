@@ -228,32 +228,52 @@
    (check-suspicious-vars! pattern rule-name)
    {:name rule-name :pattern pattern :replacement replacement :guard guard}))
 
+;; PT-F4: sentinel for "rule did not match" — distinguishes from nil as a valid
+;; substitution result. Rules that produce nil (deletion) must not be confused
+;; with "pattern didn't match".
+(def ^:private no-match
+  #?(:clj (Object.) :cljs #js {}))
+
+(defn- no-match?
+  "Is x the no-match sentinel?"
+  [x]
+  (identical? x no-match))
+
+(defn- apply-rule*
+  "Internal: try to apply a single rule. Returns result or no-match sentinel."
+  [rule expr]
+  (let [bindings (match-pattern (:pattern rule) expr)]
+    (if bindings
+      (if-let [guard (:guard rule)]
+        (let [ok? (try (guard bindings)
+                    (catch #?(:clj Exception :cljs :default) e
+                      (throw (ex-info (str "Guard function failed for rule "
+                                          (pr-str (:name rule)) ": "
+                                          #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
+                                     {:rule (:name rule) :expr expr :bindings bindings}
+                                     e))))]
+          (if ok? (substitute (:replacement rule) bindings) no-match))
+        (substitute (:replacement rule) bindings))
+      no-match)))
+
 (defn apply-rule
   "Try to apply a single rule to an expression.
-   Returns the rewritten expression, or nil if the rule doesn't match.
-   Guard exceptions are wrapped in ExceptionInfo with rule context."
+   Returns the rewritten expression, or nil if the rule doesn't match."
   [rule expr]
-  (when-let [bindings (match-pattern (:pattern rule) expr)]
-    (if-let [guard (:guard rule)]
-      (let [ok? (try (guard bindings)
-                  (catch #?(:clj Exception :cljs :default) e
-                    (throw (ex-info (str "Guard function failed for rule "
-                                        (pr-str (:name rule)) ": "
-                                        #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
-                                   {:rule (:name rule) :expr expr :bindings bindings}
-                                   e))))]
-        (when ok? (substitute (:replacement rule) bindings)))
-      (substitute (:replacement rule) bindings))))
+  (let [result (apply-rule* rule expr)]
+    (when-not (no-match? result) result)))
 
-(defn apply-rules
+(defn- apply-rules
   "Try each rule in order against an expression.
-   Returns the first successful rewrite, or nil if none match."
+   Returns the first successful rewrite, or no-match sentinel if none match."
   [rules expr]
   (reduce
    (fn [_ rule]
-     (when-let [result (apply-rule rule expr)]
-       (reduced result)))
-   nil
+     (let [result (apply-rule* rule expr)]
+       (if (no-match? result)
+         no-match
+         (reduced result))))
+   no-match
    rules))
 
 ;; ============================================================
@@ -277,10 +297,10 @@
                     (with-meta rewritten-children (meta expr)))
           ;; then try to rewrite this node
           result (apply-rules rules rebuilt)]
-      (if result
-        [true result]
+      (if (no-match? result)
         (let [changed (not= rebuilt expr)]
-          [changed rebuilt])))
+          [changed rebuilt])
+        [true result]))
 
     (and (map? expr) (not (record? expr)))
     (let [rewritten (with-meta
@@ -291,9 +311,9 @@
                                     expr))
                       (meta expr))
           result (apply-rules rules rewritten)]
-      (if result
-        [true result]
-        [(not= rewritten expr) rewritten]))
+      (if (no-match? result)
+        [(not= rewritten expr) rewritten]
+        [true result]))
 
     (set? expr)
     (let [rewritten (with-meta
@@ -302,9 +322,9 @@
                                 expr))
                       (meta expr))
           result (apply-rules rules rewritten)]
-      (if result
-        [true result]
-        [(not= rewritten expr) rewritten]))
+      (if (no-match? result)
+        [(not= rewritten expr) rewritten]
+        [true result]))
 
     ;; leaf node — try to rewrite
     :else
@@ -313,9 +333,9 @@
                      (throw (ex-info (str "Rewrite error on leaf: "
                                           #?(:clj (.getMessage ^Exception e) :cljs (.-message e)))
                                      {:expr expr :stage :rewrite-leaf} e))))]
-      (if result
-        [true result]
-        [false expr]))))
+      (if (no-match? result)
+        [false expr]
+        [true result]))))
 
 (def ^:const default-max-iters
   "Default safety cap on rewrite iterations. This is a guard against
@@ -371,14 +391,16 @@
      (when (>= i max-iters)
        (throw (ex-info "Rewrite did not reach fixed point"
                        {:iterations max-iters :expr expr})))
-     (if-let [result (apply-rules rules expr)]
-       (recur result (inc i))
-       expr))))
+     (let [result (apply-rules rules expr)]
+       (if (no-match? result)
+         expr
+         (recur result (inc i)))))))
 
 (defn rewrite-once-top
   "Try rules at top level only, return first match or original."
   [rules expr]
-  (or (apply-rules rules expr) expr))
+  (let [result (apply-rules rules expr)]
+    (if (no-match? result) expr result)))
 
 ;; ============================================================
 ;; Rule DSL helpers

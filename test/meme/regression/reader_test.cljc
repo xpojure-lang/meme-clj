@@ -6,7 +6,9 @@
             [meme.core :as core]
             [meme.emit.formatter.flat :as fmt-flat]
             [meme.forms :as forms]
-            [meme.parse.expander :as expander]))
+            [meme.parse.expander :as expander]
+            [meme.stages :as stages]
+            [meme.stages.contract :as contract]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: auto-resolve keywords are opaque
@@ -1011,6 +1013,33 @@
                           #"discarded by #_"
                           (core/meme->forms #?(:clj  "#?(:clj #_ x)"
                                                :cljs "#?(:cljs #_ x)"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: ##NaN duplicate keys in map rejected (PT-F3)
+;; Previously: silently accepted because NaN != NaN bypasses set detection.
+;; ---------------------------------------------------------------------------
+
+(deftest nan-duplicate-key-rejected
+  (testing "{##NaN 1 ##NaN 2} should error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Dd]uplicate key.*NaN"
+                          (core/meme->forms "{##NaN 1 ##NaN 2}"))))
+  (testing "{##NaN 1 :a 2} — single NaN key is fine"
+    (is (= 1 (count (core/meme->forms "{##NaN 1 :a 2}")))))
+  (testing "{##NaN 1} — lone NaN key is fine"
+    (is (= 1 (count (core/meme->forms "{##NaN 1}"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: REPL expand context valid with *validate* (PT-F6)
+;; The REPL constructs expand contexts — they must pass stage validation.
+;; ---------------------------------------------------------------------------
+
+(deftest repl-expand-context-valid-with-validate
+  (testing "context like REPL builds passes contract validation"
+    (let [ctx {:source "" :raw-tokens [] :tokens []
+               :forms [(core/meme->forms "def(x 42)")] :opts {}}]
+      (binding [meme.stages.contract/*validate* true]
+        (is (some? (stages/step-expand-syntax-quotes ctx)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: octal string escapes \0-\377 accepted on JVM (RT3-F11)

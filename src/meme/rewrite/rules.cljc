@@ -104,21 +104,32 @@
               :cljs {:tag (first children) :data (second children)})
 
            ;; RT3-F8: no-match returns nil (discard) instead of wrapping in RC
+           ;; PT-F5: use reduce+sentinel to handle false/nil branch values correctly
            meme/reader-cond
            (if preserve?
              (forms/make-reader-conditional (apply list children) false)
              (let [platform #?(:clj :clj :cljs :cljs)
                    pairs (partition 2 children)
-                   matched (some (fn [[k v]] (when (or (= k platform) (= k :default)) v)) pairs)]
-               matched))
+                   sentinel #?(:clj (Object.) :cljs #js {})
+                   matched (reduce (fn [_ [k v]]
+                                     (if (or (= k platform) (= k :default))
+                                       (reduced v)
+                                       sentinel))
+                                   sentinel pairs)]
+               (when-not (identical? matched sentinel) matched)))
 
            meme/reader-cond-splicing
            (if preserve?
              (forms/make-reader-conditional (apply list children) true)
              (let [platform #?(:clj :clj :cljs :cljs)
                    pairs (partition 2 children)
-                   matched (some (fn [[k v]] (when (or (= k platform) (= k :default)) v)) pairs)]
-               matched))
+                   sentinel #?(:clj (Object.) :cljs #js {})
+                   matched (reduce (fn [_ [k v]]
+                                     (if (or (= k platform) (= k :default))
+                                       (reduced v)
+                                       sentinel))
+                                   sentinel pairs)]
+               (when-not (identical? matched sentinel) matched)))
 
            meme/ns-map
            (let [ns-sym (first children)
