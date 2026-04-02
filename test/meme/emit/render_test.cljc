@@ -82,8 +82,9 @@
                 (r/cat (r/text "aaa")
                        (r/if-break (r/cat r/line (r/text "BREAK")) (r/text " "))
                        (r/text "bbb")))]
-      ;; Force break with narrow width
-      (is (str "aaa\nBREAK\nbbb" (r/layout doc 5))))))
+      ;; Force break with narrow width — break-doc (line + "BREAK") replaces flat " "
+      ;; so output is "aaa" + newline + "BREAK" + "bbb"
+      (is (= "aaa\nBREAKbbb" (r/layout doc 5))))))
 
 ;; ============================================================
 ;; Infinite width = always flat
