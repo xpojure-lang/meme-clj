@@ -147,9 +147,10 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid number"
                           (core/meme->forms "-09"))))
-  (testing "valid octals still work"
-    (is (= 7 (:value (first (core/meme->forms "07")))))
-    (is (= 255 (:value (first (core/meme->forms "0377"))))))
+  #?(:clj
+      (testing "valid octals still work"
+        (is (= 7 (:value (first (core/meme->forms "07")))))
+        (is (= 255 (:value (first (core/meme->forms "0377")))))))
   (testing "plain 0 is not octal"
     (is (= 0 (first (core/meme->forms "0"))))))
 

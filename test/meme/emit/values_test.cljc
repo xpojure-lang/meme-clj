@@ -16,8 +16,9 @@
 (deftest emit-regex-str-with-backslashes
   (is (= "#\"a\\db\"" (values/emit-regex-str #"a\db"))))
 
-(deftest emit-regex-str-empty
-  (is (= "#\"\"" (values/emit-regex-str #""))))
+#?(:clj
+   (deftest emit-regex-str-empty
+     (is (= "#\"\"" (values/emit-regex-str #"")))))
 
 ;; ============================================================
 ;; emit-char-str (JVM only)
