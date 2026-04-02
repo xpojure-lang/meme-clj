@@ -199,8 +199,10 @@
                            (error-data p (assoc loc :hint "Maps need key-value pairs — check for a missing key or value"))))
       (let [m (apply array-map forms)
             keys (take-nth 2 forms)]
+        ;; P7: O(n) set-based duplicate detection (was O(n²) nested filter)
         (when (not= (count m) (/ (count forms) 2))
-          (let [dup (first (filter (fn [k] (> (count (filter #(= k %) keys)) 1)) keys))]
+          (let [seen (volatile! #{})
+                dup (first (filter (fn [k] (if (contains? @seen k) true (do (vswap! seen conj k) false))) keys))]
             (errors/meme-error (str "Duplicate key in map literal: " (pr-str dup))
                                (error-data p loc))))
         m))))
