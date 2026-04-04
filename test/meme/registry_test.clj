@@ -3,7 +3,7 @@
    lang registration."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.registry :as registry]
-            [meme.tools.run :as run]))
+            [meme-lang.run :as run]))
 
 (def all-langs
   (into {} (map (fn [n] [n (registry/resolve-lang n)])
@@ -126,7 +126,7 @@
 (deftest register-and-resolve-by-extension
   (testing "register a user lang and resolve from extension"
     (registry/register! :calc {:extension ".calc"
-                           :run 'meme.tools.run/run-string})
+                           :run 'meme-lang.run/run-string})
     (let [[name _lang] (registry/resolve-by-extension "app.calc")]
       (is (= :calc name)))
     (is (nil? (registry/resolve-by-extension "app.meme")))
@@ -148,7 +148,7 @@
   (testing "register! accepts pre-resolved functions"
     (registry/register! :mini {:extension ".mini"
                            :run (fn [source opts]
-                                  (let [run-string @(resolve 'meme.tools.run/run-string)]
+                                  (let [run-string @(resolve 'meme-lang.run/run-string)]
                                     (run-string "defn(greet [n] str(\"Hi \" n))" opts)
                                     (run-string source opts)))})
     (let [f (tmp-file "test-mini" ".mini")]

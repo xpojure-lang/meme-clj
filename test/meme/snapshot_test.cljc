@@ -3,9 +3,9 @@
    for a broad set of inputs. Regression net for tokenizer and reader
    output — if any of these break, something changed observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.langs.meme :as lang]
-            [meme.tools.forms :as forms]
-            [meme.tools.reader.tokenizer :as tokenizer]))
+            [meme-lang.api :as lang]
+            [meme-lang.forms :as forms]
+            [meme-lang.tokenizer :as tokenizer]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers

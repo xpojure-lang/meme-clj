@@ -1,8 +1,8 @@
 (ns meme.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.flat :as fmt-flat]
-            [meme.tools.forms :as forms]))
+            [meme-lang.api :as lang]
+            [meme-lang.formatter.flat :as fmt-flat]
+            [meme-lang.forms :as forms]))
 
 (defn- roundtrip-forms
   "Parse meme string, get forms. Then print forms back to meme and re-parse.

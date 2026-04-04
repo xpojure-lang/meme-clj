@@ -1,8 +1,8 @@
 (ns meme.test-runner
   "Run .meme tests: eval-based and fixture-based.
    All test sections run against every built-in lang pipeline."
-  (:require [meme.tools.forms :as forms]
-            [meme.tools.errors :as errors]
+  (:require [meme-lang.forms :as forms]
+            [meme-lang.errors :as errors]
             [meme.registry :as registry]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -52,8 +52,8 @@
   "Resolve the API functions for a built-in lang by requiring its namespace.
    Returns a map of {:meme->forms fn, :meme->clj fn, :clj->meme fn, :run fn}."
   [lang-name]
-  (let [;; Convention: :meme → meme.langs.meme
-        ns-sym (symbol (str "meme.langs." (str/replace (name lang-name) #"^meme-" "")))]
+  (let [;; Convention: :meme → meme-lang.api
+        ns-sym 'meme-lang.api]
     (require ns-sym)
     {:meme->forms (ns-resolve (find-ns ns-sym) 'meme->forms)
      :meme->clj   (ns-resolve (find-ns ns-sym) 'meme->clj)

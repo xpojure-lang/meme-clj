@@ -3,8 +3,8 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [meme.tools.errors]
-            [meme.langs.meme :as lang]))
+            [meme-lang.errors]
+            [meme-lang.api :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; B5/B6: source-context nil/empty guards.
@@ -13,11 +13,11 @@
 
 (deftest source-context-edge-cases
   (testing "nil source returns nil"
-    (is (nil? (meme.tools.errors/source-context nil 1))))
+    (is (nil? (meme-lang.errors/source-context nil 1))))
   (testing "empty source returns nil"
-    (is (nil? (meme.tools.errors/source-context "" 1))))
+    (is (nil? (meme-lang.errors/source-context "" 1))))
   (testing "blank source returns nil"
-    (is (nil? (meme.tools.errors/source-context "   " 1)))))
+    (is (nil? (meme-lang.errors/source-context "   " 1)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: error gutter misalignment when secondary line has more digits.
@@ -29,7 +29,7 @@
           e (ex-info "test error"
                      {:line 5 :col 1
                       :secondary [{:line 1000 :col 1 :label "related"}]})
-          result (meme.tools.errors/format-error e source)]
+          result (meme-lang.errors/format-error e source)]
       (is (re-find #"   5 \|" result) "primary line padded to 4-wide gutter")
       (is (re-find #"1000 \|" result) "secondary line fits in gutter"))))
 
@@ -117,7 +117,7 @@
     ;; A col pointing at \r (col 4) should not produce a caret past "foo".
     (let [e (ex-info "bad" {:line 1 :col 4})
           source "foo\r\nbar"
-          result (meme.tools.errors/format-error e source)]
+          result (meme-lang.errors/format-error e source)]
       (is (re-find #"foo" result))
       ;; Caret at col 4 is clamped to col 4 (inc display-len=3+1=4), which is
       ;; one past "foo" — acceptable for exclusive end position
@@ -126,14 +126,14 @@
     ;; end-col 5 would overrun "foo" (3 chars) — should be clamped
     (let [e (ex-info "bad" {:line 1 :col 3 :end-col 5})
           source "foo\r\nbar"
-          result (meme.tools.errors/format-error e source)]
+          result (meme-lang.errors/format-error e source)]
       (is (re-find #"foo" result))
       ;; Span from col 3 to clamped end-col 4: single ~ or ^
       (is (re-find #"\| +[~^]" result))))
   (testing "normal LF source unaffected by clamp"
     (let [e (ex-info "bad" {:line 1 :col 1 :end-col 4})
           source "foo\nbar"
-          result (meme.tools.errors/format-error e source)]
+          result (meme-lang.errors/format-error e source)]
       (is (re-find #"~~~" result)))))
 
 #?(:cljs

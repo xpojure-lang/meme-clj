@@ -19,7 +19,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.java.io :as io]
-            [meme.langs.meme :as meme-lang]))
+            [meme-lang.api :as meme-lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry
@@ -62,7 +62,7 @@
     (do (when (str/includes? value "..")
           (throw (ex-info (str "Path must not contain '..': " (pr-str value))
                           {:command command :value value})))
-        (let [run-string-fn (resolve-symbol 'meme.tools.run/run-string)]
+        (let [run-string-fn (resolve-symbol 'meme-lang.run/run-string)]
           (case command
             :run (fn [source opts]
                    (run-string-fn (slurp value) (dissoc opts :prelude :lang))

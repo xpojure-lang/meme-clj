@@ -3,11 +3,11 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.flat :as fmt-flat]
-            [meme.tools.emit.formatter.canon :as fmt-canon]
-            [meme.tools.emit.values :as values]
-            [meme.tools.forms :as forms]
+            [meme-lang.api :as lang]
+            [meme-lang.formatter.flat :as fmt-flat]
+            [meme-lang.formatter.canon :as fmt-canon]
+            [meme-lang.values :as values]
+            [meme-lang.forms :as forms]
 ))
 
 ;; ---------------------------------------------------------------------------

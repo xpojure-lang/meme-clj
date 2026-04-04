@@ -2,7 +2,7 @@
   "Integration tests: complex, multi-feature meme examples.
    Unit-level parser tests live in reader_test.cljc."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.langs.meme :as lang]))
+            [meme-lang.api :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Full integration example — everything is a call

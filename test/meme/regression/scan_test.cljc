@@ -2,10 +2,10 @@
   "Scar tissue: tokenizer regression tests.
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.flat :as fmt-flat]
-            [meme.tools.forms :as forms]
-            [meme.tools.reader.tokenizer :as tokenizer]))
+            [meme-lang.api :as lang]
+            [meme-lang.formatter.flat :as fmt-flat]
+            [meme-lang.forms :as forms]
+            [meme-lang.tokenizer :as tokenizer]))
 
 (defn- semantic-tokens
   "Filter tokenizer output to only semantic tokens (remove whitespace, newlines, comments).
@@ -21,16 +21,16 @@
   (testing "backtick on symbol produces a MemeSyntaxQuote node"
     (let [form (first (lang/meme->forms "`foo"))]
       (is (some? form))
-      (is (instance? meme.tools.forms.MemeSyntaxQuote form))))
+      (is (instance? meme_lang.forms.MemeSyntaxQuote form))))
   (testing "backtick on call produces a MemeSyntaxQuote wrapping the call"
     (let [form (first (lang/meme->forms "`a(b c)"))]
-      (is (instance? meme.tools.forms.MemeSyntaxQuote form))
+      (is (instance? meme_lang.forms.MemeSyntaxQuote form))
       (is (= '(a b c) (:form form)))))
   (testing "backtick nested inside a call works"
     (let [form (first (lang/meme->forms "foo(`bar)"))]
       (is (seq? form))
       (is (= 'foo (first form)))
-      (is (instance? meme.tools.forms.MemeSyntaxQuote (second form))))))
+      (is (instance? meme_lang.forms.MemeSyntaxQuote (second form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Signed number tokenization: sign adjacent to digit = number,
@@ -104,8 +104,8 @@
 (deftest syntax-quote-unquote-forms
   (testing "`~foo produces MemeSyntaxQuote wrapping MemeUnquote"
     (let [form (first (lang/meme->forms "`~foo"))]
-      (is (instance? meme.tools.forms.MemeSyntaxQuote form))
-      (is (instance? meme.tools.forms.MemeUnquote (:form form)))
+      (is (instance? meme_lang.forms.MemeSyntaxQuote form))
+      (is (instance? meme_lang.forms.MemeUnquote (:form form)))
       (is (= 'foo (:form (:form form))))))
   (testing "` + ~ tokenize as separate prefix tokens"
     (let [tokens (tokenizer/tokenize "`~foo")]
@@ -187,7 +187,7 @@
       (is (= :syntax-quote (:type (first tokens))))))
   (testing "`~\"foo\" produces MemeSyntaxQuote wrapping MemeUnquote of string"
     (let [form (first (lang/meme->forms "`~\"foo\""))]
-      (is (instance? meme.tools.forms.MemeSyntaxQuote form))
+      (is (instance? meme_lang.forms.MemeSyntaxQuote form))
       (is (= "foo" (:form (:form form)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -446,7 +446,7 @@
     (is (= :syntax-quote (:type (first (tokenizer/tokenize "`~\\a"))))))
   (testing "`~\\a produces MemeSyntaxQuote wrapping MemeUnquote of char"
     (let [form (first (lang/meme->forms "`~\\a"))]
-      (is (instance? meme.tools.forms.MemeSyntaxQuote form))
+      (is (instance? meme_lang.forms.MemeSyntaxQuote form))
       (is (= \a (:form (:form form)))))))
 
 ;; ---------------------------------------------------------------------------

@@ -2,8 +2,8 @@
   "Shared test utilities for meme-clj test suite.
    Extracts helpers that were duplicated across dogfood, vendor roundtrip,
    and benchmark tests."
-  (:require [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.flat :as fmt-flat]
+  (:require [meme-lang.api :as lang]
+            [meme-lang.formatter.flat :as fmt-flat]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 

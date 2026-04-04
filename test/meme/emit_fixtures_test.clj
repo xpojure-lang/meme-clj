@@ -15,7 +15,7 @@
 (defn- resolve-lang-fns
   "Resolve conversion functions for a built-in lang by namespace convention."
   [lang-name]
-  (let [ns-sym (symbol (str "meme.langs." (str/replace (name lang-name) #"^meme-" "")))]
+  (let [ns-sym 'meme-lang.api]
     (require ns-sym)
     {:meme->clj (ns-resolve (find-ns ns-sym) 'meme->clj)
      :clj->meme (ns-resolve (find-ns ns-sym) 'clj->meme)}))

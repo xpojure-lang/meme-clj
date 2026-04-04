@@ -4,8 +4,8 @@
    - Per-form roundtrip with precise failure accounting
    - clj-kondo var-definition comparison for semantic equivalence"
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.flat :as fmt-flat]
+            [meme-lang.api :as lang]
+            [meme-lang.formatter.flat :as fmt-flat]
             [meme.test-util :as tu]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -18,19 +18,19 @@
 (deftest dogfood-per-form-experimental
   ;; lang-map uses #?@(:clj [...]) inside a map literal which Clojure's reader
   ;; cannot read with :read-cond :preserve — tolerate 1 read error for that form.
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/langs/meme.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/api.cljc")]
     (is (= (- total (count read-errors)) (count succeeded)) "readable forms roundtrip")
     (is (zero? (count failed)))
     (is (<= (count read-errors) 1) "at most 1 read error (lang-map #?@ splice)")))
 
 (deftest dogfood-per-form-run
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/run.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/run.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-repl
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/repl.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/repl.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
@@ -47,7 +47,7 @@
 ;; and document the specific failing forms in a comment.
 
 (deftest dogfood-per-form-cst-reader
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/reader/cst_reader.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/cst_reader.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -55,7 +55,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-printer
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/emit/printer.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/printer.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -63,7 +63,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-exp-tokenizer
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/reader/tokenizer.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/tokenizer.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -71,7 +71,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-resolve
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/parse/resolve.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/resolve.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -79,7 +79,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-exp-stages
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/reader/stages.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/stages.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -87,7 +87,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-errors
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/errors.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/errors.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -120,14 +120,14 @@
     tmp))
 
 (deftest dogfood-semantic-equivalence
-  (doseq [path ["src/meme/langs/meme.cljc" "src/meme/tools/run.clj"
-                "src/meme/tools/repl.clj" "test/meme/test_runner.clj"
-                "src/meme/tools/reader/cst_reader.cljc"
-                "src/meme/tools/emit/printer.cljc"
-                "src/meme/tools/reader/tokenizer.cljc"
-                "src/meme/tools/parse/resolve.cljc"
-                "src/meme/tools/reader/stages.cljc"
-                "src/meme/tools/errors.cljc"
+  (doseq [path ["src/meme_lang/api.cljc" "src/meme_lang/run.clj"
+                "src/meme_lang/repl.clj" "test/meme/test_runner.clj"
+                "src/meme_lang/cst_reader.cljc"
+                "src/meme_lang/printer.cljc"
+                "src/meme_lang/tokenizer.cljc"
+                "src/meme_lang/resolve.cljc"
+                "src/meme_lang/stages.cljc"
+                "src/meme_lang/errors.cljc"
                 "src/meme/registry.clj"
                 "src/meme/cli.clj"]]
     (testing (str path " roundtripped vars match original")

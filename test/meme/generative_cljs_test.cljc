@@ -5,9 +5,9 @@
   (:require [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.canon :as fmt-canon]
-            [meme.tools.emit.formatter.flat :as fmt-flat]))
+            [meme-lang.api :as lang]
+            [meme-lang.formatter.canon :as fmt-canon]
+            [meme-lang.formatter.flat :as fmt-flat]))
 
 ;; ===========================================================================
 ;; Leaf generators (portable — no chars, ratios, BigDecimal, BigInt)

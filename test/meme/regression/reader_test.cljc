@@ -3,11 +3,11 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
 
-            [meme.langs.meme :as lang]
-            [meme.tools.emit.formatter.flat :as fmt-flat]
-            [meme.tools.forms :as forms]
-            [meme.tools.parse.expander :as expander]
-            [meme.tools.reader.stages :as stages]))
+            [meme-lang.api :as lang]
+            [meme-lang.formatter.flat :as fmt-flat]
+            [meme-lang.forms :as forms]
+            [meme-lang.expander :as expander]
+            [meme-lang.stages :as stages]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: auto-resolve keywords are opaque
@@ -465,14 +465,14 @@
 ;; has adjacent call args, produces (sentinel arg).
 (deftest reader-conditional-no-match-with-call-args
   (testing "non-matching reader cond with call args produces (sentinel 42)"
-    #?(:clj  (is (= ['(:meme.tools.reader.cst-reader/no-match 42)] (lang/meme->forms "#?(:cljs identity)(42)")))
-       :cljs (is (= ['(:meme.tools.reader.cst-reader/no-match 42)] (lang/meme->forms "#?(:clj identity)(42)")))))
+    #?(:clj  (is (= ['(:meme-lang.cst-reader/no-match 42)] (lang/meme->forms "#?(:cljs identity)(42)")))
+       :cljs (is (= ['(:meme-lang.cst-reader/no-match 42)] (lang/meme->forms "#?(:clj identity)(42)")))))
   (testing "chained call args chain on sentinel"
-    #?(:clj  (is (= ['((:meme.tools.reader.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:cljs identity)(42)(43)")))
-       :cljs (is (= ['((:meme.tools.reader.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:clj identity)(42)(43)")))))
+    #?(:clj  (is (= ['((:meme-lang.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:cljs identity)(42)(43)")))
+       :cljs (is (= ['((:meme-lang.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:clj identity)(42)(43)")))))
   (testing "surrounding forms include (sentinel 42)"
-    #?(:clj  (is (= [1 '(:meme.tools.reader.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:cljs inc)(42) 2")))
-       :cljs (is (= [1 '(:meme.tools.reader.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:clj inc)(42) 2")))))
+    #?(:clj  (is (= [1 '(:meme-lang.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:cljs inc)(42) 2")))
+       :cljs (is (= [1 '(:meme-lang.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:clj inc)(42) 2")))))
   (testing "matching case still works with call args"
     #?(:clj  (is (= ['(inc 42)] (lang/meme->forms "#?(:clj inc)(42)")))
        :cljs (is (= ['(identity 42)] (lang/meme->forms "#?(:cljs identity)(42)"))))))

@@ -1,6 +1,6 @@
 (ns meme.cli
   "Unified CLI. Commands dispatch through lang maps."
-  (:require [meme.tools.errors :as errors]
+  (:require [meme-lang.errors :as errors]
             [meme.registry :as registry]
             [clojure.java.io :as io]
             [clojure.string :as str]))
