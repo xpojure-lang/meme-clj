@@ -136,27 +136,29 @@ during design iteration. IDs are stable references and are not renumbered.
 ## Architecture
 
 ```
-.meme file ──→ scanner ──→ trivia ──→ pratt-parser ──→ cst-reader ──→ Clojure forms
-              (step-scan) (step-trivia) (step-parse)   (step-read)         │
-                                                                          ▼
-                                         resolve                    expander ──→ eval
-                                     (value resolution)                  │
-                                                                   printer ──→ .meme text
-                                                                 formatter ──→ .meme text
+.meme file ──→ unified-pratt-parser ──→ cst-reader ──→ Clojure forms
+                  (step-parse)          (step-read)         │
+                                                            ▼
+                                                      expander ──→ eval
+                                                            │
+                                                       printer ──→ .meme text
+                                                     formatter ──→ .meme text
 ```
 
-The pipeline has composable stages (composed by `meme.tools.reader.stages`), each a `ctx → ctx` function with a `step-` prefix:
-1. **step-strip-shebang** — remove `#!` line from `:source` (for executable scripts).
-   Defined in `meme.tools.run`, not part of the core pipeline.
-2. **step-scan** (`meme.tools.reader.tokenizer`) — exhaustive byte-level scanner → flat
-   token vector. Never throws. Partition invariant: `(= input (apply str (map :raw tokens)))`.
-3. **step-trivia** (`meme.tools.pratt.trivia`) — attaches trivia (whitespace, comments)
-   to semantic tokens as structured `:trivia/before` metadata.
-4. **step-parse** (`meme.tools.pratt.parser`) — data-driven Pratt parser → lossless CST.
-   Grammar defined in `meme.tools.reader.meme-grammar`.
-5. **step-read** (`meme.tools.reader.cst-reader`) — lowers CST to Clojure forms. Value
-   resolution delegated to `meme.tools.parse.resolve`. No `read-string` delegation.
-6. **step-expand-syntax-quotes** (`meme.tools.parse.expander`) — syntax-quote AST nodes →
+The codebase has three layers:
+- **`meme.tools.*`** — Generic infrastructure: parser engine, scanlet builders, render engine
+- **`meme-lang.*`** — Meme language: grammar, scanlets, parselets, stages, printer, formatter
+- **`meme.*`** — CLI and lang registry
+
+The pipeline has composable stages (composed by `meme-lang.stages`), each a `ctx → ctx` function with a `step-` prefix:
+1. **strip-shebang** — remove `#!` line from `:source` (for executable scripts).
+   Defined in `meme-lang.stages`, called by runtime before the core pipeline.
+2. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — unified scanlet-parselet
+   Pratt parser → lossless CST. Scanning (character dispatch, trivia) and parsing (structure)
+   are both defined in the grammar spec. Reads directly from source string.
+3. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. Value
+   resolution delegated to `meme-lang.resolve`. No `read-string` delegation.
+4. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes →
    plain Clojure forms. Only needed before eval, not for tooling.
    `stages/run` intentionally omits this stage, returning AST
    nodes for tooling access.
@@ -211,7 +213,7 @@ meme rules inside. No opaque regions.
 | PL4 | `run-file` and CLI auto-detect guest language from file extension | Done |
 | PL5 | `run-string` accepts `:prelude` | Done |
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
-| PL8 | Stage contract: spec validation at stage boundaries | Done (removed — contract validation was deleted during pipeline unification) |
+| PL8 | Stage contract: spec validation at stage boundaries | Removed — contract validation was deleted during pipeline unification to the scanlet-parselet architecture |
 | PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
 
 ## Future work

@@ -1,17 +1,10 @@
-(ns meme-lang.tokenizer
-  "Backward-compatible tokenizer API.
-
-   Delegates to the unified Pratt parser engine for scanning. Produces a flat
-   token vector with the same partition invariant as the original tokenizer:
-   (= source (apply str (map :raw tokens))).
-
-   The actual scanning logic lives in meme-lang.grammar as
-   character-dispatched scanlets."
+(ns meme-lang.test-util
+  "Shared .cljc test utilities for meme-lang tests."
   (:require [meme.tools.parser :as pratt]
             [meme-lang.grammar :as grammar]))
 
 ;; ---------------------------------------------------------------------------
-;; CST → flat token extraction
+;; CST → flat token extraction (for scanner-level tests)
 ;; ---------------------------------------------------------------------------
 
 (defn- add-token [tokens tok]
@@ -83,14 +76,10 @@
       (add-token tokens tok)
       tokens)))
 
-;; ---------------------------------------------------------------------------
-;; Public API
-;; ---------------------------------------------------------------------------
-
 (defn tokenize
-  "Tokenize source string into a flat vector of tokens.
+  "Parse source and extract a flat token vector from the CST.
    Structural invariant: (= source (apply str (map :raw tokens))).
-   Never throws — invalid input produces :invalid tokens."
+   Used by scanner-level tests."
   [source]
   (if (zero? (count source))
     []

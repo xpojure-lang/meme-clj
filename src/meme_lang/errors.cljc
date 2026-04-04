@@ -8,7 +8,7 @@
   "Extract the source line at the given 1-indexed line number for display.
    Uses str/split-lines which splits on \\n and \\r\\n (stripping \\r from
    CRLF pairs). This is the *display* line model — it may differ from the
-   scanner line model (meme-lang.tokenizer) which treats
+   scanner line model (meme.tools.parser) which treats
    \\r as a regular character. The difference only matters for CRLF sources.
    Returns nil if source is nil/blank, line is nil, or line is out of range."
   [source line]

@@ -5,7 +5,7 @@
             [meme-lang.api :as lang]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.forms :as forms]
-            [meme-lang.tokenizer :as tokenizer]))
+            [meme-lang.test-util :as tokenizer]))
 
 (defn- semantic-tokens
   "Filter tokenizer output to only semantic tokens (remove whitespace, newlines, comments).

@@ -5,7 +5,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
             [meme-lang.forms :as forms]
-            [meme-lang.tokenizer :as tokenizer]))
+            [meme-lang.test-util :as tokenizer]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
