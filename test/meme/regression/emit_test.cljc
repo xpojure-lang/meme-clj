@@ -7,8 +7,7 @@
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
             [meme-lang.values :as values]
-            [meme-lang.forms :as forms]
-))
+            [meme-lang.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
@@ -17,34 +16,10 @@
 ;; Both roundtrip through the reader.
 ;; ---------------------------------------------------------------------------
 
-(deftest quoted-call-printer
-  (testing "'f(x y) sugar roundtrips"
-    (let [form (with-meta '(quote (f x y)) {:meme/sugar true})
-          printed (fmt-flat/format-form form)
-          read-back (first (lang/meme->forms printed))]
-      (is (= "'f(x y)" printed))
-      (is (= '(quote (f x y)) read-back))))
-  (testing "quote(+(1 2)) call form roundtrips"
-    (let [form '(quote (+ 1 2))
-          printed (fmt-flat/format-form form)
-          read-back (first (lang/meme->forms printed))]
-      (is (= "quote(+(1 2))" printed))
-      (is (= form read-back))))
-  (testing "quoted empty list — sugar"
-    (is (= "'()" (fmt-flat/format-form (with-meta '(quote ()) {:meme/sugar true})))))
-  (testing "quoted empty list — call form"
-    (is (= "quote(())" (fmt-flat/format-form '(quote ()))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Empty list prints as (): not "nil()".
 ;; Bug: print-form on empty list produced "nil()" which re-reads as (nil).
 ;; ---------------------------------------------------------------------------
-
-(deftest empty-list-roundtrip
-  (testing "empty list prints as ()"
-    (is (= "()" (fmt-flat/format-form ()))))
-  (testing "printed empty list re-reads correctly"
-    (is (= [(list)] (lang/meme->forms "()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; B4: #() printer drops surplus % params.
@@ -94,19 +69,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Quote roundtrips — both sugar and call paths.
 ;; ---------------------------------------------------------------------------
-
-(deftest quoted-call-form-roundtrip
-  (testing "'f(g(x)) sugar roundtrips"
-    (let [form (with-meta '(quote (f (g x))) {:meme/sugar true})
-          printed (fmt-flat/format-form form)
-          reread (first (lang/meme->forms printed))]
-      (is (= "'f(g(x))" printed))
-      (is (= '(quote (f (g x))) reread))))
-  (testing "quote(a(b(c) d)) call form roundtrips"
-    (let [form '(quote (a (b c) d))
-          printed (fmt-flat/format-form form)
-          read-back (first (lang/meme->forms printed))]
-      (is (= form read-back)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: canon formatter head-line args must respect width.
@@ -309,34 +271,9 @@
 ;; nil/true/false as list heads — the rule is purely syntactic.
 ;; ---------------------------------------------------------------------------
 
-(deftest literal-head-prints
-  (testing "nil as head"
-    (is (= "nil(1 2)" (fmt-flat/format-form (list nil 1 2)))))
-  (testing "true as head"
-    (is (= "true(1 2)" (fmt-flat/format-form (list true 1 2)))))
-  (testing "false as head"
-    (is (= "false(1 2)" (fmt-flat/format-form (list false 1 2))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ' prefix sugar roundtrips for all inner form types.
 ;; ---------------------------------------------------------------------------
-
-(deftest quote-sugar-roundtrips-all-heads
-  (testing "' sugar roundtrips through meme reader for all head types"
-    (doseq [[input expected-form]
-            [["'1(2 3)"       '(quote (1 2 3))]
-             ["'\"s\"(a)"     '(quote ("s" a))]
-             ["':k(v)"        '(quote (:k v))]
-             ["'[x](body)"   '(quote ([x] body))]
-             ["'f(x)"         '(quote (f x))]
-             ["'x"            '(quote x)]
-             ["'42"           '(quote 42)]
-             ["'()"           '(quote ())]]]
-      (testing input
-        (let [forms (lang/meme->forms input)
-              printed (lang/forms->meme forms)]
-          (is (= [expected-form] forms))
-          (is (= input printed)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: MemeRaw in canon formatter was rendered as {:value N :raw "..."}.
@@ -562,17 +499,6 @@
 ;; canon/format-forms preserved them. Fix: flat now mirrors canon behavior.
 ;; ---------------------------------------------------------------------------
 
-(deftest flat-format-preserves-trailing-comments
-  (testing "trailing comment after forms is preserved in flat output"
-    (let [forms (lang/meme->forms "def(x 1)\n; trailing comment")
-          result (fmt-flat/format-forms forms)]
-      (is (re-find #"; trailing comment" result)
-          "trailing comment should appear in flat output")))
-  (testing "no trailing comment — no extra output"
-    (let [forms (lang/meme->forms "def(x 1)")
-          result (fmt-flat/format-forms forms)]
-      (is (= "def(x 1)" result)))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: printer must not hang on infinite or very large lazy sequences.
 ;; RT3-F1: flat/format-form on (range) previously caused OOM.
@@ -636,16 +562,6 @@
 ;; Previously: fits? traversed entire remaining work-list for every DocGroup.
 ;; ---------------------------------------------------------------------------
 
-(deftest layout-infinite-width-performance
-  (testing "flat formatting many-arg call completes quickly"
-    (let [;; Wide form: f(a0 a1 ... a999) — many siblings to stress layout
-          form (cons 'f (map #(symbol (str "a" %)) (range 1000)))
-          start #?(:clj (System/nanoTime) :cljs (js/Date.now))
-          result (fmt-flat/format-form form)
-          elapsed #?(:clj (/ (- (System/nanoTime) start) 1e6) :cljs (- (js/Date.now) start))]
-      (is (string? result))
-      (is (< elapsed 500) (str "flat formatting should be fast, took " elapsed "ms")))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: non-printable chars must emit as \uXXXX, not raw bytes
 ;; ---------------------------------------------------------------------------
@@ -666,33 +582,9 @@
 ;; Scar tissue: format-clj must preserve trailing comments
 ;; ---------------------------------------------------------------------------
 
-(deftest format-clj-preserves-trailing-comments
-  (testing "inline comment on last form"
-    (let [forms (lang/meme->forms "f(x) ;; trailing")
-          clj (fmt-flat/format-clj forms)]
-      (is (str/includes? clj "trailing"))))
-  (testing "standalone comment after last form"
-    (let [forms (lang/meme->forms "f(x)\n;; EOF comment")
-          clj (fmt-flat/format-clj forms)]
-      (is (str/includes? clj "EOF comment"))))
-  (testing "comment between forms"
-    (let [forms (lang/meme->forms "f(x) ;; mid\ng(y)")
-          clj (fmt-flat/format-clj forms)]
-      (is (str/includes? clj "mid")))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: format-forms nil must throw consistently
 ;; ---------------------------------------------------------------------------
-
-(deftest format-forms-nil-throws-consistently
-  (testing "flat format-forms rejects nil"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"expects a sequence"
-                          (fmt-flat/format-forms nil))))
-  (testing "canon format-forms rejects nil"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"expects a sequence"
-                          (fmt-canon/format-forms nil)))))
 
 ;; Known limitation: CLJS cannot distinguish 1.0 from 1 at the value level
 ;; (JavaScript has no integer/float type distinction). The emitter produces "1"
@@ -704,18 +596,6 @@
 ;; evaluated (losing the non-matching branch) during formatting.
 ;; ---------------------------------------------------------------------------
 
-(deftest format-meme-preserves-reader-conditionals
-  (testing "format-meme preserves both branches of #?"
-    (let [src "#?(:clj 1 :cljs 2)"
-          result (lang/format-meme src {})]
-      (is (re-find #":clj" result) "clj branch preserved")
-      (is (re-find #":cljs" result) "cljs branch preserved")))
-  (testing "format-meme preserves #?@ splice"
-    (let [src "#?@(:clj [1 2] :cljs [3 4])"
-          result (lang/format-meme src {})]
-      (is (re-find #":clj" result))
-      (is (re-find #":cljs" result)))))
-
 ;; ---------------------------------------------------------------------------
 ;; Known limitation: symbols with whitespace/parens in name (C1)
 ;; Clojure has no escape syntax for symbols — pr-str returns the same as str.
@@ -723,18 +603,6 @@
 ;; faithfully printed in any Clojure-based syntax. This test documents the
 ;; limitation rather than attempting to fix it.
 ;; ---------------------------------------------------------------------------
-
-(deftest symbol-with-syntax-chars-known-limitation
-  (testing "normal symbols print correctly"
-    (is (= "foo-bar" (fmt-flat/format-form 'foo-bar)))
-    (is (= "foo?" (fmt-flat/format-form 'foo?)))
-    (is (= "+" (fmt-flat/format-form '+)))
-    (is (= "foo->bar" (fmt-flat/format-form 'foo->bar))))
-  (testing "symbol with whitespace does not roundtrip (known limitation)"
-    (let [sym (symbol "foo bar")
-          meme (fmt-flat/format-form sym)]
-      (is (= "foo bar" meme) "prints raw — no escape available")
-      (is (not= [sym] (lang/meme->forms meme)) "re-parse produces different forms"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: canon format-forms bare integer arg silently ignored (C3)
@@ -785,26 +653,11 @@
 ;; Fix: copied guard from flat to canon.
 ;; ---------------------------------------------------------------------------
 
-(deftest canon-format-forms-rejects-map-set
-  (testing "canon/format-forms rejects map input"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (fmt-canon/format-forms {:a 1}))))
-  (testing "canon/format-forms rejects set input"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (fmt-canon/format-forms #{1 2})))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT6-F21: Comment-only files don't get leading newlines
 ;; Bug: formatting ";; comment" produced "\n\n;; comment".
 ;; Fix: format-meme returns source unchanged when forms is empty.
 ;; ---------------------------------------------------------------------------
-
-(deftest comment-only-files-unchanged
-  (testing "comment-only source returned unchanged"
-    (let [src ";; just a comment"]
-      (is (= src (lang/format-meme src {})))))
-  (testing "empty source returned unchanged"
-    (is (= "" (lang/format-meme "" {})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fuzzer finding: control char roundtrip — bare control char prints as

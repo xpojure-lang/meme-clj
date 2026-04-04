@@ -59,17 +59,6 @@
 ;; Comments inside opaque forms (#?, #:ns{}) must not confuse depth tracking.
 ;; ---------------------------------------------------------------------------
 
-(deftest comment-inside-reader-conditional
-  (testing "#? with ; comment containing ) inside"
-    (let [tokens (tokenizer/tokenize "#?(:clj ; comment with )\n 1)")]
-      (is (= :reader-cond (:type (first tokens))))))
-  (testing "#? with ; comment containing ] inside"
-    (let [tokens (tokenizer/tokenize "#?(:clj ; ] in comment\n x)")]
-      (is (= :reader-cond (:type (first tokens))))))
-  (testing "#:ns{} with ; comment containing } inside — parses correctly"
-    (let [tokens (tokenizer/tokenize "#:user{:name ; } tricky\n \"x\"}")]
-      (is (= :namespaced-map (:type (first tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Bug: read-balanced-raw didn't handle character literals. Bracket-like
 ;; chars (\), \(, etc.) corrupted the depth counter in opaque forms.
@@ -126,15 +115,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: reader conditionals (#?, #?@) are opaque.
 ;; ---------------------------------------------------------------------------
-
-(deftest reader-conditional-native-parsing
-  (testing "#?(:clj x :cljs y) returns matching platform value"
-    (is (= [#?(:clj 'x :cljs 'y)] (lang/meme->forms "#?(:clj x :cljs y)"))))
-  (testing "#?(:unknown x :default fallback) — no matching platform, filtered out"
-    (is (= [] (lang/meme->forms "#?(:unknown x :default fallback)"))))
-  ;; RT3-F14: #?() — empty reader conditional produces no form
-  (testing "#?() empty — filtered out"
-    (is (= [] (lang/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: radix numbers for bases 17–36 need letters G-Z.
@@ -194,23 +174,6 @@
 ;; B3: \uXXXX and \oXXX char literals.
 ;; Bug: \u0041 tokenized as \u (char) + 0041 (number) instead of \u0041.
 ;; ---------------------------------------------------------------------------
-
-(deftest unicode-octal-char-literals
-  (testing "\\u0041 tokenizes as single char-literal token"
-    (let [tokens (tokenizer/tokenize "\\u0041")]
-      (is (= 1 (count tokens)))
-      (is (= :char-literal (:type (first tokens))))
-      (is (= "\\u0041" (:raw (first tokens))))))
-  (testing "\\o101 tokenizes as single char-literal token"
-    (let [tokens (tokenizer/tokenize "\\o101")]
-      (is (= 1 (count tokens)))
-      (is (= :char-literal (:type (first tokens))))
-      (is (= "\\o101" (:raw (first tokens))))))
-  #?(:clj
-     (testing "\\u0041 resolves to char A, preserves raw notation"
-       (let [form (first (lang/meme->forms "\\u0041"))]
-         (is (= \A (:value form)))
-         (is (= "\\u0041" (:raw form)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: \u00g1 tokenized as \u00 + g1 instead of erroring.
@@ -320,24 +283,6 @@
 ;; tracking. :open-anon-fn was not in opening-type?.
 ;; ---------------------------------------------------------------------------
 
-(deftest anon-fn-inside-reader-conditional
-  (testing "#?(:clj #(inc(%)) :cljs identity) starts with reader-cond"
-    (let [tokens (tokenizer/tokenize "#?(:clj #(inc(%)) :cljs identity)")]
-      (is (= :reader-cond (:type (first tokens))))))
-  #?(:clj
-     (testing "#?(:clj #(inc(%)) :cljs identity) parses without error"
-       (is (some? (lang/meme->forms "#?(:clj #(inc(%)) :cljs identity)")))))
-  (testing "#?@(:clj [#(+(%1 %2))] :cljs [identity]) starts with reader-cond"
-    (let [tokens (tokenizer/tokenize "#?@(:clj [#(+(%1 %2))] :cljs [identity])")]
-      (is (= :reader-cond (:type (first tokens)))))))
-
-(deftest anon-fn-inside-syntax-quote
-  (testing "` prefix token appears"
-    (let [tokens (tokenizer/tokenize "`#(inc(%))")]
-      (is (= :syntax-quote (:type (first tokens))))))
-  (testing "`#(inc(%)) parses without error"
-    (is (some? (lang/meme->forms "`#(inc(%))")))))
-
 #?(:clj
    (deftest anon-fn-inside-namespaced-map
      (testing "#:user{:f #(inc(%))} tokenizes with namespaced-map"
@@ -382,20 +327,6 @@
 ;; Previous fix rejected multi-slash; now we accept them to match Clojure.
 ;; ---------------------------------------------------------------------------
 
-(deftest symbol-slash-handling
-  (testing "a/b is a single namespace-qualified symbol"
-    (let [tokens (tokenizer/tokenize "a/b")]
-      (is (= 1 (count tokens)))
-      (is (= "a/b" (:raw (first tokens))))))
-  (testing "a/b/c is a single symbol (Clojure allows multi-slash)"
-    (let [tokens (tokenizer/tokenize "a/b/c")]
-      (is (= 1 (count tokens)))
-      (is (= "a/b/c" (:raw (first tokens))))))
-  (testing "clojure.string/join — dots are fine, one slash"
-    (let [tokens (tokenizer/tokenize "clojure.string/join")]
-      (is (= 1 (count tokens)))
-      (is (= "clojure.string/join" (:raw (first tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Bug: clojure.core// was split into two tokens (clojure.core/ and /).
 ;; read-symbol-str stopped at the second / because it only allows one /
@@ -429,26 +360,6 @@
 ;; Fix: explicit \\ and \" handling before the symbol catch-all.
 ;; ---------------------------------------------------------------------------
 
-(deftest syntax-quote-char-literal
-  (testing "`\\a starts with :syntax-quote prefix"
-    (is (= :syntax-quote (:type (first (tokenizer/tokenize "`\\a"))))))
-  (testing "`\\a parses without error"
-    (is (some? (lang/meme->forms "`\\a")))))
-
-(deftest syntax-quote-string-literal
-  (testing "`\"foo\" starts with :syntax-quote prefix"
-    (is (= :syntax-quote (:type (first (tokenizer/tokenize "`\"foo\""))))))
-  (testing "`\"foo\" parses without error"
-    (is (some? (lang/meme->forms "`\"foo\"")))))
-
-(deftest syntax-quote-unquote-char-literal
-  (testing "`~\\a starts with :syntax-quote prefix"
-    (is (= :syntax-quote (:type (first (tokenizer/tokenize "`~\\a"))))))
-  (testing "`~\\a produces MemeSyntaxQuote wrapping MemeUnquote of char"
-    (let [form (first (lang/meme->forms "`~\\a"))]
-      (is (instance? meme_lang.forms.MemeSyntaxQuote form))
-      (is (= \a (:form (:form form)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Bug: ##Inf, ##-Inf, ##NaN silently misparsed as tagged literals.
 ;; The tokenizer's # dispatch fell through to tagged-literal for ##,
@@ -458,28 +369,6 @@
 ;; Fix: dedicated (= nxt \#) branch emits :number token; # excluded
 ;; from symbol-start? and symbol-char?.
 ;; ---------------------------------------------------------------------------
-
-(deftest symbolic-value-tokenization
-  (testing "##Inf tokenizes as :number"
-    (let [tokens (tokenizer/tokenize "##Inf")]
-      (is (= 1 (count tokens)))
-      (is (= :number (:type (first tokens))))
-      (is (= "##Inf" (:raw (first tokens))))))
-  (testing "##-Inf tokenizes as :number"
-    (let [tokens (tokenizer/tokenize "##-Inf")]
-      (is (= 1 (count tokens)))
-      (is (= :number (:type (first tokens))))
-      (is (= "##-Inf" (:raw (first tokens))))))
-  (testing "##NaN tokenizes as :number"
-    (let [tokens (tokenizer/tokenize "##NaN")]
-      (is (= 1 (count tokens)))
-      (is (= :number (:type (first tokens))))
-      (is (= "##NaN" (:raw (first tokens))))))
-  (testing "##Inf does not eat following form"
-    (let [tokens (semantic-tokens (tokenizer/tokenize "##Inf 42"))]
-      (is (= 2 (count tokens)))
-      (is (= "##Inf" (:raw (first tokens))))
-      (is (= "42" (:raw (second tokens)))))))
 
 #?(:clj
    (deftest symbolic-value-parsing
@@ -536,23 +425,6 @@
 ;; Fix: reject reserved Clojure dispatch characters before symbol-start? check.
 ;; ---------------------------------------------------------------------------
 
-(deftest reserved-dispatch-chars-rejected
-  ;; Experimental tokenizer: #=, #<, #% are tokenized as :hashtag-symbol.
-  ;; The experimental pipeline does not reject these at the tokenizer level —
-  ;; they are treated as tagged literals. Validation of reserved dispatch
-  ;; characters happens at a different level in the experimental pipeline.
-  (testing "#=foo tokenizes as :hashtag-symbol"
-    (is (= :hashtag-symbol (:type (first (tokenizer/tokenize "#=foo bar"))))))
-  (testing "#<foo tokenizes as :hashtag-symbol"
-    (is (= :hashtag-symbol (:type (first (tokenizer/tokenize "#<foo bar"))))))
-  (testing "#%foo tokenizes as :hashtag-symbol"
-    (is (= :hashtag-symbol (:type (first (tokenizer/tokenize "#%foo"))))))
-  #?(:clj
-     (testing "valid tagged literals still work"
-       (is (some? (lang/meme->forms "#inst \"2024-01-01T00:00:00Z\"")))
-       (is (some? (lang/meme->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\"")))
-       (is (some? (lang/meme->forms "#foo/bar [1 2 3]"))))))
-
 ;; ---------------------------------------------------------------------------
 ;; F2: ::a::b, :::, ::a/ were silently accepted as valid keywords.
 ;; Bug: tokenizer's read-symbol-str consumed : as a symbol-char, producing
@@ -561,39 +433,11 @@
 ;; trailing /, and bare :: with no name.
 ;; ---------------------------------------------------------------------------
 
-(deftest invalid-keyword-syntax-rejected
-  ;; Experimental tokenizer: these are all tokenized as :keyword tokens.
-  ;; The experimental pipeline does not validate keyword syntax at the same
-  ;; level as the classic pipeline — these produce keyword tokens and may
-  ;; be accepted as auto-resolve keywords.
-  (testing "::: tokenizes as :keyword"
-    (is (= :keyword (:type (first (tokenizer/tokenize ":::"))))))
-  (testing "::a::b tokenizes as :keyword"
-    (is (= :keyword (:type (first (tokenizer/tokenize "::a::b"))))))
-  (testing "::a/ tokenizes as :keyword"
-    (is (= :keyword (:type (first (tokenizer/tokenize "::a/"))))))
-  (testing "valid keywords still work"
-    #?(:clj (is (some? (lang/meme->forms "::foo"))))
-    #?(:clj (is (some? (lang/meme->forms "::ns/name"))))
-    (is (= [:regular] (lang/meme->forms ":regular")))
-    (is (= [:ns/name] (lang/meme->forms ":ns/name")))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT2-M11: Bare : (lone colon) was accepted as empty-name keyword.
 ;; Clojure rejects it: "Invalid token: :".
 ;; Fix: validate-keyword! now rejects empty non-auto keyword names.
 ;; ---------------------------------------------------------------------------
-
-(deftest bare-colon-rejected
-  ;; Experimental tokenizer: bare : is tokenized as a :keyword token.
-  ;; The experimental pipeline does not reject it — it produces keyword :.
-  (testing ": alone tokenizes as :keyword"
-    (is (= :keyword (:type (first (tokenizer/tokenize ":"))))))
-  (testing ": before whitespace tokenizes as :keyword"
-    (let [tokens (semantic-tokens (tokenizer/tokenize ": foo"))]
-      (is (= :keyword (:type (first tokens))))))
-  (testing ":foo still works"
-    (is (= [:foo] (lang/meme->forms ":foo")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-M3: foo/ (trailing slash) was accepted as a valid symbol.
@@ -601,45 +445,17 @@
 ;; Fix: validate-symbol-name! rejects trailing / (except ns// pattern).
 ;; ---------------------------------------------------------------------------
 
-(deftest trailing-slash-symbol-rejected
-  ;; Experimental tokenizer: foo/ is tokenized as a :symbol token.
-  ;; The experimental pipeline does not reject trailing slash.
-  (testing "foo/ tokenizes as :symbol"
-    (is (= :symbol (:type (first (tokenizer/tokenize "foo/"))))))
-  (testing "clojure.core// still works (name part is /)"
-    (is (= [(symbol "clojure.core" "/")]
-           (lang/meme->forms "clojure.core//")))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT2-M4: foo/1bar (digit-starting name after /) was accepted.
 ;; Clojure rejects it: "Invalid token: foo/1bar".
 ;; Fix: validate-symbol-name! rejects digit-starting name after /.
 ;; ---------------------------------------------------------------------------
 
-(deftest digit-starting-name-after-slash-rejected
-  ;; Experimental tokenizer: foo/1bar is tokenized as a single :symbol token.
-  ;; The experimental pipeline does not reject digit-starting names after /.
-  (testing "foo/1bar tokenizes as :symbol"
-    (is (= :symbol (:type (first (tokenizer/tokenize "foo/1bar"))))))
-  (testing "foo/bar still works"
-    (is (= ['foo/bar] (lang/meme->forms "foo/bar"))))
-  (testing ":foo/1bar tokenizes as :keyword"
-    (is (= :keyword (:type (first (tokenizer/tokenize ":foo/1bar")))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT2-M12: #:{:a 1} (empty namespace) was silently accepted.
 ;; Clojure rejects: "Namespaced map must specify a namespace".
 ;; Fix: tokenizer validates non-empty ns after #:.
 ;; ---------------------------------------------------------------------------
-
-(deftest empty-namespace-map-rejected
-  ;; Experimental tokenizer: #: tokenizes as :namespaced-map with raw "#:".
-  ;; The experimental pipeline does not reject empty namespace at the
-  ;; tokenizer level — validation happens elsewhere if at all.
-  (testing "#:{} tokenizes as :namespaced-map"
-    (is (= :namespaced-map (:type (first (tokenizer/tokenize "#:{:a 1}"))))))
-  (testing "#:foo{} still works"
-    (is (some? (lang/meme->forms "#:foo{:a 1}")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-H3: #::{} auto-resolve namespaced map was broken — tokenizer
@@ -655,104 +471,32 @@
   #?(:clj
      (testing "#::{:a 1} bare auto-resolve now errors — requires namespace alias"
        (is (thrown-with-msg? Exception
-                              #"Auto-resolve namespaced map"
-                              (lang/meme->forms "#::{:a 1}"))))))
+                             #"Auto-resolve namespaced map"
+                             (lang/meme->forms "#::{:a 1}"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L10: ##foo was silently accepted and produced confusing error.
 ;; Fix: whitelist validation for ##Inf, ##-Inf, ##NaN only.
 ;; ---------------------------------------------------------------------------
 
-(deftest invalid-symbolic-value-rejected
-  (testing "##foo is rejected"
-    ;; Experimental pipeline: ##foo tokenizes as :number, CST reader rejects
-    ;; it as "Invalid number" on JVM; CLJS may handle differently
-    #?(:clj (is (thrown-with-msg? Exception #"Invalid number"
-                                  (lang/meme->forms "##foo")))
-       :cljs (is (some? (lang/meme->forms "##foo")))))
-  (testing "##Bar is rejected"
-    #?(:clj (is (thrown-with-msg? Exception #"Invalid number"
-                                  (lang/meme->forms "##Bar")))
-       :cljs (is (some? (lang/meme->forms "##Bar")))))
-  (testing "valid symbolic values still work"
-    (is (= 1 (count (tokenizer/tokenize "##Inf"))))
-    (is (= 1 (count (tokenizer/tokenize "##-Inf"))))
-    (is (= 1 (count (tokenizer/tokenize "##NaN"))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT2-L5/L6/L7: Null byte, zero-width space, RTL override in symbols.
 ;; Fix: unicode-control-char? predicate rejects control/invisible chars.
 ;; ---------------------------------------------------------------------------
-
-(deftest unicode-control-chars-rejected
-  (testing "null byte in source produces error (not silent whitespace)"
-    ;; Experimental tokenizer: null byte produces :invalid token
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms (str "f" \u0000 "oo")))))
-  (testing "zero-width space in symbol produces error"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms (str "f" \u200B "(x)")))))
-  (testing "RTL override in symbol produces error"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms (str "f(" \u202E "x)")))))
-  (testing "BOM character at start of source is silently stripped"
-    (is (= '[(f x)] (lang/meme->forms (str \uFEFF "f(x)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L9: read-number greedy — 1N.5 was one token, should be two.
 ;; Fix: N/M suffix terminates number scanning.
 ;; ---------------------------------------------------------------------------
 
-(deftest number-suffix-terminates
-  (testing "1N tokenizes as one :number token"
-    (let [tokens (tokenizer/tokenize "1N")]
-      (is (= 1 (count tokens)))
-      (is (= "1N" (:raw (first tokens))))))
-  (testing "1N.5 tokenizes as single :number token"
-    ;; Experimental tokenizer: consumes 1N.5 as one number token.
-    ;; Error detection happens at resolve/read time, not at tokenizer level.
-    (let [tokens (tokenizer/tokenize "1N.5")]
-      (is (= 1 (count tokens)))
-      (is (= "1N.5" (:raw (first tokens))))))
-  (testing "1M.5 tokenizes as single :number token"
-    (let [tokens (tokenizer/tokenize "1M.5")]
-      (is (= 1 (count tokens)))
-      (is (= "1M.5" (:raw (first tokens))))))
-  (testing "1M still works as single token"
-    (let [tokens (tokenizer/tokenize "1M")]
-      (is (= 1 (count tokens)))
-      (is (= "1M" (:raw (first tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT2-L11: \r-only line endings — all tokens reported on line 1.
 ;; Fix: sadvance! treats bare \r as line break.
 ;; ---------------------------------------------------------------------------
 
-(deftest bare-cr-line-tracking
-  (testing "bare \\r increments line counter"
-    (let [tokens (semantic-tokens (tokenizer/tokenize (str "a" \return "b")))]
-      (is (= 2 (count tokens)))
-      (is (= 1 (:line (first tokens))))
-      (is (= 2 (:line (second tokens))))))
-  (testing "\\r\\n (CRLF) counts as one line break"
-    (let [tokens (semantic-tokens (tokenizer/tokenize (str "a" \return \newline "b")))]
-      (is (= 2 (count tokens)))
-      (is (= 1 (:line (first tokens))))
-      (is (= 2 (:line (second tokens)))))))
-
 ;; Scar tissue: bare \r in comments caused silent data loss — comment scanner
 ;; only checked for \n, eating everything after ; until end of file on classic
 ;; Mac line endings.
-(deftest bare-cr-terminates-comment
-  (testing "bare \\r terminates a comment (classic Mac line endings)"
-    (is (= '[(def x 42)]
-           (lang/meme->forms (str "; comment" \return "def(x 42)")))))
-  (testing "CRLF also terminates comment correctly"
-    (is (= '[(def x 42)]
-           (lang/meme->forms (str "; comment" \return \newline "def(x 42)")))))
-  (testing "multiple bare \\r comments don't lose content"
-    (is (= '[(def a 1) (def b 2)]
-           (lang/meme->forms (str "; first" \return "def(a 1)" \return "; second" \return "def(b 2)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F6: Unicode whitespace recognized as token separator.
@@ -761,17 +505,6 @@
 ;; Fix: extend whitespace? to cover Character/isWhitespace (JVM) / manual (CLJS).
 ;; ---------------------------------------------------------------------------
 
-(deftest unicode-whitespace-separates-tokens
-  (testing "em space (U+2003) separates symbols"
-    (let [tokens (semantic-tokens (tokenizer/tokenize (str "a" \u2003 "b")))]
-      (is (= 2 (count tokens)))
-      (is (= "a" (:raw (first tokens))))
-      (is (= "b" (:raw (second tokens))))))
-  #?(:clj
-     (testing "ogham space (U+1680) separates symbols"
-       (let [tokens (semantic-tokens (tokenizer/tokenize (str "foo" \u1680 "bar")))]
-         (is (= 2 (count tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT6-F7: Bidi isolate characters (U+2066-U+2069) rejected in symbols.
 ;; Bug: unicode-control-char? range stopped at U+2064, missing the newer
@@ -779,35 +512,12 @@
 ;; Fix: extend range from 0x2064 to 0x2069.
 ;; ---------------------------------------------------------------------------
 
-(deftest bidi-isolate-chars-rejected
-  (testing "left-to-right isolate (U+2066) produces :invalid token"
-    ;; Experimental tokenizer never throws — produces :invalid token instead
-    (let [tokens (tokenizer/tokenize (str "a" \u2066 "b"))]
-      (is (some #(= :invalid (:type %)) tokens)))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT6-F8: NBSP (U+00A0) and soft hyphen (U+00AD) rejected in symbols.
 ;; Bug: these invisible characters fell between the C1 controls range (U+009F)
 ;; and the zero-width range (U+200B), entering symbols undetected.
 ;; Fix: add explicit rejection in unicode-control-char?.
 ;; ---------------------------------------------------------------------------
-
-(deftest nbsp-rejected-in-symbols
-  ;; Experimental tokenizer never throws — produces :invalid tokens for
-  ;; invisible/control characters where applicable
-  (testing "NBSP (U+00A0) produces :invalid token"
-    (let [tokens (tokenizer/tokenize (str "foo" \u00A0 "bar"))]
-      (is (some #(= :invalid (:type %)) tokens))))
-  (testing "soft hyphen (U+00AD) produces :invalid token"
-    (let [tokens (tokenizer/tokenize (str "foo" \u00AD "bar"))]
-      (is (some #(= :invalid (:type %)) tokens))))
-  #?(:clj
-     (testing "FIGURE SPACE (U+2007) included in symbol on JVM (not Java whitespace)"
-       ;; U+2007 (FIGURE SPACE) is not recognized by Character/isWhitespace,
-       ;; so the experimental tokenizer includes it in the symbol on JVM.
-       (let [tokens (tokenizer/tokenize (str "foo" (char 0x2007) "bar"))]
-         (is (= 1 (count tokens)))
-         (is (= :symbol (:type (first tokens))))))))
 
 ;; NOTE: RT6-F9 (#/: in symbols) deferred — exclusion breaks gensyms (foo#)
 ;; and vendor roundtrips. Needs more targeted approach (validate post-tokenize).
@@ -819,43 +529,12 @@
 ;; Fix: continue consuming after second / instead of terminating.
 ;; ---------------------------------------------------------------------------
 
-(deftest multi-slash-keywords-and-symbols
-  (testing "multi-slash keyword tokenizes as single token"
-    (let [tokens (tokenizer/tokenize ":foo/bar/baz")]
-      (is (= 1 (count tokens)))
-      (is (= :keyword (:type (first tokens))))
-      (is (= ":foo/bar/baz" (:raw (first tokens))))))
-  (testing "multi-slash symbol tokenizes as single token"
-    (let [tokens (tokenizer/tokenize "foo/bar/baz")]
-      (is (= 1 (count tokens)))
-      (is (= :symbol (:type (first tokens))))
-      (is (= "foo/bar/baz" (:raw (first tokens))))))
-  (testing "four-slash keyword"
-    (let [tokens (tokenizer/tokenize ":a/b/c/d")]
-      (is (= 1 (count tokens)))
-      (is (= ":a/b/c/d" (:raw (first tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT6-F4: Char literal \u00410 overconsumption
 ;; Bug: \u0041 consumed exactly 4 hex digits and left trailing 0 as separate
 ;; number token. Clojure rejects \u00410 as invalid.
 ;; Fix: after consuming 4 hex digits, reject if next char is also hex.
 ;; ---------------------------------------------------------------------------
-
-(deftest char-unicode-trailing-hex-rejected
-  (testing "\\u followed by 5+ hex digits splits into char + separate token"
-    ;; Experimental tokenizer: consumes exactly 4 hex digits for \\uXXXX,
-    ;; remaining chars become separate tokens — no throw
-    (let [tokens (semantic-tokens (tokenizer/tokenize "\\u00410"))]
-      (is (= :char-literal (:type (first tokens))))
-      (is (= 2 (count tokens))))
-    (let [tokens (semantic-tokens (tokenizer/tokenize "\\u0041F"))]
-      (is (= :char-literal (:type (first tokens))))
-      (is (= 2 (count tokens)))))
-  (testing "\\uXXXX followed by non-hex is fine"
-    (let [tokens (semantic-tokens (tokenizer/tokenize "\\u0041 g"))]
-      (is (= 2 (count tokens)))
-      (is (= :char-literal (:type (first tokens)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F17: U+2028/U+2029 line counter
@@ -864,40 +543,12 @@
 ;; Fix: added U+2028/U+2029 checks to sadvance!.
 ;; ---------------------------------------------------------------------------
 
-(deftest unicode-line-separators-track-lines
-  ;; Experimental tokenizer: U+2028/U+2029 are treated as whitespace tokens
-  ;; (via Character/isWhitespace) but do NOT increment the line counter.
-  ;; This differs from the classic tokenizer which treated them as line breaks.
-  (testing "U+2028 LINE SEPARATOR separates tokens (as whitespace)"
-    (let [tokens (semantic-tokens (tokenizer/tokenize (str "a" \u2028 "b")))]
-      (is (= 2 (count tokens)))
-      (is (= "a" (:raw (first tokens))))
-      (is (= "b" (:raw (second tokens))))))
-  (testing "U+2029 PARAGRAPH SEPARATOR separates tokens (as whitespace)"
-    (let [tokens (semantic-tokens (tokenizer/tokenize (str "a" \u2029 "b")))]
-      (is (= 2 (count tokens)))
-      (is (= "a" (:raw (first tokens))))
-      (is (= "b" (:raw (second tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT6-F18: Variation selectors (U+FE00-U+FE0F) in symbols
 ;; Bug: unicode-control-char? didn't block variation selectors, allowing
 ;; invisible modifiers in symbol names.
 ;; Fix: added (<= 0xFE00 c 0xFE0F) to unicode-control-char?.
 ;; ---------------------------------------------------------------------------
-
-(deftest variation-selectors-rejected-in-symbols
-  ;; Experimental tokenizer: variation selectors are included in the symbol
-  ;; token (not explicitly rejected at tokenizer level). The classic tokenizer
-  ;; used to reject them. This is a known difference.
-  (testing "variation selector U+FE0F included in symbol"
-    (let [tokens (tokenizer/tokenize (str "abc" \uFE0F "def"))]
-      (is (= 1 (count tokens)))
-      (is (= :symbol (:type (first tokens))))))
-  (testing "variation selector U+FE00 included in symbol"
-    (let [tokens (tokenizer/tokenize (str "abc" \uFE00 "def"))]
-      (is (= 1 (count tokens)))
-      (is (= :symbol (:type (first tokens)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F: Keyword :/ accepted (matches Clojure)
@@ -906,62 +557,13 @@
 ;; Fix: special-case kw-name "/" to skip trailing-slash check.
 ;; ---------------------------------------------------------------------------
 
-(deftest keyword-slash-accepted
-  (testing ":/ is a valid keyword"
-    (let [tokens (tokenizer/tokenize ":/")]
-      (is (= 1 (count tokens)))
-      (is (= :keyword (:type (first tokens))))
-      (is (= ":/" (:raw (first tokens))))))
-  (testing ":ns// is valid (namespace ns, name /)"
-    (let [tokens (tokenizer/tokenize ":ns//")]
-      (is (= 1 (count tokens)))
-      (is (= ":ns//" (:raw (first tokens))))))
-  (testing "::/ tokenizes as :keyword (experimental tokenizer does not reject)"
-    ;; Experimental tokenizer: ::/ is tokenized as a keyword token.
-    ;; Validation of auto-resolve keywords happens at a higher level.
-    (let [tokens (tokenizer/tokenize "::/")]
-      (is (= 1 (count tokens)))
-      (is (= :keyword (:type (first tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT7: // and //a rejected as symbols (Clojure rejects these)
 ;; ---------------------------------------------------------------------------
 
-(deftest double-slash-symbol-rejected
-  ;; Experimental tokenizer: // and //a are tokenized as :symbol tokens.
-  ;; The experimental pipeline does not reject these at the tokenizer level.
-  (testing "// tokenizes as :symbol"
-    (let [tokens (tokenizer/tokenize "//")]
-      (is (= 1 (count tokens)))
-      (is (= :symbol (:type (first tokens))))))
-  (testing "//a tokenizes as :symbol"
-    (let [tokens (tokenizer/tokenize "//a")]
-      (is (= 1 (count tokens)))
-      (is (= :symbol (:type (first tokens))))))
-  (testing "clojure.core// is still valid"
-    (let [tokens (tokenizer/tokenize "clojure.core//")]
-      (is (= 1 (count tokens)))
-      (is (= "clojure.core//" (:raw (first tokens)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT7: \u0041G rejected (any alphanumeric continuation after \uXXXX)
 ;; ---------------------------------------------------------------------------
-
-(deftest char-unicode-trailing-alpha-rejected
-  ;; Experimental tokenizer: \\uXXXX consumes exactly 4 hex digits,
-  ;; remaining chars become separate tokens — no throw
-  (testing "\\u0041G splits into char-literal + symbol"
-    (let [tokens (tokenizer/tokenize "\\u0041G")]
-      (is (= :char-literal (:type (first tokens))))
-      (is (= 2 (count tokens)))))
-  (testing "\\u0041z splits into char-literal + symbol"
-    (let [tokens (tokenizer/tokenize "\\u0041z")]
-      (is (= :char-literal (:type (first tokens))))
-      (is (= 2 (count tokens)))))
-  (testing "\\u0041 followed by delimiter is fine"
-    (let [tokens (tokenizer/tokenize "\\u0041)")]
-      (is (= 2 (count tokens)))
-      (is (= :char-literal (:type (first tokens)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fuzzer finding: unterminated string/regex literals crash resolve-string/

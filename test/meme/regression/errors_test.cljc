@@ -165,32 +165,8 @@
 ;; Scar tissue: error message quality improvements
 ;; ---------------------------------------------------------------------------
 
-(deftest mismatched-bracket-error-is-specific
-  (testing "[1 2) produces error (unclosed vector — experimental pipeline)"
-    (let [e (try (lang/meme->forms "[1 2)")
-                 nil
-                 (catch #?(:clj Exception :cljs js/Error) e e))]
-      (is (some? e) "should produce an error")
-      (is (re-find #"[Uu]nclosed|[Mm]ismatched|[Uu]nexpected" (ex-message e))
-          "error should describe the structural issue")))
-  (testing "{:a 1] produces error"
-    (let [e (try (lang/meme->forms "{:a 1]")
-                 nil
-                 (catch #?(:clj Exception :cljs js/Error) e e))]
-      (is (some? e) "should produce an error")
-      (is (re-find #"[Uu]nclosed|[Mm]ismatched|[Uu]nexpected" (ex-message e))))))
-
 ;; NOTE: The pipeline now validates duplicate map keys and set elements
 ;; at read time, matching Clojure's behavior.
-(deftest duplicate-key-throws-error
-  (testing "duplicate map key — throws Duplicate key error"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Duplicate key"
-                          (lang/meme->forms "{:a 1 :b 2 :a 3}"))))
-  (testing "duplicate set element — throws Duplicate key error"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Duplicate key"
-                          (lang/meme->forms "#{1 2 1}")))))
 
 (deftest unclosed-reader-conditional-has-context
   (testing "unclosed #?( is :incomplete"

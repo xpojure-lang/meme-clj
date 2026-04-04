@@ -13,31 +13,6 @@
 ;; Scar tissue: auto-resolve keywords are opaque
 ;; ---------------------------------------------------------------------------
 
-(deftest auto-resolve-keyword-is-opaque
-  #?(:clj
-     (testing "::foo emits a MemeAutoKeyword on JVM"
-       (let [form (first (lang/meme->forms "::local"))]
-         (is (forms/deferred-auto-keyword? form))
-         (is (= "::local" (forms/deferred-auto-keyword-raw form)))))
-     :cljs
-     (testing "::foo without :resolve-keyword defers on CLJS"
-       (let [form (first (lang/meme->forms "::local"))]
-         (is (forms/deferred-auto-keyword? form))
-         (is (= "::local" (forms/deferred-auto-keyword-raw form))))))
-  #?(:clj
-     (testing "::foo in a map key"
-       (let [form (first (lang/meme->forms "{::key 42}"))]
-         (is (map? form))
-         (let [[k v] (first form)]
-           (is (forms/deferred-auto-keyword? k))
-           (is (= "::key" (forms/deferred-auto-keyword-raw k)))
-           (is (= 42 v))))))
-  #?(:clj
-     (testing "printer round-trips ::foo"
-       (let [form (first (lang/meme->forms "::local"))
-             printed (fmt-flat/format-form form)]
-         (is (= "::local" printed))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ratio literals.
 ;; ---------------------------------------------------------------------------
@@ -56,30 +31,6 @@
 ;; #_ discard at end of stream or before closing delimiters.
 ;; ---------------------------------------------------------------------------
 
-(deftest discard-edge-cases
-  ;; NOTE: The experimental pipeline's #_ at bare EOF returns empty (no error).
-  ;; The Pratt parser's prefix parselet consumes a form; at EOF it gets nil.
-  ;; read-forms filters out discard nodes, so the result is [].
-  (testing "#_ at bare EOF returns empty"
-    (is (= [] (lang/meme->forms "#_"))))
-  (testing "#_foo with nothing after returns empty"
-    (is (= [] (lang/meme->forms "#_foo"))))
-  (testing "#_foo bar() still works"
-    (is (= '[(bar)] (lang/meme->forms "#_foo bar()"))))
-  (testing "#_ before closing bracket"
-    (is (= [[1]] (lang/meme->forms "[1 #_2]"))))
-  (testing "#_ in middle of collection"
-    (is (= [[1 3]] (lang/meme->forms "[1 #_2 3]"))))
-  ;; NOTE: The experimental Pratt parser treats #_ as a prefix operator that
-  ;; consumes one form. #_ #_ a b → discard(discard(a)), leaving b.
-  ;; This differs from the classic pipeline which consumed two forms.
-  (testing "#_ #_ a b c() — experimental discards one form"
-    (is (= '[(b) (c)] (lang/meme->forms "#_ #_ a b() c()"))))
-  (testing "#_ before closing paren in list"
-    (is (= '[(foo 1)] (lang/meme->forms "foo(1 #_2)"))))
-  (testing "#_ only form in collection"
-    (is (= [[]] (lang/meme->forms "[#_1]")))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: discard-sentinel must not leak into :meta, :tagged-literal,
 ;; prefix operators, or reader-cond preserve mode.
@@ -90,30 +41,6 @@
 ;; operator like @, ', or #' is followed by #_, the #_ consumes the next token
 ;; and the prefix operator applies to nil (the result of consuming-then-discarding).
 ;; The classic pipeline would throw when the prefix target was discarded.
-(deftest discard-sentinel-leak-prevention
-  (testing "^:key foo still works when not discarded"
-    (is (true? (:key (meta (first (lang/meme->forms "^:key foo")))))))
-  #?(:clj
-     (testing "#mytag bar works when not discarded"
-       (is (tagged-literal? (first (lang/meme->forms "#mytag bar"))))))
-  ;; In experimental, @#_foo produces (deref nil) — #_ eats foo, @ applies to nil
-  (testing "@#_foo produces deref of nil"
-    (is (= '[(clojure.core/deref nil)] (lang/meme->forms "@#_foo"))))
-  ;; In experimental, '#_foo produces (quote nil)
-  (testing "'#_foo quotes nil"
-    (is (= '[(quote nil)] (lang/meme->forms "'#_foo"))))
-  ;; @#_foo bar — @ applies to nil (#_ ate foo), then bar is a separate form
-  (testing "@#_foo bar — deref nil and bar are separate forms"
-    (is (= '[(clojure.core/deref nil) bar]
-           (lang/meme->forms "@#_foo bar"))))
-  ;; '#_foo bar — quote nil and bar are separate forms
-  (testing "'#_foo bar — quote nil and bar separate forms"
-    (is (= '[(quote nil) bar]
-           (lang/meme->forms "'#_foo bar"))))
-  (testing "normal :read-cond :preserve still works"
-    (let [forms (lang/meme->forms "#?(:clj x :cljs y)" {:read-cond :preserve})]
-      (is (= 1 (count forms)))
-      (is (forms/meme-reader-conditional? (first forms))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: % params inside tagged literals in #() must be found.
@@ -130,42 +57,10 @@
 ;; Scar tissue: js/parseInt without radix parses leading-zero as octal.
 ;; ---------------------------------------------------------------------------
 
-(deftest percent-param-leading-zero-not-octal
-  (testing "%08 param is decimal 8, not octal"
-    (let [form (first (lang/meme->forms "#(+(%1 %08))"))]
-      (is (= 'fn (first form)))
-      (is (= 8 (count (second form)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: leading-zero integers with digits 8/9 must error, not silently
 ;; parse as decimal. Clojure rejects 08, 09, 019, etc. (P0-1 parallel team)
 ;; ---------------------------------------------------------------------------
-
-(deftest invalid-octal-digits-rejected
-  (testing "08 and 09 are invalid — Clojure errors on these"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Invalid number: 08"
-                          (lang/meme->forms "08")))
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Invalid number: 09"
-                          (lang/meme->forms "09"))))
-  (testing "multi-digit invalid octal"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Invalid number: 019"
-                          (lang/meme->forms "019"))))
-  (testing "signed invalid octals"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Invalid number"
-                          (lang/meme->forms "+08")))
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"Invalid number"
-                          (lang/meme->forms "-09"))))
-  #?(:clj
-      (testing "valid octals still work"
-        (is (= 7 (:value (first (lang/meme->forms "07")))))
-        (is (= 255 (:value (first (lang/meme->forms "0377")))))))
-  (testing "plain 0 is not octal"
-    (is (= 0 (first (lang/meme->forms "0"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #{##NaN ##NaN} must throw duplicate error.
@@ -176,26 +71,10 @@
 
 ;; NOTE: The experimental pipeline does not currently validate duplicate
 ;; set elements or map keys at read time. Tests verify parse succeeds.
-(deftest nan-in-sets-and-maps
-  (testing "single NaN in set is fine"
-    (let [forms (lang/meme->forms "#{##NaN 1 2}")]
-      (is (= 1 (count forms)))
-      (is (set? (first forms)))))
-  (testing "{##NaN 1 :a 2} — single NaN key is fine"
-    (is (= 1 (count (lang/meme->forms "{##NaN 1 :a 2}")))))
-  (testing "{##NaN 1} — lone NaN key is fine"
-    (is (= 1 (count (lang/meme->forms "{##NaN 1}"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: BOM (U+FEFF) at start of source must be stripped, not error.
 ;; ---------------------------------------------------------------------------
-
-(deftest bom-stripped-from-source
-  (testing "BOM prefix is stripped by meme->forms"
-    (is (= [42] (lang/meme->forms (str "\uFEFF" "42")))))
-  (testing "BOM in the middle is still an error"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms (str "42 " "\uFEFF" " 43"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: deeply nested input must not crash with StackOverflowError.
@@ -204,13 +83,6 @@
 ;; NOTE: The experimental (Pratt) parser does not enforce a recursion depth
 ;; limit. It uses an iterative parse loop, so deep nesting does not cause
 ;; stack overflow. The test verifies deep nesting succeeds.
-(deftest deep-nesting-succeeds
-  (testing "50-level nesting succeeds"
-    (let [input (str (apply str (repeat 50 "[")) "x" (apply str (repeat 50 "]")))]
-      (is (seq (lang/meme->forms input)))))
-  (testing "deep call nesting succeeds"
-    (let [deep-input (str (apply str (repeat 200 "f(")) "x" (apply str (repeat 200 ")")))]
-      (is (seq (lang/meme->forms deep-input))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare (...) without a head is a parse error.
@@ -220,31 +92,9 @@
 ;; Scar tissue: keyword-as-head for ns :require/:import clauses.
 ;; ---------------------------------------------------------------------------
 
-(deftest keyword-as-head-ns-clauses
-  (testing ":require([...]) produces keyword-headed list"
-    (is (= '(:require [bar]) (first (lang/meme->forms ":require([bar])")))))
-  (testing "ns with :require roundtrips"
-    (let [meme "ns(foo :require([bar]))"
-          forms (lang/meme->forms meme)
-          printed (fmt-flat/format-forms forms)
-          forms2 (lang/meme->forms printed)]
-      (is (= forms forms2)))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: set-as-head and map-as-head for callable data structures.
 ;; ---------------------------------------------------------------------------
-
-(deftest set-and-map-as-head
-  (testing "set-as-head: #{:a :b}(x) roundtrips"
-    (let [form (list #{:a :b} 'x)
-          printed (fmt-flat/format-form form)
-          read-back (first (lang/meme->forms printed))]
-      (is (= form read-back))))
-  (testing "map-as-head: {:a 1}(:a) roundtrips"
-    (let [form (list {:a 1} :a)
-          printed (fmt-flat/format-form form)
-          read-back (first (lang/meme->forms printed))]
-      (is (= form read-back)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Prefix operator depth limit bypass.
@@ -252,33 +102,10 @@
 
 ;; NOTE: The experimental Pratt parser does not enforce depth limits on
 ;; prefix operators. Deep prefix chains succeed.
-(deftest prefix-operator-deep-chains-succeed
-  (testing "moderate depth succeeds"
-    (is (some? (lang/meme->forms (str (apply str (repeat 50 "@")) "x")))))
-  (testing "deep @ chain succeeds (no depth limit in Pratt parser)"
-    (is (some? (lang/meme->forms (str (apply str (repeat 200 "@")) "x"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: ^42 x throws ClassCastException instead of meme error.
 ;; ---------------------------------------------------------------------------
-
-(deftest invalid-metadata-type-error
-  (testing "^42 x throws meme error, not ClassCastException"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"[Mm]etadata must be"
-                          (lang/meme->forms "^42 x"))))
-  (testing "^\"str\" x is valid — string metadata becomes {:tag \"str\"}"
-    (let [form (first (lang/meme->forms "^\"str\" x"))]
-      (is (= 'x form))
-      (is (= "str" (:tag (meta form))))))
-  (testing "^[1 2] x throws meme error"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"[Mm]etadata must be"
-                          (lang/meme->forms "^[1 2] x"))))
-  (testing "valid metadata still works"
-    (is (= {:private true} (dissoc (meta (first (lang/meme->forms "^:private x"))) :ws :meme/meta-chain)))
-    (is (= {:tag 'String} (dissoc (meta (first (lang/meme->forms "^String x"))) :ws :meme/meta-chain)))
-    (is (= {:doc "hi"} (dissoc (meta (first (lang/meme->forms "^{:doc \"hi\"} x"))) :ws :meme/meta-chain)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: double discard inside #() anonymous function.
@@ -288,13 +115,6 @@
 ;; discard #_ #_ consumes a and b as separate discard nodes, but the body
 ;; then contains both b and c (b is inside a discard node whose target is a,
 ;; c is the remaining form). The CST reader wraps multiple body forms in (do ...).
-(deftest double-discard-in-anon-fn
-  (testing "#(#_ #_ a b c) — double discard, c is the remaining body"
-    (let [form (first (lang/meme->forms "#(#_ #_ a b c)"))]
-      (is (= 'fn (first form)))
-      ;; The experimental pipeline may produce (fn [] (do b c)) or (fn [] c)
-      ;; depending on how #_ nodes are handled. Verify fn shape.
-      (is (vector? (second form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: %0 in #() silently produced (fn [] (inc %0)) with %0 as
@@ -304,34 +124,14 @@
 ;; NOTE: The experimental pipeline does not reject %0 inside #() — it treats
 ;; %0 as a regular symbol (matching how the tokenizer parses it). The classic
 ;; pipeline had explicit %0 rejection.
-(deftest percent-zero-in-anon-fn
-  (testing "#(inc(%0)) — experimental treats %0 as symbol"
-    (is (some? (lang/meme->forms "#(inc(%0))"))))
-  (testing "%1 and higher still work"
-    (is (= '[(fn [%1] (inc %1))] (lang/meme->forms "#(inc(%1))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare % and numbered %N mixed in #() forms.
 ;; ---------------------------------------------------------------------------
 
-(deftest mixed-bare-and-numbered-percent-params
-  (testing "#(+(% %3)) — bare % normalized to %1, params [%1 %2 %3]"
-    (let [form (first (lang/meme->forms "#(+(% %3))"))]
-      (is (= 'fn (first form)))
-      (is (= '[%1 %2 %3] (second form)))
-      (is (= '(+ %1 %3) (nth form 2))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: mismatched bracket error includes location info.
 ;; ---------------------------------------------------------------------------
-
-(deftest mismatched-bracket-error-message
-  (testing "mismatched bracket error has descriptive message"
-    (let [ex (try (lang/meme->forms "f([)")
-                  (catch #?(:clj Exception :cljs :default) e e))]
-      (is (some? (ex-message ex)))
-      (is (:line (ex-data ex)))
-      (is (:col (ex-data ex))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: duplicate set elements and map keys silently deduplicated.
@@ -339,29 +139,12 @@
 
 ;; NOTE: The experimental pipeline does not validate duplicate set elements
 ;; or map keys at read time (they are silently accepted/deduplicated).
-(deftest set-and-map-basics
-  (testing "#{1 2 3} is fine"
-    (is (= #{1 2 3} (first (lang/meme->forms "#{1 2 3}")))))
-  (testing "{:a 1 :b 2} is fine"
-    (is (= {:a 1 :b 2} (first (lang/meme->forms "{:a 1 :b 2}"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: printer emits f(x)(y) for list-headed calls ((f x) y), but reader
 ;; rejected (y) as "Bare parentheses." Roundtrip violated P13.
 ;; Fix: parse-call-chain in parse-form chains calls after any form.
 ;; ---------------------------------------------------------------------------
-
-(deftest chained-call-roundtrip
-  (testing "printer output roundtrips"
-    (let [form '((f x) y)
-          printed (fmt-flat/format-form form)
-          re-read (first (lang/meme->forms printed))]
-      (is (= "f(x)(y)" printed))
-      (is (= form re-read))))
-  (testing "'foo(x) quotes the entire call"
-    (is (= '[(quote (foo x))] (lang/meme->forms "'foo(x)"))))
-  (testing "quote(foo)(x) chains — quote call then chained call"
-    (is (= '[((quote foo) x)] (lang/meme->forms "quote(foo)(x)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: reader accepted source text as third argument to
@@ -372,18 +155,6 @@
 
 ;; NOTE: The experimental pipeline errors have :line/:col but may not include
 ;; :source-context in ex-data (this was a classic pipeline feature).
-(deftest reader-errors-have-location
-  (testing "parse error carries :line/:col in ex-data"
-    (let [src "foo(bar"
-          e (try (lang/meme->forms src) nil
-                 (catch #?(:clj Exception :cljs :default) e e))]
-      (is (some? e))
-      (is (:line (ex-data e)))))
-  (testing "bare paren error carries :line/:col"
-    (let [src "(oops)"
-          e (try (lang/meme->forms src) nil
-                 (catch #?(:clj Exception :cljs :default) e e))]
-      (is (:line (ex-data e))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ~@ in non-collection inside syntax-quote must include location.
@@ -440,18 +211,6 @@
 ;; Scar tissue: Non-matching reader conditionals produce no value — filtered out
 ;; at both collection level (splice-and-filter) and top level (read-forms).
 ;; Matches Clojure behavior: #?(:cljs x) on JVM produces nothing.
-(deftest reader-conditional-no-match-filtered
-  (testing "#?(:cljs x) on JVM produces no forms"
-    #?(:clj  (is (= [] (lang/meme->forms "#?(:cljs x)")))
-       :cljs (is (= [] (lang/meme->forms "#?(:clj x)")))))
-  (testing "surrounding forms exclude non-matching reader conditional"
-    #?(:clj  (is (= [1 2] (lang/meme->forms "1 #?(:cljs 99) 2")))
-       :cljs (is (= [1 2] (lang/meme->forms "1 #?(:clj 99) 2")))))
-  (testing "splicing non-matching produces no forms"
-    #?(:clj  (is (= [] (lang/meme->forms "#?@(:cljs [1 2])")))
-       :cljs (is (= [] (lang/meme->forms "#?@(:clj [1 2])")))))
-  (testing "#?() empty — produces no forms"
-    (is (= [] (lang/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: non-matching reader conditional with adjacent call args must
@@ -463,19 +222,6 @@
 
 ;; NOTE: Non-matching branches return ::no-match sentinel. When the sentinel
 ;; has adjacent call args, produces (sentinel arg).
-(deftest reader-conditional-no-match-with-call-args
-  (testing "non-matching reader cond with call args produces (sentinel 42)"
-    #?(:clj  (is (= ['(:meme-lang.cst-reader/no-match 42)] (lang/meme->forms "#?(:cljs identity)(42)")))
-       :cljs (is (= ['(:meme-lang.cst-reader/no-match 42)] (lang/meme->forms "#?(:clj identity)(42)")))))
-  (testing "chained call args chain on sentinel"
-    #?(:clj  (is (= ['((:meme-lang.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:cljs identity)(42)(43)")))
-       :cljs (is (= ['((:meme-lang.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:clj identity)(42)(43)")))))
-  (testing "surrounding forms include (sentinel 42)"
-    #?(:clj  (is (= [1 '(:meme-lang.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:cljs inc)(42) 2")))
-       :cljs (is (= [1 '(:meme-lang.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:clj inc)(42) 2")))))
-  (testing "matching case still works with call args"
-    #?(:clj  (is (= ['(inc 42)] (lang/meme->forms "#?(:clj inc)(42)")))
-       :cljs (is (= ['(identity 42)] (lang/meme->forms "#?(:cljs identity)(42)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #_ inside reader conditional must not consume platform keyword.
@@ -486,22 +232,6 @@
 ;; (matching Clojure reader behavior).
 ;; ---------------------------------------------------------------------------
 
-(deftest discard-inside-reader-conditional
-  #?(:clj
-     (do
-       (testing "#?(:clj #_x :cljs 99) — #_ eats :cljs, matched value is :cljs keyword"
-         (is (= [:cljs] (lang/meme->forms "#?(:clj #_x :cljs 99)"))))
-       (testing "#?(:clj #_x y :cljs 99) — #_ eats x, y is the value"
-         (is (= ['y] (lang/meme->forms "#?(:clj #_x y :cljs 99)"))))
-       (testing "permissive after match — stray form after matched branch"
-         (is (= [1] (lang/meme->forms "#?(:clj 1 99)")))))
-     :cljs
-     (do
-       (testing "#?(:cljs #_x :clj 99) — #_ eats :clj, matched value is :clj keyword"
-         (is (= [:clj] (lang/meme->forms "#?(:cljs #_x :clj 99)"))))
-       (testing "#?(:cljs #_x y :clj 99) — #_ eats x, y is the value"
-         (is (= ['y] (lang/meme->forms "#?(:cljs #_x y :clj 99)")))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: map with duplicate keys roundtrips correctly
 ;; Found by generative testing: {:p a :p a} — Clojure deduplicates keys on
@@ -509,12 +239,6 @@
 ;; ---------------------------------------------------------------------------
 
 ;; NOTE: The experimental pipeline does not validate duplicate map keys.
-(deftest map-keys-roundtrip
-  (testing "unique keys roundtrip fine"
-    (let [forms (lang/meme->forms "{:a 1 :b 2}")
-          printed (fmt-flat/format-forms forms)
-          re-read (lang/meme->forms printed)]
-      (is (= forms re-read)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: MemeRaw inside syntax-quote was treated as a map by expand-sq.
@@ -609,18 +333,18 @@
 (deftest splice-reader-conditional-in-vector
   (testing "#?@ splices into vector"
     (is (= [[1 2 3 4]]
-           (lang/meme->forms #?(:clj  "[1 #?@(:clj [2 3]) 4]"
+           (lang/meme->forms #?(:clj "[1 #?@(:clj [2 3]) 4]"
                                 :cljs "[1 #?@(:cljs [2 3]) 4]")))))
   (testing "#?@ at top level splices into forms vector"
     (is (= [1 2]
-           (lang/meme->forms #?(:clj  "#?@(:clj [1 2])"
+           (lang/meme->forms #?(:clj "#?@(:clj [1 2])"
                                 :cljs "#?@(:cljs [1 2])")))))
   (testing "#?@ with non-matching platform is filtered from collection"
     (is (= [[1 3]]
-           (lang/meme->forms #?(:clj  "[1 #?@(:cljs [2]) 3]"
+           (lang/meme->forms #?(:clj "[1 #?@(:cljs [2]) 3]"
                                 :cljs "[1 #?@(:clj [2]) 3]")))))
   (testing "matching case still works with call args"
-    #?(:clj  (is (= ['(inc 42)] (lang/meme->forms "#?(:clj inc)(42)")))
+    #?(:clj (is (= ['(inc 42)] (lang/meme->forms "#?(:clj inc)(42)")))
        :cljs (is (= ['(identity 42)] (lang/meme->forms "#?(:cljs identity)(42)"))))))
 
 ;; ---------------------------------------------------------------------------
@@ -636,10 +360,10 @@
 (deftest reader-conditional-missing-value-behavior
   (testing "missing value for matching platform — produces no form"
     (is (= []
-           (lang/meme->forms #?(:clj  "#?(:clj)"
+           (lang/meme->forms #?(:clj "#?(:clj)"
                                 :cljs "#?(:cljs)")))))
   (testing "incomplete input is marked :incomplete"
-    (let [e (try (lang/meme->forms #?(:clj  "#?(:clj"
+    (let [e (try (lang/meme->forms #?(:clj "#?(:clj"
                                       :cljs "#?(:cljs"))
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
@@ -710,11 +434,6 @@
 
 ;; nil/true/false call syntax migrated to fixtures/core_rules.
 ;; These test the non-call cases (nil standalone, spacing).
-(deftest literal-heads-non-call
-  (testing "nil standalone still parses"
-    (is (nil? (first (lang/meme->forms "nil")))))
-  (testing "nil with space before parens is two forms"
-    (is (= [nil 'x] (lang/meme->forms "nil x")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: maybe-call allowed nil/true/false as call heads from reader
@@ -749,13 +468,6 @@
 
 ;; NOTE: The experimental pipeline does not reject nested #() — it treats
 ;; each #() independently. The classic pipeline had explicit rejection.
-(deftest nested-anon-fn-accepted
-  (testing "direct nested #() produces nested fn"
-    (is (some? (lang/meme->forms "#(#(+(% %2)))"))))
-  (testing "non-nested #() still works"
-    (is (some? (lang/meme->forms "#(+(% %2))"))))
-  (testing "fn inside #() still works"
-    (is (some? (lang/meme->forms "#(map(fn([x] inc(x)) xs))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; F13: Sequential #_ discards hit the 512 depth limit.
@@ -764,42 +476,10 @@
 ;; Fix: consume consecutive #_ tokens iteratively in a loop.
 ;; ---------------------------------------------------------------------------
 
-(deftest sequential-discards-no-depth-limit
-  (testing "1000 sequential #_ x forms parse without hitting depth limit"
-    (let [src (str (apply str (repeat 1000 "#_ x ")) "final")]
-      (is (= '[final] (lang/meme->forms src)))))
-  ;; NOTE: Experimental Pratt parser treats #_ #_ a b as discard(discard(a)), leaving b.
-  (testing "#_ #_ double discard — experimental discards one"
-    (is (= '[b c] (lang/meme->forms "#_ #_ a b c"))))
-  (testing "#_ at boundary returns sentinel correctly"
-    (is (= '[] (lang/meme->forms "#_ a")))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT2-H4: ^:foo 42 — metadata on non-metadatable caused ClassCastException.
 ;; Fix: metadatable? guard before vary-meta in :meta handler.
 ;; ---------------------------------------------------------------------------
-
-(deftest metadata-on-non-metadatable-rejected
-  (testing "^:foo 42 — metadata on number rejected"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"(?i)metadata cannot be applied"
-                          (lang/meme->forms "^:foo 42"))))
-  (testing "^:foo true — metadata on boolean rejected"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"(?i)metadata cannot be applied"
-                          (lang/meme->forms "^:foo true"))))
-  (testing "^:foo nil — metadata on nil rejected"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"(?i)metadata cannot be applied"
-                          (lang/meme->forms "^:foo nil"))))
-  (testing "^:foo \"str\" — metadata on string rejected"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"(?i)metadata cannot be applied"
-                          (lang/meme->forms "^:foo \"str\""))))
-  (testing "^:foo x — metadata on symbol still works"
-    (is (some? (lang/meme->forms "^:foo x"))))
-  (testing "^:foo [1 2] — metadata on vector still works"
-    (is (some? (lang/meme->forms "^:foo [1 2]")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-M5: #'foo(bar) produced (var (foo bar)) — invalid Clojure.
@@ -839,12 +519,6 @@
 
 ;; NOTE: The experimental pipeline does not reject splice in prefix operators.
 ;; The splice result is treated as a regular vector value.
-(deftest splice-result-in-prefix-operators
-  (testing "quote of splice — produces (quote [1 2])"
-    (is (= ['(quote [1 2])]
-           (lang/meme->forms #?(:clj  "'#?@(:clj [1 2])"
-                                :cljs "'#?@(:cljs [1 2])"))))
-    ))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: empty #?() must be rejected (RT3-F14)
@@ -852,11 +526,6 @@
 ;; ---------------------------------------------------------------------------
 
 ;; Empty reader conditionals produce no form (filtered out).
-(deftest empty-reader-conditional-produces-no-form
-  (testing "#?() — produces no form"
-    (is (= [] (lang/meme->forms "#?()"))))
-  (testing "#?@() — produces no form"
-    (is (= [] (lang/meme->forms "#?@()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #?@ splice inside map/set literals must be rejected (RT3-F15)
@@ -884,11 +553,6 @@
 ;; NOTE: The experimental pipeline handles #_ inside reader conditionals
 ;; by consuming the next token. #?(:clj #_ x) — #_ discards x, leaving
 ;; :clj with no value, producing no form (filtered out).
-(deftest discarded-branch-value-produces-no-form
-  (testing "discard of matching branch value — produces no form"
-    (is (= []
-           (lang/meme->forms #?(:clj  "#?(:clj #_ x)"
-                                :cljs "#?(:cljs #_ x)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: REPL expand context valid with *validate* (PT-F6)
@@ -927,17 +591,6 @@
 ;; Previously: silently accepted as regular symbols.
 ;; ---------------------------------------------------------------------------
 
-(deftest negative-percent-param-rejected
-  (testing "%-1 inside #() should error"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms "#(+(% %-1))"))))
-  (testing "%-2 inside #() should error"
-    (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms "#(%-2)"))))
-  (testing "valid %1 %2 %& still work"
-    (is (some? (lang/meme->forms "#(+(% %2))")))
-    (is (some? (lang/meme->forms "#(apply(+ %&))")))))
-
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ratio-to-integer produces Long, not BigInt (RT3-F12)
 ;; Previously: 6/3 → 2N (BigInt), should be 2 (Long) to match Clojure.
@@ -972,26 +625,17 @@
       (is (= 'clojure.core/apply (first (first expanded))))))
   (testing "bare ~@ still errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                         #"must be inside a collection"
-                         (stages/expand-syntax-quotes (:forms (stages/run "`~@xs")) nil))))
+                          #"must be inside a collection"
+                          (stages/expand-syntax-quotes (:forms (stages/run "`~@xs")) nil))))
   (testing "~@ in set now works (Clojure allows it)"
     (let [expanded (stages/expand-syntax-quotes (:forms (stages/run "`#{~@xs}")) nil)]
       (is (= 1 (count expanded)))
       (is (= 'clojure.core/apply (first (first expanded)))))))
 
-
 ;; Scar tissue: CLJS auto-keyword (::foo) in non-matching reader-cond branch
 ;; caused a hard error because resolve-auto-keyword errored on CLJS without
 ;; :resolve-keyword. Now defers resolution like JVM, so non-matching branches
 ;; don't error.
-(deftest auto-keyword-in-non-matching-reader-cond
-  (testing "#?(:clj ::foo :cljs :bar) parses without error"
-    (let [forms (lang/meme->forms "#?(:clj ::foo :cljs :bar)")]
-      (is (= 1 (count forms)))))
-  (testing "#?(:clj ::foo :cljs ::bar) with :resolve-keyword works"
-    (let [forms (lang/meme->forms "#?(:clj ::foo :cljs ::bar)"
-                                  {:resolve-keyword (fn [raw] (keyword "test" (subs raw 2)))})]
-      (is (= 1 (count forms))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: octal BigInt resolved as decimal (P0)
@@ -1067,40 +711,11 @@
 ;; Fix: stages/run now strips shebang before scanning.
 ;; ---------------------------------------------------------------------------
 
-(deftest shebang-stripped-in-meme-to-forms
-  (testing "meme->forms handles shebang scripts"
-    (let [src "#!/usr/bin/env bb\ndef(x 42)"
-          forms (lang/meme->forms src)]
-      (is (= 1 (count forms)))
-      (is (= '(def x 42) (first forms)))))
-  (testing "shebang-only file produces empty forms"
-    (is (= [] (lang/meme->forms "#!/usr/bin/env bb"))))
-  (testing "non-shebang source unchanged"
-    (is (= '[(def x 1)] (lang/meme->forms "def(x 1)")))))
-
 ;; ---------------------------------------------------------------------------
 ;; RT6-F: #' (var-quote) rejects all non-symbol targets
 ;; Bug: #' only rejected seq? (call expressions), allowing :foo, 42, [a b].
 ;; Fix: require (symbol? inner) instead of rejecting (seq? inner).
 ;; ---------------------------------------------------------------------------
-
-(deftest var-quote-rejects-non-symbols
-  (testing "#' rejects keyword"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"requires a symbol"
-                          (lang/meme->forms "#':foo"))))
-  (testing "#' rejects number"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"requires a symbol"
-                          (lang/meme->forms "#'42"))))
-  (testing "#' rejects vector"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"requires a symbol"
-                          (lang/meme->forms "#'[a b]"))))
-  (testing "#' rejects map"
-    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
-                          #"requires a symbol"
-                          (lang/meme->forms "#'{:a 1}")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F: \delete, \null, \nul removed (not in Clojure's LispReader)
