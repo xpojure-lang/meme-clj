@@ -1,5 +1,0 @@
-defn greet(name):
-  str("Hello, ", name, "!")
-end
-
-println(greet("world"))

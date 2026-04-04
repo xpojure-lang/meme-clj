@@ -1,16 +1,16 @@
 (ns meme.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.core :as core]
-            [meme.emit.formatter.flat :as fmt-flat]
-            [meme.forms :as forms]))
+            [meme.langs.meme :as lang]
+            [meme.tools.emit.formatter.flat :as fmt-flat]
+            [meme.tools.forms :as forms]))
 
 (defn- roundtrip-forms
   "Parse meme string, get forms. Then print forms back to meme and re-parse.
    The re-parsed forms should equal the original forms."
   [meme-src]
-  (let [forms1 (core/meme->forms meme-src)
+  (let [forms1 (lang/meme->forms meme-src)
         meme-text (fmt-flat/format-forms forms1)
-        forms2 (core/meme->forms meme-text)]
+        forms2 (lang/meme->forms meme-text)]
     [forms1 forms2 meme-text]))
 
 ;; ---------------------------------------------------------------------------
@@ -203,17 +203,17 @@
 
 (deftest roundtrip-named-chars
   (testing "\\newline roundtrips"
-    (is (= [\newline] (core/meme->forms (fmt-flat/format-forms [\newline])))))
+    (is (= [\newline] (lang/meme->forms (fmt-flat/format-forms [\newline])))))
   (testing "\\space roundtrips"
-    (is (= [\space] (core/meme->forms (fmt-flat/format-forms [\space])))))
+    (is (= [\space] (lang/meme->forms (fmt-flat/format-forms [\space])))))
   (testing "\\tab roundtrips"
-    (is (= [\tab] (core/meme->forms (fmt-flat/format-forms [\tab])))))
+    (is (= [\tab] (lang/meme->forms (fmt-flat/format-forms [\tab])))))
   (testing "\\return roundtrips"
-    (is (= [\return] (core/meme->forms (fmt-flat/format-forms [\return])))))
+    (is (= [\return] (lang/meme->forms (fmt-flat/format-forms [\return])))))
   (testing "\\backspace roundtrips"
-    (is (= [\backspace] (core/meme->forms (fmt-flat/format-forms [\backspace])))))
+    (is (= [\backspace] (lang/meme->forms (fmt-flat/format-forms [\backspace])))))
   (testing "\\formfeed roundtrips"
-    (is (= [\formfeed] (core/meme->forms (fmt-flat/format-forms [\formfeed]))))))
+    (is (= [\formfeed] (lang/meme->forms (fmt-flat/format-forms [\formfeed]))))))
 
 (deftest roundtrip-regex
   ;; Regex patterns don't support equality, so compare by pattern string
@@ -688,9 +688,9 @@
 (defn- roundtrip-preserve
   "Roundtrip with :read-cond :preserve — parse, print, re-parse."
   [meme-src]
-  (let [forms1 (core/meme->forms meme-src {:read-cond :preserve})
+  (let [forms1 (lang/meme->forms meme-src {:read-cond :preserve})
         meme-text (fmt-flat/format-forms forms1)
-        forms2 (core/meme->forms meme-text {:read-cond :preserve})]
+        forms2 (lang/meme->forms meme-text {:read-cond :preserve})]
     [forms1 forms2 meme-text]))
 
 (deftest roundtrip-reader-conditional-preserve
@@ -727,8 +727,8 @@
   "Parse meme string, print back, and verify the printed text matches the input.
    Tests syntactic transparency — the lens should not alter the user's notation."
   [meme-src]
-  (let [forms (core/meme->forms meme-src)
-        printed (core/forms->meme forms)]
+  (let [forms (lang/meme->forms meme-src)
+        printed (lang/forms->meme forms)]
     printed))
 
 (deftest roundtrip-quote-sugar-preserved
@@ -757,9 +757,10 @@
   (testing "var(x) explicit call roundtrips as var(x)"
     (is (= "var(foo)" (roundtrip-syntax "var(foo)")))))
 
+;; NOTE: experimental pipeline normalizes bare % to %1
 (deftest roundtrip-anon-fn-sugar-preserved
-  (testing "#() sugar roundtrips as #()"
-    (is (= "#(inc(%))" (roundtrip-syntax "#(inc(%))"))))
+  (testing "#() sugar roundtrips (bare % normalized to %1)"
+    (is (= "#(inc(%1))" (roundtrip-syntax "#(inc(%))"))))
   (testing "fn() explicit call roundtrips as fn()"
     (is (= "fn([%1] inc(%1))" (roundtrip-syntax "fn([%1] inc(%1))")))))
 
@@ -825,17 +826,17 @@
 
 (deftest roundtrip-sugar-in-clj-output
   (testing "meme 'x → clj 'x"
-    (is (= "'foo" (core/meme->clj "'foo"))))
+    (is (= "'foo" (lang/meme->clj "'foo"))))
   (testing "meme quote(x) → clj (quote x)"
-    (is (= "(quote foo)" (core/meme->clj "quote(foo)"))))
+    (is (= "(quote foo)" (lang/meme->clj "quote(foo)"))))
   (testing "meme @x → clj @x"
-    (is (= "@foo" (core/meme->clj "@foo"))))
+    (is (= "@foo" (lang/meme->clj "@foo"))))
   (testing "meme clojure.core/deref(x) → clj (clojure.core/deref x)"
-    (is (= "(clojure.core/deref foo)" (core/meme->clj "clojure.core/deref(foo)"))))
+    (is (= "(clojure.core/deref foo)" (lang/meme->clj "clojure.core/deref(foo)"))))
   (testing "meme #'x → clj #'x"
-    (is (= "#'foo" (core/meme->clj "#'foo"))))
+    (is (= "#'foo" (lang/meme->clj "#'foo"))))
   (testing "meme var(x) → clj (var x)"
-    (is (= "(var foo)" (core/meme->clj "var(foo)")))))
+    (is (= "(var foo)" (lang/meme->clj "var(foo)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; fn without sugar: structural divergence (documented, not a bug)

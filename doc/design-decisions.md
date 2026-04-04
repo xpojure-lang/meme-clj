@@ -19,33 +19,24 @@ Everything else is Clojure.
 
 ## Reader stages
 
-The reader has two core stages and two optional stages:
+The reader has four core stages and one optional stage:
 
-1. **step-scan** (`meme.scan.tokenizer`) — character scanning → flat token vector.
-   Compound forms (reader conditionals, namespaced maps, syntax-quote)
-   emit marker tokens.
-2. **step-parse** (`meme.parse.reader`) — recursive-descent parser → Clojure forms.
-   No `read-string` delegation — all values resolved natively. Accepts an
-   optional `:parser` in opts for guest language plug-in parsers.
-3. **step-expand-syntax-quotes** (`meme.parse.expander`) — syntax-quote AST
-   nodes → plain Clojure forms. Only needed before eval, not for tooling.
-4. **step-rewrite** (`meme.rewrite`) — apply rewrite rules to forms.
-   No-op if no `:rewrite-rules` in opts. Used by `run-string` for guest
-   language transforms.
+1. **step-scan** (`meme.tools.reader.tokenizer`) — exhaustive byte-level scanner → flat token vector. Never throws. Partition invariant: `(= input (apply str (map :raw tokens)))`.
+2. **step-trivia** (`meme.tools.pratt.trivia`) — attaches trivia (whitespace, comments) to semantic tokens as structured `:trivia/before` metadata.
+3. **step-parse** (`meme.tools.pratt.parser`) — data-driven Pratt parser → lossless CST. Grammar is a map of token types to parselet functions.
+4. **step-read** (`meme.tools.reader.cst-reader`) — lowers CST to Clojure forms. No `read-string` delegation — all values resolved natively via `meme.tools.parse.resolve`.
+5. **step-expand-syntax-quotes** (`meme.tools.parse.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
 
-The core `stages/run` calls only stages 1–2, returning AST nodes for
-tooling. `runtime/run-string` chains all four stages before eval.
+The core `stages/run` calls stages 1–4, returning AST nodes for
+tooling. `run-string` chains all five stages before eval.
 
 The split makes each stage independently testable and the composition extensible.
 The tokenizer handles all character-level concerns (strings, chars, comments
 are individual tokens, so `\)` inside a string is just a `:string` token,
-not a closing paren). The parser handles all structural concerns.
+not a closing paren). The Pratt parser handles all structural concerns.
 
-`meme.stages` composes the stages as `ctx → ctx` functions, threading a
-context map with `:source`, `:raw-tokens`, `:tokens`, `:forms`. Each stage
-boundary is validated by `meme.stages.contract` when `*validate*` is
-true. This makes intermediate state visible to tooling via
-`meme.core/run-stages`.
+`meme.tools.reader.stages` composes the stages as `ctx → ctx` functions, threading a
+context map with `:source`, `:tokens`, `:cst`, `:forms`.
 
 
 ## Centralized value resolution (meme.parse.resolve)
@@ -235,17 +226,8 @@ behavior to the host platform without depending on its reader.
 
 The codebase is split into three platform tiers:
 
-- **Core translation** (tokenizer, reader, resolve, expander, printer,
-  render, formatter.flat, formatter.canon, stages, stages.contract,
-  core, errors, forms, source, rewrite, rewrite.rules, rewrite.tree,
-  rewrite.emit, lang, lang.meme-classic, lang.meme-rewrite, lang.meme-trs,
-  trs) — portable `.cljc`, runs on JVM,
-  Babashka, and ClojureScript. Pure functions with no eval or I/O
-  dependency. `rewrite` macros (`defrule`, `defrule-guard`, `ruleset`)
-  are JVM/Babashka only.
-- **Runtime** (repl, run, runtime.resolve) — `.cljc` but require `eval`
-  and `read-line`/`slurp`, which are JVM/Babashka by default. ClojureScript
-  callers can inject these via options.
+- **Core translation** (reader.tokenizer, reader.stages, reader.meme-grammar, reader.meme-parselets, reader.cst-reader, pratt.parser, pratt.trivia, parse.resolve, parse.expander, emit.printer, emit.render, emit.values, emit.formatter.flat, emit.formatter.canon, errors, forms, langs.meme) — portable `.cljc`, runs on JVM, Babashka, and ClojureScript. Pure functions with no eval or I/O dependency.
+- **Runtime** (repl, run, registry, cli) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`.
 - **Test infrastructure** (test-runner, dogfood-test) — `.clj`, JVM only.
   These use `java.io`, `PushbackReader`, `System/exit`.
 
@@ -284,22 +266,9 @@ This prevents stack overflow from deeply nested or malicious input.
 default stack sizes.
 
 
-## Shared source-position contract (meme.scan.source)
+## Source-position tracking
 
-The tokenizer records `(line, col)` on each token. The tokenizer also
-needs to map those positions back to character offsets in the source
-string for whitespace attachment. If position tracking is inconsistent,
-whitespace metadata is wrong: off-by-one truncation, stray characters,
-or outright garbled output.
-
-`meme.scan.source/line-col->offset` is the single definition that
-ensures the mapping is consistent. The tokenizer uses it in
-`attach-whitespace`. Because it's one function in one namespace, the
-mapping can't diverge. The alternative — each stage carrying its own
-offset logic — was the source of a previous bug where whitespace
-attachment disagreed after a newline.
-
-The shared contract is important for the tokenizer's whitespace attachment.
+The tokenizer records `(line, col)` on each token. Position tracking uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). This is handled internally within `meme.tools.reader.tokenizer`. The display line model (`str/split-lines` in `meme.tools.errors`) may diverge for CRLF sources — `format-error` bridges the gap by clamping carets.
 
 
 ## Centralized error infrastructure (meme.errors)
@@ -364,31 +333,13 @@ via metadata):
 - `#()` vs `fn()`: preserved via `:meme/sugar` (see above section).
 
 
-## Three lang backends
+## Lang backend
 
-meme provides three independent implementations of the meme↔Clojure translation, each with different trade-offs:
+meme uses a single implementation of the meme↔Clojure translation, registered as `:meme` in the lang registry.
 
-### meme-classic (default)
+The pipeline combines a lossless Pratt parser (`meme.tools.pratt.parser` with `meme.tools.reader.meme-grammar`) and a Wadler-Lindig document printer (`meme.tools.emit.printer`). It preserves all metadata, sugar flags (`:meme/sugar`), whitespace annotations, and comment positions through roundtrips.
 
-Full-fidelity recursive-descent parser (`meme.parse.reader`) combined with a Wadler-Lindig document printer (`meme.emit.printer`). This is the reference implementation and the only path that preserves all metadata, sugar flags (`:meme/sugar`), whitespace annotations, and comment positions through roundtrips.
-
-**Use for:** formatting, tooling integration, roundtrip-sensitive workflows, and as the correctness oracle for the other two backends.
-
-### meme-rewrite
-
-Injects `meme.rewrite.tree/rewrite-parser` as a custom `:parser` in the stage pipeline. The tree parser builds explicit tagged nodes (`m-call`, `bracket`, `brace`, etc.), then applies `meme.rewrite.rules/tree->s-rules` followed by `transform-structures` to produce the same Clojure forms as meme-classic.
-
-**Use for:** testing the rewrite engine as a viable parsing mechanism, guest languages that need tree-level transformations, and as a demonstration that the stage pipeline's pluggable parser design works correctly.
-
-### meme-trs
-
-Token-stream term rewriting (`meme.trs`). For the meme→clj direction, bypasses the parser entirely: tokenize → nest balanced delimiters → apply m-call rules at the token level → flatten → emit text. The lightest-weight path. Whitespace is preserved exactly because transformations operate on tokens, not forms.
-
-**Use for:** fast text-to-text conversion (`to-clj` direction) when no semantic analysis is needed. Not suitable for tooling that requires parsed forms or metadata.
-
-### Agreement testing
-
-All three backends are cross-checked: `benchmark_test.clj` verifies they produce the same Clojure forms for all fixture files and vendor roundtrip forms. `trs_test.cljc` explicitly tests agreement between meme-classic and meme-trs for representative inputs.
+**Use for:** formatting, tooling integration, roundtrip-sensitive workflows.
 
 ## Known divergences from Clojure's reader
 
@@ -412,10 +363,6 @@ Comments in meme source (`;; comment`) are attached as `:ws` metadata to the fol
 
 The meme formatter uses a "comment attaches to next form" model inherited from the tokenizer. An end-of-line comment like `foo(x ;; note\n y)` is attached to `y` (the next form), not to `x` (the preceding form). When formatted, the comment appears before `y` rather than after `x`. This preserves comment content but changes its visual position. This is an inherent consequence of the "attach to next token" architecture.
 
-### `defrule` / `ruleset` macros are JVM-only
-
-The `defrule`, `defrule-guard`, and `ruleset` macros in `meme.rewrite` are only available on JVM/Babashka. On ClojureScript, use the function API (`make-rule`, `rewrite`) directly.
-
 ### Sorted collections lose ordering through roundtrip
 
 `sorted-map` and `sorted-set` have no literal syntax in Clojure. When printed, they appear as regular maps/sets. Re-parsing produces `PersistentArrayMap`/`PersistentHashSet`, losing the sorted property. This matches Clojure's own limitation.
@@ -428,17 +375,72 @@ The `@` deref prefix applies to the next complete form. `@f(x)` parses as `(dere
 
 The printer accesses the regex pattern via `.pattern` (JVM) or `.-source` (CLJS), which returns only the pattern body without flags. If a regex was constructed programmatically with flags (e.g., `re-pattern` with inline flags), the flags appear in the pattern string itself (e.g., `(?i)...`) and are preserved. External flag objects are not representable in `#"..."` literal syntax.
 
-### TRS behavioral differences
+### Symbols with whitespace cannot roundtrip
 
-The token-stream term rewriting backend (`meme-trs`) operates at the text level and does NOT:
-- Expand syntax-quote to `seq`/`concat`/`list` — preserves `` ` `` notation in output
-- Evaluate reader conditionals (`#?`) — preserves them verbatim
-- Normalize whitespace — preserves original formatting
+Programmatically constructed symbols containing whitespace, parentheses, or other syntax-significant characters (e.g., `(symbol "foo bar")`) cannot be faithfully printed and re-parsed. Clojure has no escape syntax for symbols — `pr-str` returns the same as `str` for symbols. This means such symbols print as raw text which re-parses as different forms: `(symbol "foo\nbar")` → `foo\nbar` → two symbols `foo` and `bar`. This matches Clojure's own limitation and affects all Clojure-based syntax tools.
 
-Additionally, the TRS `run-source` path converts meme→clj text, then reads that text with Clojure's reader. This means `::foo` auto-resolve keywords resolve in the namespace current when `clj->forms` calls `read-string`, NOT in the file's declared namespace. The classic path uses deferred `MemeAutoKeyword` records + `(read-string "::foo")` at eval time in the file's namespace, which is correct.
+### Inline comments on primitive values lost during formatting
 
-These are inherent to the text-level rewriting approach. The classic backend (`meme-classic`) does expand syntax-quote and evaluate reader conditionals. Use classic for eval paths and TRS for text-to-text conversion.
+Comments are preserved through the pipeline via `:ws` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
+
+Comments that **survive** formatting: those before symbols, keywords, collections, and calls. Comments that are **lost**: those before numbers, strings, booleans, characters, nil, and regex literals.
+
+This is a known limitation shared by all Clojure-based formatting tools (cljfmt, zprint face similar challenges). A complete fix would require a concrete syntax tree (CST) that preserves all tokens including whitespace, which is a fundamentally different architecture than the current form-based pipeline.
+
+Leading and trailing comments (before/after top-level forms) are always preserved, as they are attached to the forms vector or to forms that support metadata.
 
 ### U+00A0 NBSP in symbols
 
 The non-breaking space character (U+00A0, NBSP) is treated as part of a symbol name, not as whitespace. This matches Clojure's own behavior — `(read-string (str "f" \u00A0 "g"))` produces a single symbol `f\u00A0g` in Clojure too. This means NBSP is an invisible character attack vector: a symbol containing NBSP looks identical to one without it, but they are different symbols. Users should be aware of this when working with copy-pasted code from web pages or formatted documents that may contain NBSP characters.
+
+
+### Tokenizer: structural vs semantic validation
+
+The tokenizer (`meme.tools.reader.tokenizer`) is a pure structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. The pipeline stages (`meme.tools.reader.stages`) translate structural tokens into the semantic format the Pratt parser and CST reader expect.
+
+This separation means semantic validation belongs in the pipeline stages, not the tokenizer:
+
+- **Reserved dispatch chars** (`#<`, `#=`, `#%`): The tokenizer correctly classifies `#=foo` as `:tagged-literal` (structurally, it IS `#` + symbol). Whether `=` is a reserved dispatch character is a semantic rule enforced downstream.
+- **Unterminated strings/regex**: The tokenizer produces a token with `:raw` = `"abc` (no close quote) — correct per its partition invariant. Validation that string/regex tokens are properly delimited happens in the pipeline.
+- **`:invalid` token error messages**: The pipeline should carry `:raw` content from `:invalid` tokens into parser errors for actionable diagnostics.
+
+This keeps the tokenizer's contract clean: never throws, always partitions, no semantic knowledge.
+
+
+## Roadmap
+
+### `.mcj` — McCarthy's original M-expression syntax
+
+McCarthy (1960) defined M-expressions as the surface syntax for Lisp. meme implements M-expressions for Clojure with one rule: `f(x y)` → `(f x y)`. But meme's syntax is a Clojure-flavored dialect — it inherits Clojure's reader macros, dispatch forms, and data literal conventions.
+
+McCarthy's original syntax was different: `car[x]` used square brackets for application, `[p₁ → e₁; … ; pₙ → eₙ]` for conditionals, `λ[[x]; e]` for lambda, `label[f; λ[[x]; …]]` for recursive binding. A faithful implementation of the original notation — as a guest language with file extension `.mcj` (McCarthy John, M-expression CloJure) — would honor the historical origin while demonstrating the guest language system.
+
+The infrastructure exists: the data-driven Pratt parser takes a grammar spec, the trivia transformer is configurable, and the lang registry supports guest languages. A `.mcj` lang would supply its own grammar (square-bracket application, semicolon separators, arrow conditionals) and its own parselets, reusing the same scanner and parser engine.
+
+### Generic CST reader
+
+`meme.tools.reader.cst-reader` lowers meme's CST to Clojure forms. The pattern is general — every language that uses the Pratt parser needs CST → host-language lowering. The generic parts (tree walking, trivia extraction, discard filtering) could become `meme.tools.pratt.cst` with language-specific value resolution and node handlers plugged in. Currently there's only one consumer (meme), so the extraction is deferred until a second language (e.g., `.mcj`) needs it.
+
+### Data-driven scanner
+
+The tokenizer (`meme.tools.reader.tokenizer`) knows about `#` dispatch, `:` keywords, `'`/`@`/`^`/`` ` ``/`~` prefix characters. This is Clojure-family knowledge baked into the scanner. A truly generic scanner would take a character → token-type configuration map:
+
+```clojure
+{:dispatch    \#
+ :keyword     \:
+ :prefixes    #{\' \@ \^ \` \~}
+ :delimiters  {\( :open-paren  \) :close-paren
+               \[ :open-bracket \] :close-bracket
+               \{ :open-brace  \} :close-brace}
+ :string      \"
+ :comment     \;
+ :escape      \\}
+```
+
+This would allow the same scanner to tokenize languages with different sigils (e.g., `$` for variables, `@` for decorators, `//` for comments). The current scanner is fast and correct — this refactor trades simplicity for generality and should wait until a second language needs a different character vocabulary.
+
+### Trivia configuration
+
+The trivia transformer accepts a configurable set of token types to classify as trivia. The default is `#{:whitespace :newline}` — minimal noise. The parsing pipeline extends this with `:comment :bom :shebang`.
+
+An open question: should the trivia configuration be part of the grammar spec rather than a separate pipeline parameter? If the grammar defines what tokens are syntactically significant, it implicitly defines what's trivia. Merging them would reduce the number of configuration points. Currently kept separate because trivia classification is a scanner-level concern (before parsing) while the grammar is a parser-level concern.

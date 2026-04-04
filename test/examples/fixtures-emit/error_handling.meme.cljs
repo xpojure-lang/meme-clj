@@ -1,0 +1,3 @@
+(try (dangerous) (catch Exception e (handle e)))
+
+(try (risky) (catch Exception e (log e) (recover)) (finally (cleanup)))

@@ -42,7 +42,6 @@ the CLI itself is written in `.meme`.
 
 - **Platform for guest languages.** The tokenizer, pipeline, and FullForm
   representation are designed as a foundation for languages beyond Clojure.
-  See `doc/platform-roadmap.md`.
 
 
 ## Non-goals
@@ -92,7 +91,7 @@ the CLI itself is written in `.meme`.
 | R23 | Signed numbers: `-1` is number, `-(1 2)` is call to `-` | Done |
 | R24 | `#:ns{...}` namespaced maps parsed natively (no read-string) | Done |
 | R25 | `#()` uses meme syntax inside, `%` params → `fn` form | Done |
-| R26 | `run-stages` exposes intermediate stage state for tooling | Done |
+| R26 | `stages/run` exposes intermediate stage state for tooling | Done |
 | R28 | `()` is the empty list (no head required) | Done |
 | R29 | No S-expression escape hatch — `'(...)` uses meme syntax inside | Done |
 | R30 | Syntax-quote parsed natively — meme syntax inside `` ` `` | Done |
@@ -137,38 +136,30 @@ during design iteration. IDs are stable references and are not renumbered.
 ## Architecture
 
 ```
-.meme file ──→ tokenizer ──→ parser ──→ Clojure forms
-                 (scan)       (parse)        │
-                    │            │           ▼
-                  source      resolve    expander ──→ rewrite ──→ eval
-               (shared line/col                │
-                → offset contract)       printer ──→ .meme text
-                  stages.contract      formatter ──→ .meme text
-               (spec validation at
-                stage boundaries)
+.meme file ──→ scanner ──→ trivia ──→ pratt-parser ──→ cst-reader ──→ Clojure forms
+              (step-scan) (step-trivia) (step-parse)   (step-read)         │
+                                                                          ▼
+                                         resolve                    expander ──→ eval
+                                     (value resolution)                  │
+                                                                   printer ──→ .meme text
+                                                                 formatter ──→ .meme text
 ```
 
-The pipeline has composable stages (composed by `meme.stages`), each a `ctx → ctx` function with a `step-` prefix:
+The pipeline has composable stages (composed by `meme.tools.reader.stages`), each a `ctx → ctx` function with a `step-` prefix:
 1. **step-strip-shebang** — remove `#!` line from `:source` (for executable scripts).
-   Defined in `runtime/run`, not part of the core pipeline.
-2. **step-scan** (`meme.scan.tokenizer`) — character stream → flat token vector.
-   Compound forms (dispatch, syntax-quote) emit marker tokens.
-3. **step-parse** (`meme.parse.reader`) — recursive-descent parser, tokens → Clojure
-   forms. Value resolution (numbers, strings, chars, regex, keywords, tagged
-   literals) is delegated to `meme.parse.resolve`. Volatile position
-   counter for portability. No intermediate AST — forms are emitted as
-   standard Clojure data. No `read-string` delegation. Accepts an optional
-   `:parser` in opts for guest language plug-in parsers.
-4. **step-expand-syntax-quotes** (`meme.parse.expander`) — syntax-quote AST nodes →
+   Defined in `meme.tools.run`, not part of the core pipeline.
+2. **step-scan** (`meme.tools.reader.tokenizer`) — exhaustive byte-level scanner → flat
+   token vector. Never throws. Partition invariant: `(= input (apply str (map :raw tokens)))`.
+3. **step-trivia** (`meme.tools.pratt.trivia`) — attaches trivia (whitespace, comments)
+   to semantic tokens as structured `:trivia/before` metadata.
+4. **step-parse** (`meme.tools.pratt.parser`) — data-driven Pratt parser → lossless CST.
+   Grammar defined in `meme.tools.reader.meme-grammar`.
+5. **step-read** (`meme.tools.reader.cst-reader`) — lowers CST to Clojure forms. Value
+   resolution delegated to `meme.tools.parse.resolve`. No `read-string` delegation.
+6. **step-expand-syntax-quotes** (`meme.tools.parse.expander`) — syntax-quote AST nodes →
    plain Clojure forms. Only needed before eval, not for tooling.
-   `meme.stages/run` intentionally omits this stage, returning AST
+   `stages/run` intentionally omits this stage, returning AST
    nodes for tooling access.
-5. **step-rewrite** (`meme.rewrite`) — apply rewrite rules to `:forms`.
-   No-op if no `:rewrite-rules` in opts. Used by `run-string` for guest
-   language transforms.
-
-Stage boundaries are validated by `meme.stages.contract` (clojure.spec)
-when `contract/*validate*` is bound to true.
 
 The printer pattern-matches on form structure to reverse the transformation.
 It detects special forms and produces their meme syntax equivalents.
@@ -204,33 +195,24 @@ meme rules inside. No opaque regions.
   Tree-sitter grammar in `tree-sitter-meme/` (both in the `xpojure-lang` org).
   Both cover `.meme` extension.
 
-- **Platform / guest language system.** See `doc/platform-roadmap.md` and
-  `doc/LANGBOOK.md`. Includes:
-  - **Rewrite engine** (`meme.rewrite`) — pattern matching, rule
-    application, bottom-up rewriting to fixpoint. `defrule`, `ruleset` macros.
-  - **Lang registration** (`meme.lang`) — `register!` a guest language
-    with `:extension`, `:run`, `:rules`, `:parser`, `:format`, `:to-clj`, `:to-meme`.
+- **Platform / guest language system.** Includes:
+  - **Lang registration** (`meme.registry`) — `register!` a guest language
+    with `:extension`, `:run`, `:parser`, `:format`, `:to-clj`, `:to-meme`.
     `run-file` and CLI auto-detect guest languages from file extension.
-  - **Pipeline integration** — `step-rewrite` stage, pluggable `:parser` in
-    `step-parse`, `:prelude`/`:rewrite-rules`/`:rewrite-max-iters` options
-    in `run-string`.
+  - **Pipeline integration** — pluggable `:parser` in
+    `step-parse`, `:prelude` option in `run-string`.
   - **Example languages** in `examples/languages/`: calc, prefix, superficie.
 
 ### Platform requirements
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| PL1 | Rewrite engine: pattern matching (`?x`, `??x`), substitution, bottom-up rewriting | Done |
-| PL2 | `defrule`, `defrule-guard`, `ruleset` macros for rule definition (JVM) | Done |
 | PL3 | Lang registration: `lang/register!`, `lang/resolve-by-extension`, `lang/resolve-lang` | Done |
 | PL4 | `run-file` and CLI auto-detect guest language from file extension | Done |
-| PL5 | `run-string` accepts `:prelude`, `:rewrite-rules`, `:rewrite-max-iters` | Done |
+| PL5 | `run-string` accepts `:prelude` | Done |
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
-| PL7 | `step-rewrite` pipeline stage applies rules after expansion | Done |
-| PL8 | Stage contract: spec validation at stage boundaries (`stages.contract`) | Done |
-| PL9 | Three conversion langs: meme-classic, meme-rewrite, meme-trs (via `meme.lang` `:to-clj` / `:to-meme`) | Done |
+| PL8 | Stage contract: spec validation at stage boundaries | Done (removed — contract validation was deleted during pipeline unification) |
 | PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
-| PL11 | Comparative benchmark across all three langs | Done |
 
 ## Future work
 

@@ -5,9 +5,9 @@
   (:require [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [meme.core :as core]
-            [meme.emit.formatter.canon :as fmt-canon]
-            [meme.emit.formatter.flat :as fmt-flat]))
+            [meme.langs.meme :as lang]
+            [meme.tools.emit.formatter.canon :as fmt-canon]
+            [meme.tools.emit.formatter.flat :as fmt-flat]))
 
 ;; ===========================================================================
 ;; Leaf generators (portable — no chars, ratios, BigDecimal, BigInt)
@@ -127,7 +127,7 @@
 (defn roundtrip-ok? [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
-          read-back (core/meme->forms printed)]
+          read-back (lang/meme->forms printed)]
       (= [form] read-back))
     (catch #?(:clj Exception :cljs :default) _
       false)))
@@ -151,7 +151,7 @@
                              (gen/let [h (gen/fmap str gen-simple-symbol)]
                                (str h "([)"))])]
     (try
-      (core/meme->forms meme-str)
+      (lang/meme->forms meme-str)
       false
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (let [data (ex-data e)]
@@ -160,13 +160,14 @@
       (catch #?(:clj Exception :cljs :default) _
         false))))
 
+;; NOTE: The experimental tokenizer never throws for unterminated strings.
+;; Only delimiter-unclosed inputs produce :incomplete.
 (defspec prop-cljs-unclosed-is-incomplete 100
   (prop/for-all [meme-str (gen/one-of
-                            [(gen/return "\"hello")
-                             (gen/return "f(x")
+                            [(gen/return "f(x")
                              (gen/return "[1 2")])]
     (try
-      (core/meme->forms meme-str)
+      (lang/meme->forms meme-str)
       false
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (:incomplete (ex-data e)))
@@ -176,6 +177,6 @@
 (defspec prop-cljs-canon-formatter-idempotent 100
   (prop/for-all [form gen-form]
     (let [fmt1 (fmt-canon/format-forms [form] {:width 80})
-          reparsed (core/meme->forms fmt1)
+          reparsed (lang/meme->forms fmt1)
           fmt2 (fmt-canon/format-forms reparsed {:width 80})]
       (= fmt1 fmt2))))

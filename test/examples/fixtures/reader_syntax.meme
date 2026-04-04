@@ -1,7 +1,0 @@
-'foo
-'a(b c)
-#'inc
-@state
-^:dynamic x
-^{:tag String} y
-#_foo bar

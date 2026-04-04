@@ -114,7 +114,6 @@ Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sit
 ## Documentation
 
 - [Language Reference](doc/language-reference.md) — complete syntax guide
-- [Language Maker Cookbook](doc/LANGBOOK.md) — building guest languages on the meme platform
 - [API Reference](doc/api.md) — public functions
 - [Design Decisions](doc/design-decisions.md) — rationale behind each choice
 - [Product Requirements](doc/PRD.md) — requirements and known limitations

@@ -1,0 +1,5 @@
+(defmulti area :shape)
+
+(defmethod area :circle [{:keys [radius]}] (* Math/PI (* radius radius)))
+
+(defmethod area :default [s] 0)

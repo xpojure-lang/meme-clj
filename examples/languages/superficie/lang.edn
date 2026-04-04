@@ -1,3 +1,0 @@
-{:extension ".sup"
- :run "examples/languages/superficie/core.meme"
- :format :meme-classic}

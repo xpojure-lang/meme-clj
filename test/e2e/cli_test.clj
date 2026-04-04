@@ -88,9 +88,9 @@
     (is (str/includes? out "to-meme"))))
 
 (deftest inspect-lang-test
-  (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "meme-trs")]
+  (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "meme-classic")]
     (is (zero? exit))
-    (is (str/includes? out "Lang: meme-trs"))))
+    (is (str/includes? out "Lang: meme-classic"))))
 
 ;; ---------------------------------------------------------------------------
 ;; run
@@ -135,7 +135,7 @@
 
 (deftest to-clj-lang-test
   (let [f (tmp-meme "f(x y)")
-        {:keys [out exit]} (bb-meme "to-clj" (str f) "--stdout" "--lang" "meme-rewrite")]
+        {:keys [out exit]} (bb-meme "to-clj" (str f) "--stdout" "--lang" "meme-classic")]
     (is (zero? exit))
     (is (= "(f x y)\n" out))))
 
@@ -238,14 +238,20 @@
 ;; format with --lang
 ;; ---------------------------------------------------------------------------
 
-(deftest format-lang-rewrite-test
+(deftest format-lang-classic-test
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme-rewrite")]
+        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme-classic")]
     (is (zero? exit))
     (is (= "defn(foo [x] +(x 1))\n" out))))
 
-(deftest format-lang-trs-test
-  (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme-trs")]
+;; ---------------------------------------------------------------------------
+;; Scar tissue: *command-line-args* must not leak "run" and filename
+;; ---------------------------------------------------------------------------
+
+(deftest run-command-line-args-not-leaked
+  (let [f (tmp-meme "println(pr-str(*command-line-args*))")
+        {:keys [out exit]} (bb-meme "run" (str f) "--" "--user-arg" "value")]
     (is (zero? exit))
-    (is (= "defn(foo [x] +(x 1))\n" out))))
+    (is (str/includes? out "--user-arg") "user args visible")
+    (is (not (str/includes? out "run")) "CLI verb 'run' not leaked")
+    (is (not (str/includes? out ".meme")) "filename not leaked")))

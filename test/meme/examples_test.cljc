@@ -2,7 +2,7 @@
   "Integration tests: complex, multi-feature meme examples.
    Unit-level parser tests live in reader_test.cljc."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.core :as core]))
+            [meme.langs.meme :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Full integration example — everything is a call
@@ -34,7 +34,7 @@ defn(summarize [accounts]
     processed))")
 
 (deftest full-readme-example-parses
-  (let [forms (core/meme->forms full-example)]
+  (let [forms (lang/meme->forms full-example)]
     ;; Should produce 3 top-level forms: ns, defn, defn
     (is (= 3 (count forms)))
 

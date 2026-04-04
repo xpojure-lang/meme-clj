@@ -1,0 +1,33 @@
+nil
+
+true
+
+false
+
+42
+
+3.14
+
+1/3
+
+"hello"
+
+\a
+
+\newline
+
+:active
+
+:user/name
+
+[1 2 3]
+
+{:a 1 :b 2}
+
+#{1 2 3}
+
+42N
+
+511N
+
+3.14M

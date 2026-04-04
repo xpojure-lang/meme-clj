@@ -1,0 +1,10 @@
+let([x 1, y +(x 1)] *(x y))
+let([{:keys [id name]} person] str(id ": " name))
+loop([i 0, acc []]
+  if(>=(i 3)
+    acc
+    recur(inc(i) conj(acc i))))
+for([x xs, y ys, :when >(x y)] [x y])
+for([x xs, :let [y *(x 10)]] +(x y))
+for([x xs, :while <(x 5)] x)
+doseq([x items] println(x))

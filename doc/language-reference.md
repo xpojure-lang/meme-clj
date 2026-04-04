@@ -341,9 +341,8 @@ All of these work exactly as in Clojure:
 
 meme serves as a platform for guest languages. A guest language can define:
 1. **A prelude** — forms eval'd before user code (standard library)
-2. **Rewrite rules** — transforms applied to parsed forms (compile-time macros)
-3. **A custom parser** — optionally replacing the meme parser entirely
+2. **A custom parser** — optionally replacing the meme parser entirely
 
-Guest languages are defined as EDN files and registered via `meme.lang`.
-They are dispatched by file extension. See `doc/LANGBOOK.md` for a cookbook and
-`examples/languages/` for working examples (calc, prefix, superficie).
+Guest languages are defined as EDN files and registered via `meme.registry`.
+They are dispatched by file extension. See `examples/languages/` for working
+examples (prefix).

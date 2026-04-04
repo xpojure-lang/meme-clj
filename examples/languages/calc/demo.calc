@@ -1,8 +1,0 @@
-; demo.calc — runs with the calc prelude auto-loaded.
-; The simplify function is available from the prelude.
-
-println("=== calc: algebraic simplification ===")
-println(simplify('+(*(1 x) 0)))
-println(simplify('+(*(a b) -(c 0))))
-println(simplify('*(0 +(a b c d e))))
-println(simplify('/(*(1 +(x 0)) 1)))

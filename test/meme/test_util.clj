@@ -2,8 +2,8 @@
   "Shared test utilities for meme-clj test suite.
    Extracts helpers that were duplicated across dogfood, vendor roundtrip,
    and benchmark tests."
-  (:require [meme.core :as core]
-            [meme.emit.formatter.flat :as fmt-flat]
+  (:require [meme.langs.meme :as lang]
+            [meme.tools.emit.formatter.flat :as fmt-flat]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -51,7 +51,7 @@
   [form]
   (try
     (let [meme-text (fmt-flat/format-form form)
-          forms2 (core/meme->forms meme-text {:read-cond :preserve})]
+          forms2 (lang/meme->forms meme-text {:read-cond :preserve})]
       {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
     (catch Exception e
       {:error (.getMessage e)})))
