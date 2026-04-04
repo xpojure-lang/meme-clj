@@ -1,0 +1,1 @@
+#?(:clj 1 :cljs 2) #?@(:clj [a b] :cljs [c d]) #:ns{:a 1 :b 2}

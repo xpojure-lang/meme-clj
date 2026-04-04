@@ -805,3 +805,20 @@
       (is (= src (lang/format-meme src {})))))
   (testing "empty source returned unchanged"
     (is (= "" (lang/format-meme "" {})))))
+
+;; ---------------------------------------------------------------------------
+;; Fuzzer finding: control char roundtrip — bare control char prints as
+;; \uHHHH unicode escape, which re-parses as MemeRaw-wrapped char.
+;; The semantic value is preserved; the notation change is accepted.
+;; This test documents the behavior: print→re-parse produces the same value.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest control-char-semantic-roundtrip
+     (testing "control char U+0001 prints as unicode escape, value preserved"
+       (let [form (char 1)
+             printed (fmt-flat/format-form form)
+             reparsed (first (lang/meme->forms printed))]
+         (is (= "\\u0001" printed))
+         (is (forms/raw? reparsed) "re-parsed control char is MemeRaw-wrapped")
+         (is (= form (:value reparsed)) "semantic value preserved through roundtrip")))))

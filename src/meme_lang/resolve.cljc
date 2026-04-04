@@ -39,6 +39,8 @@
    Wraps in MemeRaw when the string contains unicode escapes (\\uNNNN) that would
    be lost through pr-str roundtrip."
   [raw loc]
+  (when (< (count raw) 2)
+    (errors/meme-error "Unterminated string literal" loc))
   (let [inner (subs raw 1 (dec (count raw)))] ; strip surrounding quotes
     ;; Fast path: most strings have no escapes — skip char-by-char loop
     (if (not (str/includes? inner "\\"))
@@ -354,6 +356,8 @@
 (defn resolve-regex
   "Resolve a regex literal token to a regex value."
   [raw loc]
+  (when (< (count raw) 3)
+    (errors/meme-error "Unterminated regex literal" loc))
   (let [pattern (subs raw 2 (dec (count raw)))] ; strip #" and "
     (try #?(:clj (java.util.regex.Pattern/compile pattern)
             :cljs (js/RegExp. pattern))

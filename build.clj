@@ -38,3 +38,22 @@
   (dd/deploy {:installer :remote
               :artifact (b/resolve-path jar-file)
               :pom-file (b/pom-path {:lib lib :class-dir class-dir})}))
+
+(def fuzzer-class-dir "target/fuzzer-classes")
+(def fuzzer-jar-file "target/fuzzer.jar")
+
+(defn fuzzer-jar
+  "Build an uberjar with AOT-compiled fuzz targets for Jazzer."
+  [_]
+  (b/delete {:path "target"})
+  (let [basis (b/create-basis {:project "deps.edn" :aliases [:fuzzer]})]
+    (b/compile-clj {:basis basis
+                    :src-dirs ["src" "fuzz"]
+                    :class-dir fuzzer-class-dir
+                    :ns-compile ['meme.fuzz.roundtrip]})
+    (b/copy-dir {:src-dirs ["src" "fuzz" "resources"]
+                 :target-dir fuzzer-class-dir})
+    (b/uber {:basis basis
+             :class-dir fuzzer-class-dir
+             :uber-file fuzzer-jar-file
+             :main 'com.code_intelligence.jazzer.Jazzer})))

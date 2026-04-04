@@ -29,6 +29,9 @@
         :exec-fn cognitect.test-runner.api/test
         :exec-args {:dirs ["test"]
                     :patterns ["e2e\\..*-test"]}}
+  :fuzzer {:extra-paths ["fuzz"]
+           :extra-deps {com.code-intelligence/jazzer {:mvn/version "0.30.0"}
+                        com.code-intelligence/jazzer-api {:mvn/version "0.30.0"}}}
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}
                  slipset/deps-deploy {:mvn/version "0.2.2"}}
           :ns-default build}}}

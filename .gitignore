@@ -11,3 +11,6 @@ node_modules/
 out/
 .calva/
 .clover/
+fuzz-corpus/
+crash-*
+Crash_*.java

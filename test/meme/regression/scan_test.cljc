@@ -962,3 +962,25 @@
     (let [tokens (tokenizer/tokenize "\\u0041)")]
       (is (= 2 (count tokens)))
       (is (= :char-literal (:type (first tokens)))))))
+
+;; ---------------------------------------------------------------------------
+;; Fuzzer finding: unterminated string/regex literals crash resolve-string/
+;; resolve-regex with StringIndexOutOfBoundsException. The scanner correctly
+;; produces a token for unterminated literals (EOF before closing quote),
+;; but the resolver assumed both quotes were present.
+;; Fix: length guard in resolve-string and resolve-regex.
+;; ---------------------------------------------------------------------------
+
+(deftest unterminated-string-no-crash
+  (testing "lone double-quote does not crash"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "\""))))
+  (testing "exclamation + double-quote does not crash"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "!\""))))
+  (testing "unterminated regex does not crash"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated regex"
+                          (lang/meme->forms "#\"")))))

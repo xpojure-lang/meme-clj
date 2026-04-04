@@ -1,0 +1,1 @@
+[1 2 3] {:a 1 :b 2} #{:x :y} "hello" \newline 42 3.14 true nil
