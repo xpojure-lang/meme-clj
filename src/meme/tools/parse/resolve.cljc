@@ -214,8 +214,11 @@
            (let [idx   (str/index-of raw "/")
                  num-s (subs raw 0 idx)
                  num-s (cond-> num-s (str/starts-with? num-s "+") (subs 1))
+                 den-s (subs raw (inc idx))
+                 _ (when (or (str/starts-with? den-s "+") (str/starts-with? den-s "-"))
+                     (errors/meme-error (str "Invalid number: " raw) loc))
                  num   (java.math.BigInteger. ^String num-s)
-                 den   (java.math.BigInteger. ^String (subs raw (inc idx)))
+                 den   (java.math.BigInteger. ^String den-s)
                  result (/ (clojure.lang.BigInt/fromBigInteger num)
                            (clojure.lang.BigInt/fromBigInteger den))]
              (cond

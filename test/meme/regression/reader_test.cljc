@@ -437,23 +437,21 @@
 ;; Fix: return discard-sentinel when no branch matches.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline returns nil for non-matching reader
-;; conditional branches rather than filtering them out. The Pratt parser
-;; produces a :reader-cond CST node; the CST reader returns nil when no
-;; branch matches the current platform.
-(deftest reader-conditional-no-match-produces-nil
-  (testing "#?(:cljs x) on JVM produces nil"
-    #?(:clj  (is (= [nil] (lang/meme->forms "#?(:cljs x)")))
-       :cljs (is (= [nil] (lang/meme->forms "#?(:clj x)")))))
-  (testing "surrounding forms include nil when reader conditional is skipped"
-    #?(:clj  (is (= [1 nil 2] (lang/meme->forms "1 #?(:cljs 99) 2")))
-       :cljs (is (= [1 nil 2] (lang/meme->forms "1 #?(:clj 99) 2")))))
-  (testing "splicing non-matching produces nil"
-    #?(:clj  (is (= [nil] (lang/meme->forms "#?@(:cljs [1 2])")))
-       :cljs (is (= [nil] (lang/meme->forms "#?@(:clj [1 2])")))))
-  ;; #?() — experimental pipeline produces nil for empty reader conditional
-  (testing "#?() empty — produces nil"
-    (is (= [nil] (lang/meme->forms "#?()")))))
+;; Scar tissue: Non-matching reader conditionals produce no value — filtered out
+;; at both collection level (splice-and-filter) and top level (read-forms).
+;; Matches Clojure behavior: #?(:cljs x) on JVM produces nothing.
+(deftest reader-conditional-no-match-filtered
+  (testing "#?(:cljs x) on JVM produces no forms"
+    #?(:clj  (is (= [] (lang/meme->forms "#?(:cljs x)")))
+       :cljs (is (= [] (lang/meme->forms "#?(:clj x)")))))
+  (testing "surrounding forms exclude non-matching reader conditional"
+    #?(:clj  (is (= [1 2] (lang/meme->forms "1 #?(:cljs 99) 2")))
+       :cljs (is (= [1 2] (lang/meme->forms "1 #?(:clj 99) 2")))))
+  (testing "splicing non-matching produces no forms"
+    #?(:clj  (is (= [] (lang/meme->forms "#?@(:cljs [1 2])")))
+       :cljs (is (= [] (lang/meme->forms "#?@(:clj [1 2])")))))
+  (testing "#?() empty — produces no forms"
+    (is (= [] (lang/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: non-matching reader conditional with adjacent call args must
@@ -463,18 +461,18 @@
 ;; Fix: loop-consume adjacent call args when returning discard-sentinel.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: experimental pipeline returns nil for non-matching branches.
-;; When nil has adjacent call args, produces (nil arg).
+;; NOTE: Non-matching branches return ::no-match sentinel. When the sentinel
+;; has adjacent call args, produces (sentinel arg).
 (deftest reader-conditional-no-match-with-call-args
-  (testing "non-matching reader cond with call args produces (nil 42)"
-    #?(:clj  (is (= ['(nil 42)] (lang/meme->forms "#?(:cljs identity)(42)")))
-       :cljs (is (= ['(nil 42)] (lang/meme->forms "#?(:clj identity)(42)")))))
-  (testing "chained call args chain on nil"
-    #?(:clj  (is (= ['((nil 42) 43)] (lang/meme->forms "#?(:cljs identity)(42)(43)")))
-       :cljs (is (= ['((nil 42) 43)] (lang/meme->forms "#?(:clj identity)(42)(43)")))))
-  (testing "surrounding forms include (nil 42)"
-    #?(:clj  (is (= [1 '(nil 42) 2] (lang/meme->forms "1 #?(:cljs inc)(42) 2")))
-       :cljs (is (= [1 '(nil 42) 2] (lang/meme->forms "1 #?(:clj inc)(42) 2")))))
+  (testing "non-matching reader cond with call args produces (sentinel 42)"
+    #?(:clj  (is (= ['(:meme.tools.reader.cst-reader/no-match 42)] (lang/meme->forms "#?(:cljs identity)(42)")))
+       :cljs (is (= ['(:meme.tools.reader.cst-reader/no-match 42)] (lang/meme->forms "#?(:clj identity)(42)")))))
+  (testing "chained call args chain on sentinel"
+    #?(:clj  (is (= ['((:meme.tools.reader.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:cljs identity)(42)(43)")))
+       :cljs (is (= ['((:meme.tools.reader.cst-reader/no-match 42) 43)] (lang/meme->forms "#?(:clj identity)(42)(43)")))))
+  (testing "surrounding forms include (sentinel 42)"
+    #?(:clj  (is (= [1 '(:meme.tools.reader.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:cljs inc)(42) 2")))
+       :cljs (is (= [1 '(:meme.tools.reader.cst-reader/no-match 42) 2] (lang/meme->forms "1 #?(:clj inc)(42) 2")))))
   (testing "matching case still works with call args"
     #?(:clj  (is (= ['(inc 42)] (lang/meme->forms "#?(:clj inc)(42)")))
        :cljs (is (= ['(identity 42)] (lang/meme->forms "#?(:cljs identity)(42)"))))))
@@ -606,19 +604,19 @@
 ;; parse-forms-until to splice instead of conj.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline does not splice #?@ results into parent
-;; collections. The splice result is returned as a vector, not spliced.
+;; NOTE: #?@ now correctly splices into parent collections and filters
+;; no-match sentinels inside collections.
 (deftest splice-reader-conditional-in-vector
-  (testing "#?@ returns vector as single element (no splice)"
-    (is (= [[1 [2 3] 4]]
+  (testing "#?@ splices into vector"
+    (is (= [[1 2 3 4]]
            (lang/meme->forms #?(:clj  "[1 #?@(:clj [2 3]) 4]"
                                 :cljs "[1 #?@(:cljs [2 3]) 4]")))))
-  (testing "#?@ at top level returns vector"
-    (is (= [[1 2]]
+  (testing "#?@ at top level splices into forms vector"
+    (is (= [1 2]
            (lang/meme->forms #?(:clj  "#?@(:clj [1 2])"
                                 :cljs "#?@(:cljs [1 2])")))))
-  (testing "#?@ with non-matching platform returns nil"
-    (is (= [[1 nil 3]]
+  (testing "#?@ with non-matching platform is filtered from collection"
+    (is (= [[1 3]]
            (lang/meme->forms #?(:clj  "[1 #?@(:cljs [2]) 3]"
                                 :cljs "[1 #?@(:clj [2]) 3]")))))
   (testing "matching case still works with call args"
@@ -634,11 +632,12 @@
 ;; ---------------------------------------------------------------------------
 
 ;; NOTE: The experimental pipeline treats #?(:clj) as a reader conditional
-;; with only a keyword and no value — it produces nil instead of erroring.
+;; with only a keyword and no value — it produces no form (filtered out).
 (deftest reader-conditional-missing-value-behavior
-  (testing "missing value for matching platform — produces nil"
-    (is (= [nil] (lang/meme->forms #?(:clj  "#?(:clj)"
-                                       :cljs "#?(:cljs)")))))
+  (testing "missing value for matching platform — produces no form"
+    (is (= []
+           (lang/meme->forms #?(:clj  "#?(:clj)"
+                                :cljs "#?(:cljs)")))))
   (testing "incomplete input is marked :incomplete"
     (let [e (try (lang/meme->forms #?(:clj  "#?(:clj"
                                       :cljs "#?(:cljs"))
@@ -852,12 +851,12 @@
 ;; Previously: silently accepted, produced empty string output.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline produces nil for empty reader conditionals.
-(deftest empty-reader-conditional-produces-nil
-  (testing "#?() — produces nil"
-    (is (= [nil] (lang/meme->forms "#?()"))))
-  (testing "#?@() — produces nil"
-    (is (= [nil] (lang/meme->forms "#?@()")))))
+;; Empty reader conditionals produce no form (filtered out).
+(deftest empty-reader-conditional-produces-no-form
+  (testing "#?() — produces no form"
+    (is (= [] (lang/meme->forms "#?()"))))
+  (testing "#?@() — produces no form"
+    (is (= [] (lang/meme->forms "#?@()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #?@ splice inside map/set literals must be rejected (RT3-F15)
@@ -884,11 +883,12 @@
 
 ;; NOTE: The experimental pipeline handles #_ inside reader conditionals
 ;; by consuming the next token. #?(:clj #_ x) — #_ discards x, leaving
-;; :clj with no value, producing nil.
-(deftest discarded-branch-value-produces-nil
-  (testing "discard of matching branch value — produces nil"
-    (is (= [nil] (lang/meme->forms #?(:clj  "#?(:clj #_ x)"
-                                       :cljs "#?(:cljs #_ x)"))))))
+;; :clj with no value, producing no form (filtered out).
+(deftest discarded-branch-value-produces-no-form
+  (testing "discard of matching branch value — produces no form"
+    (is (= []
+           (lang/meme->forms #?(:clj  "#?(:clj #_ x)"
+                                :cljs "#?(:cljs #_ x)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: REPL expand context valid with *validate* (PT-F6)

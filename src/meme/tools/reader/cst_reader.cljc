@@ -12,6 +12,15 @@
             [meme.tools.parse.resolve :as resolve]))
 
 ;; ---------------------------------------------------------------------------
+;; Reader-conditional sentinel
+;; ---------------------------------------------------------------------------
+
+(def ^:private no-match
+  "Sentinel for reader-conditional branches with no platform match.
+   Distinguished from nil so that #?(:clj nil) correctly returns nil."
+  ::no-match)
+
+;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
@@ -67,7 +76,10 @@
 
       :keyword
       (if (str/starts-with? raw "::")
-        (resolve/resolve-auto-keyword raw loc (:resolve-keyword opts))
+        (let [body (subs raw 2)]
+          (when (or (= body "") (str/starts-with? body "/") (str/ends-with? body "/"))
+            (errors/meme-error (str "Invalid token: " raw) loc))
+          (resolve/resolve-auto-keyword raw loc (:resolve-keyword opts)))
         (let [s (subs raw 1)
               i (str/index-of s "/")]
           (if (some? i)
@@ -93,13 +105,29 @@
 ;; Collection reading
 ;; ---------------------------------------------------------------------------
 
+(defn- splice-and-filter
+  "Post-process read children: remove no-match sentinels, splice #?@ results.
+   Reader conditionals in :eval mode return `no-match` when no platform matches
+   and vectors with :meme/splice metadata for #?@ splicing."
+  [items]
+  (persistent!
+    (reduce (fn [acc item]
+              (cond
+                (identical? item no-match) acc
+                (and (vector? item) (:meme/splice (meta item)))
+                (reduce conj! acc item)
+                :else (conj! acc item)))
+            (transient []) items)))
+
 (defn- read-children
   "Read a vector of CST child nodes into Clojure forms, filtering discards.
-   Discard nodes already contain their target in :form — just skip them."
+   Discard nodes already contain their target in :form — just skip them.
+   Also splices #?@ results and filters no-match sentinels."
   [children opts]
-  (into [] (comp (remove #(= :discard (:node %)))
-                 (map #(read-node % opts)))
-        children))
+  (splice-and-filter
+    (into [] (comp (remove #(= :discard (:node %)))
+                   (map #(read-node % opts)))
+          children)))
 
 (defn- metadatable?
   "Can metadata be attached to this value?"
@@ -109,18 +137,20 @@
 
 (defn- read-children-with-ws
   "Read children, preserving :ws metadata from trivia on each form.
-   Discard nodes already contain their target — just skip them."
+   Discard nodes already contain their target — just skip them.
+   Also splices #?@ results and filters no-match sentinels."
   [children opts]
-  (into []
-        (comp (remove #(= :discard (:node %)))
-              (map (fn [child]
-                     (let [form (read-node child opts)
-                           first-tok (or (:token child) (:open child) (:ns child))
-                           ws (ws-before first-tok)]
-                       (if (and ws (metadatable? form))
-                         (vary-meta form assoc :ws ws)
-                         form)))))
-        children))
+  (splice-and-filter
+    (into []
+          (comp (remove #(= :discard (:node %)))
+                (map (fn [child]
+                       (let [form (read-node child opts)
+                             first-tok (or (:token child) (:open child) (:ns child))
+                             ws (ws-before first-tok)]
+                         (if (and ws (metadatable? form))
+                           (vary-meta form assoc :ws ws)
+                           form)))))
+          children)))
 
 ;; ---------------------------------------------------------------------------
 ;; Node reading
@@ -165,6 +195,9 @@
       (when (odd? (count items))
         (errors/meme-error "Map must contain an even number of forms"
                            (node-loc node)))
+      (let [ks (take-nth 2 items)]
+        (when-let [dup (first (for [[k freq] (frequencies ks) :when (> freq 1)] k))]
+          (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node))))
       (cond-> (apply array-map items)
         ws (vary-meta assoc :ws ws)))
 
@@ -172,6 +205,8 @@
     (let [_ (check-closed! node "set")
           items (read-children (:children node) opts)
           ws (ws-before (:open node))]
+      (when-let [dup (first (for [[v freq] (frequencies items) :when (> freq 1)] v))]
+        (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
       (cond-> (set items)
         ws (vary-meta assoc :ws ws)
         true (vary-meta assoc :meme/order (vec items))))
@@ -258,10 +293,18 @@
     :namespaced-map
     (let [_ (check-closed! node "namespaced map")
           ns-raw (:raw (:ns node))
-          ;; #:ns or #::ns — strip #: or #::
-          ns-str (if (str/starts-with? ns-raw "#::")
-                   (subs ns-raw 3)
-                   (subs ns-raw 2))
+          auto-resolve? (str/starts-with? ns-raw "#::")
+          ;; #:ns → "ns", #::alias → "::alias" (preserve prefix for roundtrip)
+          ns-name (if auto-resolve? (subs ns-raw 3) (subs ns-raw 2))
+          _ (when (str/blank? ns-name)
+              (errors/meme-error
+                (if auto-resolve?
+                  "Auto-resolve namespaced map #::{} requires a namespace alias"
+                  "Namespaced map must specify a namespace")
+                (node-loc node)))
+          ns-str (if auto-resolve? (str "::" ns-name) ns-name)
+          ;; For key qualification, use the bare namespace name (without :: prefix)
+          qual-ns ns-name
           items (read-children (:children node) opts)
           _ (when (odd? (count items))
               (errors/meme-error "Namespaced map must contain even number of forms"
@@ -270,7 +313,7 @@
           resolved (into (array-map)
                          (map (fn [[k v]]
                                 [(if (and (keyword? k) (nil? (namespace k)))
-                                   (keyword ns-str (name k))
+                                   (keyword qual-ns (name k))
                                    k)
                                  v])
                               pairs))]
@@ -285,16 +328,17 @@
         :preserve
         (forms/make-reader-conditional (apply list items) splicing?)
 
-        ;; :eval mode — match platform
+        ;; :eval mode — match platform, return no-match sentinel when unmatched
         (let [platform #?(:clj :clj :cljs :cljs)
               pairs (partition 2 items)
-              matched (some (fn [[k v]] (when (= k platform) v)) pairs)]
+              found?  (some (fn [[k _]] (= k platform)) pairs)
+              matched (when found? (some (fn [[k v]] (when (= k platform) v)) pairs))]
           (if splicing?
-            ;; Return as splice marker
-            (if matched
-              (with-meta (vec matched) {:meme/splice true})
-              nil)
-            matched))))
+            (if found?
+              (with-meta (vec (if (sequential? matched) matched [matched]))
+                         {:meme/splice true})
+              no-match)
+            (if found? matched no-match)))))
 
     :error
     (let [msg (or (:message node) "Parse error")
@@ -312,13 +356,15 @@
 
 (defn read-forms
   "Read a vector of CST nodes into a vector of Clojure forms.
-   Filters out discard nodes at the top level."
+   Filters out discard nodes and no-match sentinels at the top level,
+   and splices #?@ results."
   ([cst] (read-forms cst nil))
   ([cst opts]
-   (let [forms (into []
-                     (comp (remove #(= :discard (:node %)))
-                           (map #(read-node % opts)))
-                     cst)]
+   (let [forms (splice-and-filter
+                 (into []
+                       (comp (remove #(= :discard (:node %)))
+                             (map #(read-node % opts)))
+                       cst))]
      (if-let [trailing (:trivia/after (meta cst))]
        (let [ws (apply str (map :raw trailing))]
          (with-meta forms {:trailing-ws ws}))

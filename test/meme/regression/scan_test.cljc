@@ -130,13 +130,11 @@
 (deftest reader-conditional-native-parsing
   (testing "#?(:clj x :cljs y) returns matching platform value"
     (is (= [#?(:clj 'x :cljs 'y)] (lang/meme->forms "#?(:clj x :cljs y)"))))
-  (testing "#?(:unknown x :default fallback) — no matching platform returns nil"
-    ;; Experimental pipeline: reader conditionals without a matching platform
-    ;; key produce nil (no :default fallback support at this level)
-    (is (= [nil] (lang/meme->forms "#?(:unknown x :default fallback)"))))
-  ;; RT3-F14: #?() — experimental pipeline returns nil for empty reader conditional
-  (testing "#?() empty — returns nil in experimental pipeline"
-    (is (= [nil] (lang/meme->forms "#?()")))))
+  (testing "#?(:unknown x :default fallback) — no matching platform, filtered out"
+    (is (= [] (lang/meme->forms "#?(:unknown x :default fallback)"))))
+  ;; RT3-F14: #?() — empty reader conditional produces no form
+  (testing "#?() empty — filtered out"
+    (is (= [] (lang/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: radix numbers for bases 17–36 need letters G-Z.
@@ -655,8 +653,10 @@
       (is (= :namespaced-map (:type (first tokens))))
       (is (= "#::" (:raw (first tokens))))))
   #?(:clj
-     (testing "#::{:a 1} parses correctly"
-       (is (some? (lang/meme->forms "#::{:a 1}"))))))
+     (testing "#::{:a 1} bare auto-resolve now errors — requires namespace alias"
+       (is (thrown-with-msg? Exception
+                              #"Auto-resolve namespaced map"
+                              (lang/meme->forms "#::{:a 1}"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L10: ##foo was silently accepted and produced confusing error.

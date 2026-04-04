@@ -178,10 +178,10 @@
   (testing "returns matching platform value"
     (is (= #?(:clj 1 :cljs 2) (first (lang/meme->forms "#?(:clj 1 :cljs 2)"))))))
 
-;; NOTE: The experimental pipeline returns the splice result as a vector.
+;; Splicing at top level splices into the forms vector.
 (deftest parse-reader-conditional-splicing
-  (testing "splicing at top level returns matched vector"
-    (is (= #?(:clj [[1 2]] :cljs [[3 4]]) (lang/meme->forms "#?@(:clj [1 2] :cljs [3 4])")))))
+  (testing "splicing at top level splices into forms vector"
+    (is (= #?(:clj [1 2] :cljs [3 4]) (lang/meme->forms "#?@(:clj [1 2] :cljs [3 4])")))))
 
 ;; ---------------------------------------------------------------------------
 ;; :read-cond :preserve — return ReaderConditional objects

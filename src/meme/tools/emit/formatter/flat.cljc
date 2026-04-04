@@ -21,6 +21,7 @@
    Always produces flat (single-line per form) output — no width-aware breaking.
    For width-aware meme formatting, use canon/format-forms."
   [forms]
+  (printer/validate-format-input forms)
   (printer/join-with-trailing-comments
    #(render/layout (printer/to-doc % :clj) ##Inf)
    forms))

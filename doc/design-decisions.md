@@ -391,7 +391,7 @@ Leading and trailing comments (before/after top-level forms) are always preserve
 
 ### U+00A0 NBSP in symbols
 
-The non-breaking space character (U+00A0, NBSP) is treated as part of a symbol name, not as whitespace. This matches Clojure's own behavior — `(read-string (str "f" \u00A0 "g"))` produces a single symbol `f\u00A0g` in Clojure too. This means NBSP is an invisible character attack vector: a symbol containing NBSP looks identical to one without it, but they are different symbols. Users should be aware of this when working with copy-pasted code from web pages or formatted documents that may contain NBSP characters.
+The non-breaking space character (U+00A0, NBSP) is rejected as an invalid character in symbols. The `invisible-char?` predicate catches it, producing an `:invalid` token. This prevents invisible-character attacks where NBSP (common in web copy-paste) would create symbols that look identical but are semantically different.
 
 
 ### Tokenizer: structural vs semantic validation

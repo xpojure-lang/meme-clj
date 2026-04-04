@@ -211,23 +211,30 @@
   (require 'babashka.cli)
   (let [dispatch (resolve 'babashka.cli/dispatch)
         file-cmd (fn [f] (fn [m] (f (collect-file-args m))))]
-    (dispatch
-      [{:cmds ["run"]     :fn (fn [{:keys [opts args]}]
-                                    (run (assoc opts :rest-args (vec args))))
-        :args->opts [:file] :spec {:lang {:coerce :string}}}
-       {:cmds ["repl"]    :fn (comp repl :opts) :spec {:lang {:coerce :string}}}
-       (assoc file-spec :cmds ["to-clj"]  :fn (file-cmd to-clj))
-       (assoc file-spec :cmds ["to-meme"] :fn (file-cmd to-meme))
-       {:cmds ["format"]  :fn (file-cmd format-files)
-        :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
-                                   :lang {:coerce :string} :style {:coerce :string}
-                                   :width {:coerce :long}}}
-       {:cmds ["inspect"] :fn (comp inspect-lang :opts) :spec {:lang {:coerce :string}}}
-       {:cmds ["version"] :fn (fn [_] (version nil))}
-       {:cmds [] :fn (fn [{:keys [args]}]
-                       (when (seq args)
-                         (binding [*out* *err*] (println (str "Unknown command: " (first args))))
-                         (println))
-                       (help nil)
-                       (when (seq args) (System/exit 1)))}]
-      args)))
+    (try
+      (dispatch
+        [{:cmds ["run"]     :fn (fn [{:keys [opts args]}]
+                                      (run (assoc opts :rest-args (vec args))))
+          :args->opts [:file] :spec {:lang {:coerce :string}}}
+         {:cmds ["repl"]    :fn (comp repl :opts) :spec {:lang {:coerce :string}}}
+         (assoc file-spec :cmds ["to-clj"]  :fn (file-cmd to-clj))
+         (assoc file-spec :cmds ["to-meme"] :fn (file-cmd to-meme))
+         {:cmds ["format"]  :fn (file-cmd format-files)
+          :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
+                                     :lang {:coerce :string} :style {:coerce :string}
+                                     :width {:coerce :long}}}
+         {:cmds ["inspect"] :fn (comp inspect-lang :opts) :spec {:lang {:coerce :string}}}
+         {:cmds ["version"] :fn (fn [_] (version nil))}
+         {:cmds [] :fn (fn [{:keys [args]}]
+                         (when (seq args)
+                           (binding [*out* *err*] (println (str "Unknown command: " (first args))))
+                           (println))
+                         (help nil)
+                         (when (seq args) (System/exit 1)))}]
+        args)
+      (catch Exception e
+        (let [msg (ex-message e)]
+          (if (and msg (re-find #"(?i)coerce" msg))
+            (do (binding [*out* *err*] (println (str "Error: " msg)))
+                (System/exit 1))
+            (throw e)))))))

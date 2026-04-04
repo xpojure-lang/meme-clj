@@ -46,7 +46,8 @@
                 (= c 0x2C)    ; comma
                 #?(:clj (and (not= c 0x0A) (not= c 0x0D)
                              (Character/isWhitespace (char c)))
-                   :cljs (or (<= 0x2000 c 0x200A)
+                   :cljs (or (<= 0x2000 c 0x2006)
+                             (<= 0x2008 c 0x200A) ;; skip 0x2007 FIGURE SPACE (matches JVM)
                              (= c 0x1680) (= c 0x2028) (= c 0x2029)
                              (= c 0x205F) (= c 0x3000)))))))
 
@@ -57,11 +58,12 @@
   (and ch (let [c (char-code ch)] (and (>= c 0x30) (<= c 0x39)))))
 
 (defn- invisible-char?
-  "Unicode control chars, non-breaking spaces, zero-width chars, BOM — forbidden in symbols."
+  "Unicode control chars, surrogates, non-breaking spaces, zero-width chars, BOM — forbidden in symbols."
   [c]
   (or (<= 0x0000 c 0x001F) (= c 0x007F)
       (<= 0x0080 c 0x009F)
       (= c 0x00A0) (= c 0x00AD)
+      (<= 0xD800 c 0xDFFF)
       (<= 0x200B c 0x200F) (<= 0x202A c 0x202E)
       (<= 0x2060 c 0x2069) (= c 0xFEFF)))
 

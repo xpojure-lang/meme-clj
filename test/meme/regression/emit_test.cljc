@@ -377,13 +377,12 @@
              result (fmt-canon/format-form form {:width 20})]
          (is (str/starts-with? result "#:user{"))
          (is (not (re-find #"^\{" result)))))
-     ;; NOTE: The experimental pipeline stores only the namespace name in
-     ;; :meme/ns metadata (without the :: prefix), so #::foo{} is printed
-     ;; as #:foo{} by the formatter.
-     (testing "#::ns{} auto-resolve — experimental stores as #:ns{}"
+     ;; NOTE: The pipeline now stores the full prefix in :meme/ns metadata
+     ;; (including the :: prefix), so #::foo{} is printed as #::foo{}.
+     (testing "#::ns{} auto-resolve — stores full ::foo prefix"
        (let [form (first (lang/meme->forms "#::foo{:a 1 :b 2 :c \"a-very-long-value-here\"}"))
              result (fmt-canon/format-form form {:width 20})]
-         (is (str/starts-with? result "#:foo{"))))))
+         (is (str/starts-with? result "#:::foo{"))))))
 
 #?(:clj
    (deftest canon-preserves-meta-chain

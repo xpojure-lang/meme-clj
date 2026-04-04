@@ -144,6 +144,10 @@
                       {:lang lang-name}))))
   (let [resolved (resolve-edn config)]
     (when-let [ext (:extension resolved)]
+      (when (str/blank? ext)
+        (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                             " — extension must be a non-empty string")
+                        {:lang lang-name})))
       (when (= ext "meme")
         (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
                              " — extension .meme is reserved for built-in langs")

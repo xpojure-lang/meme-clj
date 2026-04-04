@@ -180,13 +180,17 @@
       (is (some? e) "should produce an error")
       (is (re-find #"[Uu]nclosed|[Mm]ismatched|[Uu]nexpected" (ex-message e))))))
 
-;; NOTE: The experimental pipeline does not currently validate duplicate
-;; map keys or set elements at read time. These tests verify parse succeeds.
-(deftest duplicate-key-produces-result
-  (testing "duplicate map key — experimental pipeline accepts silently"
-    (is (some? (lang/meme->forms "{:a 1 :b 2 :a 3}"))))
-  (testing "duplicate set element — experimental pipeline accepts silently"
-    (is (some? (lang/meme->forms "#{1 2 1}")))))
+;; NOTE: The pipeline now validates duplicate map keys and set elements
+;; at read time, matching Clojure's behavior.
+(deftest duplicate-key-throws-error
+  (testing "duplicate map key — throws Duplicate key error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate key"
+                          (lang/meme->forms "{:a 1 :b 2 :a 3}"))))
+  (testing "duplicate set element — throws Duplicate key error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate key"
+                          (lang/meme->forms "#{1 2 1}")))))
 
 (deftest unclosed-reader-conditional-has-context
   (testing "unclosed #?( is :incomplete"

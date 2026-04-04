@@ -17,7 +17,7 @@
    Returns a vector of trimmed comment strings, or nil."
   [ws]
   (when ws
-    (let [lines (str/split-lines ws)]
+    (let [lines (str/split ws #"\r?\n|\r")]
       (not-empty (mapv str/triml (filterv #(re-find #"^\s*;" %) lines))))))
 
 (defn join-with-trailing-comments
@@ -331,16 +331,20 @@
     (vector? form)
     (collection-doc "[" "]" (vec form) mode)
 
-    ;; Map — reconstruct #:ns{} when :meme/ns metadata present
+    ;; Map — reconstruct #:ns{} or #::alias{} when :meme/ns metadata present
     (map? form)
     (if-let [ns-str (:meme/ns (meta form))]
-      (let [strip-ns (fn [k]
+      (let [;; ns-str is "foo" for #:foo{}, "::foo" for #::foo{}
+            actual-ns (if (str/starts-with? ns-str "::") (subs ns-str 2) ns-str)
+            prefix (if (str/starts-with? ns-str "::")
+                     (str "#:" ns-str "{")   ;; "#:::foo{" → "#::foo{"
+                     (str "#:" ns-str "{"))
+            strip-ns (fn [k]
                        (if (and (keyword? k)
-                                (= (namespace k)
-                                   (if (str/starts-with? ns-str ":") (subs ns-str 1) ns-str)))
+                                (= (namespace k) actual-ns))
                          (keyword (name k))
                          k))]
-        (pairs-doc (str "#:" ns-str "{") "}" (mapv (fn [[k v]] [(strip-ns k) v]) form) mode))
+        (pairs-doc prefix "}" (mapv (fn [[k v]] [(strip-ns k) v]) form) mode))
       (pairs-doc "{" "}" (vec form) mode))
 
     ;; Set — use :meme/order for insertion-order output
@@ -390,6 +394,10 @@
     (throw (ex-info "format-forms expects a sequence of forms, not a string"
                     {:input (subs forms 0 (min 50 (count forms)))})))
   (when (or (map? forms) (set? forms))
+    (throw (ex-info (str "format-forms expects a sequence of forms, not a "
+                         #?(:clj (.getName (class forms)) :cljs (pr-str (type forms))))
+                    {})))
+  (when-not (sequential? forms)
     (throw (ex-info (str "format-forms expects a sequence of forms, not a "
                          #?(:clj (.getName (class forms)) :cljs (pr-str (type forms))))
                     {}))))
