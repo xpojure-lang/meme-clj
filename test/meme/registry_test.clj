@@ -103,7 +103,7 @@
   (testing "prefix lang EDN loads and :run works"
     (let [l (registry/load-edn "examples/languages/prefix/lang.edn")]
       (is (fn? (:run l)))
-      (is (= ".pfx" (:extension l))))))
+      (is (= [".pfx"] (:extensions l))))))
 
 (deftest load-edn-format-delegates
   (testing ":format :meme in EDN resolves to built-in format"
@@ -192,5 +192,40 @@
   (testing ":run with .. is rejected in load-edn"
     (let [f (tmp-file "test-traversal" ".edn")]
       (spit f "{:run \"../../etc/passwd\"}")
-      (is (thrown? Exception (registry/load-edn f)))))
-)
+      (is (thrown? Exception (registry/load-edn f))))))
+
+;; ---------------------------------------------------------------------------
+;; Multi-extension support
+;; ---------------------------------------------------------------------------
+
+(deftest multi-extension-registration
+  (testing ":extensions vector — both extensions resolve"
+    (registry/register! :multi {:extensions [".aa" ".bb"]
+                                :run 'meme-lang.run/run-string})
+    (let [[n _] (registry/resolve-by-extension "app.aa")]
+      (is (= :multi n)))
+    (let [[n _] (registry/resolve-by-extension "app.bb")]
+      (is (= :multi n)))
+    (is (nil? (registry/resolve-by-extension "app.cc"))))
+
+  (testing ":extension string normalizes to :extensions vector"
+    (let [l (registry/resolve-lang :multi)]
+      (is (vector? (:extensions l)))
+      (is (= [".aa" ".bb"] (:extensions l)))
+      (is (nil? (:extension l)) ":extension key removed after normalization")))
+
+  (testing "mixed :extension + :extensions merged"
+    (registry/register! :mixed {:extension ".xx"
+                                :extensions [".yy" ".zz"]
+                                :run 'meme-lang.run/run-string})
+    (is (= [".xx" ".yy" ".zz"] (:extensions (registry/resolve-lang :mixed))))
+    (is (some? (registry/resolve-by-extension "app.xx")))
+    (is (some? (registry/resolve-by-extension "app.zz")))))
+
+(deftest multi-extension-conflict-detection
+  (testing "conflict when new extension overlaps existing extensions vector"
+    (registry/register! :owner {:extensions [".p" ".q"]
+                                :run 'meme-lang.run/run-string})
+    (is (thrown-with-msg? Exception #"already claimed"
+                          (registry/register! :thief {:extension ".q"
+                                                      :run 'meme-lang.run/run-string})))))

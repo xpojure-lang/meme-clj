@@ -10,7 +10,9 @@
      :to-meme  (fn [source] → meme-text)    — convert clj→meme
 
    Plus optional metadata:
-     :extension  \".ext\"   — file extension for auto-detection
+     :extension   \".ext\"           — file extension (string or vector)
+     :extensions  [\".ext\" \".e\"]  — file extensions (string or vector)
+   Both forms are accepted and normalized to :extensions [...].
 
    Every key is optional. A lang supports exactly the commands it has keys for.
 
@@ -27,8 +29,21 @@
 
 (defonce ^:private registry (atom {}))
 
+(defn- normalize-extensions
+  "Normalize :extension/:extensions into a flat vector of dot-prefixed strings.
+   Accepts string or vector for either key. Both keys are merged."
+  [m]
+  (let [ext  (:extension m)
+        exts (:extensions m)
+        raw  (concat (if (sequential? ext) ext (when ext [ext]))
+                     (if (sequential? exts) exts (when exts [exts])))
+        normalized (mapv #(if (str/starts-with? % ".") % (str "." %)) raw)]
+    (-> (dissoc m :extension :extensions)
+        (cond-> (seq normalized) (assoc :extensions normalized)))))
+
 (defn- register-builtin! [lang-name lang-map]
-  (swap! registry assoc lang-name (vary-meta lang-map assoc :builtin? true)))
+  (swap! registry assoc lang-name
+         (vary-meta (normalize-extensions lang-map) assoc :builtin? true)))
 
 ;; Register built-in langs from their self-describing lang-maps
 (register-builtin! :meme meme-lang/lang-map)
@@ -91,11 +106,10 @@
 
 (defn- resolve-edn
   "Resolve all values in an EDN map to functions.
-   Extracts :extension as metadata (not a command).
+   Normalizes :extension/:extensions into :extensions vector.
    Bakes :parser into the :run closure."
   [edn-data]
-  (let [ext (get edn-data :extension)
-        commands (dissoc edn-data :extension)
+  (let [commands (dissoc edn-data :extension :extensions)
         base (into {} (map (fn [[k v]] [k (resolve-value k v)]) commands))
         run-fn (:run base)
         parser (:parser base)
@@ -104,7 +118,7 @@
                (assoc :run (fn [source opts]
                              (run-fn source (assoc opts :parser parser))))
                parser (dissoc :parser))]
-    (cond-> base ext (assoc :extension ext))))
+    (normalize-extensions (merge base (select-keys edn-data [:extension :extensions])))))
 
 ;; ---------------------------------------------------------------------------
 ;; EDN loading (for user-defined langs)
@@ -143,33 +157,32 @@
                            " — choose a different name")
                       {:lang lang-name}))))
   (let [resolved (resolve-edn config)]
-    (when-let [ext (:extension resolved)]
+    (doseq [ext (:extensions resolved)]
       (when (str/blank? ext)
         (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
                              " — extension must be a non-empty string")
                         {:lang lang-name})))
-      (when (= ext "meme")
+      (when (= ext ".meme")
         (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
                              " — extension .meme is reserved for built-in langs")
                         {:lang lang-name :extension ext})))
       (doseq [[existing-name existing-lang] @registry]
         (when (and (not= existing-name lang-name)
-                   (= ext (:extension existing-lang)))
+                   (some #{ext} (:extensions existing-lang)))
           (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                               " — extension ." ext " already claimed by "
+                               " — extension " ext " already claimed by "
                                (pr-str existing-name))
                           {:lang lang-name :extension ext
                            :existing existing-name})))))
     (swap! registry assoc lang-name resolved)))
 
 (defn resolve-by-extension
-  "Given a file path, find the lang whose :extension matches.
+  "Given a file path, find the lang whose :extensions match.
    Returns [lang-name lang-map] or nil."
   [path]
   (some (fn [[n l]]
-          (when-let [ext (:extension l)]
-            (let [dot-ext (if (str/starts-with? ext ".") ext (str "." ext))]
-              (when (str/ends-with? path dot-ext) [n l]))))
+          (when (some #(str/ends-with? path %) (:extensions l))
+            [n l]))
         @registry))
 
 (defn registered-langs
@@ -188,15 +201,13 @@
   (set (keys @registry)))
 
 (defn registered-extensions
-  "Return a seq of [dot-extension run-fn] for all langs with :extension and :run.
+  "Return a seq of [dot-extension run-fn] for all langs with :extensions and :run.
    Used by the generic loader to search the classpath for lang source files."
   []
-  (keep (fn [[_name lang-map]]
-          (when-let [ext (:extension lang-map)]
+  (mapcat (fn [[_name lang-map]]
             (when-let [run-fn (:run lang-map)]
-              [(if (str/starts-with? ext ".") ext (str "." ext))
-               run-fn])))
-        @registry))
+              (map (fn [ext] [ext run-fn]) (:extensions lang-map))))
+          @registry))
 
 (defn builtin-langs
   "Return a map of {lang-name lang-map} for all built-in langs."
