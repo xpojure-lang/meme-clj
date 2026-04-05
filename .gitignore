@@ -14,3 +14,4 @@ out/
 fuzz-corpus/
 crash-*
 Crash_*.java
+slow-unit-*
