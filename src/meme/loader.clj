@@ -107,6 +107,7 @@
 
 (defn install!
   "Install the lang-aware loader. Idempotent — safe to call multiple times.
+   Designed for single-threaded initialization at program startup.
    After this, (require 'my.ns) searches all registered lang extensions.
    On Babashka, require-based loading is not supported (SCI bypasses
    clojure.core/load). A warning is printed on first install."
@@ -124,7 +125,8 @@
 
 (defn uninstall!
   "Uninstall the loader, restoring original clojure.core/load.
-   Throws if called from within a lang-load (e.g. from .meme code during require)."
+   Throws if called from within a lang-load on the current thread.
+   Not safe to call concurrently from another thread while loading is active."
   []
   (when *loading*
     (throw (ex-info "Cannot uninstall loader while a lang file is being loaded"

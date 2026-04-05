@@ -6,6 +6,17 @@
             [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
+;; CLI exit — throw instead of System/exit so commands are testable
+;; ---------------------------------------------------------------------------
+
+(defn- cli-exit!
+  "Signal a CLI exit. Throws ex-info with ::exit data instead of calling
+   System/exit directly, so command functions are testable and composable.
+   -main catches this and calls System/exit."
+  [code]
+  (throw (ex-info "" {::exit code})))
+
+;; ---------------------------------------------------------------------------
 ;; File utilities
 ;; ---------------------------------------------------------------------------
 
@@ -43,7 +54,7 @@
   (let [expanded (expand-inputs inputs pred)]
     (when (empty? expanded)
       (println "No matching files found.")
-      (System/exit 1))
+      (cli-exit! 1))
     (let [process-one
           (fn [path]
             (try
@@ -69,7 +80,7 @@
         (println)
         (println (str total " file(s), " (- total failed) " " verb
                       (when (pos? failed) (str ", " failed " failed")))))
-      (when (pos? failed) (System/exit 1)))))
+      (when (pos? failed) (cli-exit! 1)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Lang resolution
@@ -86,7 +97,7 @@
          (catch Exception e
            (binding [*out* *err*]
              (println (str "Error loading lang " lang-str ": " (ex-message e))))
-           (System/exit 1)))
+           (cli-exit! 1)))
 
     lang-str
     (let [kw (keyword lang-str)]
@@ -95,7 +106,7 @@
              (binding [*out* *err*]
                (println (str "Unknown lang: " kw))
                (println (str "Available: " (str/join ", " (map name (registry/available-langs))))))
-             (System/exit 1))))
+             (cli-exit! 1))))
 
     file
     (or (registry/resolve-by-extension file)
@@ -112,7 +123,7 @@
   [{:keys [file files stdout check lang] :as opts}
    {:keys [cmd pred output-fn verb usage]}]
   (let [inputs (or files (when file [file]))]
-    (when (empty? inputs) (println usage) (System/exit 1))
+    (when (empty? inputs) (println usage) (cli-exit! 1))
     (let [[lang-name l] (get-lang lang file)
           lopts (lang-opts opts)]
       (registry/check-support l lang-name cmd)
@@ -132,7 +143,7 @@
   [{:keys [file lang rest-args] :as opts}]
   (when-not file
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name] [-- args...]"))
-    (System/exit 1))
+    (cli-exit! 1))
   (let [[lang-name l] (get-lang lang file)]
     (registry/check-support l lang-name :run)
     (@(requiring-resolve 'meme.loader/install!))
@@ -141,7 +152,7 @@
          (catch Exception e
            (binding [*out* *err*]
              (println (errors/format-error e (try (slurp file) (catch Exception _ nil)))))
-           (System/exit 1)))))
+           (cli-exit! 1)))))
 
 (defn repl
   "Start an interactive meme REPL."
@@ -180,7 +191,7 @@
         out-dir (or out "target/classes")]
     (when (empty? inputs)
       (println "Usage: meme compile <src-dir|file...> [--out target/classes] [--lang name]")
-      (System/exit 1))
+      (cli-exit! 1))
     (let [[lang-name l] (get-lang lang nil)
           _ (registry/check-support l lang-name :to-clj)
           to-clj-fn (:to-clj l)
@@ -193,7 +204,7 @@
                       inputs)]
       (when (empty? expanded)
         (println "No .meme files found.")
-        (System/exit 1))
+        (cli-exit! 1))
       (let [process-one
             (fn [path]
               (try
@@ -217,7 +228,7 @@
         (println)
         (println (str total " file(s) compiled to " out-dir
                       (when (pos? failed) (str ", " failed " failed"))))
-        (when (pos? failed) (System/exit 1))))))
+        (when (pos? failed) (cli-exit! 1))))))
 
 (defn inspect-lang
   "Print diagnostic info about the current lang configuration."
@@ -290,11 +301,13 @@
                            (binding [*out* *err*] (println (str "Unknown command: " (first args))))
                            (println))
                          (help nil)
-                         (when (seq args) (System/exit 1)))}]
+                         (when (seq args) (cli-exit! 1)))}]
         args)
       (catch Exception e
-        (let [msg (ex-message e)]
-          (if (and msg (re-find #"(?i)coerce" msg))
-            (do (binding [*out* *err*] (println (str "Error: " msg)))
-                (System/exit 1))
-            (throw e)))))))
+        (if-let [code (::exit (ex-data e))]
+          (System/exit code)
+          (let [msg (ex-message e)]
+            (if (and msg (re-find #"(?i)coerce" msg))
+              (do (binding [*out* *err*] (println (str "Error: " msg)))
+                  (System/exit 1))
+              (throw e))))))))

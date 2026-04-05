@@ -17,7 +17,11 @@
 
 (defn meme->forms
   "Read meme source string. Returns a vector of Clojure forms.
-   step-parse → step-read"
+   step-parse → step-read
+
+   opts keys:
+     :read-cond        — :eval (default, match current platform) or :preserve
+     :resolve-keyword  — fn to resolve auto-resolve keywords (::kw)"
   ([s] (meme->forms s nil))
   ([s opts]
    {:pre [(string? s)]}
@@ -32,7 +36,9 @@
 
 (defn format-meme-forms
   "Format Clojure forms as canonical meme source string (multi-line, indented).
-   opts: {:width 80}"
+
+   opts keys:
+     :width  — target line width (int, default 80)"
   ([forms] (format-meme-forms forms nil))
   ([forms opts]
    {:pre [(sequential? forms)]}
@@ -44,7 +50,8 @@
   (fmt-flat/format-clj (expander/expand-forms forms)))
 
 (defn meme->clj
-  "Convert meme source to Clojure source string."
+  "Convert meme source to Clojure source string.
+   opts: same as meme->forms (:read-cond, :resolve-keyword)."
   ([meme-src] (meme->clj meme-src nil))
   ([meme-src opts]
    {:pre [(string? meme-src)]}

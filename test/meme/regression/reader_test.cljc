@@ -324,9 +324,11 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest discard-inside-reader-conditional
-  (testing "#?(:clj #_x) — discard inside reader cond produces no form"
-    (is (= [] (lang/meme->forms #?(:clj "#?(:clj #_ x)"
-                                    :cljs "#?(:cljs #_ x)"))))))
+  (testing "#?(:clj #_x) — discard leaves odd count, which errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"even number of forms"
+                          (lang/meme->forms #?(:clj "#?(:clj #_ x)"
+                                                :cljs "#?(:cljs #_ x)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Note: duplicate map keys are rejected (see duplicate-keys-rejected above).
@@ -447,13 +449,14 @@
 ;; Fix: check for ) or EOF after platform keyword before calling parse-form.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline treats #?(:clj) as a reader conditional
-;; with only a keyword and no value — it produces no form (filtered out).
+;; NOTE: Reader conditionals with odd-count forms now error instead of
+;; silently dropping the last element via partition 2.
 (deftest reader-conditional-missing-value-behavior
-  (testing "missing value for matching platform — produces no form"
-    (is (= []
-           (lang/meme->forms #?(:clj "#?(:clj)"
-                                :cljs "#?(:cljs)")))))
+  (testing "missing value for matching platform — errors (odd count)"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"even number of forms"
+                          (lang/meme->forms #?(:clj "#?(:clj)"
+                                                :cljs "#?(:cljs)")))))
   (testing "incomplete input is marked :incomplete"
     (let [e (try (lang/meme->forms #?(:clj "#?(:clj"
                                       :cljs "#?(:cljs"))
@@ -786,3 +789,31 @@
        (is (thrown? Exception (lang/meme->forms "\\null"))))
      (testing "\\nul is not a valid char name"
        (is (thrown? Exception (lang/meme->forms "\\nul"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: reader conditional with odd-count forms must error,
+;; not silently drop the last element via partition 2.
+;; ---------------------------------------------------------------------------
+
+(deftest reader-conditional-odd-count
+  (testing "#?(:clj 1 :cljs) — odd count errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"even number of forms"
+                          (lang/meme->forms "#?(:clj 1 :cljs)"))))
+  (testing "#?(:clj) — single element errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"even number of forms"
+                          (lang/meme->forms "#?(:clj)"))))
+  (testing "#?(:clj 1 :cljs 2) — even count is fine"
+    (is (some? (lang/meme->forms "#?(:clj 1 :cljs 2)")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: empty namespace or name in namespaced keywords must error.
+;; :/foo (empty namespace) and :ns/ (empty name) are invalid in Clojure.
+;; ---------------------------------------------------------------------------
+
+(deftest empty-keyword-namespace-components
+  (testing ":/foo — empty namespace"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid token"
+                          (lang/meme->forms ":/foo"))))
+  (testing ":ns/ — empty name"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid token"
+                          (lang/meme->forms ":ns/")))))

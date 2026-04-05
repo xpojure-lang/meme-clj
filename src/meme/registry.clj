@@ -150,16 +150,16 @@
    are resolved via requiring-resolve, strings and keywords follow the same
    rules as load-edn. Pre-resolved functions are passed through.
    Rejects attempts to override built-in langs.
-   Conflict checks are atomic — performed inside swap! to prevent TOCTOU races."
+   All conflict checks are atomic — performed inside swap!."
   [lang-name config]
-  (when-let [existing (get @registry lang-name)]
-    (when (:builtin? (meta existing))
-      (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
-                           " — choose a different name")
-                      {:lang lang-name}))))
   (let [resolved (resolve-edn config)]
     (swap! registry
       (fn [reg]
+        (when-let [existing (get reg lang-name)]
+          (when (:builtin? (meta existing))
+            (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
+                                 " — choose a different name")
+                            {:lang lang-name}))))
         (doseq [ext (:extensions resolved)]
           (when (str/blank? ext)
             (throw (ex-info (str "Cannot register lang " (pr-str lang-name)

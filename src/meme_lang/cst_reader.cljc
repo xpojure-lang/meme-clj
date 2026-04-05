@@ -92,7 +92,11 @@
               (errors/meme-error (str "Invalid token: " raw) loc))
             (let [i (str/index-of s "/")]
               (if (some? i)
-                (keyword (subs s 0 i) (subs s (inc i)))
+                (let [ns-part (subs s 0 i)
+                      name-part (subs s (inc i))]
+                  (when (or (= ns-part "") (= name-part ""))
+                    (errors/meme-error (str "Invalid token: " raw) loc))
+                  (keyword ns-part name-part))
                 (keyword s))))))
 
       :number
@@ -350,16 +354,19 @@
         (forms/make-reader-conditional (apply list items) splicing?)
 
         ;; :eval mode — match platform, return no-match sentinel when unmatched
-        (let [platform #?(:clj :clj :cljs :cljs)
-              pairs (partition 2 items)
-              found?  (some (fn [[k _]] (= k platform)) pairs)
-              matched (when found? (some (fn [[k v]] (when (= k platform) v)) pairs))]
-          (if splicing?
-            (if found?
-              (with-meta (vec (if (sequential? matched) matched [matched]))
-                         {:meme-lang/splice true})
-              no-match)
-            (if found? matched no-match)))))
+        (do (when (odd? (count items))
+              (errors/meme-error "Reader conditional must contain an even number of forms"
+                                 (node-loc node)))
+            (let [platform #?(:clj :clj :cljs :cljs)
+                  pairs (partition 2 items)
+                  found?  (some (fn [[k _]] (= k platform)) pairs)
+                  matched (when found? (some (fn [[k v]] (when (= k platform) v)) pairs))]
+              (if splicing?
+                (if found?
+                  (with-meta (vec (if (sequential? matched) matched [matched]))
+                             {:meme-lang/splice true})
+                  no-match)
+                (if found? matched no-match))))))
 
     :error
     (let [msg (or (:message node) "Parse error")
