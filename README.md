@@ -43,7 +43,7 @@ Add to `deps.edn`:
 
 <!-- Update version below when releasing — source of truth is src/meme/version.txt -->
 ```clojure
-io.github.xpojure-lang/meme-clj {:mvn/version "3.3.0"}
+io.github.xpojure-lang/meme-clj {:mvn/version "3.3.3"}
 ```
 
 Or clone and use directly:
