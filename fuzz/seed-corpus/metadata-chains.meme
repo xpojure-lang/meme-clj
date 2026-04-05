@@ -1,0 +1,5 @@
+^:private x
+^:private ^:dynamic y
+^{:doc "hi"} ^:private defn(f [x] x)
+^String x
+^:tag ^:private ^{:added "1.0"} defn(g [] nil)

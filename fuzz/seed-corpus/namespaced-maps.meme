@@ -1,0 +1,3 @@
+#:user{:name "x" :age 1}
+#:ns{:a 1 :b 2 :c 3}
+#:foo{:bar #:baz{:qux 1}}

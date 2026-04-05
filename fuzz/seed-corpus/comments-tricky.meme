@@ -1,0 +1,9 @@
+; top comment
+def(x 42) ; inline
+; between
+def(y ; mid-form comment
+  +(1 2))
+[1 ; inside vector
+ 2 3]
+{:a ; before value
+ 1}

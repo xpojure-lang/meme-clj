@@ -1,0 +1,5 @@
+defn(f
+  [](f(0))
+  [x](+(x 1))
+  [x y](+(x y))
+  [x y & more](apply(+ x y more)))

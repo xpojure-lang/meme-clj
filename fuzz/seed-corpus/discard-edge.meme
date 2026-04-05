@@ -1,0 +1,7 @@
+#_foo bar
+#_ #_ a b c
+[1 #_2 3]
+foo(1 #_2 3)
+@#_foo bar
+'#_foo bar
+^:key #_foo bar

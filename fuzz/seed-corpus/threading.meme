@@ -1,0 +1,6 @@
+->(x foo bar)
+->>(xs map(inc) filter(even?) vec)
+->(m assoc(:a 1) update(:b inc))
+some->(x foo bar)
+some->>(xs map(inc))
+as->(x $ foo($) bar($ 1))

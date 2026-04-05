@@ -1,0 +1,4 @@
+let([{:keys [a b] :as m} {:a 1 :b 2}] +(a b))
+let([[x & rest] [1 2 3]] x)
+fn([{:keys [name age]}] str(name " is " age))
+for([{:keys [x y]} points] +(x y))

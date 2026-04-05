@@ -1,0 +1,7 @@
+#(inc(%))
+#(+(% %2))
+#(apply(str %&))
+#(rand())
+#(identity(%1))
+#(map(fn([x] x) %&))
+#(do(println(%1)) %1)

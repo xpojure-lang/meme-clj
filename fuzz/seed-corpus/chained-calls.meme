@@ -1,0 +1,4 @@
+f(x)(y)
+f(x)(y)(z)
+:key(m)(:nested)
+get-in(m [:a :b])(identity)

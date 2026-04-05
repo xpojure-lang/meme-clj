@@ -1,0 +1,8 @@
+`if(~test do(~@body))
+`[~a ~@rest]
+`{~k ~v ~@pairs}
+`#{~a ~@more}
+`defmacro(m [x] `+(~x 1))
+`~'foo
+`~@[1 2 3]
+``~~x

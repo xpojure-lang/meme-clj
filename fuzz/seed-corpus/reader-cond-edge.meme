@@ -1,0 +1,9 @@
+#?(:clj 1 :cljs 2)
+#?(:clj \) :cljs \x)
+#?(:clj ")" :cljs nil)
+#?(:clj ; comment with )
+ 1 :cljs 2)
+#?@(:clj [1 2] :cljs [3 4])
+#?(:clj #(inc(%)) :cljs identity)
+#?(:clj #:user{:a 1} :cljs {:a 1})
+[1 #?@(:clj [2 3]) 4]
