@@ -112,6 +112,7 @@ The generic parser engine, scanlet builders, and render engine live in `meme.too
 
 - `meme.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
 - `meme.registry` (.clj) — Lang registry: registration, resolution, and EDN loading. `default-lang`, `resolve-lang`, `supports?`, `check-support`, `load-edn`, `register!`, `resolve-by-extension`, `registered-langs`, `clear-user-langs!`, `available-langs`. Built-in lang is `:meme`; user langs register via EDN. JVM/Babashka only.
+- `meme.loader` (.clj) — Namespace loader: intercepts `clojure.core/load` to find `.meme` files on the classpath. Installed automatically by `run-file` and REPL `start` — no explicit setup needed. `require` in `.meme` code finds both `.meme` and `.clj` namespaces. `.meme` takes precedence when both exist. `install!`/`uninstall!` for manual control. JVM/Babashka only.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
 ### Platform tiers
@@ -120,7 +121,7 @@ The generic parser engine, scanlet builders, and render engine live in `meme.too
 |------|---------|-----------|
 | Generic tools | meme.tools.{parser, lexer, render} | JVM, Babashka, ClojureScript |
 | Core translation | meme-lang.{api, grammar, lexlets, parselets, stages, cst-reader, forms, errors, resolve, expander, printer, values, formatter.flat, formatter.canon} | JVM, Babashka, ClojureScript |
-| Runtime | meme.tools.{run, repl}, meme-lang.{run, repl}, meme.{registry, cli} | JVM, Babashka |
+| Runtime | meme.tools.{run, repl}, meme-lang.{run, repl}, meme.{registry, cli, loader} | JVM, Babashka |
 | Test infra | meme.test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
 ## Documentation
