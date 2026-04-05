@@ -263,22 +263,22 @@
 (deftest roundtrip-metadata
   (let [[f1 f2 printed] (roundtrip-forms "^:private def(x 42)")]
     (is (= f1 f2))
-    (is (= {:private true} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
-    (is (= {:private true} (dissoc (meta (first f2)) :ws :meme/meta-chain)))
+    (is (= {:private true} (dissoc (meta (first f1)) :meme/ws :meme/meta-chain)))
+    (is (= {:private true} (dissoc (meta (first f2)) :meme/ws :meme/meta-chain)))
     (is (re-find #"\^:private" printed))))
 
 (deftest roundtrip-metadata-dynamic
   (let [[f1 f2 printed] (roundtrip-forms "^:dynamic *x*")]
     (is (= f1 f2))
-    (is (= {:dynamic true} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
-    (is (= {:dynamic true} (dissoc (meta (first f2)) :ws :meme/meta-chain)))
+    (is (= {:dynamic true} (dissoc (meta (first f1)) :meme/ws :meme/meta-chain)))
+    (is (= {:dynamic true} (dissoc (meta (first f2)) :meme/ws :meme/meta-chain)))
     (is (re-find #"\^:dynamic" printed))))
 
 (deftest roundtrip-metadata-type-tag
   (let [[f1 f2 printed] (roundtrip-forms "^String x")]
     (is (= f1 f2))
-    (is (= {:tag 'String} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
-    (is (= {:tag 'String} (dissoc (meta (first f2)) :ws :meme/meta-chain)))
+    (is (= {:tag 'String} (dissoc (meta (first f1)) :meme/ws :meme/meta-chain)))
+    (is (= {:tag 'String} (dissoc (meta (first f2)) :meme/ws :meme/meta-chain)))
     (is (re-find #"\^String" printed))))
 
 (deftest roundtrip-metadata-map
@@ -620,14 +620,14 @@
   (testing "^:tag [1 2 3] roundtrips"
     (let [[f1 f2 printed] (roundtrip-forms "^:tag [1 2 3]")]
       (is (= f1 f2))
-      (is (= {:tag true} (dissoc (meta (first f1)) :ws :meme/meta-chain)))
+      (is (= {:tag true} (dissoc (meta (first f1)) :meme/ws :meme/meta-chain)))
       (is (re-find #"\^:tag" printed)))))
 
 (deftest roundtrip-metadata-on-map
   (testing "^:private {:a 1} roundtrips"
     (let [[f1 f2 _] (roundtrip-forms "^:private {:a 1}")]
       (is (= f1 f2))
-      (is (= {:private true} (dissoc (meta (first f1)) :ws :meme/meta-chain))))))
+      (is (= {:private true} (dissoc (meta (first f1)) :meme/ws :meme/meta-chain))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Multi-arity named fn

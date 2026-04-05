@@ -20,6 +20,7 @@
   "Start the meme REPL."
   ([] (start {}))
   ([opts]
+   (@(requiring-resolve 'meme.loader/install!))
    (let [stages-impl (:stages opts)
          run-fn (or (:run-fn stages-impl) stages/run)
          expand-fn (or (:expand-forms stages-impl) stages/expand-syntax-quotes)

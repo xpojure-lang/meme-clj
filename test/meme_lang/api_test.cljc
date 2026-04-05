@@ -142,3 +142,15 @@
     (is (= "+(1 2)" (lang/format-meme "+(1 2)" {}))))
   (testing "empty source returns source"
     (is (= "" (lang/format-meme "" {})))))
+
+;; ---------------------------------------------------------------------------
+;; C5: clj->forms deep nesting guard
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest clj->forms-deep-nesting-guard
+     (testing "deeply nested Clojure input produces clean error, not StackOverflowError"
+       (let [depth 10000
+             input (str (apply str (repeat depth "(")) "x" (apply str (repeat depth ")")))]
+         (is (thrown-with-msg? Exception #"nesting depth"
+                               (lang/clj->forms input)))))))

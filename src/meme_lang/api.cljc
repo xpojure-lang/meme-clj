@@ -63,6 +63,9 @@
            (loop [forms []]
              (let [form (try
                           (read {:read-cond :preserve :eof eof-sentinel} rdr)
+                          (catch StackOverflowError _
+                            (throw (ex-info "Clojure source exceeds maximum nesting depth"
+                                            {:source (subs clj-src 0 (min 200 (count clj-src)))})))
                           (catch Exception e
                             (throw (ex-info (str "Clojure read error: " (ex-message e)) {:source clj-src} e))))]
                (if (identical? form eof-sentinel)
@@ -104,7 +107,9 @@
 
 (def lang-map
   "Command map for the meme lang."
-  {:format  format-meme
+  {:extension ".meme"
+   :extensions [".memec" ".memej" ".memejs"]
+   :format  format-meme
    :to-clj  to-clj
    #?@(:clj [:to-meme to-meme
               :run     (fn [source opts] (run/run-string source opts))

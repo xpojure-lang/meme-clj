@@ -101,9 +101,10 @@
                            (= (pratt/peek-char engine) \#)
                            (let [nxt (pratt/peek-char engine 1)]
                              (and nxt (= nxt \_))))
-                    (do (pratt/advance! engine 2)
-                        (pratt/make-token! engine :discard (pratt/cursor engine))
-                        (recur (inc n)))
+                    (let [discard-start (pratt/cursor engine)]
+                      (pratt/advance! engine 2)
+                      (pratt/make-token! engine :discard discard-start)
+                      (recur (inc n)))
                     ;; Parse and discard (n-1) forms, wrap the last in :discard
                     (do (dotimes [_ (dec n)]
                           (pratt/parse-expr engine 0))

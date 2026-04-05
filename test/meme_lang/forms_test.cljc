@@ -81,7 +81,7 @@
 ;; ============================================================
 
 (deftest strip-internal-meta-removes-pipeline-keys
-  (let [m {:line 1 :col 2 :ws " " :meme/sugar true :meme/order [1] :meme/ns "foo"
+  (let [m {:line 1 :col 2 :meme/ws " " :meme/sugar true :meme/order [1] :meme/ns "foo"
            :meme/meta-chain [] :user-key "val" :tag 'String}]
     (is (= {:user-key "val" :tag 'String} (forms/strip-internal-meta m)))))
 

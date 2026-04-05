@@ -433,6 +433,23 @@ Common errors:
 
 Error recovery is not supported — the reader stops at the first error. This is documented as future work in the PRD.
 
+## meme.loader
+
+Namespace loader for `.meme` files. Intercepts `clojure.core/load` to search for `.meme` files on the classpath before delegating to the standard Clojure loader. JVM/Babashka only.
+
+### install! / uninstall!
+
+```clojure
+(meme.loader/install!)    ;; => :installed
+(meme.loader/uninstall!)  ;; => :uninstalled
+```
+
+`install!` is idempotent — safe to call multiple times. After install, `(require 'my.ns)` searches for `my/ns.meme` on the classpath first, then falls back to `.clj`/`.cljc` as usual.
+
+**Automatic installation:** `run-file` and the REPL's `start` call `install!` automatically. No manual setup is needed when using the CLI (`bb meme run`, `bb meme repl`).
+
+**Precedence:** When both `my/ns.meme` and `my/ns.clj` exist on the classpath, `.meme` takes priority.
+
 ## meme-lang.errors
 
 Error infrastructure used by the scanner, reader, and resolver. Portable (.cljc).

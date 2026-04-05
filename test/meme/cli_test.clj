@@ -8,6 +8,10 @@
       (is (true? (meme-file? "foo.meme")))
       (is (true? (meme-file? "path/to/bar.meme")))
       (is (true? (meme-file? "/absolute/path.meme"))))
+    (testing "returns true for registered meme extensions"
+      (is (true? (meme-file? "foo.memec")))
+      (is (true? (meme-file? "foo.memej")))
+      (is (true? (meme-file? "foo.memejs"))))
     (testing "returns false for non-.meme files"
       (is (false? (meme-file? "foo.clj")))
       (is (false? (meme-file? "foo.cljc")))
@@ -34,6 +38,11 @@
     (testing "swaps .meme to .clj"
       (is (= "foo.clj" (swap-ext "foo.meme" "meme" "clj")))
       (is (= "path/to/bar.clj" (swap-ext "path/to/bar.meme" "meme" "clj"))))
+    (testing "swaps registered meme extensions to .clj"
+      (is (= "foo.clj" (swap-ext "foo.memec" "meme" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.memej" "meme" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.memejs" "meme" "clj")))
+      (is (= "path/to/bar.clj" (swap-ext "path/to/bar.memec" "meme" "clj"))))
     (testing "swaps .clj variants to .meme"
       (is (= "foo.meme" (swap-ext "foo.clj" "clj" "meme")))
       (is (= "foo.meme" (swap-ext "foo.cljc" "clj" "meme")))

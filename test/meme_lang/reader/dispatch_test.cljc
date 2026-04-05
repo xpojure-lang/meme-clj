@@ -4,7 +4,8 @@
    tagged literals, reader conditionals, namespaced maps."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
-            [meme-lang.forms :as forms]))
+            [meme-lang.forms :as forms]
+            [meme-lang.formatter.flat :as fmt-flat]))
 
 ;; ---------------------------------------------------------------------------
 ;; Prefix reader macros: @, ^, ', #'
@@ -169,6 +170,23 @@
        (let [result (first (lang/meme->forms "#:user{:name \"x\" :address {:city \"Kyiv\"}}"))]
          (is (= "x" (:user/name result)))
          (is (= {:city "Kyiv"} (:user/address result)))))))
+
+;; ---------------------------------------------------------------------------
+;; C7: Bare auto-resolve namespaced map #::{}
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest parse-bare-auto-resolve-namespaced-map
+     (testing "#::{:a 1} — bare auto-resolve accepted, keys stay unqualified"
+       (let [result (first (lang/meme->forms "#::{:a 1}"))]
+         (is (map? result))
+         (is (= 1 (:a result)) "keys should stay unqualified (defer to eval)")
+         (is (= "::" (:meme/ns (meta result))) "metadata signals bare auto-resolve")))
+     (testing "#::{:a 1} roundtrips through printer"
+       (let [forms (lang/meme->forms "#::{:a 1}")
+             printed (fmt-flat/format-forms forms)
+             reparsed (lang/meme->forms printed)]
+         (is (= forms reparsed))))))
 
 (deftest parse-reader-conditional
   (testing "returns matching platform value"

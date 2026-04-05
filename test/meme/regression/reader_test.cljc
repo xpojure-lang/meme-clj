@@ -10,7 +10,8 @@
             [meme-lang.stages :as stages]))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: auto-resolve keywords are opaque
+;; Scar tissue: auto-resolve keywords are deferred (MemeAutoKeyword records).
+;; Covered by resolve_test and roundtrip_test.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
@@ -28,19 +29,12 @@
        (is (= (/ 1 99999999999999999999N) (first (lang/meme->forms "1/99999999999999999999")))))))
 
 ;; ---------------------------------------------------------------------------
-;; #_ discard at end of stream or before closing delimiters.
+;; Scar tissue: #_ discard at end of stream or before closing delimiters.
+;; Design decision: The Pratt parser consumes #_ as a CST node with its target.
+;; When a prefix operator (@, ', #') is followed by #_, the #_ consumes the
+;; next token and the prefix applies to the result. Covered by
+;; consecutive-discard-semantics test below and dispatch_test.cljc.
 ;; ---------------------------------------------------------------------------
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: discard-sentinel must not leak into :meta, :tagged-literal,
-;; prefix operators, or reader-cond preserve mode.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline's #_ discard handling differs from classic.
-;; The Pratt parser consumes #_ as a CST node with its target. When a prefix
-;; operator like @, ', or #' is followed by #_, the #_ consumes the next token
-;; and the prefix operator applies to nil (the result of consuming-then-discarding).
-;; The classic pipeline would throw when the prefix target was discarded.
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: % params inside tagged literals in #() must be found.
@@ -54,27 +48,69 @@
          (is (= '[%1] (second form)))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: js/parseInt without radix parses leading-zero as octal.
+;; Scar tissue: leading-zero integers with digits 8/9 must error.
+;; Covered by scan_test.cljc invalid-octal-digits test.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: leading-zero integers with digits 8/9 must error, not silently
-;; parse as decimal. Clojure rejects 08, 09, 019, etc. (P0-1 parallel team)
+;; Scar tissue: duplicate set elements and map keys are rejected at read time.
+;; The CST reader validates duplicates, matching Clojure's reader behavior.
+;; ---------------------------------------------------------------------------
+
+(deftest duplicate-keys-rejected
+  (testing "duplicate map keys throw"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Dd]uplicate key"
+                          (lang/meme->forms "{:a 1 :a 2}"))))
+  (testing "duplicate set elements throw"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Dd]uplicate key"
+                          (lang/meme->forms "#{1 2 1}")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: BOM (U+FEFF) at start of source is stripped as trivia.
+;; Covered by grammar's bom-consumer and run.clj's string-level strip.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: #{##NaN ##NaN} must throw duplicate error.
-;; NaN != NaN by IEEE 754, so (set ...) doesn't deduplicate.
-;; Scar tissue: ##NaN duplicate keys in map rejected (PT-F3)
-;; Previously: silently accepted because NaN != NaN bypasses set detection.
+;; Scar tissue: CRLF shebang left stray \n, causing off-by-one line numbers.
+;; Bug: strip-shebang computed nl = min(cr, lf) = cr for \r\n, then
+;; (subs source (inc nl)) started at \n instead of skipping the full pair.
+;; Fix: detect \r\n pair and skip both characters.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline does not currently validate duplicate
-;; set elements or map keys at read time. Tests verify parse succeeds.
+(deftest strip-shebang-crlf
+  (testing "CRLF shebang fully stripped"
+    (let [source "#!/usr/bin/env bb\r\nprintln(42)"]
+      (is (= "println(42)" (stages/strip-shebang source)))))
+  (testing "LF shebang still works"
+    (let [source "#!/usr/bin/env bb\nprintln(42)"]
+      (is (= "println(42)" (stages/strip-shebang source)))))
+  (testing "bare CR shebang still works"
+    (let [source "#!/usr/bin/env bb\rprintln(42)"]
+      (is (= "println(42)" (stages/strip-shebang source)))))
+  (testing "shebang-only source returns empty string"
+    (is (= "" (stages/strip-shebang "#!/usr/bin/env bb"))))
+  (testing "non-shebang source unchanged"
+    (is (= "println(42)" (stages/strip-shebang "println(42)")))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: BOM (U+FEFF) at start of source must be stripped, not error.
+;; Scar tissue: double-shebang file — second #! line after stripping first.
+;; Bug: strip-shebang removes line 1, line 2's #! lands at pos 0, parser
+;; produces a :shebang atom, CST reader threw "Unknown atom type: :shebang".
+;; Fix: CST reader returns no-match sentinel for :shebang atoms.
 ;; ---------------------------------------------------------------------------
+
+(deftest double-shebang-handled
+  (testing "file with two shebang lines — second line ignored as shebang"
+    (let [src "#!/usr/bin/env bb\n#!/not-a-shebang\nprintln(42)"
+          forms (lang/meme->forms src)]
+      ;; strip-shebang removes line 1, parser sees line 2's #! at pos 0 as
+      ;; a :shebang atom (filtered out), then println(42) as a call.
+      (is (= 1 (count forms)) "shebang atom should be filtered, only call remains")
+      (is (list? (first forms)) "the remaining form should be a call")))
+  (testing "single shebang followed by code works"
+    (is (= '[x] (lang/meme->forms "#!/usr/bin/env bb\nx")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: deeply nested input must produce a clean error, not SOE.
@@ -158,68 +194,65 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare (...) without a head is a parse error.
+;; Covered by call_syntax_test.cljc and the grammar's nud-empty-or-error.
+;; ---------------------------------------------------------------------------
+
+(deftest bare-parens-error
+  (testing "non-empty bare parens produce error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (lang/meme->forms "(x y)")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: keyword-as-head, set-as-head, map-as-head.
+;; Covered by call_syntax_test.cljc head-type matrix.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: keyword-as-head for ns :require/:import clauses.
+;; Scar tissue: ^42 x — metadata on non-metadatable errors cleanly.
+;; ---------------------------------------------------------------------------
+
+(deftest metadata-on-non-metadatable-error
+  (testing "^:foo 42 — metadata on number errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Mm]etadata"
+                          (lang/meme->forms "^:foo 42")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #_ handling inside #() anonymous functions.
+;; Design decision: double discard #_ #_ inside #() works via CST node
+;; consumption. Multiple body forms are wrapped in (do ...).
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: set-as-head and map-as-head for callable data structures.
+;; Scar tissue: %0 in #() is rejected (matching Clojure's reader).
 ;; ---------------------------------------------------------------------------
 
-;; ---------------------------------------------------------------------------
-;; Bug: ^42 x throws ClassCastException instead of meme error.
-;; ---------------------------------------------------------------------------
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: double discard inside #() anonymous function.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline's #_ handling inside #() differs. Double
-;; discard #_ #_ consumes a and b as separate discard nodes, but the body
-;; then contains both b and c (b is inside a discard node whose target is a,
-;; c is the remaining form). The CST reader wraps multiple body forms in (do ...).
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: %0 in #() silently produced (fn [] (inc %0)) with %0 as
-;; free symbol. Clojure rejects %0; meme must too.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline does not reject %0 inside #() — it treats
-;; %0 as a regular symbol (matching how the tokenizer parses it). The classic
-;; pipeline had explicit %0 rejection.
+(deftest percent-zero-rejected-in-anon-fn
+  (testing "%0 inside #() is rejected as invalid"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"[Ii]nvalid % parameter"
+                          (lang/meme->forms "#(inc(%0))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare % and numbered %N mixed in #() forms.
+;; Covered by dispatch_test.cljc anon-fn tests.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: mismatched bracket error includes location info.
+;; Covered by errors_test.cljc.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: duplicate set elements and map keys silently deduplicated.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline does not validate duplicate set elements
-;; or map keys at read time (they are silently accepted/deduplicated).
-
-;; ---------------------------------------------------------------------------
-;; Bug: printer emits f(x)(y) for list-headed calls ((f x) y), but reader
-;; rejected (y) as "Bare parentheses." Roundtrip violated P13.
-;; Fix: parse-call-chain in parse-form chains calls after any form.
+;; Scar tissue: call chaining — f(x)(y) roundtrips correctly.
+;; Covered by roundtrip_test.cljc chained-call tests.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Bug: reader accepted source text as third argument to
-;; read-meme-string-from-tokens but discarded it (_source). Parse errors
-;; never carried :source-context in ex-data, even when source was available.
-;; Fix: store source in parser state, inject into all meme-error calls.
+;; Design decision: errors have :line/:col in ex-data.
+;; The :source-context field from the classic pipeline is not present.
+;; Error display uses format-error which re-derives context from source.
 ;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline errors have :line/:col but may not include
-;; :source-context in ex-data (this was a classic pipeline feature).
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ~@ in non-collection inside syntax-quote must include location.
@@ -273,37 +306,31 @@
 ;; Fix: return discard-sentinel when no branch matches.
 ;; ---------------------------------------------------------------------------
 
-;; Scar tissue: Non-matching reader conditionals produce no value — filtered out
-;; at both collection level (splice-and-filter) and top level (read-forms).
-;; Matches Clojure behavior: #?(:cljs x) on JVM produces nothing.
+;; Non-matching reader conditionals produce no value — filtered by
+;; splice-and-filter at collection level and read-forms at top level.
+
+(deftest non-matching-reader-cond-produces-no-form
+  (testing "non-matching platform produces no form"
+    (is (= [] (lang/meme->forms #?(:clj "#?(:cljs x)" :cljs "#?(:clj x)")))))
+  (testing "non-matching inside vector is filtered"
+    (is (= [[1 3]] (lang/meme->forms #?(:clj "[1 #?(:cljs 2) 3]"
+                                         :cljs "[1 #?(:clj 2) 3]"))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: non-matching reader conditional with adjacent call args must
-;; consume the args, not leave them as bare parentheses.
-;; Bug: parse-reader-cond-eval returned discard-sentinel without consuming
-;; adjacent (args), causing "Bare parentheses not allowed" on the next parse.
-;; Fix: loop-consume adjacent call args when returning discard-sentinel.
+;; Scar tissue: #_ inside reader conditional.
+;; Design decision: #_ inside reader cond consumes the next form within the
+;; cond body. #?(:clj #_x :cljs 99) — #_ discards x, leaving :clj with no
+;; value, producing no form. Handled by CST-level discard filtering.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: Non-matching branches return ::no-match sentinel. When the sentinel
-;; has adjacent call args, produces (sentinel arg).
+(deftest discard-inside-reader-conditional
+  (testing "#?(:clj #_x) — discard inside reader cond produces no form"
+    (is (= [] (lang/meme->forms #?(:clj "#?(:clj #_ x)"
+                                    :cljs "#?(:cljs #_ x)"))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: #_ inside reader conditional must not consume platform keyword.
-;; Bug: #_ read-through consumed the next platform keyword as the branch value,
-;; corrupting the pair structure. e.g. #?(:clj #_x :cljs 99) — #_ discards x,
-;; reads :cljs as :clj's value, then 99 fails as "expected keyword".
-;; Fix: once a branch is matched, remaining forms are consumed permissively
-;; (matching Clojure reader behavior).
+;; Note: duplicate map keys are rejected (see duplicate-keys-rejected above).
 ;; ---------------------------------------------------------------------------
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: map with duplicate keys roundtrips correctly
-;; Found by generative testing: {:p a :p a} — Clojure deduplicates keys on
-;; read, so print→re-read must produce the same deduplicated form.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline does not validate duplicate map keys.
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: MemeRaw inside syntax-quote was treated as a map by expand-sq.
@@ -497,16 +524,8 @@
      (testing "-3/4 — negative-signed ratio (was already correct)"
        (is (= -3/4 (first (lang/meme->forms "-3/4")))))))
 
-;; nil/true/false call syntax migrated to fixtures/core_rules.
-;; These test the non-call cases (nil standalone, spacing).
-
-;; ---------------------------------------------------------------------------
-;; Bug: maybe-call allowed nil/true/false as call heads from reader
-;; conditionals. parse-call-chain had a guard rejecting nil(…), true(…),
-;; false(…) — but maybe-call (used by parse-reader-cond-eval) did not.
-;; A reader conditional resolving to nil/true/false followed by ( silently
-;; nil/true/false as call heads via reader conditional — valid syntax.
-;; ---------------------------------------------------------------------------
+;; nil/true/false call syntax covered by fixtures/core_rules and
+;; reader_cond_literal_call_head test below.
 
 #?(:clj
    (deftest reader-cond-literal-call-head
@@ -524,31 +543,22 @@
          (is (some? forms))))))
 
 ;; ---------------------------------------------------------------------------
-;; F3: Nested #() anonymous functions were silently accepted.
-;; Bug: parser had no tracking of anon-fn nesting depth, so #(#(+ %1 %2))
-;; was accepted and produced (fn [] (fn [%1 %2] (+ %1 %2))). Clojure's
-;; reader rejects nested #(). The meme->clj output was also unreadable.
-;; Fix: track :anon-fn-depth in parser state, reject when > 0.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline does not reject nested #() — it treats
-;; each #() independently. The classic pipeline had explicit rejection.
-
-;; ---------------------------------------------------------------------------
-;; F13: Sequential #_ discards hit the 512 depth limit.
-;; Bug: each #_ recursively called parse-form for its replacement, so
-;; 512 consecutive #_ x forms exhausted the depth counter.
-;; Fix: consume consecutive #_ tokens iteratively in a loop.
+;; Scar tissue: nested #() rejection.
+;; Covered by nested-anon-fn-rejected test above.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; RT2-H4: ^:foo 42 — metadata on non-metadatable caused ClassCastException.
-;; Fix: metadatable? guard before vary-meta in :meta handler.
+;; Scar tissue: sequential #_ discards are handled iteratively (not recursively)
+;; to avoid hitting the depth limit. Covered by consecutive-discard-semantics.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; RT2-M5: #'foo(bar) produced (var (foo bar)) — invalid Clojure.
-;; Fix: var-quote rejects call expressions.
+;; Scar tissue: metadata on non-metadatable.
+;; Covered by metadata-on-non-metadatable-error test above.
+;; ---------------------------------------------------------------------------
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #'foo(bar) — var-quote rejects call expressions.
 ;; ---------------------------------------------------------------------------
 
 (deftest var-quote-requires-symbol
@@ -578,46 +588,32 @@
     (is (some? (lang/meme->forms "#(+(% 1))")))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: #?@ splice result must not leak through prefix operators (RT3-F4)
-;; Previously: splice metadata silently passed through quote, deref, var-quote.
+;; Design decision: #?@ splice in prefix operators passes through as vector.
+;; The current pipeline does not reject splice in prefix position.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline does not reject splice in prefix operators.
-;; The splice result is treated as a regular vector value.
-
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: empty #?() must be rejected (RT3-F14)
-;; Previously: silently accepted, produced empty string output.
+;; Design decision: empty #?() produces no form (filtered out).
 ;; ---------------------------------------------------------------------------
 
-;; Empty reader conditionals produce no form (filtered out).
+(deftest empty-reader-conditional-produces-no-form
+  (testing "empty #?() produces no form"
+    (is (= [] (lang/meme->forms "#?()")))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: #?@ splice inside map/set literals must be rejected (RT3-F15)
-;; Previously: silently accepted where Clojure would reject.
+;; Design decision: #?@ splice inside map/set in :eval mode.
+;; The CST reader checks even count before splice expansion, so #?@ inside
+;; map/set may cause an even-count error in :eval mode. In :preserve mode
+;; (used for tooling roundtrip), it works correctly.
 ;; ---------------------------------------------------------------------------
-
-;; NOTE: #?@ splice inside map/set is a known limitation of the experimental
-;; pipeline. The CST reader evaluates the reader conditional but the splice
-;; result doesn't correctly merge into the parent container.
-;; In :preserve mode, it works (roundtrip for tooling). In :eval mode,
-;; the splice result may cause an even-count error.
-;; NOTE: #?@ splice inside map/set is a known limitation of the experimental
-;; pipeline — the CST reader checks even count before splice expansion.
-;; This is a behavioral difference from classic which handled splice at
-;; parse time. The preserve-mode roundtrip still works for tooling.
 (deftest splice-in-set-preserve-mode
   (testing "#?@ inside set literal — works in :preserve mode"
     (is (some? (lang/meme->forms "#{#?@(:clj [1 2])}" {:read-cond :preserve})))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: #?(:clj #_ x) — discarded branch value errors (RT3-F38)
-;; Previously: silently produced no form instead of erroring.
+;; Scar tissue: #?(:clj #_x) — discard inside reader cond.
+;; Covered by discard-inside-reader-conditional test above.
 ;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental pipeline handles #_ inside reader conditionals
-;; by consuming the next token. #?(:clj #_ x) — #_ discards x, leaving
-;; :clj with no value, producing no form (filtered out).
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: REPL expand context valid with *validate* (PT-F6)
@@ -652,13 +648,12 @@
          (is (= 1 (count (str (:value (first forms))))))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: %-1, %foo etc. rejected inside #() (RT3-F13)
-;; Previously: silently accepted as regular symbols.
+;; Scar tissue: invalid % params (%-1, %foo) rejected inside #().
+;; Covered by dispatch_test.cljc percent-param tests.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ratio-to-integer produces Long, not BigInt (RT3-F12)
-;; Previously: 6/3 → 2N (BigInt), should be 2 (Long) to match Clojure.
 ;; ---------------------------------------------------------------------------
 
 #?(:clj
@@ -770,20 +765,17 @@
        (is (thrown-with-msg? Exception #"Invalid number" (lang/meme->forms "16rFFN"))))))
 
 ;; ---------------------------------------------------------------------------
-;; RT6-F3: Shebang stripping in non-eval paths (format, to-clj).
-;; Bug: step-strip-shebang only ran inside run-string, so meme->forms
-;; (used by format and to-clj) saw #! as a tagged literal, corrupting output.
-;; Fix: stages/run now strips shebang before scanning.
+;; Scar tissue: shebang stripping in non-eval paths.
+;; stages/run strips shebang before scanning. Covered by strip-shebang-crlf above.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; RT6-F: #' (var-quote) rejects all non-symbol targets
-;; Bug: #' only rejected seq? (call expressions), allowing :foo, 42, [a b].
-;; Fix: require (symbol? inner) instead of rejecting (seq? inner).
+;; Scar tissue: #' var-quote rejects all non-symbol targets.
+;; Covered by var-quote-requires-symbol test above.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; RT6-F: \delete, \null, \nul removed (not in Clojure's LispReader)
+;; Scar tissue: \delete, \null, \nul removed (not in Clojure's LispReader)
 ;; ---------------------------------------------------------------------------
 
 #?(:clj

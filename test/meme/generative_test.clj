@@ -29,7 +29,7 @@
                         (symbol "nil") (symbol "true") (symbol "false")})
 
 ;; Keywords the printer strips from metadata (compiler/reader-added keys)
-(def reserved-meta-keywords #{:ws :line :column :file})
+(def reserved-meta-keywords #{:meme/ws :line :column :file})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))
@@ -373,13 +373,13 @@
       false)))
 
 (defn meta-roundtrip-ok?
-  "Check roundtrip preserving metadata (ignoring :ws added by reader)."
+  "Check roundtrip preserving metadata (ignoring :meme/ws added by reader)."
   [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
           read-back (first (lang/meme->forms printed))]
       (and (= form read-back)
-           (= (meta form) (dissoc (meta read-back) :ws :meme/meta-chain))))
+           (= (meta form) (dissoc (meta read-back) :meme/ws :meme/meta-chain))))
     (catch Exception e
       (println "Meta roundtrip failed for form:" (pr-str form))
       (println "Error:" (.getMessage e))

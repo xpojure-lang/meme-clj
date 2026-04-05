@@ -9,11 +9,11 @@
             [meme-lang.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
-;; Comment extraction from :ws metadata
+;; Comment extraction from :meme/ws metadata
 ;; ---------------------------------------------------------------------------
 
 (defn- extract-comments
-  "Extract comment lines from a :ws metadata string.
+  "Extract comment lines from a :meme/ws metadata string.
    Returns a vector of trimmed comment strings, or nil."
   [ws]
   (when ws
@@ -36,13 +36,13 @@
       body)))
 
 (defn- form-comments
-  "Get comment lines from a form's :ws metadata, or nil."
+  "Get comment lines from a form's :meme/ws metadata, or nil."
   [form]
   (when (and (some? form)
              #?(:clj  (instance? clojure.lang.IMeta form)
                 :cljs (satisfies? IMeta form))
              (meta form))
-    (extract-comments (:ws (meta form)))))
+    (extract-comments (:meme/ws (meta form)))))
 
 (defn- comment-doc
   "Build a Doc that emits comment lines followed by a hardline.
@@ -354,10 +354,14 @@
         (pairs-doc prefix "}" (mapv (fn [[k v]] [(strip-ns k) v]) form) mode))
       (pairs-doc "{" "}" (vec form) mode))
 
-    ;; Set — use :meme/order for insertion-order output
+    ;; Set — use :meme/order for insertion-order output, validated against actual contents
     (set? form)
-    (let [elements (or (:meme/order (meta form)) (seq form))]
-      (collection-doc "#{" "}" (vec (or elements [])) mode))
+    (let [order (:meme/order (meta form))
+          ;; Use :meme/order when it matches set size (not stale), otherwise fall back
+          elements (if (and order (= (count order) (count form)))
+                     order
+                     (vec form))]
+      (collection-doc "#{" "}" elements mode))
 
     ;; Symbol
     (symbol? form) (render/text (str form))

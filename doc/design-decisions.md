@@ -430,3 +430,62 @@ The grammar spec shape:
 ```
 
 This allows the same parser engine to handle languages with different character vocabularies — each language supplies its own grammar spec.
+
+
+## The call/data tension: lists, homoiconicity, and M-expressions
+
+Meme has one syntactic rule for non-empty lists: `head(args...)` → `(head args...)`. This rule does not distinguish between function calls and data lists. The distinction is fundamental to understanding meme's design and its relationship to Lisp's homoiconicity principle.
+
+### The structural identity
+
+In Clojure, `(+ 1 2)` and `(quote (1 2 3))` produce the same data structure: a list. The difference is purely contextual — the evaluator treats the first element as something to call. At **read time**, there is no distinction between code and data. This is homoiconicity: code is data, data is code.
+
+Meme inherits this property. `+(1 2)` and `1(2 3)` both produce lists. The reader performs a purely syntactic transform — it does not know or care whether the head is callable. `1(2 3)` reads as `(1 2 3)`, which is a valid Clojure form that will fail at eval time ("1 is not IFn"), just as `(1 2 3)` does in Clojure.
+
+### What meme adds and what it doesn't
+
+Meme adds: visual distinction between the head and the arguments of a list. In `+(1 2)`, the `+` is visually separated from the `(1 2)`, making the call structure immediately apparent. This is McCarthy's original M-expression idea from 1960.
+
+Meme does NOT add: a separate notation for "data lists" vs "call lists." In S-expressions, both use `(...)`. In meme, both use `head(...)`. The syntactic surface changed, but the underlying identity of code and data is preserved.
+
+### Quote as the escape hatch
+
+Lisp's answer to "how do I write a list that isn't a call" has always been `quote`. This carries over to meme:
+
+| Intent | Clojure | Meme | Result |
+|--------|---------|------|--------|
+| Call + to 1 and 2 | `(+ 1 2)` | `+(1 2)` | `(+ 1 2)` |
+| Data list of 1, 2, 3 | `'(1 2 3)` | `'1(2 3)` | `(quote (1 2 3))` |
+| Construct list at runtime | `(list 1 2 3)` | `list(1 2 3)` | `(list 1 2 3)` |
+| Empty list | `()` or `'()` | `()` | `()` |
+
+Quote signals intent: `'1(2 3)` says "this is data." `1(2 3)` without quote says "call 1 with args 2 and 3" — which will fail at eval time, but is structurally valid.
+
+### Consequences for the printer
+
+The meme printer converts Clojure forms back to meme syntax. When it encounters a non-empty list `(f x y)`, it emits `f(x y)`. This is correct for all lists:
+
+- `(+ 1 2)` → `+(1 2)` — looks like a call, is a call. Correct.
+- `(1 2 3)` → `1(2 3)` — looks like a call to 1. Structurally correct; will error at eval.
+- `(nil 1)` → `nil(1)` — looks like a call to nil. Valid meme; `nil` is a legal head.
+
+The printer does not inject `quote` because it cannot know whether the list was intended as a call or as data — that information is not present in the Clojure form. A `(1 2 3)` produced by `(list 1 2 3)` at runtime is indistinguishable from one produced by reading `'(1 2 3)`. This is a consequence of homoiconicity, not a printer limitation.
+
+When the list originates from the meme reader with `'1(2 3)`, the reader attaches `{:meme/sugar true}` metadata to the `(quote ...)` wrapper. The printer uses this to reproduce the quote sugar. Without that metadata (e.g., for programmatically constructed lists), the printer has no way to know whether quote was originally present.
+
+### Implications for language designers using `meme.tools.*`
+
+The generic parser engine (`meme.tools.parser`) and render engine (`meme.tools.render`) are language-agnostic. A language built on these tools inherits meme's call/data conflation unless it adds its own notation. Options:
+
+1. **Accept the conflation** (meme's choice). Rely on quote for data lists. Minimal syntax, maximal consistency with Lisp's code-as-data principle.
+2. **Add a data list notation** (e.g., `#list(1 2 3)` or `<1 2 3>`). Requires a new parselet in the grammar and corresponding printer logic. Breaks the "one rule" simplicity.
+3. **Infer from context** (e.g., numeric heads → data list). Requires semantic knowledge at read time. Violates the principle that the reader is a pure syntactic transform.
+4. **Use a different delimiter** (e.g., `f[x y]` for calls, `(1 2 3)` for data). Requires repurposing existing Clojure delimiters, creating incompatibility.
+
+Meme chose option 1 because it preserves three properties simultaneously: syntactic simplicity (one rule), Clojure compatibility (all forms roundtrip), and homoiconicity (code and data have the same structure). The cost is that the printer cannot express intent — only structure.
+
+### Historical context
+
+McCarthy's 1960 M-expressions (`f[x; y]`) were designed exclusively for function application. There was no M-expression notation for data lists because M-expressions were the "readable" layer over S-expressions — you could always drop down to S-expressions for data. This asymmetry was one reason M-expressions were never adopted: programmers preferred the uniformity of S-expressions.
+
+Meme takes a different approach: M-expression notation IS the S-expression, just rearranged. There is no "drop down" because there is nothing below — `f(x y)` and `(f x y)` are the same thing at different stages of the pipeline. This eliminates the M/S asymmetry, but it means the call/data tension is fundamental and cannot be resolved without adding syntax.

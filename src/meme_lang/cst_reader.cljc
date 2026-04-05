@@ -36,7 +36,7 @@
       {:line 1 :col 1}))
 
 (defn- ws-before
-  "Get the :ws string from trivia/before on a token."
+  "Get the whitespace string from trivia/before on a token."
   [tok]
   (when-let [trivia (:trivia/before tok)]
     (apply str (map :raw trivia))))
@@ -85,6 +85,7 @@
             (resolve/resolve-auto-keyword raw loc (:resolve-keyword opts)))
           (let [s (subs raw 1)]
             (when (or (= s "")                        ;; bare :
+                      (str/starts-with? s "/")         ;; :/foo
                       (str/ends-with? s ":")           ;; :foo:
                       (str/ends-with? s "/")           ;; :foo/
                       (str/includes? s "::"))          ;; :a::b
@@ -144,7 +145,7 @@
      :cljs (satisfies? IWithMeta v)))
 
 (defn- read-children-with-ws
-  "Read children, preserving :ws metadata from trivia on each form.
+  "Read children, preserving :meme/ws metadata from trivia on each form.
    Discard nodes already contain their target — just skip them.
    Also splices #?@ results and filters no-match sentinels."
   [children opts]
@@ -156,7 +157,7 @@
                              first-tok (or (:token child) (:open child) (:ns child))
                              ws (ws-before first-tok)]
                          (if (and ws (metadatable? form))
-                           (vary-meta form assoc :ws ws)
+                           (vary-meta form assoc :meme/ws ws)
                            form)))))
           children)))
 
@@ -173,12 +174,14 @@
   (let [opts (update opts ::depth (fnil inc 0))]
   (case (:node node)
     :atom
-    (let [form (read-atom node opts)
-          first-tok (:token node)
-          ws (ws-before first-tok)]
-      (if (and ws (metadatable? form))
-        (vary-meta form assoc :ws ws)
-        form))
+    (let [tok (:token node)]
+      (if (= :shebang (:type tok))
+        no-match  ;; shebang lines are informational, produce no form
+        (let [form (read-atom node opts)
+              ws (ws-before tok)]
+          (if (and ws (metadatable? form))
+            (vary-meta form assoc :meme/ws ws)
+            form))))
 
     :call
     (let [_ (check-closed! node "call")
@@ -187,7 +190,7 @@
           ws-open (ws-before (:open node))
           result (apply list head args)]
       (if ws-open
-        (with-meta result (assoc (meta result) :ws ws-open))
+        (with-meta result (assoc (meta result) :meme/ws ws-open))
         result))
 
     :list
@@ -198,7 +201,7 @@
           items (read-children-with-ws (:children node) opts)
           ws (ws-before (:open node))]
       (cond-> (vec items)
-        ws (vary-meta assoc :ws ws)))
+        ws (vary-meta assoc :meme/ws ws)))
 
     :map
     (let [_ (check-closed! node "map")
@@ -211,7 +214,7 @@
         (when-let [dup (first (for [[k freq] (frequencies ks) :when (> freq 1)] k))]
           (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node))))
       (cond-> (apply array-map items)
-        ws (vary-meta assoc :ws ws)))
+        ws (vary-meta assoc :meme/ws ws)))
 
     :set
     (let [_ (check-closed! node "set")
@@ -220,7 +223,7 @@
       (when-let [dup (first (for [[v freq] (frequencies items) :when (> freq 1)] v))]
         (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
       (cond-> (set items)
-        ws (vary-meta assoc :ws ws)
+        ws (vary-meta assoc :meme/ws ws)
         true (vary-meta assoc :meme/order (vec items))))
 
     :quote
@@ -310,14 +313,17 @@
           auto-resolve? (str/starts-with? ns-raw "#::")
           ;; #:ns → "ns", #::alias → "::alias" (preserve prefix for roundtrip)
           ns-name (if auto-resolve? (subs ns-raw 3) (subs ns-raw 2))
-          _ (when (str/blank? ns-name)
-              (errors/meme-error
-                (if auto-resolve?
-                  "Auto-resolve namespaced map #::{} requires a namespace alias"
-                  "Namespaced map must specify a namespace")
-                (node-loc node)))
-          ns-str (if auto-resolve? (str "::" ns-name) ns-name)
+          _ (when (and (str/blank? ns-name) (not auto-resolve?))
+              (errors/meme-error "Namespaced map must specify a namespace"
+                                 (node-loc node)))
+          ;; #::{} (bare auto-resolve) → ns-str "::", qual-ns "" (defer to eval)
+          ;; #::alias{} → ns-str "::alias", qual-ns "alias"
+          ;; #:ns{} → ns-str "ns", qual-ns "ns"
+          ns-str (if auto-resolve?
+                   (if (str/blank? ns-name) "::" (str "::" ns-name))
+                   ns-name)
           ;; For key qualification, use the bare namespace name (without :: prefix)
+          ;; Blank qual-ns (bare #::{}) skips qualification — keys stay unqualified
           qual-ns ns-name
           items (read-children (:children node) opts)
           _ (when (odd? (count items))
@@ -326,7 +332,8 @@
           pairs (partition 2 items)
           resolved (into (array-map)
                          (map (fn [[k v]]
-                                [(if (and (keyword? k) (nil? (namespace k)))
+                                [(if (and (keyword? k) (nil? (namespace k))
+                                          (not (str/blank? qual-ns)))
                                    (keyword qual-ns (name k))
                                    k)
                                  v])

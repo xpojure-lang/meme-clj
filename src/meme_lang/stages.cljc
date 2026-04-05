@@ -81,7 +81,15 @@
                lf lf
                cr cr
                :else nil)]
-      (if nl (subs source (inc nl)) ""))
+      (if nl
+        (let [next (inc nl)]
+          ;; Skip full \r\n pair when present
+          (if (and (= (.charAt ^String source nl) \return)
+                   (< next (count source))
+                   (= (.charAt ^String source next) \newline))
+            (subs source (inc next))
+            (subs source next)))
+        ""))
     source))
 
 (defn run

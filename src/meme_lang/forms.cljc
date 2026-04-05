@@ -141,7 +141,7 @@
    Excluded when checking for user-visible metadata.
    Both :col (meme tokenizer) and :column (Clojure reader) are included
    so stripping works regardless of which reader produced the metadata."
-  #{:line :col :column :file :ws :meme/sugar :meme/order :meme/ns :meme/meta-chain :meme/bare-percent})
+  #{:line :col :column :file :meme/ws :meme/sugar :meme/order :meme/ns :meme/meta-chain :meme/bare-percent})
 
 (def notation-meta-keys
   "Internal metadata keys that encode the user's notation choices.
@@ -174,8 +174,9 @@
              (> (count n) 1)
              (<= (count n) 12)  ;; host platform limit: prevents Long/parseInt overflow
              (re-matches #"0*[1-9]\d*" (subs n 1)))
-        #?(:clj (Long/parseLong (subs n 1))
-           :cljs (js/parseInt (subs n 1) 10))
+        (let [v #?(:clj (Long/parseLong (subs n 1))
+                   :cljs (js/parseInt (subs n 1) 10))]
+          (when (<= v 20) v))  ;; Clojure limits anon fn params to %1..%20
         :else nil))))
 
 ;; ---------------------------------------------------------------------------

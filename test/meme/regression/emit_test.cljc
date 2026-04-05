@@ -155,32 +155,32 @@
       (is (re-find #"^\^ints" result)))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug: comment lines from :ws metadata emitted at column 0 inside nested
+;; Bug: comment lines from :meme/ws metadata emitted at column 0 inside nested
 ;; multi-line blocks.
 ;; ---------------------------------------------------------------------------
 
 (deftest canon-comment-indentation-in-nested-blocks
   (testing "single comment indented to match body"
-    (let [baz (with-meta '(baz) {:ws "; single\n"})
+    (let [baz (with-meta '(baz) {:meme/ws "; single\n"})
           form (list 'foo '(bar) baz)
           result (fmt-canon/format-form form {:width 10})
           lines (str/split-lines result)]
       (is (= "  ; single" (nth lines 2)))))
   (testing "multiple comment lines all indented"
-    (let [baz (with-meta '(baz) {:ws "; line 1\n; line 2\n"})
+    (let [baz (with-meta '(baz) {:meme/ws "; line 1\n; line 2\n"})
           form (list 'foo '(bar) baz)
           result (fmt-canon/format-form form {:width 10})
           lines (str/split-lines result)]
       (is (= "  ; line 1" (nth lines 2)))
       (is (= "  ; line 2" (nth lines 3)))))
   (testing "original whitespace stripped and re-indented"
-    (let [baz (with-meta '(baz) {:ws "    ; deep\n"})
+    (let [baz (with-meta '(baz) {:meme/ws "    ; deep\n"})
           form (list 'foo '(bar) baz)
           result (fmt-canon/format-form form {:width 10})
           lines (str/split-lines result)]
       (is (= "  ; deep" (nth lines 2)))))
   (testing "top-level comments unchanged"
-    (let [form (with-meta '(foo x) {:ws "; top\n"})
+    (let [form (with-meta '(foo x) {:meme/ws "; top\n"})
           result (fmt-canon/format-form form)]
       (is (str/starts-with? result "; top\n")))))
 
@@ -702,3 +702,35 @@
       (is (not (str/starts-with? printed "~@"))
           "must not produce ~@ which re-parses as unquote-splicing")
       (is (= "~clojure.core/deref(x)" printed)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: :ws metadata key collision — user :ws was silently interpreted
+;; as trivia/comments. Fix: renamed internal key to :meme/ws.
+;; ---------------------------------------------------------------------------
+
+(deftest user-ws-metadata-not-silently-consumed
+  (testing "user :ws metadata is preserved in output, not interpreted as comments"
+    (let [form (with-meta '(foo) {:ws "user-value"})
+          printed (fmt-flat/format-form form)]
+      ;; :ws is NOT an internal key anymore — it should appear in metadata
+      (is (str/includes? printed "^") "user :ws should produce a metadata prefix")))
+  (testing ":meme/ws is internal and not emitted as user metadata"
+    (let [form (with-meta '(foo) {:meme/ws "; comment\n"})
+          printed (fmt-flat/format-form form)]
+      (is (not (str/includes? printed "^")) ":meme/ws should not produce metadata prefix"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: stale :meme/order on set — printer trusted (:meme/order) blindly.
+;; Fix: validate :meme/order count matches set size; fall back to (vec form).
+;; ---------------------------------------------------------------------------
+
+(deftest stale-meme-order-falls-back
+  (testing "set with stale :meme/order (wrong count) falls back to unordered"
+    (let [form (with-meta #{1 2} {:meme/order [1 2 3]})
+          printed (fmt-flat/format-form form)]
+      ;; Stale order (3 elements vs 2 in set) → fallback, no phantom element
+      (is (not (str/includes? printed "3")) "phantom element 3 should not appear")))
+  (testing "set with correct :meme/order preserves order"
+    (let [form (with-meta #{3 1 2} {:meme/order [3 1 2]})
+          printed (fmt-flat/format-form form)]
+      (is (= "#{3 1 2}" printed)))))

@@ -235,6 +235,8 @@
                (str/starts-with? raw "-0x") (str/starts-with? raw "-0X"))
            (let [negative? (str/starts-with? raw "-")
                  hex-str (subs raw (if (or (str/starts-with? raw "+") (str/starts-with? raw "-")) 3 2))
+                 _ (when (empty? hex-str)
+                     (errors/meme-error (str "Empty hex literal: " raw) loc))
                  bi (java.math.BigInteger. hex-str 16)
                  bi (if negative? (.negate bi) bi)
                  val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]

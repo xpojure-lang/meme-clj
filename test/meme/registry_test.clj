@@ -103,7 +103,7 @@
   (testing "prefix lang EDN loads and :run works"
     (let [l (registry/load-edn "examples/languages/prefix/lang.edn")]
       (is (fn? (:run l)))
-      (is (= ".pfx" (:extension l))))))
+      (is (= [".pfx"] (:extensions l))))))
 
 (deftest load-edn-format-delegates
   (testing ":format :meme in EDN resolves to built-in format"
@@ -129,7 +129,8 @@
                            :run 'meme-lang.run/run-string})
     (let [[name _lang] (registry/resolve-by-extension "app.calc")]
       (is (= :calc name)))
-    (is (nil? (registry/resolve-by-extension "app.meme")))
+    (let [[meme-name _] (registry/resolve-by-extension "app.meme")]
+      (is (= :meme meme-name) "built-in meme resolves by extension"))
     (is (nil? (registry/resolve-by-extension "app.clj"))))
   (testing "registered-langs returns names"
     (is (contains? (set (registry/registered-langs)) :calc)))
@@ -191,5 +192,76 @@
   (testing ":run with .. is rejected in load-edn"
     (let [f (tmp-file "test-traversal" ".edn")]
       (spit f "{:run \"../../etc/passwd\"}")
-      (is (thrown? Exception (registry/load-edn f)))))
-)
+      (is (thrown? Exception (registry/load-edn f))))))
+
+;; ---------------------------------------------------------------------------
+;; Multi-extension support
+;; ---------------------------------------------------------------------------
+
+(deftest multi-extension-registration
+  (testing ":extensions vector — both extensions resolve"
+    (registry/register! :multi {:extensions [".aa" ".bb"]
+                                :run 'meme-lang.run/run-string})
+    (let [[n _] (registry/resolve-by-extension "app.aa")]
+      (is (= :multi n)))
+    (let [[n _] (registry/resolve-by-extension "app.bb")]
+      (is (= :multi n)))
+    (is (nil? (registry/resolve-by-extension "app.cc"))))
+
+  (testing ":extension string normalizes to :extensions vector"
+    (let [l (registry/resolve-lang :multi)]
+      (is (vector? (:extensions l)))
+      (is (= [".aa" ".bb"] (:extensions l)))
+      (is (nil? (:extension l)) ":extension key removed after normalization")))
+
+  (testing "mixed :extension + :extensions merged"
+    (registry/register! :mixed {:extension ".xx"
+                                :extensions [".yy" ".zz"]
+                                :run 'meme-lang.run/run-string})
+    (is (= [".xx" ".yy" ".zz"] (:extensions (registry/resolve-lang :mixed))))
+    (is (some? (registry/resolve-by-extension "app.xx")))
+    (is (some? (registry/resolve-by-extension "app.zz")))))
+
+(deftest builtin-meme-extensions-resolve
+  (testing ".meme resolves to :meme"
+    (is (= :meme (first (registry/resolve-by-extension "app.meme")))))
+  (testing ".memec resolves to :meme"
+    (is (= :meme (first (registry/resolve-by-extension "app.memec")))))
+  (testing ".memej resolves to :meme"
+    (is (= :meme (first (registry/resolve-by-extension "app.memej")))))
+  (testing ".memejs resolves to :meme"
+    (is (= :meme (first (registry/resolve-by-extension "app.memejs")))))
+  (testing "unknown extension returns nil"
+    (is (nil? (registry/resolve-by-extension "app.txt")))))
+
+;; ---------------------------------------------------------------------------
+;; C2: Concurrent register! with conflicting extensions — atomic conflict check
+;; ---------------------------------------------------------------------------
+
+(deftest concurrent-register-conflict-detection
+  (testing "concurrent registrations with same extension — at most one succeeds"
+    (let [results (atom [])
+          barrier (java.util.concurrent.CyclicBarrier. 2)]
+      (dotimes [i 2]
+        (.start (Thread. (fn []
+                           (.await barrier)
+                           (try
+                             (registry/register! (keyword (str "conc" i))
+                                                 {:extension ".conflict-test"
+                                                  :run 'meme-lang.run/run-string})
+                             (swap! results conj [:ok i])
+                             (catch Exception _
+                               (swap! results conj [:error i])))))))
+      (Thread/sleep 500)
+      (let [ok-count (count (filter #(= :ok (first %)) @results))
+            error-count (count (filter #(= :error (first %)) @results))]
+        (is (<= ok-count 1) "at most one registration should succeed")
+        (is (= 2 (+ ok-count error-count)) "both threads should complete")))))
+
+(deftest multi-extension-conflict-detection
+  (testing "conflict when new extension overlaps existing extensions vector"
+    (registry/register! :owner {:extensions [".p" ".q"]
+                                :run 'meme-lang.run/run-string})
+    (is (thrown-with-msg? Exception #"already claimed"
+                          (registry/register! :thief {:extension ".q"
+                                                      :run 'meme-lang.run/run-string})))))

@@ -469,10 +469,11 @@
       (is (= :namespaced-map (:type (first tokens))))
       (is (= "#::" (:raw (first tokens))))))
   #?(:clj
-     (testing "#::{:a 1} bare auto-resolve now errors — requires namespace alias"
-       (is (thrown-with-msg? Exception
-                             #"Auto-resolve namespaced map"
-                             (lang/meme->forms "#::{:a 1}"))))))
+     (testing "#::{:a 1} bare auto-resolve — keys stay unqualified (deferred to eval)"
+       (let [result (first (lang/meme->forms "#::{:a 1}"))]
+         (is (map? result))
+         (is (= 1 (:a result)))
+         (is (= "::" (:meme/ns (meta result))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L10: ##foo was silently accepted and produced confusing error.
@@ -638,6 +639,10 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
                           (lang/meme->forms ":foo/"))))
+  (testing "leading slash :/foo is invalid (matches Clojure)"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid token"
+                          (lang/meme->forms ":/foo"))))
   (testing "valid keywords still work"
     (is (= [:foo] (lang/meme->forms ":foo")))
     (is (= [:foo/bar] (lang/meme->forms ":foo/bar")))))
@@ -653,8 +658,16 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid % parameter"
                           (lang/meme->forms "#(+(%0 %1))"))))
-  (testing "%20 is valid"
+  (testing "%20 is valid (Clojure's max)"
     (is (some? (lang/meme->forms "#(%20)"))))
+  (testing "%21 is rejected — exceeds Clojure's limit"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid % parameter"
+                          (lang/meme->forms "#(%21)"))))
+  (testing "%99999999999 is rejected — was OOM before cap"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid % parameter"
+                          (lang/meme->forms "#(%99999999999)"))))
   (testing "huge %N doesn't crash with NumberFormatException"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid % parameter"
@@ -672,3 +685,48 @@
     (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                           #"Invalid % parameter"
                           (lang/meme->forms "#(%+ c%)")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: 0x (empty hex body) produced Java error "Zero length BigInteger".
+;; Fix: explicit guard in resolve-number for empty hex body.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest empty-hex-literal-clean-error
+     (testing "0x at EOF — empty hex body"
+       (is (thrown-with-msg? Exception #"Empty hex literal"
+                             (lang/meme->forms "0x"))))
+     (testing "0X at EOF — empty hex body (uppercase)"
+       (is (thrown-with-msg? Exception #"Empty hex literal"
+                             (lang/meme->forms "0X"))))
+     (testing "+0x at EOF — signed empty hex body"
+       (is (thrown-with-msg? Exception #"Empty hex literal"
+                             (lang/meme->forms "+0x"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: U+2007 FIGURE SPACE entered symbol names on both platforms.
+;; Fix: added U+2007 to explicit whitespace list.
+;; ---------------------------------------------------------------------------
+
+(deftest figure-space-is-whitespace
+  (testing "U+2007 is treated as whitespace, not part of symbol"
+    (let [forms (lang/meme->forms (str "a" \u2007 "b"))]
+      (is (= '[a b] forms))))
+  (testing "U+2007 between tokens acts as separator"
+    (let [forms (lang/meme->forms (str "[1" \u2007 "2]"))]
+      (is (= [[1 2]] forms)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: supplementary-plane characters (emoji) produced two :error
+;; nodes — one per UTF-16 surrogate half. Fix: consume surrogate pairs as one.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest supplementary-plane-single-error
+     (testing "emoji produces one error node, not two"
+       ;; U+1F600 (GRINNING FACE) = surrogate pair D83D DE00
+       ;; Can't use char literals for surrogates in Clojure source,
+       ;; so construct the string via char array.
+       (let [src (str (String. (char-array [(char 0xD83D) (char 0xDE00)])) " x")]
+         (is (thrown-with-msg? Exception #"Unexpected token"
+                               (lang/meme->forms src)))))))

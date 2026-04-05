@@ -89,6 +89,7 @@
   "Read and eval a meme file. Returns the last result."
   ([path] (run-file path {}))
   ([path eval-fn-or-opts]
+   (@(requiring-resolve 'meme.loader/install!))
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})
          stages-impl (:stages opts)
          reader-opts (default-reader-opts opts)
