@@ -50,7 +50,9 @@ def(state atom({:count 0}))
 ### let
 
 ```
-let([x 1, y +(x 1)] *(x y))
+let([x 1, y +(x 1)] 
+  *(x y)
+)
 ```
 
 Produces: `(let [x 1 y (+ x 1)] (* x y))`
@@ -58,7 +60,11 @@ Produces: `(let [x 1 y (+ x 1)] (* x y))`
 Destructuring works:
 
 ```
-let([{:keys [id name]} person] println(id name))
+let(
+  [{:keys [id name]} person] 
+  
+  println(id name)
+)
 ```
 
 
@@ -69,42 +75,71 @@ let([{:keys [id name]} person] println(id name))
 Single arity:
 
 ```
-defn(greet [name] println(str("Hello " name)))
+defn(greet [name] 
+  println(str("Hello " name))
+)
 ```
 
 Multiple body forms:
 
 ```
-defn(greet [name] println(str("Hello " name)) name)
+defn(greet [name] 
+  println(str("Hello " name)) 
+  name
+)
 ```
 
 With docstring:
 
 ```
-defn(greet "Greets a person" [name] println(str("Hello " name)))
+defn(greet 
+  "Greets a person" 
+  [name] 
+  
+  println(str("Hello " name))
+)
 ```
 
 Multi-arity:
 
 ```
 defn(greet
-  [name](greet(name "!"))
-  [name punct](println(str("Hello " name punct))))
+  [name](
+    greet(name "!")
+  )
+  [name punct](
+    println(str("Hello " name punct))
+  )
+)
 ```
 
 ### fn
 
 ```
-fn([x] +(x 1))
-fn([x y] *(x y))
-fn([acc item] assoc(acc :id(item) :balance(item)))
+fn([x] 
+  +(x 1)
+)
+
+fn([x y] 
+  *(x y)
+)
+
+fn([acc item] 
+  assoc(acc :id(item) :balance(item))
+)
 ```
 
 Multi-arity anonymous function (vector-as-head for each clause):
 
 ```
-fn([x](+(x 1))
-   [x y](+(x y)))
+fn(
+  [x](
+    +(x 1)
+  )
+  [x y](
+    +(x y)
+  )
+)
 ```
 
 ### defn- (private)
@@ -121,7 +156,10 @@ work as prefix operators.
 
 ```
 defmacro(my-log [tag expr] list('println tag expr))
-defmacro(unless [test & body] `if(~test nil do(~@body)))
+
+defmacro(unless [test & body] 
+  `if(~test nil do(~@body))
+)
 ```
 
 
@@ -156,7 +194,8 @@ cond(
 case(x
   1 "one"
   2 "two"
-  "default")
+  "default"
+)
 ```
 
 ### loop/recur
@@ -165,13 +204,17 @@ case(x
 loop([i 0, acc []]
   if(>=(i 10)
     acc
-    recur(inc(i) conj(acc i))))
+    recur(inc(i) conj(acc i))
+  )
+)
 ```
 
 ### for
 
 ```
-for([x xs, y ys, :when >(x y)] [x y])
+for([x xs, y ys, :when >(x y)] 
+  [x y]
+)
 ```
 
 Produces: `(for [x xs y ys :when (> x y)] [x y])`
@@ -179,7 +222,10 @@ Produces: `(for [x xs y ys :when (> x y)] [x y])`
 Modifiers `:when`, `:while`, and `:let` are passed through:
 
 ```
-for([x xs, :let [y *(x 10)], :while <(y 100)] y)
+for([ x xs, 
+      :let [y *(x 10)], 
+      :while <(y 100)] 
+y)
 ```
 
 ### doseq
@@ -187,7 +233,9 @@ for([x xs, :let [y *(x 10)], :while <(y 100)] y)
 Same binding syntax as `for`, but for side effects:
 
 ```
-doseq([x items, :when active?(x)] println(x))
+doseq([x items, :when active?(x)] 
+  println(x)
+)
 ```
 
 
@@ -196,8 +244,11 @@ doseq([x items, :when active?(x)] println(x))
 ```
 try(
   dangerous-operation()
+  
   catch(Exception e log/error("Failed:" e) default-value)
-  finally(cleanup()))
+  
+  finally(cleanup())
+)
 ```
 
 `catch` and `finally` are regular calls inside `try`'s arguments.
@@ -219,8 +270,11 @@ Multi-line:
 ->>(accounts
   filter(:active)
   map(fn([a] update(a :balance *(:balance(a) 1.05))))
-  remove(fn([a] neg?(:balance(a))))
-  reduce(+ 0))
+  remove(
+    fn([a] neg?(:balance(a)))
+  )
+  reduce(+ 0)
+)
 ```
 
 
@@ -259,14 +313,22 @@ swap!(state update(:count inc))
 ## Protocols and Records
 
 ```
-defprotocol(Drawable draw([this canvas]) bounds([this]))
+defprotocol(Drawable 
+  draw([this canvas]) 
+  bounds([this])
+)
 
 defrecord(Circle [center radius])
 
 defrecord(Circle [center radius]
   Drawable
-  draw([this canvas] draw-circle(canvas this))
-  bounds([this] get-bounds(this)))
+  draw([this canvas] 
+    draw-circle(canvas this)
+  )
+  bounds([this] 
+    get-bounds(this)
+  )
+)
 ```
 
 ## Types
@@ -276,7 +338,10 @@ deftype(Point [x y])
 
 deftype(Point [x y]
   Drawable
-  draw([this canvas] render(canvas .-x(this) .-y(this))))
+  draw([this canvas] 
+    render(canvas .-x(this) .-y(this))
+  )
+)
 ```
 
 ## Reify
