@@ -1,0 +1,4 @@
+ns(test-meme-ns.caller
+  :require([test-meme-ns.greeter :as g]))
+
+defn(greet-world [] g/hello("World"))

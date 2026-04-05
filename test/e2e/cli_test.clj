@@ -245,6 +245,34 @@
     (is (= "defn(foo [x] +(x 1))\n" out))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: Bug #3 — Babashka warns about .meme require limitation
+;; Babashka's SCI require bypasses clojure.core/load, so the loader
+;; cannot intercept. The loader now prints a warning instead of silently
+;; doing nothing.
+;; ---------------------------------------------------------------------------
+
+(deftest run-babashka-loader-warning
+  (let [f (tmp-meme "println(\"hello\")")
+        {:keys [out err exit]} (bb-meme "run" (str f))]
+    (is (zero? exit))
+    (is (str/includes? out "hello"))
+    (is (str/includes? err "Babashka")
+        "Should warn that .meme require is not available on Babashka")))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: Bug #4 — bb meme run with nested .meme require
+;; The CLI run command now installs the loader. On Babashka, nested .meme
+;; require is not supported (SCI limitation), but the file itself runs fine.
+;; ---------------------------------------------------------------------------
+
+(deftest run-file-with-require-of-clj-namespace
+  (let [f (tmp-meme "require('[clojure.string :as s]) println(s/upper-case(\"hello\"))")
+        {:keys [out exit]} (bb-meme "run" (str f))]
+    (is (zero? exit))
+    (is (= "HELLO\n" out)
+        "require of standard .clj namespace should work")))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: *command-line-args* must not leak "run" and filename
 ;; ---------------------------------------------------------------------------
 

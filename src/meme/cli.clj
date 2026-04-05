@@ -127,13 +127,15 @@
 
 (defn run
   "Run a meme source file. Requires :file in opts.
-   Binds *command-line-args* to the user's args (excluding the command verb and filename)."
+   Binds *command-line-args* to the user's args (excluding the command verb and filename).
+   Installs the loader so require of .meme namespaces works from within the file."
   [{:keys [file lang rest-args] :as opts}]
   (when-not file
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name] [-- args...]"))
     (System/exit 1))
   (let [[lang-name l] (get-lang lang file)]
     (registry/check-support l lang-name :run)
+    (@(requiring-resolve 'meme.loader/install!))
     (try (binding [*command-line-args* (or rest-args [])]
            ((:run l) (slurp file) (lang-opts opts)))
          (catch Exception e
@@ -169,6 +171,54 @@
     {:cmd :format, :pred meme-file?, :output-fn nil
      :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"}))
 
+(defn compile-meme
+  "Compile .meme files to .clj in a separate output directory.
+   Preserves relative paths. Output can be added to :paths in deps.edn
+   so that require, load-file, and nREPL all work without runtime patching."
+  [{:keys [file files out lang] :as opts}]
+  (let [inputs (or files (when file [file]))
+        out-dir (or out "target/classes")]
+    (when (empty? inputs)
+      (println "Usage: meme compile <src-dir|file...> [--out target/classes] [--lang name]")
+      (System/exit 1))
+    (let [[lang-name l] (get-lang lang nil)
+          _ (registry/check-support l lang-name :to-clj)
+          to-clj-fn (:to-clj l)
+          expanded (expand-inputs inputs meme-file?)
+          ;; Find the common root of all inputs to compute relative paths
+          roots (mapv (fn [input]
+                        (let [f (io/file input)]
+                          (if (.isDirectory f) (.getCanonicalPath f)
+                              (.getCanonicalPath (.getParentFile f)))))
+                      inputs)]
+      (when (empty? expanded)
+        (println "No .meme files found.")
+        (System/exit 1))
+      (let [process-one
+            (fn [path]
+              (try
+                (let [abs (.getCanonicalPath (io/file path))
+                      ;; Find the matching root to strip
+                      root (some #(when (str/starts-with? abs (str % "/")) %) roots)
+                      rel (if root (subs abs (inc (count root))) (.getName (io/file path)))
+                      out-path (str out-dir "/" (swap-ext rel "meme" "clj"))
+                      out-file (io/file out-path)]
+                  (.mkdirs (.getParentFile out-file))
+                  (spit out-file (str (to-clj-fn (slurp path)) "\n"))
+                  (println (str path " → " out-path))
+                  :ok)
+                (catch Exception e
+                  (binding [*out* *err*]
+                    (println (errors/format-error e (try (slurp path) (catch Exception _ nil)))))
+                  :fail)))
+            results (doall (map process-one expanded))
+            total (count results)
+            failed (count (filter #{:fail} results))]
+        (println)
+        (println (str total " file(s) compiled to " out-dir
+                      (when (pos? failed) (str ", " failed " failed"))))
+        (when (pos? failed) (System/exit 1))))))
+
 (defn inspect-lang
   "Print diagnostic info about the current lang configuration."
   [{:keys [lang]}]
@@ -195,6 +245,7 @@
     (when (has? :to-clj)  (println "  meme to-clj <file|dir> [--lang name] [--stdout]"))
     (when (has? :to-meme) (println "  meme to-meme <file|dir> [--lang name] [--stdout]"))
     (when (has? :format)  (println "  meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"))
+    (when (has? :to-clj)  (println "  meme compile <src-dir|file...> [--out target/classes] [--lang name]"))
     (println "  meme inspect [--lang name]")
     (println "  meme version")
     (println)
@@ -230,6 +281,8 @@
           :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
                                      :lang {:coerce :string} :style {:coerce :string}
                                      :width {:coerce :long}}}
+         {:cmds ["compile"] :fn (file-cmd compile-meme)
+          :args->opts [:file] :spec {:out {:coerce :string} :lang {:coerce :string}}}
          {:cmds ["inspect"] :fn (comp inspect-lang :opts) :spec {:lang {:coerce :string}}}
          {:cmds ["version"] :fn (fn [_] (version nil))}
          {:cmds [] :fn (fn [{:keys [args]}]
