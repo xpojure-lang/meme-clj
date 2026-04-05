@@ -5,6 +5,7 @@
    The Pratt parser produces a lossless CST; the CST reader lowers it
    to Clojure forms."
   (:require [meme-lang.stages :as stages]
+            [meme-lang.forms :as forms]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
             [meme-lang.expander :as expander]
@@ -60,24 +61,35 @@
 #?(:clj
    (do
      (def ^:private eof-sentinel (Object.))
+     (defn- check-depth
+       "Walk form and throw if nesting exceeds max-parse-depth."
+       [form depth]
+       (when (> depth forms/max-parse-depth)
+         (throw (ex-info "Clojure source exceeds maximum nesting depth"
+                         {:depth depth})))
+       (when (coll? form)
+         (run! #(check-depth % (inc depth)) form)))
+
      (defn clj->forms
        "Read Clojure source string, return a vector of forms.
        JVM/Babashka only — Clojure's reader is needed for full form support."
        [clj-src]
        {:pre [(string? clj-src)]}
        (binding [*read-eval* false]
-         (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))]
-           (loop [forms []]
-             (let [form (try
-                          (read {:read-cond :preserve :eof eof-sentinel} rdr)
-                          (catch StackOverflowError _
-                            (throw (ex-info "Clojure source exceeds maximum nesting depth"
-                                            {:source (subs clj-src 0 (min 200 (count clj-src)))})))
-                          (catch Exception e
-                            (throw (ex-info (str "Clojure read error: " (ex-message e)) {:source clj-src} e))))]
-               (if (identical? form eof-sentinel)
-                 forms
-                 (recur (conj forms form))))))))))
+         (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))
+               result (loop [forms []]
+                        (let [form (try
+                                     (read {:read-cond :preserve :eof eof-sentinel} rdr)
+                                     (catch StackOverflowError _
+                                       (throw (ex-info "Clojure source exceeds maximum nesting depth"
+                                                       {:source (subs clj-src 0 (min 200 (count clj-src)))})))
+                                     (catch Exception e
+                                       (throw (ex-info (str "Clojure read error: " (ex-message e)) {:source clj-src} e))))]
+                          (if (identical? form eof-sentinel)
+                            forms
+                            (recur (conj forms form)))))]
+           (run! #(check-depth % 0) result)
+           result)))))
 #?(:clj
    (defn clj->meme
      "Convert Clojure source to meme. JVM only."
