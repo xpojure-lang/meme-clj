@@ -35,6 +35,7 @@
                                    target)
                            corpus-dir (str "fuzz-corpus/" target)]
                        (babashka.fs/create-dirs corpus-dir)
+                       (babashka.fs/create-dirs "fuzz-corpus/crashes")
                        (apply shell "java" "-cp" "target/fuzzer.jar"
                               "com.code_intelligence.jazzer.Jazzer"
                               (str "--target_class=" class)
@@ -42,5 +43,7 @@
                               "--disabled_hooks=com.code_intelligence.jazzer.sanitizers.RegexInjection"
                               (str "-dict=fuzz/meme.dict")
                               (str "-fork=" (max 1 (- (.availableProcessors (Runtime/getRuntime)) 2)))
+                              "--reproducer_path=fuzz-corpus/crashes/"
+                              "-artifact_prefix=fuzz-corpus/crashes/"
                               corpus-dir "fuzz/seed-corpus"
                               opts))}}}
