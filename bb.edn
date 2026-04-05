@@ -21,6 +21,10 @@
                              (shell "clojure" "-X:e2e"))}
          fuzz-build {:doc "Build fuzzer uberjar (AOT-compiled fuzz targets for Jazzer)"
                      :task (shell "clojure" "-T:build" "fuzzer-jar")}
+         fuzz-quick {:doc "Run all 3 fuzz targets, 50K runs each (~3 min total)"
+                     :task (do (shell "bb" "fuzz" "roundtrip" "--" "-runs=50000" "-max_total_time=60" "-fork=1")
+                               (shell "bb" "fuzz" "format" "--" "-runs=50000" "-max_total_time=60" "-fork=1")
+                               (shell "bb" "fuzz" "idempotent" "--" "-runs=50000" "-max_total_time=60" "-fork=1"))}
          fuzz {:doc "Run Jazzer fuzz target. Usage: bb fuzz [target] [-- jazzer-opts]"
                :task (let [[target & opts] *command-line-args*
                            target (or target "roundtrip")

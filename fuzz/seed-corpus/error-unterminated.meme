@@ -1,0 +1,7 @@
+"unterminated string
+"hello
+"a
+#"unterminated regex
+#"pattern
+#"ab
+"trailing backslash\

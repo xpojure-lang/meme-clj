@@ -1,0 +1,9 @@
+.method(obj a b c)
+.method(obj)
+Math/PI
+Math/abs(x)
+java.util.HashMap.()
+java.lang.Math/abs(x)
+.toString(obj)
+new(String "hello")
+..(obj method1 method2)
