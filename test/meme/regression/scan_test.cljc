@@ -702,3 +702,31 @@
      (testing "+0x at EOF — signed empty hex body"
        (is (thrown-with-msg? Exception #"Empty hex literal"
                              (lang/meme->forms "+0x"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: U+2007 FIGURE SPACE entered symbol names on both platforms.
+;; Fix: added U+2007 to explicit whitespace list.
+;; ---------------------------------------------------------------------------
+
+(deftest figure-space-is-whitespace
+  (testing "U+2007 is treated as whitespace, not part of symbol"
+    (let [forms (lang/meme->forms (str "a" \u2007 "b"))]
+      (is (= '[a b] forms))))
+  (testing "U+2007 between tokens acts as separator"
+    (let [forms (lang/meme->forms (str "[1" \u2007 "2]"))]
+      (is (= [[1 2]] forms)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: supplementary-plane characters (emoji) produced two :error
+;; nodes — one per UTF-16 surrogate half. Fix: consume surrogate pairs as one.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest supplementary-plane-single-error
+     (testing "emoji produces one error node, not two"
+       ;; U+1F600 (GRINNING FACE) = surrogate pair D83D DE00
+       ;; Can't use char literals for surrogates in Clojure source,
+       ;; so construct the string via char array.
+       (let [src (str (String. (char-array [(char 0xD83D) (char 0xDE00)])) " x")]
+         (is (thrown-with-msg? Exception #"Unexpected token"
+                               (lang/meme->forms src)))))))

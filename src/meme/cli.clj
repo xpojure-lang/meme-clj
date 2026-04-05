@@ -47,17 +47,17 @@
     (let [process-one
           (fn [path]
             (try
-              (cond
-                stdout (do (println (transform path)) :ok)
-                check  (let [src       (slurp path)
-                             formatted (str (transform path) "\n")]
-                         (if (= src formatted) :ok
-                             (do (println (str "would reformat: " path)) :fail)))
-                :else  (let [out    (if output-fn (output-fn path) path)
-                             result (transform path)]
-                         (spit out (str result "\n"))
-                         (println (if (= path out) (str verb " " path) (str path " → " out)))
-                         :ok))
+              (let [src (slurp path)]
+                (cond
+                  stdout (do (println (transform src)) :ok)
+                  check  (let [formatted (str (transform src) "\n")]
+                           (if (= src formatted) :ok
+                               (do (println (str "would reformat: " path)) :fail)))
+                  :else  (let [out    (if output-fn (output-fn path) path)
+                               result (transform src)]
+                           (spit out (str result "\n"))
+                           (println (if (= path out) (str verb " " path) (str path " → " out)))
+                           :ok)))
               (catch Exception e
                 (binding [*out* *err*]
                   (println (errors/format-error e (try (slurp path) (catch Exception _ nil)))))
@@ -119,7 +119,7 @@
       (process-files
         {:inputs    inputs
          :pred      pred
-         :transform (fn [path] ((cmd l) (slurp path) lopts))
+         :transform (fn [src] ((cmd l) src lopts))
          :output-fn output-fn
          :stdout    stdout
          :check     check

@@ -22,6 +22,7 @@
                 (= c 0x0C)    ; form feed
                 (= c 0x0B)    ; vertical tab
                 (= c 0x2C)    ; comma
+                (= c 0x2007)  ; figure space (Zs — visually indistinguishable from space)
                 #?(:clj (and (not= c 0x0A) (not= c 0x0D)
                              (Character/isWhitespace (char c)))
                    :cljs (or (<= 0x2000 c 0x2006)

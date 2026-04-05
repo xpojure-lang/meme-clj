@@ -363,9 +363,15 @@
                          (nud-pred-match engine ch))
               lhs (if nud-fn
                     (nud-fn engine)
-                    ;; Unknown character — consume one byte as :invalid
-                    (let [start (cursor engine)]
-                      (advance! engine 1)
+                    ;; Unknown character — consume as :invalid.
+                    ;; Consume surrogate pairs (2 UTF-16 code units) as one token.
+                    (let [start (cursor engine)
+                          ch-code (int ch)
+                          pair? (and (<= 0xD800 ch-code 0xDBFF)
+                                     (let [next-ch (peek-char engine 1)]
+                                       (and next-ch
+                                            (<= 0xDC00 (int next-ch) 0xDFFF))))]
+                      (advance! engine (if pair? 2 1))
                       (cst :error {:token (make-token! engine :invalid start)
                                    :message (str "Unexpected token: :invalid")})))
               result
