@@ -12,12 +12,16 @@ M-expressions were McCarthy's original intended syntax for Lisp (1960). S-expres
 Everything else is Clojure.
 
 ```clojure
-defn(stars [owner repo]
-  let([url  str("https://api.github.com/repos/" owner "/" repo)
-       data json/parse-string(slurp(url) true)]
-    println(str(owner "/" repo ": " :stargazers_count(data) " stars"))))
+;; greet.meme
+defn(greet [name]
+  str("Hello, " name "!"))
 
-stars("xpojure-lang" "meme-clj")
+println(greet("world"))
+
+;; data transforms — just Clojure, head-first
+let([xs [1 2 3 4 5]]
+  println(filter(odd? xs))
+  println(map(inc xs)))
 ```
 
 ## Documentation
