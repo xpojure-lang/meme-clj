@@ -94,7 +94,7 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 (meme-lang.api/format-meme-forms forms opts)
 ```
 
-Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:ws` metadata (attached by the pipeline's scan stage). All platforms.
+Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:meme/ws` metadata (attached by the pipeline's scan stage). All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -155,7 +155,7 @@ Convert a Clojure form to a Wadler-Lindig Doc tree. `mode` is `:meme` (call nota
 (meme-lang.printer/extract-comments ws)
 ```
 
-Extract comment lines from a `:ws` metadata string. Returns a vector of trimmed comment strings, or nil.
+Extract comment lines from a `:meme/ws` metadata string. Returns a vector of trimmed comment strings, or nil.
 
 
 ## meme-lang.formatter.flat
@@ -209,7 +209,7 @@ Canonical (width-aware) formatter. Composes printer + render at target width. Us
 (meme-lang.formatter.canon/format-form form opts)
 ```
 
-Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:ws` metadata.
+Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:meme/ws` metadata.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -221,7 +221,7 @@ Options:
 (meme-lang.formatter.canon/format-forms forms opts)
 ```
 
-Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:ws` metadata, including trailing comments after the last form.
+Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:meme/ws` metadata, including trailing comments after the last form.
 
 
 ## meme-lang.repl
@@ -501,12 +501,25 @@ In addition to built-in langs and EDN-loaded langs, user langs can be registered
 (meme.registry/register! lang-name config)
 ```
 
-Register a user lang. `lang-name` is a keyword. `config` is an EDN-style map — the same format as `.edn` lang files. Symbols are resolved via `requiring-resolve`, strings and keywords follow the same rules as `load-edn`. Pre-resolved functions are also accepted.
+Register a user lang. `lang-name` is a keyword. `config` is an EDN-style map — the same format as `.edn` lang files. Symbols are resolved via `requiring-resolve`, strings and keywords follow the same rules as `load-edn`. Pre-resolved functions are also accepted. Thread-safe — extension conflict checks are atomic.
+
+Both `:extension` (string) and `:extensions` (vector) are accepted. Both are normalized to a single `:extensions` vector. The `:extension` key is removed after normalization.
 
 ```clojure
+;; Single extension
 (registry/register! :prefix {:extension ".prefix"
                              :run "examples/languages/prefix/core.meme"
                              :format :meme})
+
+;; Multiple extensions
+(registry/register! :my-lang {:extensions [".ml" ".mlx"]
+                              :run 'my-lang.run/run-string})
+
+;; Mixed — both forms merged
+(registry/register! :hybrid {:extension ".hyb"
+                             :extensions [".hybx"]
+                             :run 'my-lang.run/run-string})
+;; Normalizes to :extensions [".hyb" ".hybx"]
 ```
 
 ### resolve-by-extension

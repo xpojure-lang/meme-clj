@@ -215,6 +215,11 @@ meme rules inside. No opaque regions.
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
 | PL8 | Stage contract: spec validation at stage boundaries | Removed — contract validation was deleted during pipeline unification to the scanlet-parselet architecture |
 | PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
+| PL11 | Namespace loader: intercept `clojure.core/load` to find `.meme` files on classpath. `install!`/`uninstall!`, auto-installed by `run-file` and REPL | Done |
+| PL12 | Multi-extension support: `:extension`/`:extensions` normalization, both string and vector accepted | Done |
+| PL13 | Loader namespace denylist: `clojure.*`, `java.*`, `javax.*` etc. cannot be shadowed | Done |
+| PL14 | Registry atomicity: extension conflict check inside `swap!` callback, thread-safe | Done |
+| PL15 | Red team hardening: 11 confirmed fixes (OOM, TOCTOU, compat, metadata), 4 plausible concern fixes | Done |
 
 ## Future work
 

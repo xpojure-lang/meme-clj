@@ -310,7 +310,7 @@ metadata to reconstruct the original syntax.
 forms produced by sugar syntax (`'`, `@`, `#'`). The printer checks
 this: sugar-tagged forms emit sugar; untagged forms emit the explicit
 call. The `:meme/sugar` key is stripped from display metadata (alongside
-`:line`, `:column`, `:file`, `:ws`) so it never appears in output.
+`:line`, `:column`, `:file`, `:meme/ws`) so it never appears in output.
 
 **Why this matters:** Without this, the stages silently normalize
 user code. `var(x)` becomes `#'x`. `quote(list)` becomes `'list`.
@@ -355,7 +355,7 @@ Clojure's `array-map` preserves insertion order for up to 8 entries. Beyond that
 
 ### Comments on primitive map keys
 
-Comments in meme source (`;; comment`) are attached as `:ws` metadata to the following form. However, primitive types (keywords, numbers, strings, booleans) do not implement `IMeta` in Clojure and cannot carry metadata. When a comment appears before a keyword map key (e.g., `{; comment\n :a 1}`), the comment is lost because `:a` cannot store metadata. This is a fundamental Clojure platform limitation. Comments before symbols, vectors, maps, and sets are preserved correctly.
+Comments in meme source (`;; comment`) are attached as `:meme/ws` metadata to the following form. However, primitive types (keywords, numbers, strings, booleans) do not implement `IMeta` in Clojure and cannot carry metadata. When a comment appears before a keyword map key (e.g., `{; comment\n :a 1}`), the comment is lost because `:a` cannot store metadata. This is a fundamental Clojure platform limitation. Comments before symbols, vectors, maps, and sets are preserved correctly.
 
 ### End-of-line comment repositioning
 
@@ -379,7 +379,7 @@ Programmatically constructed symbols containing whitespace, parentheses, or othe
 
 ### Inline comments on primitive values lost during formatting
 
-Comments are preserved through the pipeline via `:ws` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
+Comments are preserved through the pipeline via `:meme/ws` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
 
 Comments that **survive** formatting: those before symbols, keywords, collections, and calls. Comments that are **lost**: those before numbers, strings, booleans, characters, nil, and regex literals.
 

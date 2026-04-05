@@ -25,6 +25,10 @@ bb test-cljs
 # All test suites (Babashka + JVM + ClojureScript)
 bb test-all
 
+# Coverage-guided fuzzing (requires Jazzer — see deps.edn :fuzzer alias)
+bb fuzz-build          # Build fuzzer uberjar
+bb fuzz-quick          # 50K runs per target (~3 min)
+
 # Run a .meme file
 bb meme run file.meme
 

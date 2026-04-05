@@ -4,6 +4,40 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.0.0] — 2026-04-05
+
+### Added
+- **Namespace loader** (`meme.loader`): intercepts `clojure.core/load` to find `.meme` files on the classpath. Auto-installed by `run-file` and REPL start. `install!`/`uninstall!` for manual control. `require` in `.meme` code finds both `.meme` and `.clj` namespaces; `.meme` takes precedence when both exist.
+- **Multi-extension support**: `register!` accepts both `:extension` (string) and `:extensions` (vector); both are normalized to `:extensions [...]`. Built-in meme lang registers `.meme`, `.memec`, `.memej`, `.memejs`.
+- **Namespace denylist in loader**: `clojure.*`, `java.*`, `javax.*`, `cljs.*`, `nrepl.*`, `cider.*` namespaces cannot be shadowed by `.meme` files on the classpath.
+- **Loader uninstall guard**: `uninstall!` throws when called from within a lang-load (prevents `.meme` code from disabling the loader mid-execution).
+- **`#::{}` bare auto-resolve**: namespaced maps with empty alias (`#::{:a 1}`) are now accepted, matching Clojure's behavior. Keys stay unqualified; qualification deferred to eval time.
+- **Red team report**: `doc/red-team/report.md` — 71 adversarial hypotheses tested across parser, value resolution, expansion, printer, loader, registry, and CLI.
+- **Design documentation**: "The call/data tension" section in `doc/design-decisions.md` — analysis of lists, homoiconicity, and M-expressions.
+
+### Changed
+- **Architecture**: three-layer reorganization — `meme.tools.*` (generic parser/render), `meme-lang.*` (meme language), `meme.*` (CLI/registry/loader). The Pratt parser is fully data-driven via grammar spec.
+- **Internal metadata key `:ws` renamed to `:meme/ws`**: prevents collision with user-supplied `:ws` metadata that was silently consumed as comments by the printer.
+- **`register!` conflict check is atomic**: extension validation moved inside `swap!` callback, preventing TOCTOU race on concurrent registrations.
+- **CLI reads file once**: `process-files` reads source via `slurp` once and passes content to transform, eliminating TOCTOU between read and write.
+- **`meme-file?` and `swap-ext`** consult the registry for all registered extensions, not just hard-coded `.meme`.
+- **`strip-shebang`** correctly handles CRLF (`\r\n`) line endings.
+- **`clj->forms`** catches `StackOverflowError` on deeply nested Clojure input and rethrows as `ex-info`.
+
+### Fixed
+- **`%N` param OOM**: anonymous function params capped at `%20` (was ~10^11 → instant heap exhaustion). Matches Clojure's LispReader limit.
+- **`:/foo` keyword accepted**: leading-slash keywords now rejected, matching Clojure's reader.
+- **`:shebang` atom in CST reader**: double-shebang files no longer produce "Unknown atom type" error.
+- **Empty hex literal `0x`**: produces "Empty hex literal" instead of leaking Java's "Zero length BigInteger" message.
+- **`:meme/order` stale metadata**: printer validates order vector count against set size; falls back to unordered when stale.
+- **U+2007 FIGURE SPACE**: classified as whitespace on all platforms, preventing invisible characters in symbol names.
+- **UTF-16 surrogate pairs**: consumed as single `:invalid` token instead of two confusing errors per surrogate half.
+- **Intermediate `#_` discard tokens**: capture start position before advance, producing correct non-zero-length spans.
+- **Scar tissue triage**: ~15 comment-only regression blocks in `reader_test.cljc` converted to active tests or documented design decisions. Two stale comments corrected (duplicate keys and `%0` ARE rejected by the current pipeline).
+
+### Removed
+- **Legacy internal `:ws` metadata key**: replaced by namespaced `:meme/ws` throughout pipeline (CST reader, printer, formatter, forms).
+
 ## [1.0.0] — 2026-04-01
 
 ### Changed
