@@ -791,3 +791,115 @@
       (catch clojure.lang.ExceptionInfo _ true)  ;; meme errors OK
       (catch StackOverflowError _ true)           ;; depth limit OK
       (catch Exception _ false))))                ;; raw JVM exception = FAIL
+
+;; ===========================================================================
+;; NEW: Coverage gaps from red team round 3 analysis
+;; ===========================================================================
+
+;; --- Tagged literals ---
+
+(def gen-tagged-literal-text
+  "Generate tagged literal text (#inst, #uuid, custom)."
+  (gen/one-of
+   [(gen/return "#inst \"2024-01-01T00:00:00.000Z\"")
+    (gen/return "#uuid \"550e8400-e29b-41d4-a716-446655440000\"")
+    (gen/let [tag (gen/elements ["my/tag" "foo/bar" "x/y"])
+              val gen-meme-atom]
+      (str "#" tag " " val))]))
+
+(defspec prop-tagged-literal-parses 200
+  (prop/for-all [text gen-tagged-literal-text]
+    (try
+      (some? (lang/meme->forms text))
+      (catch Exception _ false))))
+
+;; --- Auto-alias namespaced maps (#::alias{}) ---
+
+(def gen-alias-namespaced-map-text
+  "Generate auto-alias namespaced map text (#::alias{})."
+  (gen/let [alias (gen/fmap #(apply str %) (gen/vector (gen/elements (seq "abcdef")) 1 4))
+            n (gen/choose 1 3)
+            ks (gen/vector (gen/fmap #(str ":" (name %)) gen-keyword) n)
+            vs (gen/vector gen-meme-atom n)]
+    (let [pairs (interleave (distinct ks) vs)]
+      (str "#::" alias "{" (str/join " " pairs) "}"))))
+
+(defspec prop-alias-namespaced-map-roundtrip 200
+  (prop/for-all [text gen-alias-namespaced-map-text]
+    (try
+      (let [forms (lang/meme->forms text)
+            printed (fmt-flat/format-forms forms)
+            re-read (lang/meme->forms printed)]
+        (= (pr-str forms) (pr-str re-read)))
+      (catch Exception _ false))))
+
+;; --- Invalid keywords (error cases) ---
+
+(def gen-invalid-keyword-text
+  "Generate invalid keyword forms that should error."
+  (gen/elements [":" ":foo:" ":::foo" ":a::b" ":foo/"]))
+
+(defspec prop-invalid-keyword-errors 100
+  (prop/for-all [text gen-invalid-keyword-text]
+    (try
+      (lang/meme->forms text)
+      false  ;; should have thrown
+      (catch clojure.lang.ExceptionInfo _ true)
+      (catch Exception _ false))))
+
+;; --- Unterminated regex (error cases) ---
+
+(def gen-unterminated-regex-text
+  "Generate unterminated regex literals that should error."
+  (gen/let [body (gen/fmap #(apply str %) (gen/vector gen/char-alpha 1 10))]
+    (str "#\"" body)))
+
+(defspec prop-unterminated-regex-errors 100
+  (prop/for-all [text gen-unterminated-regex-text]
+    (try
+      (lang/meme->forms text)
+      false  ;; should have thrown
+      (catch clojure.lang.ExceptionInfo _ true)
+      (catch Exception _ false))))
+
+;; --- Unterminated strings (error/incomplete cases) ---
+
+(defspec prop-unterminated-string-errors 100
+  (prop/for-all [body (gen/fmap #(apply str %) (gen/vector gen/char-alpha 1 10))]
+    (let [text (str "\"" body)]
+      (try
+        (lang/meme->forms text)
+        false  ;; should have thrown
+        (catch clojure.lang.ExceptionInfo _ true)
+        (catch Exception _ false)))))
+
+;; --- Consecutive #_ discard semantics ---
+
+(defspec prop-consecutive-discard-semantics 200
+  (prop/for-all [n (gen/choose 1 4)]
+    (try
+      (let [syms (mapv #(str "s" %) (range (inc n)))
+            discards (apply str (repeat n "#_ "))
+            input (str discards (str/join " " syms))
+            result (lang/meme->forms input)]
+        ;; N discards should leave only the last form
+        (= 1 (count result)))
+      (catch Exception _ false))))
+
+;; --- Nested syntax-quote ---
+
+(def gen-nested-syntax-quote-text
+  "Generate nested syntax-quote forms."
+  (gen/one-of
+   [(gen/return "``x")
+    (gen/return "``~x")
+    (gen/return "``~~x")
+    (gen/return "`map(~f `if(~test ~body))")
+    (gen/let [sym gen-simple-symbol]
+      (str "``" (name sym)))]))
+
+(defspec prop-nested-syntax-quote-parses 200
+  (prop/for-all [text gen-nested-syntax-quote-text]
+    (try
+      (some? (lang/meme->forms text))
+      (catch Exception _ false))))
