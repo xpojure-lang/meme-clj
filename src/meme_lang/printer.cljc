@@ -234,8 +234,8 @@
   (cond
     ;; Metadata prefix — checked first, before structural checks.
     (and (some? form)
-         #?(:clj (instance? clojure.lang.IMeta form)
-            :cljs (satisfies? IMeta form))
+         #?(:clj (instance? clojure.lang.IObj form)
+            :cljs (satisfies? IWithMeta form))
          (some? (meta form))
          (seq (forms/strip-internal-meta (meta form))))
     (let [chain (:meme/meta-chain (meta form))

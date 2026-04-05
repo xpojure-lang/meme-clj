@@ -579,6 +579,17 @@
        (is (= "\\newline" (values/emit-char-str \newline))))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: forms->meme must not crash on Var objects.
+;; Bug: Vars implement IMeta but not IObj; with-meta threw ClassCastException.
+;; Fix: changed IMeta check to IObj in printer's metadata branch.
+;; ---------------------------------------------------------------------------
+
+#?(:clj
+   (deftest var-object-does-not-crash-printer
+     (testing "forms->meme handles Var without crashing"
+       (is (string? (lang/forms->meme [#'clojure.core/inc]))))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: format-clj must preserve trailing comments
 ;; ---------------------------------------------------------------------------
 

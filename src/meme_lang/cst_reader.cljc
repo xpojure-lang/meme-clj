@@ -75,16 +75,24 @@
         (symbol raw))
 
       :keyword
-      (if (str/starts-with? raw "::")
-        (let [body (subs raw 2)]
-          (when (or (= body "") (str/starts-with? body "/") (str/ends-with? body "/"))
-            (errors/meme-error (str "Invalid token: " raw) loc))
-          (resolve/resolve-auto-keyword raw loc (:resolve-keyword opts)))
-        (let [s (subs raw 1)
-              i (str/index-of s "/")]
-          (if (some? i)
-            (keyword (subs s 0 i) (subs s (inc i)))
-            (keyword s))))
+      (if (str/starts-with? raw ":::")
+        ;; Triple+ colons: always invalid
+        (errors/meme-error (str "Invalid token: " raw) loc)
+        (if (str/starts-with? raw "::")
+          (let [body (subs raw 2)]
+            (when (or (= body "") (str/starts-with? body "/") (str/ends-with? body "/"))
+              (errors/meme-error (str "Invalid token: " raw) loc))
+            (resolve/resolve-auto-keyword raw loc (:resolve-keyword opts)))
+          (let [s (subs raw 1)]
+            (when (or (= s "")                        ;; bare :
+                      (str/ends-with? s ":")           ;; :foo:
+                      (str/ends-with? s "/")           ;; :foo/
+                      (str/includes? s "::"))          ;; :a::b
+              (errors/meme-error (str "Invalid token: " raw) loc))
+            (let [i (str/index-of s "/")]
+              (if (some? i)
+                (keyword (subs s 0 i) (subs s (inc i)))
+                (keyword s))))))
 
       :number
       (resolve/resolve-number raw loc)
@@ -278,7 +286,9 @@
 
     :anon-fn
     (let [_ (check-closed! node "anonymous function")
-          body (read-children (:children node) opts)]
+          _ (when (::in-anon-fn opts)
+              (errors/meme-error "Nested #() are not allowed" (node-loc node)))
+          body (read-children (:children node) (assoc opts ::in-anon-fn true))]
       (when (empty? body)
         (errors/meme-error "#() requires a body" (node-loc node)))
       (let [body-form (if (= 1 (count body))

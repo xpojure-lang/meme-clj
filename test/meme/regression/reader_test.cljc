@@ -105,6 +105,37 @@
                             (lang/meme->forms input))))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: consecutive #_ discards must discard N forms (Clojure semantics).
+;; Bug: #_ was a prefix parselet nesting discards instead of consuming sequentially.
+;; Fix: iterative consumption of consecutive #_ tokens in parselets.cljc.
+;; ---------------------------------------------------------------------------
+
+(deftest consecutive-discard-semantics
+  (testing "#_ #_ a b c discards a and b, keeps c"
+    (is (= '[c] (lang/meme->forms "#_ #_ a b c"))))
+  (testing "#_ #_ #_ a b c d discards a, b, c, keeps d"
+    (is (= '[d] (lang/meme->forms "#_ #_ #_ a b c d"))))
+  (testing "non-consecutive discards in vector"
+    (is (= [[1 4]] (lang/meme->forms "[1 #_ 2 #_ 3 4]"))))
+  (testing "consecutive discards inside vector"
+    (is (= [[1 4]] (lang/meme->forms "[1 #_ #_ 2 3 4]")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: nested #() must be rejected (Clojure semantics).
+;; Bug: anon-fn handler had no nesting check.
+;; Fix: track ::in-anon-fn in opts, reject when nested.
+;; ---------------------------------------------------------------------------
+
+(deftest nested-anon-fn-rejected
+  (testing "nested #() produces error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Nested"
+                          (lang/meme->forms "#(#(+(% %2)))"))))
+  (testing "after nested #() error, subsequent #() works"
+    (is (thrown? #?(:clj Exception :cljs js/Error) (lang/meme->forms "#(#(+ %))")))
+    (is (some? (lang/meme->forms "#(+(% 1))")))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare (...) without a head is a parse error.
 ;; ---------------------------------------------------------------------------
 

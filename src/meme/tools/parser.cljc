@@ -367,17 +367,19 @@
                     (let [start (cursor engine)]
                       (advance! engine 1)
                       (cst :error {:token (make-token! engine :invalid start)
-                                   :message (str "Unexpected token: :invalid")})))]
+                                   :message (str "Unexpected token: :invalid")})))
+              result
+              (loop [lhs lhs]
+                (skip-trivia! engine)
+                (if-let [led (matching-led engine min-bp)]
+                  ;; Led matched — consume the opening char and call the led parselet
+                  (let [start (cursor engine)]
+                    (advance! engine 1)
+                    (let [open-tok (make-token! engine (:open-type led) start)]
+                      (recur ((:fn led) engine lhs open-tok))))
+                  lhs))]
           (vswap! (:depth engine) dec)
-          (loop [lhs lhs]
-            (skip-trivia! engine)
-            (if-let [led (matching-led engine min-bp)]
-              ;; Led matched — consume the opening char and call the led parselet
-              (let [start (cursor engine)]
-                (advance! engine 1)
-                (let [open-tok (make-token! engine (:open-type led) start)]
-                  (recur ((:fn led) engine lhs open-tok))))
-              lhs)))))))
+          result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

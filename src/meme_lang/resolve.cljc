@@ -39,8 +39,9 @@
    Wraps in MemeRaw when the string contains unicode escapes (\\uNNNN) that would
    be lost through pr-str roundtrip."
   [raw loc]
-  (when (< (count raw) 2)
-    (errors/meme-error "Unterminated string literal" loc))
+  (when (or (< (count raw) 2)
+            (not= (.charAt ^String raw (dec (count raw))) \"))
+    (errors/meme-error "Unterminated string literal" (assoc loc :incomplete true)))
   (let [inner (subs raw 1 (dec (count raw)))] ; strip surrounding quotes
     ;; Fast path: most strings have no escapes — skip char-by-char loop
     (if (not (str/includes? inner "\\"))

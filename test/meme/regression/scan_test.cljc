@@ -582,10 +582,65 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated string"
                           (lang/meme->forms "!\""))))
+  (testing "multi-char unterminated string errors instead of truncating"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "\"hello"))))
+  (testing "two-char unterminated string errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "\"a"))))
+  (testing "unterminated string with trailing backslash errors"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "\"hello\\"))))
   (testing "unterminated regex does not crash"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated regex"
                           (lang/meme->forms "#\"")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: invalid keyword forms must be rejected (Clojure compatibility).
+;; Bug: consume-keyword accepted colons mid/end of keyword names.
+;; Fix: post-validation in CST reader keyword handling.
+;; ---------------------------------------------------------------------------
+
+(deftest invalid-keyword-rejected
+  (testing "bare colon : is invalid"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid token: :"
+                          (lang/meme->forms ":"))))
+  (testing "trailing colon :foo: is invalid"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid token"
+                          (lang/meme->forms ":foo:"))))
+  (testing "triple colon :::foo is invalid"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid token"
+                          (lang/meme->forms ":::foo"))))
+  (testing "embedded double colon :a::b is invalid"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid token"
+                          (lang/meme->forms ":a::b"))))
+  (testing "trailing slash :foo/ is invalid"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid token"
+                          (lang/meme->forms ":foo/"))))
+  (testing "valid keywords still work"
+    (is (= [:foo] (lang/meme->forms ":foo")))
+    (is (= [:foo/bar] (lang/meme->forms ":foo/bar")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: %0 must be rejected in anonymous functions.
+;; Bug: percent-param-type regex #"\d+" matched "0".
+;; Fix: changed to #"[1-9]\d*" to require 1-indexed params.
+;; ---------------------------------------------------------------------------
+
+(deftest percent-zero-rejected
+  (testing "%0 is rejected as invalid param"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Invalid % parameter"
+                          (lang/meme->forms "#(+(%0 %1))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fuzzer finding: #(%+ c%) threw IllegalArgumentException instead of

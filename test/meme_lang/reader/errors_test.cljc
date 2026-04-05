@@ -8,11 +8,11 @@
 ;; Parse errors
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental tokenizer never throws — unterminated strings produce
-;; a string token. The CST reader accepts it. This differs from the classic
-;; pipeline which threw at scan time.
+;; Unterminated strings are now properly rejected with :incomplete marker.
 (deftest parse-unterminated-string
-  (is (some? (lang/meme->forms "\"unterminated"))))
+  (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                        #"Unterminated string"
+                        (lang/meme->forms "\"unterminated"))))
 
 (deftest parse-mismatched-paren
   (is (thrown? #?(:clj Exception :cljs js/Error)
@@ -66,8 +66,10 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest error-messages-include-location
-  (testing "unterminated string accepted by experimental pipeline"
-    (is (some? (lang/meme->forms "\"unclosed"))))
+  (testing "unterminated string rejected with error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "\"unclosed"))))
   (testing "unmatched paren includes error"
     (let [e (try (lang/meme->forms "foo(1 2")
                  nil
@@ -81,7 +83,9 @@
       (is (some? e))
       (is (= 1 (:line (ex-data e))))
       (is (= 1 (:col (ex-data e))))))
-  (testing "unterminated string on second line accepted"
-    (is (some? (lang/meme->forms "foo()\n\"unclosed")))))
+  (testing "unterminated string on second line rejected"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Unterminated string"
+                          (lang/meme->forms "foo()\n\"unclosed")))))
 
 

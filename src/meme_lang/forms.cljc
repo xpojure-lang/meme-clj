@@ -172,7 +172,7 @@
         (= n "%&") :rest
         (and (str/starts-with? n "%")
              (> (count n) 1)
-             (re-matches #"\d+" (subs n 1)))
+             (re-matches #"0*[1-9]\d*" (subs n 1)))
         #?(:clj (Long/parseLong (subs n 1))
            :cljs (js/parseInt (subs n 1) 10))
         :else nil))))

@@ -90,11 +90,25 @@
               (let [tok (pratt/make-token! engine :var-quote start)]
                 ((pratt/nud-prefix :var-quote) engine tok)))
 
-          ;; #_
+          ;; #_ — discard. Consecutive #_ tokens discard N forms (Clojure semantics).
           (= next-ch \_)
           (do (pratt/advance! engine 2)
               (let [tok (pratt/make-token! engine :discard start)]
-                ((pratt/nud-prefix :discard) engine tok)))
+                ;; Count consecutive #_ tokens (including this one)
+                (loop [n 1]
+                  (pratt/skip-trivia! engine)
+                  (if (and (not (pratt/eof? engine))
+                           (= (pratt/peek-char engine) \#)
+                           (let [nxt (pratt/peek-char engine 1)]
+                             (and nxt (= nxt \_))))
+                    (do (pratt/advance! engine 2)
+                        (pratt/make-token! engine :discard (pratt/cursor engine))
+                        (recur (inc n)))
+                    ;; Parse and discard (n-1) forms, wrap the last in :discard
+                    (do (dotimes [_ (dec n)]
+                          (pratt/parse-expr engine 0))
+                        (let [form (pratt/parse-expr engine 0)]
+                          (pratt/cst :discard {:token tok :form form})))))))
 
           ;; #"
           (= next-ch \")
