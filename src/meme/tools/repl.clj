@@ -20,7 +20,7 @@
    (try
      (run-fn s opts)
      :complete
-     (catch Exception e
+     (catch Throwable e
        (if (:incomplete (ex-data e))
          :incomplete
          :invalid)))))
@@ -30,7 +30,7 @@
   (try
     (let [result (run-fn s opts)]
       {:state :complete :forms (:forms result)})
-    (catch Exception e
+    (catch Throwable e
       (if (:incomplete (ex-data e))
         {:state :incomplete}
         {:state :invalid :error e}))))

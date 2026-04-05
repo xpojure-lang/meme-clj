@@ -77,12 +77,32 @@
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: deeply nested input must not crash with StackOverflowError.
+;; Scar tissue: deeply nested input must produce a clean error, not SOE.
+;; max-parse-depth (512) is enforced in both the parser and CST reader.
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental (Pratt) parser does not enforce a recursion depth
-;; limit. It uses an iterative parse loop, so deep nesting does not cause
-;; stack overflow. The test verifies deep nesting succeeds.
+(deftest deep-nesting-produces-clean-error
+  (testing "call nesting beyond max-parse-depth errors cleanly"
+    (let [depth (+ forms/max-parse-depth 10)
+          input (str (apply str (repeat depth "f(")) "x" (apply str (repeat depth ")")))]
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                            #"depth"
+                            (lang/meme->forms input)))))
+  (testing "vector nesting beyond max-parse-depth errors cleanly"
+    (let [depth (+ forms/max-parse-depth 10)
+          input (str (apply str (repeat depth "[")) "x" (apply str (repeat depth "]")))]
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                            #"depth"
+                            (lang/meme->forms input)))))
+  (testing "moderate nesting (100 levels) still works"
+    (let [input (str (apply str (repeat 100 "f(")) "x" (apply str (repeat 100 ")")))]
+      (is (some? (lang/meme->forms input)))))
+  (testing "prefix chain beyond max-parse-depth errors cleanly"
+    (let [depth (+ forms/max-parse-depth 10)
+          input (str (apply str (repeat depth "'")) "x")]
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                            #"depth"
+                            (lang/meme->forms input))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare (...) without a head is a parse error.
@@ -95,13 +115,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: set-as-head and map-as-head for callable data structures.
 ;; ---------------------------------------------------------------------------
-
-;; ---------------------------------------------------------------------------
-;; Prefix operator depth limit bypass.
-;; ---------------------------------------------------------------------------
-
-;; NOTE: The experimental Pratt parser does not enforce depth limits on
-;; prefix operators. Deep prefix chains succeed.
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: ^42 x throws ClassCastException instead of meme error.

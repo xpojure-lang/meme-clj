@@ -344,7 +344,7 @@
       (let [;; ns-str is "foo" for #:foo{}, "::foo" for #::foo{}
             actual-ns (if (str/starts-with? ns-str "::") (subs ns-str 2) ns-str)
             prefix (if (str/starts-with? ns-str "::")
-                     (str "#:" ns-str "{")   ;; "#:::foo{" → "#::foo{"
+                     (str "#" ns-str "{")    ;; "::foo" → "#::foo{"
                      (str "#:" ns-str "{"))
             strip-ns (fn [k]
                        (if (and (keyword? k)

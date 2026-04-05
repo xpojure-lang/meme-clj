@@ -159,6 +159,10 @@
 (defn read-node
   "Read a single CST node into a Clojure form."
   [node opts]
+  (let [depth (or (::depth opts) 0)]
+    (when (> depth forms/max-parse-depth)
+      (errors/meme-error "Maximum nesting depth exceeded" (node-loc node))))
+  (let [opts (update opts ::depth (fnil inc 0))]
   (case (:node node)
     :atom
     (let [form (read-atom node opts)
@@ -348,7 +352,7 @@
       (errors/meme-error msg (cond-> loc eof? (assoc :incomplete true))))
 
     ;; Unknown node type
-    (errors/meme-error (str "Unknown CST node: " (:node node)) (node-loc node))))
+    (errors/meme-error (str "Unknown CST node: " (:node node)) (node-loc node)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

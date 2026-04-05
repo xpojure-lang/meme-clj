@@ -8,7 +8,8 @@
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]
             [meme-lang.lexlets :as lex]
-            [meme-lang.parselets :as mp]))
+            [meme-lang.parselets :as mp]
+            [meme-lang.forms :as forms]))
 
 (def grammar
   "Meme language grammar: characters → scanlets."
@@ -54,4 +55,6 @@
     [lex/newline-char?    lex/newline-consumer]]
 
    :led
-   [{:char \( :bp 100 :open-type :open-paren :when mp/adjacent? :fn mp/call-scanlet}]})
+   [{:char \( :bp 100 :open-type :open-paren :when mp/adjacent? :fn mp/call-scanlet}]
+
+   :max-depth forms/max-parse-depth})

@@ -74,7 +74,13 @@
   "Strip a leading #! shebang line from source."
   [source]
   (if (and (string? source) (str/starts-with? source "#!"))
-    (let [nl (str/index-of source "\n")]
+    (let [lf (str/index-of source "\n")
+          cr (str/index-of source "\r")
+          nl (cond
+               (and lf cr) (min lf cr)
+               lf lf
+               cr cr
+               :else nil)]
       (if nl (subs source (inc nl)) ""))
     source))
 

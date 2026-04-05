@@ -319,7 +319,7 @@
      (testing "#::ns{} auto-resolve — stores full ::foo prefix"
        (let [form (first (lang/meme->forms "#::foo{:a 1 :b 2 :c \"a-very-long-value-here\"}"))
              result (fmt-canon/format-form form {:width 20})]
-         (is (str/starts-with? result "#:::foo{"))))))
+         (is (str/starts-with? result "#::foo{"))))))
 
 #?(:clj
    (deftest canon-preserves-meta-chain

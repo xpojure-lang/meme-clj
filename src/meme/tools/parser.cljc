@@ -83,6 +83,7 @@
   {:source      source
    :len         (count source)
    :pos         (volatile! 0)
+   :depth       (volatile! 0)
    :line-starts (build-line-starts source)
    :trivia-acc  (volatile! [])
    :spec        spec})
@@ -351,25 +352,32 @@
   (skip-trivia! engine)
   (if (eof? engine)
     (cst :error {:message "Unexpected end of input"})
-    (let [ch (peek-char engine)
-          nud-fn (or (get (:nud (:spec engine)) ch)
-                     (nud-pred-match engine ch))
-          lhs (if nud-fn
-                (nud-fn engine)
-                ;; Unknown character — consume one byte as :invalid
-                (let [start (cursor engine)]
-                  (advance! engine 1)
-                  (cst :error {:token (make-token! engine :invalid start)
-                               :message (str "Unexpected token: :invalid")})))]
-      (loop [lhs lhs]
-        (skip-trivia! engine)
-        (if-let [led (matching-led engine min-bp)]
-          ;; Led matched — consume the opening char and call the led parselet
-          (let [start (cursor engine)]
-            (advance! engine 1)
-            (let [open-tok (make-token! engine (:open-type led) start)]
-              (recur ((:fn led) engine lhs open-tok))))
-          lhs)))))
+    (let [max-depth (:max-depth (:spec engine))
+          d (vswap! (:depth engine) inc)]
+      (if (and max-depth (> d max-depth))
+        (do (vswap! (:depth engine) dec)
+            (throw (ex-info "Maximum nesting depth exceeded"
+                            (pos-at engine @(:pos engine)))))
+        (let [ch (peek-char engine)
+              nud-fn (or (get (:nud (:spec engine)) ch)
+                         (nud-pred-match engine ch))
+              lhs (if nud-fn
+                    (nud-fn engine)
+                    ;; Unknown character — consume one byte as :invalid
+                    (let [start (cursor engine)]
+                      (advance! engine 1)
+                      (cst :error {:token (make-token! engine :invalid start)
+                                   :message (str "Unexpected token: :invalid")})))]
+          (vswap! (:depth engine) dec)
+          (loop [lhs lhs]
+            (skip-trivia! engine)
+            (if-let [led (matching-led engine min-bp)]
+              ;; Led matched — consume the opening char and call the led parselet
+              (let [start (cursor engine)]
+                (advance! engine 1)
+                (let [open-tok (make-token! engine (:open-type led) start)]
+                  (recur ((:fn led) engine lhs open-tok))))
+              lhs)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

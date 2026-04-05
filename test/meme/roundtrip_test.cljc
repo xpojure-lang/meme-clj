@@ -778,7 +778,9 @@
 
 (deftest roundtrip-namespaced-map-preserved
   (testing "#:ns{} roundtrips"
-    (is (= "#:user{:a 1 :b 2}" (roundtrip-syntax "#:user{:a 1 :b 2}")))))
+    (is (= "#:user{:a 1 :b 2}" (roundtrip-syntax "#:user{:a 1 :b 2}"))))
+  (testing "#::alias{} roundtrips"
+    (is (= "#::foo{:a 1 :b 2}" (roundtrip-syntax "#::foo{:a 1 :b 2}")))))
 
 (deftest roundtrip-metadata-chain-preserved
   (testing "^:a ^:b x preserves chain order"

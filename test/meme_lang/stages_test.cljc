@@ -108,6 +108,15 @@
   (testing "shebang line is stripped"
     (let [ctx (stages/run "#!/usr/bin/env bb\n+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx)))))
+  (testing "shebang with \\r\\n line ending"
+    (let [ctx (stages/run "#!/usr/bin/env bb\r\n+(1 2)")]
+      (is (= '[(+ 1 2)] (:forms ctx)))))
+  (testing "shebang with bare \\r line ending"
+    (let [ctx (stages/run "#!/usr/bin/env bb\r+(1 2)")]
+      (is (= '[(+ 1 2)] (:forms ctx)))))
+  (testing "shebang-only file with no newline"
+    (let [ctx (stages/run "#!/usr/bin/env bb")]
+      (is (= [] (:forms ctx)))))
   (testing "no shebang — normal parsing"
     (let [ctx (stages/run "+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx))))))
