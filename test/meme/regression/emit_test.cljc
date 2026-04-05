@@ -675,3 +675,19 @@
          (is (= "\\u0001" printed))
          (is (forms/raw? reparsed) "re-parsed control char is MemeRaw-wrapped")
          (is (= form (:value reparsed)) "semantic value preserved through roundtrip")))))
+
+;; ---------------------------------------------------------------------------
+;; Fuzzer finding: ~,@J printed as ~@J (unquote-splicing) instead of
+;; ~clojure.core/deref(J). The comma (whitespace) between ~ and @ was lost,
+;; merging unquote + deref-sugar into unquote-splicing.
+;; Fix: suppress @deref sugar inside ~ to prevent ~@ ambiguity.
+;; ---------------------------------------------------------------------------
+
+(deftest unquote-deref-sugar-no-ambiguity
+  (testing "~(deref x) with sugar does not print as ~@x"
+    (let [form (meme-lang.forms/->MemeUnquote
+                 (with-meta (list 'clojure.core/deref 'x) {:meme/sugar true}))
+          printed (fmt-flat/format-form form)]
+      (is (not (str/starts-with? printed "~@"))
+          "must not produce ~@ which re-parses as unquote-splicing")
+      (is (= "~clojure.core/deref(x)" printed)))))

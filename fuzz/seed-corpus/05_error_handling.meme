@@ -1,0 +1,41 @@
+; Error handling — try/catch/finally
+
+;; basic try/catch
+def(result try(
+  throw(ex-info("boom" {:code 42}))
+  catch(Exception e
+    :code(ex-data(e)))))
+assert(=(result 42))
+
+;; try/catch/finally with side effects
+def(log atom([]))
+def(value try(
+  swap!(log conj :try)
+  +(1 2)
+  catch(Exception e
+    swap!(log conj :catch)
+    0)
+  finally(
+    swap!(log conj :finally))))
+assert(=(value 3))
+assert(=(@log [:try :finally]))
+
+;; catch actually catches
+def(log2 atom([]))
+def(value2 try(
+  swap!(log2 conj :try)
+  throw(ex-info("fail" {}))
+  catch(Exception e
+    swap!(log2 conj :catch)
+    :recovered)
+  finally(
+    swap!(log2 conj :finally))))
+assert(=(value2 :recovered))
+assert(=(@log2 [:try :catch :finally]))
+
+;; try with single-form catch
+def(value3 try(
+  throw(ex-info("oops" {}))
+  catch(Exception e
+    :caught)))
+assert(=(value3 :caught))

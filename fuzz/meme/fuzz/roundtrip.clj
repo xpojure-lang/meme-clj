@@ -1,13 +1,15 @@
 (ns meme.fuzz.roundtrip
   "Jazzer fuzz targets for meme roundtrip testing.
 
-   Each target is a gen-class with a static fuzzerTestOneInput method.
-   Jazzer feeds mutated inputs and uses coverage guidance to explore
-   parser paths.
+   Targets:
+   - RoundtripTarget: parse → print → re-parse equivalence + no raw JVM exceptions
+   - FormatTarget: parse → format → re-parse equivalence
+   - IdempotentTarget: format(format(x)) == format(x)
 
    Build:  clojure -T:build fuzzer-jar
-   Run:    java -cp target/fuzzer.jar com.code_intelligence.jazzer.Jazzer \\
-             --target_class=meme.fuzz.roundtrip.RoundtripTarget"
+   Run:    bb fuzz roundtrip          (default)
+           bb fuzz format
+           bb fuzz idempotent"
   (:require [meme-lang.api :as api]
             [meme-lang.forms :as forms])
   (:import [com.code_intelligence.jazzer.api FuzzedDataProvider]))
@@ -52,7 +54,11 @@
   (= (deep-strip a) (deep-strip b)))
 
 ;; ---------------------------------------------------------------------------
-;; Target 1: Roundtrip — parse → print → re-parse, assert equivalence
+;; Target 1: Roundtrip — parse → print → re-parse
+;; Also catches unexpected JVM exceptions (subsumes the old NoCrashTarget).
+;; ExceptionInfo = expected parse error (swallowed).
+;; Other Exception = real bug (reported).
+;; AssertionError = roundtrip mismatch (reported).
 ;; ---------------------------------------------------------------------------
 
 (gen-class
@@ -75,29 +81,17 @@
                             "  forms:    " (pr-str forms) "\n"
                             "  printed:  " (pr-str printed) "\n"
                             "  reparsed: " (pr-str reparsed))))))))
-      (catch Exception _ nil)
-      (catch StackOverflowError _ nil))))
+      (catch clojure.lang.ExceptionInfo _ nil)
+      (catch AssertionError e (throw e))
+      (catch StackOverflowError _ nil)
+      (catch Exception e
+        (throw (AssertionError.
+                 (str "Unexpected exception on input " (pr-str s) "\n"
+                      "  type: " (.getName (class e)) "\n"
+                      "  msg:  " (.getMessage e))))))))
 
 ;; ---------------------------------------------------------------------------
-;; Target 2: No-crash — parse arbitrary input, assert no unexpected exceptions
-;; ---------------------------------------------------------------------------
-
-(gen-class
-  :name meme.fuzz.roundtrip.NoCrashTarget
-  :prefix "nc-"
-  :methods [^:static [fuzzerTestOneInput [com.code_intelligence.jazzer.api.FuzzedDataProvider] void]])
-
-(defn nc-fuzzerTestOneInput
-  [^FuzzedDataProvider data]
-  (let [s (.consumeRemainingAsString data)]
-    (try
-      (api/meme->forms s)
-      nil
-      (catch Exception _ nil)
-      (catch StackOverflowError _ nil))))
-
-;; ---------------------------------------------------------------------------
-;; Target 3: Format roundtrip — parse → format → re-parse
+;; Target 2: Format roundtrip — parse → format → re-parse
 ;; ---------------------------------------------------------------------------
 
 (gen-class
@@ -120,5 +114,44 @@
                             "  forms:     " (pr-str forms) "\n"
                             "  formatted: " (pr-str formatted) "\n"
                             "  reparsed:  " (pr-str reparsed))))))))
-      (catch Exception _ nil)
-      (catch StackOverflowError _ nil))))
+      (catch clojure.lang.ExceptionInfo _ nil)
+      (catch AssertionError e (throw e))
+      (catch StackOverflowError _ nil)
+      (catch Exception e
+        (throw (AssertionError.
+                 (str "Unexpected exception on input " (pr-str s) "\n"
+                      "  type: " (.getName (class e)) "\n"
+                      "  msg:  " (.getMessage e))))))))
+
+;; ---------------------------------------------------------------------------
+;; Target 3: Format idempotency — format(format(x)) == format(x)
+;; ---------------------------------------------------------------------------
+
+(gen-class
+  :name meme.fuzz.roundtrip.IdempotentTarget
+  :prefix "idem-"
+  :methods [^:static [fuzzerTestOneInput [com.code_intelligence.jazzer.api.FuzzedDataProvider] void]])
+
+(defn idem-fuzzerTestOneInput
+  [^FuzzedDataProvider data]
+  (let [s (.consumeRemainingAsString data)]
+    (try
+      (let [forms (api/meme->forms s)]
+        (when (seq forms)
+          (let [fmt1 (api/format-meme-forms forms)
+                reparsed (api/meme->forms fmt1)
+                fmt2 (api/format-meme-forms reparsed)]
+            (when (not= fmt1 fmt2)
+              (throw (AssertionError.
+                       (str "Format not idempotent!\n"
+                            "  input: " (pr-str s) "\n"
+                            "  fmt1:  " (pr-str fmt1) "\n"
+                            "  fmt2:  " (pr-str fmt2))))))))
+      (catch clojure.lang.ExceptionInfo _ nil)
+      (catch AssertionError e (throw e))
+      (catch StackOverflowError _ nil)
+      (catch Exception e
+        (throw (AssertionError.
+                 (str "Unexpected exception on input " (pr-str s) "\n"
+                      "  type: " (.getName (class e)) "\n"
+                      "  msg:  " (.getMessage e))))))))

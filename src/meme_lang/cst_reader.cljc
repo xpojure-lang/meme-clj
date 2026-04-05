@@ -281,9 +281,9 @@
                         (first body)
                         (apply list 'do body))
             invalid (forms/find-invalid-percent-symbols body-form)
-            _ (when (seq invalid)
+            _ (when (some? invalid)
                 (errors/meme-error
-                  (str "Invalid % parameter: " (first invalid))
+                  (str "Invalid % parameter: " invalid)
                   (node-loc node)))
             normalized (forms/walk-anon-fn-body forms/normalize-bare-percent body-form)
             params (forms/find-percent-params normalized)

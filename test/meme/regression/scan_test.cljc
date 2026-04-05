@@ -586,3 +586,16 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated regex"
                           (lang/meme->forms "#\"")))))
+
+;; ---------------------------------------------------------------------------
+;; Fuzzer finding: #(%+ c%) threw IllegalArgumentException instead of
+;; ExceptionInfo. find-invalid-percent-symbols returns a symbol, but the
+;; caller used (seq ...) on it — (seq symbol) throws.
+;; Fix: use (some? ...) instead of (seq ...) in cst-reader.
+;; ---------------------------------------------------------------------------
+
+(deftest invalid-percent-param-no-raw-exception
+  (testing "#(%+ c%) produces meme error, not IllegalArgumentException"
+    (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                          #"Invalid % parameter"
+                          (lang/meme->forms "#(%+ c%)")))))

@@ -1,0 +1,54 @@
+; Nil-headed lists — lists where the first element is nil, true, or false
+;
+; The meme rule is purely syntactic: f(x y) → (f x y).
+; nil(1 2) → (nil 1 2) — a valid Clojure list, just not callable.
+; Use quote to prevent evaluation: 'nil(1 2) → (quote (nil 1 2))
+
+;; nil as head — quoted
+assert(=(first('nil(1 2)) nil))
+assert(=(rest('nil(1 2)) list(1 2)))
+assert(=(count('nil(1 2)) 3))
+assert(=('nil(1 2) list(nil 1 2)))
+
+;; true/false as head — quoted
+assert(=(first('true(:a :b)) true))
+assert(=(count('true(:a :b)) 3))
+assert(=(first('false(42)) false))
+assert(=(second('false(42)) 42))
+
+;; nil-headed lists in data structures
+def(v ['nil(1) 'nil(2) 'nil(3)])
+assert(=(count(v) 3))
+assert(=(mapv(first v) [nil nil nil]))
+assert(=(mapv(second v) [1 2 3]))
+
+;; Nested nil-headed lists
+def(nested 'nil(nil(42)))
+assert(=(first(nested) nil))
+assert(=(first(second(nested)) nil))
+assert(=(second(second(nested)) 42))
+
+;; Equality
+assert(=('nil() list(nil)))
+assert(=('nil(1 2) list(nil 1 2)))
+assert(not=('nil(1) 'nil(2)))
+
+;; As map values
+def(m {:a 'nil(1) :b 'nil(2)})
+assert(=(first(:a(m)) nil))
+assert(=(second(:b(m)) 2))
+
+;; Operations on nil-headed lists
+assert(=(conj('nil(1) 0) list(0 nil 1)))
+assert(=(into([] 'nil(1 2)) [nil 1 2]))
+
+;; filter/map
+assert(=(filter(some? 'nil(nil 1 nil 2 nil)) list(1 2)))
+assert(=(count(filter(nil? 'nil(nil 1 nil 2 nil))) 4))
+
+;; Created via list() — equivalent
+assert(=(list(nil 1 2) 'nil(1 2)))
+
+;; empty list is not nil-headed
+assert(=(list() ()))
+assert(=(count(()) 0))

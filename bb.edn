@@ -21,13 +21,13 @@
                              (shell "clojure" "-X:e2e"))}
          fuzz-build {:doc "Build fuzzer uberjar (AOT-compiled fuzz targets for Jazzer)"
                      :task (shell "clojure" "-T:build" "fuzzer-jar")}
-         fuzz {:doc "Run Jazzer fuzz target. Usage: bb fuzz [target] [opts]"
+         fuzz {:doc "Run Jazzer fuzz target. Usage: bb fuzz [target] [-- jazzer-opts]"
                :task (let [[target & opts] *command-line-args*
                            target (or target "roundtrip")
                            class (case target
-                                   "roundtrip" "meme.fuzz.roundtrip.RoundtripTarget"
-                                   "no-crash"  "meme.fuzz.roundtrip.NoCrashTarget"
-                                   "format"    "meme.fuzz.roundtrip.FormatTarget"
+                                   "roundtrip"  "meme.fuzz.roundtrip.RoundtripTarget"
+                                   "format"     "meme.fuzz.roundtrip.FormatTarget"
+                                   "idempotent" "meme.fuzz.roundtrip.IdempotentTarget"
                                    target)
                            corpus-dir (str "fuzz-corpus/" target)]
                        (babashka.fs/create-dirs corpus-dir)
@@ -35,5 +35,8 @@
                               "com.code_intelligence.jazzer.Jazzer"
                               (str "--target_class=" class)
                               "--instrumentation_includes=meme_lang.**:meme.tools.**:meme.fuzz.**"
+                              "--disabled_hooks=com.code_intelligence.jazzer.sanitizers.RegexInjection"
+                              (str "-dict=fuzz/meme.dict")
+                              (str "-fork=" (max 1 (- (.availableProcessors (Runtime/getRuntime)) 2)))
                               corpus-dir "fuzz/seed-corpus"
                               opts))}}}

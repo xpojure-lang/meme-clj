@@ -1,0 +1,27 @@
+; Reader syntax — reader macros
+
+;; 'quote
+assert(=('foo 'foo))
+assert(=(first(list(1 2 3)) 1))
+assert(=('() ()))
+
+;; #'var-quote
+assert(=(var?(#'inc) true))
+
+;; @deref
+def(state atom({:count 0}))
+swap!(state update :count inc)
+assert(=(:count(@state) 1))
+
+;; ^metadata on collections
+def(m ^:frozen {:a 1})
+assert(=(:frozen(meta(m)) true))
+
+def(v ^{:source "test"} [1 2 3])
+assert(=(:source(meta(v)) "test"))
+
+;; #_discard — next form is ignored
+assert(=(+(1 #_skip 2) 3))
+assert(=(vec([1 #_2 3]) [1 3]))
+def(x #_ignored 42)
+assert(=(x 42))

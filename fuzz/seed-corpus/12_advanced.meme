@@ -1,0 +1,61 @@
+; Advanced constructs — #(), condp, letfn, defmacro, some->/some->>
+
+;; #() anonymous function shorthand
+assert(=(map(#(+(% 10)) [1 2 3]) list(11 12 13)))
+assert(=(map(#(+(%1 %2)) [1 2] [10 20]) list(11 22)))
+def(square #(*(% %)))
+assert(=(square(5) 25))
+def(r #(rand-int(100)))
+assert(number?(r()))
+
+;; letfn — mutual recursion
+letfn(
+  [
+    my-even?([n] if(=(n 0) true my-odd?(dec(n))))
+    my-odd?([n] if(=(n 0) false my-even?(dec(n))))
+  ]
+  assert(=(my-even?(10) true))
+  assert(=(my-odd?(7) true))
+  assert(=(my-even?(3) false)))
+
+;; condp
+defn(classify-number [x]
+  condp(= mod(x 3)
+    0 "fizz"
+    1 "one"
+    2 "two"))
+assert(=(classify-number(9) "fizz"))
+assert(=(classify-number(7) "one"))
+assert(=(classify-number(5) "two"))
+
+;; defmacro — simple macro
+defmacro(unless [test body] list('if list('not test) body nil))
+assert(=(unless(false 42) 42))
+assert(=(unless(true 42) nil))
+
+;; some-> (thread-first with nil short-circuit)
+assert(=(some->({:a {:b 1}} :a :b) 1))
+assert(=(some->({:a nil} :a :b) nil))
+assert(=(some->(nil :a) nil))
+
+;; some->> (thread-last with nil short-circuit)
+assert(=(some->>([1 2 3] seq first) 1))
+assert(=(some->>(nil seq) nil))
+
+;; cond-> and cond->>
+assert(
+  =(
+    cond->({}
+      true  assoc(:a 1)
+      false assoc(:b 2)
+      true  assoc(:c 3))
+    {:a 1 :c 3}))
+
+;; as-> (thread through named binding)
+assert(
+  =(
+    as->(0 v
+      inc(v)
+      +(v 10)
+      *(v 2))
+    22))

@@ -1,0 +1,16 @@
+println("hello")
++(1 2 3)
+foo()
+a(b(c(x)))
+:balance(account)
+:city(:address(account))
+:name(get-user(id))
+do(
+  let([x +(1 2)] *(x 3)))
+nil(x)
+true(:a)
+false(x)
+be
+be(x y)
+f(x)(y)
+f(x)(y)(z)

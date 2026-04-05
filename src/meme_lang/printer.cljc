@@ -312,7 +312,14 @@
     (render/doc-cat doc-backtick (to-doc (:form form) mode))
 
     (forms/unquote? form)
-    (render/doc-cat doc-unquote (to-doc (:form form) mode))
+    (let [inner (:form form)
+          ;; Suppress @deref sugar inside ~ to prevent ~@J ambiguity
+          inner (if (and (seq? inner)
+                         (= 'clojure.core/deref (first inner))
+                         (:meme/sugar (meta inner)))
+                  (with-meta inner (dissoc (meta inner) :meme/sugar))
+                  inner)]
+      (render/doc-cat doc-unquote (to-doc inner mode)))
 
     (forms/unquote-splicing? form)
     (render/doc-cat doc-unquote-splicing (to-doc (:form form) mode))

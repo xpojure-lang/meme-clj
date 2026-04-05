@@ -1,0 +1,90 @@
+# Jazzer dictionary: meme syntax-significant tokens
+# Helps the mutator discover parser paths faster
+
+# Delimiters
+"("
+")"
+"["
+"]"
+"{"
+"}"
+"()"
+
+# Dispatch forms
+"#("
+"#{"
+"#?"
+"#?@"
+"#:"
+"#::"
+"#_"
+"#'"
+"#\""
+"##"
+
+# Prefix operators
+"~@"
+"~"
+"`"
+"^"
+"@"
+"'"
+
+# Char literals
+"\\a"
+"\\newline"
+"\\space"
+"\\tab"
+"\\return"
+"\\u0041"
+"\\o101"
+
+# Keywords
+"::"
+"::foo"
+":require"
+":import"
+":clj"
+":cljs"
+":default"
+
+# Symbolic values
+"##Inf"
+"##-Inf"
+"##NaN"
+
+# Numbers
+"0xFF"
+"2r1010"
+"36rZ"
+"42N"
+"3.14M"
+"1/2"
+
+# Common forms
+"defn"
+"def"
+"let"
+"fn"
+"if"
+"do"
+"ns"
+"try"
+"catch"
+
+# Percent params
+"%"
+"%1"
+"%2"
+"%&"
+
+# Strings/regex
+"\""
+"#\""
+
+# Whitespace variants
+"\x0d"
+"\x0a"
+"\x0d\x0a"
+","
+";"

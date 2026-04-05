@@ -1,0 +1,43 @@
+; M-expression call syntax: f(x y) => (f x y)
+
+; simple call
+assert(=(+(1 2 3) 6))
+
+; nested call
+assert(=(str("hello" " " "world") "hello world"))
+
+; keyword as function
+assert(=(:name({:name "Andriy"}) "Andriy"))
+
+; zero-arg call
+assert(=(list() list()))
+
+; commas are whitespace
+assert(=(assoc({} :a 1, :b 2) {:a 1 :b 2}))
+
+; deeply nested
+assert(=(inc(inc(inc(0))) 3))
+
+;; Keyword as function — :key(expr) => (:key expr)
+
+def(person {:name "Andriy" :address {:city "Kyiv" :country "UA"}})
+
+; keyword call on map
+assert(=(:name(person) "Andriy"))
+
+; chained keyword calls
+assert(=(:city(:address(person)) "Kyiv"))
+assert(=(:country(:address(person)) "UA"))
+
+; keyword call after call
+assert(=(:x(assoc({} :x 1)) 1))
+
+;; Everything is a call — let, def, if, etc.
+
+; let as a call
+def(result let([x +(1 2), y *(x 3)] y))
+assert(=(result 9))
+
+; nested let calls
+def(outer let([a +(10 20)] +(a 5)))
+assert(=(outer 35))
