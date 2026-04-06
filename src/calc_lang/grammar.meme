@@ -110,8 +110,7 @@ defn-( identifier-scanlet
     pratt/set-pos!(engine end)
     let( [tok pratt/make-token!(engine :identifier start)]
       case( :raw(tok)
-        "let"
-        do(
+        "let" do(
           pratt/skip-trivia!(engine)
           let( [name-start pratt/cursor(engine)
              name-end   lex/consume-identifier(source len name-start)]

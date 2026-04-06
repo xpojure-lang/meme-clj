@@ -60,14 +60,10 @@ defn( consume-string
   [^String source ^long len ^long pos]
   loop( [i inc(pos)]
     cond(
-      >=(i len)
-      i
-      =(.charAt(source i) \\)
-      recur(+(i 2))
-      =(.charAt(source i) \")
-      inc(i)
-      :else
-      recur(inc(i))
+      >=(i len) i
+      =(.charAt(source i) \\) recur(+(i 2))
+      =(.charAt(source i) \") inc(i)
+      :else recur(inc(i))
     )
   )
 )
