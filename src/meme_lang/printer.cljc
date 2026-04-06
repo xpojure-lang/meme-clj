@@ -60,7 +60,7 @@
 (def ^:private head-line-args
   "How many args to keep on the first line with the head.
    Absent keys default to all args in body (same as 0)."
-  {'def 1, 'def- 1,
+  {'def 1, 'def- 1, 'defonce 1,
    'defn 1, 'defn- 1, 'defmacro 1, 'defmulti 1, 'defmethod 2,
    'defprotocol 1, 'defrecord 1, 'deftype 1,
    'if 1, 'if-not 1,
@@ -70,6 +70,14 @@
    'ns 1,
    '-> 1, '->> 1, 'some-> 1, 'some->> 1, 'as-> 2,
    'deftest 1, 'testing 1})
+
+(def ^:private definition-forms
+  "Forms that always get a space after ( — even on a single line.
+   Makes definition boundaries visually distinct: defn( greet ...)."
+  #{'def 'def- 'defn 'defn- 'defonce
+    'defmacro 'defmulti 'defmethod
+    'defprotocol 'defrecord 'deftype
+    'deftest 'ns})
 
 (defn- anon-fn-shorthand?
   "Can (fn [params] body) be printed as #(body)?
@@ -173,10 +181,12 @@
           doc-close-paren)))
       ;; Meme mode: head(arg1 arg2) with head-line-args
       ;; When broken: space after ( and closing ) on its own line.
-      ;; break-space: nothing when flat, space when broken — enforces
-      ;; visual separation between ( and first arg in multi-line calls.
+      ;; Definition forms always get space after ( even when flat.
       (let [n-head (get head-line-args head)
-            break-space (render/->DocIfBreak doc-space nil)]
+            def-form? (contains? definition-forms head)
+            after-paren (if def-form?
+                          doc-space
+                          (render/->DocIfBreak doc-space nil))]
           (cond
             ;; Zero args: head()
             (empty? arg-docs)
@@ -188,7 +198,7 @@
                   body (subvec arg-docs n-head)]
               (render/group
                (render/doc-cat
-                head-doc doc-open-paren break-space
+                head-doc doc-open-paren after-paren
                 (render/nest 2
                              (render/doc-cat
                               (render/group (intersperse render/line head-docs))

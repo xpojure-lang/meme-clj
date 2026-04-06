@@ -47,23 +47,23 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-def
-  (is (= "def(x 42)"
+  (is (= "def( x 42)"
          (fmt-flat/format-form '(def x 42)))))
 
 (deftest print-def-with-expr
-  (is (= "def(x +(1 2))"
+  (is (= "def( x +(1 2))"
          (fmt-flat/format-form '(def x (+ 1 2))))))
 
 (deftest print-defn
-  (is (= "defn(greet [name] str(\"Hello\" name))"
+  (is (= "defn( greet [name] str(\"Hello\" name))"
          (fmt-flat/format-form '(defn greet [name] (str "Hello" name))))))
 
 (deftest print-defn-with-docstring
-  (is (= "defn(greet \"Greets a person\" [name] println(name))"
+  (is (= "defn( greet \"Greets a person\" [name] println(name))"
          (fmt-flat/format-form '(defn greet "Greets a person" [name] (println name))))))
 
 (deftest print-defn-multi-arity
-  (is (= "defn(greet [name](greet(name \"!\")) [name punct](println(name punct)))"
+  (is (= "defn( greet [name](greet(name \"!\")) [name punct](println(name punct)))"
          (fmt-flat/format-form '(defn greet ([name] (greet name "!")) ([name punct] (println name punct)))))))
 
 (deftest print-fn-simple
@@ -115,23 +115,23 @@
          (fmt-flat/format-form '(try (risky) (catch Exception e (handle e)) (finally (cleanup)))))))
 
 (deftest print-ns
-  (is (= "ns(foo :require([bar]))"
+  (is (= "ns( foo :require([bar]))"
          (fmt-flat/format-form '(ns foo (:require [bar]))))))
 
 (deftest print-defprotocol
-  (is (= "defprotocol(Foo draw([this]))"
+  (is (= "defprotocol( Foo draw([this]))"
          (fmt-flat/format-form '(defprotocol Foo (draw [this]))))))
 
 (deftest print-defmulti
-  (is (= "defmulti(area :shape)"
+  (is (= "defmulti( area :shape)"
          (fmt-flat/format-form '(defmulti area :shape)))))
 
 (deftest print-defmethod
-  (is (= "defmethod(area :circle [{:keys [r]}] *(r r))"
+  (is (= "defmethod( area :circle [{:keys [r]}] *(r r))"
          (fmt-flat/format-form '(defmethod area :circle [{:keys [r]}] (* r r))))))
 
 (deftest print-defrecord
-  (is (= "defrecord(Foo [x y])"
+  (is (= "defrecord( Foo [x y])"
          (fmt-flat/format-form '(defrecord Foo [x y])))))
 
 ;; ---------------------------------------------------------------------------
@@ -358,7 +358,7 @@
 
 (deftest print-deftype
   (testing "deftype prints as call"
-    (is (= "deftype(Point [x y])"
+    (is (= "deftype( Point [x y])"
            (fmt-flat/format-form '(deftype Point [x y]))))))
 
 (deftest print-reify

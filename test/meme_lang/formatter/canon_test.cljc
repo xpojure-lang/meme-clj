@@ -121,7 +121,7 @@
 
 (deftest format-forms-separated-by-blank-lines
   (let [result (fmt-canon/format-forms ['(def x 42) '(println x)])]
-    (is (= "def(x 42)\n\nprintln(x)" result))))
+    (is (= "def( x 42)\n\nprintln(x)" result))))
 
 (deftest format-forms-trailing-comments
   (let [forms (with-meta ['(def x 1)] {:trailing-ws "\n; end of file\n"})
