@@ -79,6 +79,13 @@
     'defprotocol 'defrecord 'deftype
     'deftest 'ns})
 
+(def ^:private binding-forms
+  "Forms whose first vector arg contains name-value pairs.
+   When the vector breaks to multi-line, pairs stay together."
+  #{'let 'loop 'for 'doseq 'binding
+    'with-open 'with-local-vars 'with-redefs 'if-let 'when-let
+    'if-some 'when-some 'as->})
+
 (defn- anon-fn-shorthand?
   "Can (fn [params] body) be printed as #(body)?
    Only when :meme-lang/sugar tagged by reader AND params are %-style."
@@ -148,6 +155,26 @@
 
 (declare to-doc to-doc-form)
 
+(defn- binding-vector-doc
+  "Format a binding vector with pair-per-line layout: [name val name val ...]."
+  [children mode]
+  (if (empty? children)
+    (render/text "[]")
+    (let [pairs (partition-all 2 children)
+          pair-docs (mapv (fn [pair]
+                            (if (= 2 (count pair))
+                              (render/doc-cat (to-doc (first pair) mode)
+                                              doc-space
+                                              (to-doc (second pair) mode))
+                              (to-doc (first pair) mode)))
+                          pairs)]
+      (render/group
+       (render/doc-cat
+        (render/text "[")
+        (render/nest 1 (render/doc-cat render/line0 (intersperse render/line pair-docs)))
+        render/line0
+        (render/text "]"))))))
+
 (defn- emit-meta-prefix-doc
   "Compute metadata prefix as a Doc node: ^:key, ^Type, or ^{map}.
    L12: returns Doc (not string) so metadata maps participate in width-aware layout."
@@ -169,7 +196,13 @@
   "Build Doc for a call form. Handles head-line-args and meme/clj modes."
   [head args mode]
   (let [head-doc (to-doc head mode)
-        arg-docs (mapv #(to-doc % mode) args)]
+        binding? (and (contains? binding-forms head)
+                      (seq args)
+                      (vector? (first args)))
+        arg-docs (if binding?
+                   (into [(binding-vector-doc (first args) mode)]
+                         (map #(to-doc % mode)) (rest args))
+                   (mapv #(to-doc % mode) args))]
     (if (= mode :clj)
       ;; Clojure mode: (head arg1 arg2)
       (if (empty? arg-docs)
