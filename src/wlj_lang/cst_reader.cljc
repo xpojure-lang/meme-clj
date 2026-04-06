@@ -53,6 +53,9 @@
     :and (read-infix node 'and)
     :or  (read-infix node 'or)
 
+    ;; expr // f → (f expr)
+    :postfix-apply (list (read-node (:right node)) (read-node (:left node)))
+
     :unary-minus (list '- (read-node (:form node)))
     :unary-not   (list 'not (read-node (:form node)))
 

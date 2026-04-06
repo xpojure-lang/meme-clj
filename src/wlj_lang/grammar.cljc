@@ -126,7 +126,10 @@
     ;; Arithmetic
     {:char \^ :bp 750 :open-type :caret   :fn (pratt/led-infix :pow 749)}
     {:char \* :bp 500 :open-type :star    :fn (pratt/led-infix :mul 500)}
-    {:char \/ :bp 570 :open-type :slash   :fn (pratt/led-infix :div 570)}
+    {:char \/ :bp 70  :open-type :pipe    :fn (pratt/led-infix-2char :postfix-apply 70)
+     :when (pratt/next-char-is? \/)}
+    {:char \/ :bp 570 :open-type :slash   :fn (pratt/led-infix :div 570)
+     :when (pratt/next-char-is-not? \/)}
     {:char \+ :bp 400 :open-type :plus    :fn (pratt/led-infix :add 400)}
     {:char \- :bp 400 :open-type :minus   :fn (pratt/led-infix :sub 400)
      :when (pratt/next-char-is-not? \>)}
