@@ -27,10 +27,8 @@ defn( to-clj
 )
 
 def( lang-map
-  {
-    :extension ".calc"
-    :to-clj    to-clj
-    :run       fn([source opts] run/run-string(source opts))
-    :repl      fn([opts] repl/start(opts))
-  }
+  {:extension ".calc"
+   :to-clj    to-clj
+   :run       fn([source opts] run/run-string(source opts))
+   :repl      fn([opts] repl/start(opts))}
 )

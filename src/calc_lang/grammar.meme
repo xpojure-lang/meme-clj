@@ -162,51 +162,41 @@ defn-( slash-trivia-consumer
 )
 
 def( grammar
-  {
-    :nud       {
-      \( lexer/single-char-scanlet(
-        :open-paren
-        pratt/nud-delimited(:group \) :close-paren)
-      )
-      \- lexer/single-char-scanlet(:minus pratt/nud-prefix(:unary-minus 80))
-      \! lexer/single-char-scanlet(:bang pratt/nud-prefix(:unary-not 80))
-      \" lexer/atom-scanlet(:string lex/consume-string)
-    }
-    :nud-pred  [[fn([ch _e] lex/digit?(ch))
-      lexer/atom-scanlet(:number lex/consume-number)]
-     [fn([ch _e] lex/ident-start?(ch)) identifier-scanlet]]
-    :trivia    {
-      \space   lex/ws-consumer
-      \tab     lex/ws-consumer
-      \,       lex/ws-consumer
-      \newline lex/newline-consumer
-      \return  lex/newline-consumer
-      \/       slash-trivia-consumer
-    }
-    :led       [{:char \+ :bp 60 :open-type :plus :fn pratt/led-infix(:add 60)}
-     {:char \- :bp 60 :open-type :minus :fn pratt/led-infix(:sub 60)}
-     {:char \* :bp 70 :open-type :star :fn pratt/led-infix(:mul 70)}
-     {:char \/ :bp 70 :open-type :slash :fn pratt/led-infix(:div 70)}
-     {:char \% :bp 70 :open-type :pct :fn pratt/led-infix(:mod 70)}
-     {:char \^ :bp 90 :open-type :caret :fn pratt/led-infix(:pow 89)}
-     {
-       :char      \=
-       :bp        40
-       :open-type :eq-eq
-       :fn        two-char-infix(:eq 40)
-       :when      next-is-eq?
-     }
-     {
-       :char      \!
-       :bp        40
-       :open-type :bang-eq
-       :fn        two-char-infix(:neq 40)
-       :when      next-is-eq?
-     }
-     {:char \< :bp 50 :open-type :lt :fn lt-or-lte-scanlet}
-     {:char \> :bp 50 :open-type :gt :fn gt-or-gte-scanlet}
-     {:char \? :bp 30 :open-type :question :fn ternary-scanlet}
-     {:char \( :bp 100 :open-type :open-paren :when adjacent? :fn call-scanlet}]
-    :max-depth 512
-  }
+  {:nud       {\( lexer/single-char-scanlet(
+      :open-paren
+      pratt/nud-delimited(:group \) :close-paren)
+    )
+    \- lexer/single-char-scanlet(:minus pratt/nud-prefix(:unary-minus 80))
+    \! lexer/single-char-scanlet(:bang pratt/nud-prefix(:unary-not 80))
+    \" lexer/atom-scanlet(:string lex/consume-string)}
+   :nud-pred  [[fn([ch _e] lex/digit?(ch))
+     lexer/atom-scanlet(:number lex/consume-number)]
+    [fn([ch _e] lex/ident-start?(ch)) identifier-scanlet]]
+   :trivia    {\space   lex/ws-consumer
+    \tab     lex/ws-consumer
+    \,       lex/ws-consumer
+    \newline lex/newline-consumer
+    \return  lex/newline-consumer
+    \/       slash-trivia-consumer}
+   :led       [{:char \+ :bp 60 :open-type :plus :fn pratt/led-infix(:add 60)}
+    {:char \- :bp 60 :open-type :minus :fn pratt/led-infix(:sub 60)}
+    {:char \* :bp 70 :open-type :star :fn pratt/led-infix(:mul 70)}
+    {:char \/ :bp 70 :open-type :slash :fn pratt/led-infix(:div 70)}
+    {:char \% :bp 70 :open-type :pct :fn pratt/led-infix(:mod 70)}
+    {:char \^ :bp 90 :open-type :caret :fn pratt/led-infix(:pow 89)}
+    {:char      \=
+     :bp        40
+     :open-type :eq-eq
+     :fn        two-char-infix(:eq 40)
+     :when      next-is-eq?}
+    {:char      \!
+     :bp        40
+     :open-type :bang-eq
+     :fn        two-char-infix(:neq 40)
+     :when      next-is-eq?}
+    {:char \< :bp 50 :open-type :lt :fn lt-or-lte-scanlet}
+    {:char \> :bp 50 :open-type :gt :fn gt-or-gte-scanlet}
+    {:char \? :bp 30 :open-type :question :fn ternary-scanlet}
+    {:char \( :bp 100 :open-type :open-paren :when adjacent? :fn call-scanlet}]
+   :max-depth 512}
 )
