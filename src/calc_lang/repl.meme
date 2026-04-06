@@ -1,0 +1,14 @@
+ns(calc-lang.repl
+  "Calc-lang REPL. JVM/Babashka only."
+  :require([meme.tools.repl :as tools-repl] [calc-lang.stages :as stages]))
+
+defn(start
+  [opts]
+  tools-repl/start(
+    merge(
+      opts
+      {
+        :run-fn fn([source reader-opts] stages/run(source reader-opts))
+        :expand-forms fn([forms _opts] forms)
+        :banner "calc-lang REPL — type expressions, Ctrl-D to exit"
+      })))

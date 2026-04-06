@@ -257,3 +257,16 @@
                          (name command)
                          " — supported: " (pr-str (vec (filter keyword? (keys lang)))))
                     {:lang lang-name :command command}))))
+
+;; ---------------------------------------------------------------------------
+;; Bootstrap: load .meme-based langs via the loader
+;; ---------------------------------------------------------------------------
+;; calc-lang is implemented entirely in .meme files.
+;; Install the loader so requiring-resolve can find .meme on classpath,
+;; then register calc-lang as a built-in.
+
+(try
+  (require 'meme.loader)
+  ((resolve 'meme.loader/install!))
+  (register-builtin! :calc @(requiring-resolve 'calc-lang.api/lang-map))
+  (catch Exception _))
