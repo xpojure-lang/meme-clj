@@ -39,7 +39,7 @@
     (let [result (fmt-canon/format-form
                   '(defn greet [name] (str "Hello " name))
                   {:width 30})]
-      (is (re-find #"^defn\(greet\n" result))
+      (is (re-find #"^defn\( greet\n" result))
       (is (re-find #"\)$" result)))))
 
 (deftest multi-line-if-keeps-condition
@@ -47,22 +47,22 @@
     (let [result (fmt-canon/format-form
                   '(if (> x 0) "positive" "negative")
                   {:width 30})]
-      (is (re-find #"^if\(>\(x 0\)" result)))))
+      (is (re-find #"^if\( >\(x 0\)" result)))))
 
 (deftest multi-line-defmethod-keeps-two
   (testing "defmethod (head-line-args=2) keeps name and dispatch"
     (let [result (fmt-canon/format-form
                   '(defmethod area :circle [{:keys [radius]}] (* Math/PI (* radius radius)))
                   {:width 40})]
-      (is (re-find #"^defmethod\(area :circle" result)))))
+      (is (re-find #"^defmethod\( area :circle" result)))))
 
 (deftest head-args-fallback-when-too-wide
   (testing "head-line args that don't fit fall back to all-in-body"
     (let [result (fmt-canon/format-form
                   '(defn a-very-long-function-name [x] (+ x 1))
                   {:width 25})]
-      ;; name is too wide for first line, so all args go in body
-      (is (re-find #"^defn\(\n" result)))))
+      ;; name is too wide for first line — break-space still emits space
+      (is (re-find #"^defn\( " result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Width parameter
@@ -213,7 +213,7 @@
           forms (lang/meme->forms src)
           formatted (fmt-canon/format-form (first forms) {:width 15})]
       (is (re-find #"; body comment" formatted))
-      (is (re-find #"defn\(foo" formatted)))))
+      (is (re-find #"defn\( foo" formatted)))))
 
 (deftest comment-roundtrip-mid-expression-wide
   (testing "comment inside a form preserved even at wide width"
@@ -221,7 +221,7 @@
           forms (lang/meme->forms src)
           formatted (fmt-canon/format-form (first forms) {:width 80})]
       (is (re-find #"; body comment" formatted))
-      (is (re-find #"defn\(foo" formatted)))))
+      (is (re-find #"defn\( foo" formatted)))))
 
 (deftest comment-roundtrip-forms-roundtrip
   (testing "formatted output with comments re-parses to same forms"
@@ -312,7 +312,7 @@
            (fmt-canon/format-form '(let [x 1] (+ x 1)) {:width 15}))))
   (testing "defn name on head line, body indented by 2"
     (let [result (fmt-canon/format-form '(defn f [x] (+ x 1)) {:width 15})]
-      (is (= "defn(f\n  [x]\n  +(x 1)\n)" result))))
+      (is (= "defn( f\n  [x]\n  +(x 1)\n)" result))))
   (testing "nested multi-line indentation compounds"
     (let [result (fmt-canon/format-form '(defn f [x] (let [y 1] (+ x y))) {:width 15})]
       (is (re-find #"\n    " result) "inner let body should be indented 4 spaces"))))

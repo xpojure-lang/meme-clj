@@ -88,7 +88,7 @@
      (testing "short if-condition stays on head line when multi-line needed"
        (let [form '(if (> x 0) (do-something-with x) (do-something-else y))
              result (fmt-canon/format-form form {:width 40})]
-         (is (re-find #"if\(>" result)
+         (is (re-find #"if\( >" result)
              "short condition should stay on head line")))))
 
 ;; ---------------------------------------------------------------------------

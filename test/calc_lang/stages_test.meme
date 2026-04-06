@@ -1,10 +1,10 @@
-ns(calc-lang.stages-test
+ns( calc-lang.stages-test
   :require([clojure.test :refer [deftest is testing]] [calc-lang.api :as calc])
 )
 
 defn-(calc [s] calc/calc->forms(s))
 
-deftest(basic-arithmetic
+deftest( basic-arithmetic
   is(=([list(quote(+) 2 3)] calc("2 + 3")))
   is(=([list(quote(-) 10 4)] calc("10 - 4")))
   is(=([list(quote(*) 3 5)] calc("3 * 5")))
@@ -12,33 +12,33 @@ deftest(basic-arithmetic
   is(=([list(quote(mod) 10 3)] calc("10 % 3")))
 )
 
-deftest(precedence
-  testing("mul binds tighter than add"
+deftest( precedence
+  testing( "mul binds tighter than add"
     is(=([list(quote(+) 2 list(quote(*) 3 4))] calc("2 + 3 * 4")))
   )
-  testing("grouping overrides precedence"
+  testing( "grouping overrides precedence"
     is(=([list(quote(*) list(quote(+) 2 3) 4)] calc("(2 + 3) * 4")))
   )
-  testing("left-associative add"
+  testing( "left-associative add"
     is(=([list(quote(+) list(quote(+) 1 2) 3)] calc("1 + 2 + 3")))
   )
-  testing("left-associative mul"
+  testing( "left-associative mul"
     is(=([list(quote(*) list(quote(*) 2 3) 4)] calc("2 * 3 * 4")))
   )
 )
 
-deftest(power-right-assoc
+deftest( power-right-assoc
   is(=([list(quote(Math/pow) 2 list(quote(Math/pow) 3 2))] calc("2 ^ 3 ^ 2")))
 )
 
-deftest(unary-minus
+deftest( unary-minus
   is(=([list(quote(-) 5)] calc("-5")))
   is(=([list(quote(+) list(quote(-) 5) 3)] calc("-5 + 3")))
 )
 
 deftest(unary-not is(=([list(quote(not) true)] calc("!true"))))
 
-deftest(comparisons
+deftest( comparisons
   is(=([list(quote(==) quote(x) 10)] calc("x == 10")))
   is(=([list(quote(not=) quote(x) 10)] calc("x != 10")))
   is(=([list(quote(<) quote(x) quote(y))] calc("x < y")))
@@ -47,12 +47,12 @@ deftest(comparisons
   is(=([list(quote(>=) quote(x) quote(y))] calc("x >= y")))
 )
 
-deftest(function-calls
+deftest( function-calls
   testing("single arg" is(=([list(quote(sin) 3.14)] calc("sin(3.14)"))))
-  testing("multiple args (comma-separated)"
+  testing( "multiple args (comma-separated)"
     is(=([list(quote(max) 10 20)] calc("max(10, 20)")))
   )
-  testing("nested calls"
+  testing( "nested calls"
     is(
       =(
         [list(quote(sqrt) list(quote(abs) list(quote(-) 16)))]
@@ -62,7 +62,7 @@ deftest(function-calls
   )
 )
 
-deftest(ternary
+deftest( ternary
   is(
     =(
       [
@@ -78,7 +78,7 @@ deftest(ternary
   )
 )
 
-deftest(let-binding
+deftest( let-binding
   is(=([list(quote(def) quote(x) 10)] calc("let x = 10")))
   is(
     =(
@@ -88,12 +88,12 @@ deftest(let-binding
   )
 )
 
-deftest(multiple-exprs
+deftest( multiple-exprs
   is(=([1 2 3] calc("1 2 3")))
   is(=([list(quote(+) 1 2) list(quote(*) 3 4)] calc("1 + 2 3 * 4")))
 )
 
-deftest(literals
+deftest( literals
   is(=([42] calc("42")))
   is(=([3.14] calc("3.14")))
   is(=([true] calc("true")))
@@ -101,12 +101,12 @@ deftest(literals
   is(=(["hello"] calc("\"hello\"")))
 )
 
-deftest(comments
+deftest( comments
   is(=([list(quote(+) 1 2)] calc("// add two numbers\n1 + 2")))
   is(=([list(quote(+) 1 2)] calc("1 + 2 // trailing comment")))
 )
 
-deftest(to-clj
+deftest( to-clj
   is(=("(+ 2 (* 3 4))" calc/calc->clj("2 + 3 * 4")))
   is(=("(def x 10)" calc/calc->clj("let x = 10")))
 )

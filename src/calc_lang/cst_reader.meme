@@ -1,9 +1,8 @@
 ns(calc-lang.cst-reader "CST → Clojure forms for calc-lang.")
 
-defn-(resolve-number
+defn-( resolve-number
   [raw]
-  if(
-    or(
+  if( or(
       .contains(^String raw ".")
       .contains(^String raw "e")
       .contains(^String raw "E")
@@ -13,9 +12,9 @@ defn-(resolve-number
   )
 )
 
-defn-(resolve-string
+defn-( resolve-string
   [raw]
-  ->(subs(raw 1 dec(count(raw)))
+  ->( subs(raw 1 dec(count(raw)))
     .replace("\\n" "\n")
     .replace("\\t" "\t")
     .replace("\\\\" "\\")
@@ -23,25 +22,25 @@ defn-(resolve-string
   )
 )
 
-defn-(resolve-identifier
+defn-( resolve-identifier
   [raw]
   case(raw "true" true "false" false "nil" nil symbol(raw))
 )
 
 declare(read-node)
 
-defn-(read-infix
+defn-( read-infix
   [node op-sym]
   list(op-sym read-node(:left(node)) read-node(:right(node)))
 )
 
-defn(read-node
+defn( read-node
   [node]
-  case(:node(node)
+  case( :node(node)
     :atom
     let(
       [tok :token(node)]
-      case(:type(tok)
+      case( :type(tok)
         :number
         resolve-number(:raw(tok))
         :string
@@ -82,7 +81,7 @@ defn(read-node
     :group
     let(
       [children :children(node)]
-      if(=(1 count(children))
+      if( =(1 count(children))
         read-node(first(children))
         cons(quote(do) map(read-node children))
       )
@@ -107,7 +106,7 @@ defn(read-node
   )
 )
 
-defn(read-forms
+defn( read-forms
   "Read a vector of CST nodes into a vector of Clojure forms."
   [cst _opts]
   mapv(read-node cst)

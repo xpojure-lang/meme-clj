@@ -1,9 +1,9 @@
-ns(calc-lang.run
+ns( calc-lang.run
   "Calc-lang eval pipeline. JVM/Babashka only."
   :require([meme.tools.run :as tools-run] [calc-lang.stages :as stages])
 )
 
-defn(run-string
+defn( run-string
   [s opts]
   tools-run/run-string(
     s

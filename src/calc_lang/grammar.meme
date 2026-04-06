@@ -1,4 +1,4 @@
-ns(calc-lang.grammar
+ns( calc-lang.grammar
   "Grammar spec and custom parselets for calc-lang."
   :require(
     [meme.tools.parser :as pratt]
@@ -7,13 +7,13 @@ ns(calc-lang.grammar
   )
 )
 
-defn-(adjacent?
+defn-( adjacent?
   "True when no trivia separates head from opening paren."
   [engine]
   empty?(clojure.core/deref(:trivia-acc(engine)))
 )
 
-defn-(next-is-eq?
+defn-( next-is-eq?
   "True when next char after current is =."
   [engine]
   let(
@@ -25,7 +25,7 @@ defn-(next-is-eq?
   )
 )
 
-defn-(two-char-infix
+defn-( two-char-infix
   "Led scanlet for two-character operators (==, !=, <=, >=).\n   The first char is already consumed by the engine; consume the second."
   [node-type bp]
   fn(
@@ -38,10 +38,10 @@ defn-(two-char-infix
   )
 )
 
-defn-(lt-or-lte-scanlet
+defn-( lt-or-lte-scanlet
   "Led scanlet for < or <=."
   [engine lhs op-tok]
-  if(and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \=))
+  if( and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \=))
     do(
       pratt/advance!(engine 1)
       let(
@@ -56,10 +56,10 @@ defn-(lt-or-lte-scanlet
   )
 )
 
-defn-(gt-or-gte-scanlet
+defn-( gt-or-gte-scanlet
   "Led scanlet for > or >=."
   [engine lhs op-tok]
-  if(and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \=))
+  if( and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \=))
     do(
       pratt/advance!(engine 1)
       let(
@@ -74,13 +74,13 @@ defn-(gt-or-gte-scanlet
   )
 )
 
-defn-(ternary-scanlet
+defn-( ternary-scanlet
   "Led scanlet for ? : ternary operator."
   [engine lhs question-tok]
   let(
     [then-expr pratt/parse-expr(engine 0)]
     pratt/skip-trivia!(engine)
-    if(and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \:))
+    if( and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \:))
       let(
         [start pratt/cursor(engine)]
         pratt/advance!(engine 1)
@@ -105,7 +105,7 @@ defn-(ternary-scanlet
   )
 )
 
-defn-(call-scanlet
+defn-( call-scanlet
   "Led scanlet for function calls f(args)."
   [engine lhs open-tok]
   let(
@@ -114,7 +114,7 @@ defn-(call-scanlet
   )
 )
 
-defn-(identifier-scanlet
+defn-( identifier-scanlet
   "Nud scanlet for identifiers. Handles let keyword specially."
   [engine]
   let(
@@ -131,7 +131,7 @@ defn-(identifier-scanlet
     pratt/set-pos!(engine end)
     let(
       [tok pratt/make-token!(engine :identifier start)]
-      case(:raw(tok)
+      case( :raw(tok)
         "let"
         do(
           pratt/skip-trivia!(engine)
@@ -146,8 +146,7 @@ defn-(identifier-scanlet
             let(
               [name-tok pratt/make-token!(engine :identifier name-start)]
               pratt/skip-trivia!(engine)
-              if(
-                and(
+              if( and(
                   not(pratt/eof?(engine))
                   =(pratt/peek-char(engine) \=)
                   let(
@@ -185,13 +184,12 @@ defn-(identifier-scanlet
   )
 )
 
-defn-(slash-trivia-consumer
+defn-( slash-trivia-consumer
   "If current pos is //, consume as comment. Otherwise return nil (not trivia)."
   [engine]
   let(
     [pos pratt/cursor(engine)]
-    when(
-      and(
+    when( and(
         <(inc(pos) pratt/source-len(engine))
         =(.charAt(^String pratt/source-str(engine) inc(pos)) \/)
       )
@@ -200,7 +198,7 @@ defn-(slash-trivia-consumer
   )
 )
 
-def(grammar
+def( grammar
   {
     :nud {
       \( lexer/single-char-scanlet(

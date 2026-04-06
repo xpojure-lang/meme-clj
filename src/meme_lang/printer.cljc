@@ -172,8 +172,11 @@
           (render/nest 2 (render/doc-cat render/line (intersperse render/line arg-docs)))
           doc-close-paren)))
       ;; Meme mode: head(arg1 arg2) with head-line-args
-      ;; When broken to multi-line, closing ) goes on its own line.
-      (let [n-head (get head-line-args head)]
+      ;; When broken: space after ( and closing ) on its own line.
+      ;; break-space: nothing when flat, space when broken — enforces
+      ;; visual separation between ( and first arg in multi-line calls.
+      (let [n-head (get head-line-args head)
+            break-space (render/->DocIfBreak doc-space nil)]
           (cond
             ;; Zero args: head()
             (empty? arg-docs)
@@ -185,10 +188,10 @@
                   body (subvec arg-docs n-head)]
               (render/group
                (render/doc-cat
-                head-doc doc-open-paren
+                head-doc doc-open-paren break-space
                 (render/nest 2
                              (render/doc-cat
-                              (render/group (render/doc-cat render/line0 (intersperse render/line head-docs)))
+                              (render/group (intersperse render/line head-docs))
                               (reduce (fn [acc d] (render/doc-cat acc render/line d)) nil body)))
                 render/line0
                 doc-close-paren)))
