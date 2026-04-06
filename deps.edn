@@ -11,7 +11,7 @@
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test
          :exec-args {:dirs ["test"]
-                     :patterns ["meme\\..*-test" "meme-lang\\..*-test" "calc-lang\\..*-test"]}}
+                     :patterns ["meme\\..*-test" "meme-lang\\..*-test" "calc-lang\\..*-test" "wlj-lang\\..*-test"]}}
   :meme {:replace-paths ["src"]
          :replace-deps {}
          :ns-default meme.cli}

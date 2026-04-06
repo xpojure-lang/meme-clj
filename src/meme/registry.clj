@@ -21,7 +21,8 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.java.io :as io]
-            [meme-lang.api :as meme-lang]))
+            [meme-lang.api :as meme-lang]
+            [wlj-lang.api :as wlj-lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry
@@ -47,6 +48,7 @@
 
 ;; Register built-in langs from their self-describing lang-maps
 (register-builtin! :meme meme-lang/lang-map)
+(register-builtin! :wlj wlj-lang/lang-map)
 
 (def default-lang "The default lang used when none is specified." :meme)
 

@@ -1,0 +1,17 @@
+(* wlj demo — Wolfram-style syntax for Clojure *)
+
+x = 2 + 3 * 4;
+y = (2 + 3) * 4;
+p = 2 ^ 3 ^ 2;
+
+(* function calls use square brackets *)
+Print[x];
+Print[y];
+Print[p];
+
+(* data uses curly braces *)
+nums = {1, 2, 3, 4, 5};
+Print[nums];
+
+(* nested calls — no adjacency needed *)
+Print[Str["sum: ", Apply[+, nums]]]

@@ -1,0 +1,62 @@
+(ns wlj-lang.lexlets
+  "Character predicates, consume helpers, and trivia consumers for wlj."
+  (:require [meme.tools.parser :as pratt]))
+
+(defn digit? [ch] (and ch (<= (int \0) (int ch) (int \9))))
+(defn ident-start? [ch] (and ch (or (<= (int \a) (int ch) (int \z)) (<= (int \A) (int ch) (int \Z)) (= ch \$) (= ch \_))))
+(defn ident-char? [ch] (or (ident-start? ch) (digit? ch)))
+(defn whitespace-char? [ch] (and ch (or (= ch \space) (= ch \tab) (= ch \,))))
+
+(defn consume-number [^String source ^long len ^long pos]
+  (loop [i pos]
+    (if (and (< i len) (digit? (.charAt source i)))
+      (recur (inc i))
+      (let [i (if (and (< i len) (= (.charAt source i) \.)
+                       (< (inc i) len) (digit? (.charAt source (inc i))))
+                (loop [j (+ i 2)]
+                  (if (and (< j len) (digit? (.charAt source j))) (recur (inc j)) j))
+                i)]
+        (if (and (< i len) (let [c (.charAt source i)] (or (= c \e) (= c \E))))
+          (let [j (inc i)
+                j (if (and (< j len) (let [c (.charAt source j)] (or (= c \+) (= c \-)))) (inc j) j)]
+            (loop [k j] (if (and (< k len) (digit? (.charAt source k))) (recur (inc k)) k)))
+          i)))))
+
+(defn consume-identifier [^String source ^long len ^long pos]
+  (loop [i (inc pos)] (if (and (< i len) (ident-char? (.charAt source i))) (recur (inc i)) i)))
+
+(defn consume-string [^String source ^long len ^long pos]
+  (loop [i (inc pos)]
+    (cond (>= i len) i
+          (= (.charAt source i) \\) (recur (+ i 2))
+          (= (.charAt source i) \") (inc i)
+          :else (recur (inc i)))))
+
+(defn ws-consumer [engine]
+  (let [start (pratt/cursor engine) source (pratt/source-str engine) len (pratt/source-len engine)]
+    (loop [i start]
+      (if (and (< i len) (whitespace-char? (.charAt source i)))
+        (recur (inc i))
+        (do (pratt/set-pos! engine i) (pratt/make-trivia-token! engine :whitespace start))))))
+
+(defn newline-consumer [engine]
+  (let [start (pratt/cursor engine) source (pratt/source-str engine) len (pratt/source-len engine)
+        ch (.charAt source start)
+        end (if (and (= ch \return) (< (inc start) len) (= (.charAt source (inc start)) \newline)) (+ start 2) (inc start))]
+    (pratt/set-pos! engine end) (pratt/make-trivia-token! engine :newline start)))
+
+(defn block-comment-consumer
+  "Consume (* ... *) block comment. Supports nesting."
+  [engine]
+  (let [start (pratt/cursor engine) source (pratt/source-str engine) len (pratt/source-len engine)]
+    (pratt/advance! engine 2) ;; skip (*
+    (loop [i (+ start 2) depth 1]
+      (cond
+        (>= i len) (do (pratt/set-pos! engine i) (pratt/make-trivia-token! engine :comment start))
+        (and (= (.charAt source i) \() (< (inc i) len) (= (.charAt source (inc i)) \*))
+        (recur (+ i 2) (inc depth))
+        (and (= (.charAt source i) \*) (< (inc i) len) (= (.charAt source (inc i)) \)))
+        (if (= depth 1)
+          (do (pratt/set-pos! engine (+ i 2)) (pratt/make-trivia-token! engine :comment start))
+          (recur (+ i 2) (dec depth)))
+        :else (recur (inc i) depth)))))
