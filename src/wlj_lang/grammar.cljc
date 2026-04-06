@@ -8,25 +8,10 @@
 ;; Predicates
 ;; ---------------------------------------------------------------------------
 
-(defn- next-is-eq? [engine]
-  (let [pos (inc (pratt/cursor engine))]
-    (and (< pos (pratt/source-len engine))
-         (= (.charAt ^String (pratt/source-str engine) pos) \=))))
-
-(defn- next-is-gt? [engine]
-  (let [pos (inc (pratt/cursor engine))]
-    (and (< pos (pratt/source-len engine))
-         (= (.charAt ^String (pratt/source-str engine) pos) \>))))
-
-(defn- next-is-amp? [engine]
-  (let [pos (inc (pratt/cursor engine))]
-    (and (< pos (pratt/source-len engine))
-         (= (.charAt ^String (pratt/source-str engine) pos) \&))))
-
-(defn- next-is-pipe? [engine]
-  (let [pos (inc (pratt/cursor engine))]
-    (and (< pos (pratt/source-len engine))
-         (= (.charAt ^String (pratt/source-str engine) pos) \|))))
+(def ^:private next-is-eq?  (pratt/next-char-is? \=))
+(def ^:private next-is-gt?  (pratt/next-char-is? \>))
+(def ^:private next-is-amp? (pratt/next-char-is? \&))
+(def ^:private next-is-pipe? (pratt/next-char-is? \|))
 
 (defn- is-block-comment? [engine]
   (let [pos (inc (pratt/cursor engine))]
@@ -37,27 +22,8 @@
 ;; Custom parselets
 ;; ---------------------------------------------------------------------------
 
-(defn- two-char-infix [node-type bp]
-  (fn [engine lhs op-tok]
-    (pratt/advance! engine 1)
-    (let [rhs (pratt/parse-expr engine bp)]
-      (pratt/cst node-type {:left lhs :token op-tok :right rhs}))))
-
-(defn- lt-or-lte-scanlet [engine lhs op-tok]
-  (if (and (not (pratt/eof? engine)) (= (pratt/peek-char engine) \=))
-    (do (pratt/advance! engine 1)
-        (let [rhs (pratt/parse-expr engine 360)]
-          (pratt/cst :lte {:left lhs :token op-tok :right rhs})))
-    (let [rhs (pratt/parse-expr engine 360)]
-      (pratt/cst :lt {:left lhs :token op-tok :right rhs}))))
-
-(defn- gt-or-gte-scanlet [engine lhs op-tok]
-  (if (and (not (pratt/eof? engine)) (= (pratt/peek-char engine) \=))
-    (do (pratt/advance! engine 1)
-        (let [rhs (pratt/parse-expr engine 360)]
-          (pratt/cst :gte {:left lhs :token op-tok :right rhs})))
-    (let [rhs (pratt/parse-expr engine 360)]
-      (pratt/cst :gt {:left lhs :token op-tok :right rhs}))))
+(def ^:private lt-or-lte (pratt/led-comparison-or-equal :lt :lte 360))
+(def ^:private gt-or-gte (pratt/led-comparison-or-equal :gt :gte 360))
 
 ;; Call: f[x, y] — no adjacency needed
 (defn- call-scanlet [engine lhs open-tok]
@@ -80,14 +46,6 @@
     (let [[args close-tok] (pratt/parse-until engine \] :close-bracket)]
       (pratt/cst :call {:head lhs :open open-tok :args args :close close-tok}))))
 
-;; Compound: a ; b ; c
-(defn- compound-scanlet [engine lhs semi-tok]
-  (pratt/skip-trivia! engine)
-  (if (or (pratt/eof? engine) (= (pratt/peek-char engine) \)))
-    ;; Trailing semicolon — return lhs with null marker
-    (pratt/cst :compound {:left lhs :token semi-tok :right nil})
-    (let [rhs (pratt/parse-expr engine 30)]
-      (pratt/cst :compound {:left lhs :token semi-tok :right rhs}))))
 
 ;; Rule: a -> b
 (defn- rule-scanlet [engine lhs op-tok]
@@ -171,20 +129,20 @@
     {:char \/ :bp 570 :open-type :slash   :fn (pratt/led-infix :div 570)}
     {:char \+ :bp 400 :open-type :plus    :fn (pratt/led-infix :add 400)}
     {:char \- :bp 400 :open-type :minus   :fn (pratt/led-infix :sub 400)
-     :when (fn [e] (not (next-is-gt? e)))}
+     :when (pratt/next-char-is-not? \>)}
     ;; Comparison
-    {:char \= :bp 360 :open-type :eq-eq   :fn (two-char-infix :eq 360)   :when next-is-eq?}
-    {:char \! :bp 360 :open-type :neq     :fn (two-char-infix :neq 360)  :when next-is-eq?}
-    {:char \< :bp 360 :open-type :lt      :fn lt-or-lte-scanlet}
-    {:char \> :bp 360 :open-type :gt      :fn gt-or-gte-scanlet}
+    {:char \= :bp 360 :open-type :eq-eq   :fn (pratt/led-infix-2char :eq 360)   :when next-is-eq?}
+    {:char \! :bp 360 :open-type :neq     :fn (pratt/led-infix-2char :neq 360)  :when next-is-eq?}
+    {:char \< :bp 360 :open-type :lt      :fn lt-or-lte}
+    {:char \> :bp 360 :open-type :gt      :fn gt-or-gte}
     ;; Logical
-    {:char \& :bp 290 :open-type :and     :fn (two-char-infix :and 290)  :when next-is-amp?}
-    {:char \| :bp 270 :open-type :or      :fn (two-char-infix :or 270)   :when next-is-pipe?}
+    {:char \& :bp 290 :open-type :and     :fn (pratt/led-infix-2char :and 290)  :when next-is-amp?}
+    {:char \| :bp 270 :open-type :or      :fn (pratt/led-infix-2char :or 270)   :when next-is-pipe?}
     ;; Rule
     {:char \- :bp 140 :open-type :arrow   :fn rule-scanlet               :when next-is-gt?}
     ;; Assignment (= but not ==)
     {:char \= :bp 50  :open-type :assign  :fn assign-scanlet}
     ;; Compound
-    {:char \; :bp 30  :open-type :semi    :fn compound-scanlet}]
+    {:char \; :bp 30  :open-type :semi    :fn (pratt/led-compound :compound 30)}]
 
    :max-depth 512})

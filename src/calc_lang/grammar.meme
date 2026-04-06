@@ -13,60 +13,9 @@ defn-( adjacent?
   empty?(clojure.core/deref(:trivia-acc(engine)))
 )
 
-defn-( next-is-eq?
-  "True when next char after current is =."
-  [engine]
-  let( [pos inc(pratt/cursor(engine))]
-    and(
-      <(pos pratt/source-len(engine))
-      =(.charAt(^String pratt/source-str(engine) pos) \=)
-    )
-  )
-)
-
-defn-( two-char-infix
-  "Led scanlet for two-character operators (==, !=, <=, >=).\n   The first char is already consumed by the engine; consume the second."
-  [node-type bp]
-  fn(
-    [engine lhs op-tok]
-    pratt/advance!(engine 1)
-    let( [rhs pratt/parse-expr(engine bp)]
-      pratt/cst(node-type {:left lhs :token op-tok :right rhs})
-    )
-  )
-)
-
-defn-( lt-or-lte-scanlet
-  "Led scanlet for < or <=."
-  [engine lhs op-tok]
-  if( and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \=))
-    do(
-      pratt/advance!(engine 1)
-      let( [rhs pratt/parse-expr(engine 50)]
-        pratt/cst(:lte {:left lhs :token op-tok :right rhs})
-      )
-    )
-    let( [rhs pratt/parse-expr(engine 50)]
-      pratt/cst(:lt {:left lhs :token op-tok :right rhs})
-    )
-  )
-)
-
-defn-( gt-or-gte-scanlet
-  "Led scanlet for > or >=."
-  [engine lhs op-tok]
-  if( and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \=))
-    do(
-      pratt/advance!(engine 1)
-      let( [rhs pratt/parse-expr(engine 50)]
-        pratt/cst(:gte {:left lhs :token op-tok :right rhs})
-      )
-    )
-    let( [rhs pratt/parse-expr(engine 50)]
-      pratt/cst(:gt {:left lhs :token op-tok :right rhs})
-    )
-  )
-)
+def( ^:private next-is-eq? pratt/next-char-is?(\=))
+def( ^:private lt-or-lte pratt/led-comparison-or-equal(:lt :lte 50))
+def( ^:private gt-or-gte pratt/led-comparison-or-equal(:gt :gte 50))
 
 defn-( ternary-scanlet
   "Led scanlet for ? : ternary operator."
@@ -193,15 +142,15 @@ def( grammar
                {:char      \=
                 :bp        40
                 :open-type :eq-eq
-                :fn        two-char-infix(:eq 40)
+                :fn        pratt/led-infix-2char(:eq 40)
                 :when      next-is-eq?}
                {:char      \!
                 :bp        40
                 :open-type :bang-eq
-                :fn        two-char-infix(:neq 40)
+                :fn        pratt/led-infix-2char(:neq 40)
                 :when      next-is-eq?}
-               {:char \< :bp 50 :open-type :lt :fn lt-or-lte-scanlet}
-               {:char \> :bp 50 :open-type :gt :fn gt-or-gte-scanlet}
+               {:char \< :bp 50 :open-type :lt :fn lt-or-lte}
+               {:char \> :bp 50 :open-type :gt :fn gt-or-gte}
                {:char \? :bp 30 :open-type :question :fn ternary-scanlet}
                {:char      \(
                 :bp        100

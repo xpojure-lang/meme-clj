@@ -312,6 +312,62 @@
        (cst node-type {:left lhs :token op-tok :right rhs})))))
 
 ;; ---------------------------------------------------------------------------
+;; Predicate helpers — for :when clauses in led rules
+;; ---------------------------------------------------------------------------
+
+(defn next-char-is?
+  "Factory: returns a predicate that checks if the char after cursor matches ch."
+  [ch]
+  (fn [engine]
+    (let [pos (inc (cursor engine))]
+      (and (< pos (source-len engine))
+           (= (.charAt ^String (source-str engine) pos) ch)))))
+
+(defn next-char-is-not?
+  "Factory: returns a predicate that checks if the char after cursor does NOT match ch."
+  [ch]
+  (fn [engine]
+    (let [pos (inc (cursor engine))]
+      (or (>= pos (source-len engine))
+          (not= (.charAt ^String (source-str engine) pos) ch)))))
+
+;; ---------------------------------------------------------------------------
+;; Multi-char operator helpers — for led rules with 2+ char operators
+;; ---------------------------------------------------------------------------
+
+(defn led-infix-2char
+  "Factory: two-character infix parselet (==, !=, &&, ||, etc.).
+   Consumes the second character after single-char dispatch."
+  [node-type bp]
+  (fn [engine lhs op-tok]
+    (advance! engine 1)
+    (let [rhs (parse-expr engine bp)]
+      (cst node-type {:left lhs :token op-tok :right rhs}))))
+
+(defn led-comparison-or-equal
+  "Factory: led parselet for < or <= (or > or >=).
+   Peeks at next char — if =, consumes it and uses eq-type; otherwise uses base-type."
+  [base-type eq-type bp]
+  (fn [engine lhs op-tok]
+    (if (and (not (eof? engine)) (= (peek-char engine) \=))
+      (do (advance! engine 1)
+          (let [rhs (parse-expr engine bp)]
+            (cst eq-type {:left lhs :token op-tok :right rhs})))
+      (let [rhs (parse-expr engine bp)]
+        (cst base-type {:left lhs :token op-tok :right rhs})))))
+
+(defn led-compound
+  "Factory: compound expression parselet (;).
+   Handles trailing separator (returns nil right side)."
+  [node-type bp]
+  (fn [engine lhs op-tok]
+    (skip-trivia! engine)
+    (if (or (eof? engine) (= (peek-char engine) \)))
+      (cst node-type {:left lhs :token op-tok :right nil})
+      (let [rhs (parse-expr engine bp)]
+        (cst node-type {:left lhs :token op-tok :right rhs})))))
+
+;; ---------------------------------------------------------------------------
 ;; Nud dispatch
 ;; ---------------------------------------------------------------------------
 
