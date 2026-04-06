@@ -3,8 +3,7 @@ ns( calc-lang.run
   :require([meme.tools.run :as tools-run] [calc-lang.stages :as stages])
 )
 
-defn( run-string
-  [s opts]
+defn( run-string [s opts]
   tools-run/run-string(
     s
     {

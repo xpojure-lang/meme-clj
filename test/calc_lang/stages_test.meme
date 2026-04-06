@@ -2,7 +2,7 @@ ns( calc-lang.stages-test
   :require([clojure.test :refer [deftest is testing]] [calc-lang.api :as calc])
 )
 
-defn-(calc [s] calc/calc->forms(s))
+defn-( calc [s] calc/calc->forms(s))
 
 deftest( basic-arithmetic
   is(=([list(quote(+) 2 3)] calc("2 + 3")))
@@ -36,7 +36,7 @@ deftest( unary-minus
   is(=([list(quote(+) list(quote(-) 5) 3)] calc("-5 + 3")))
 )
 
-deftest(unary-not is(=([list(quote(not) true)] calc("!true"))))
+deftest( unary-not is(=([list(quote(not) true)] calc("!true"))))
 
 deftest( comparisons
   is(=([list(quote(==) quote(x) 10)] calc("x == 10")))

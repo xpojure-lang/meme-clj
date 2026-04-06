@@ -1,7 +1,6 @@
-ns(calc-lang.cst-reader "CST → Clojure forms for calc-lang.")
+ns( calc-lang.cst-reader "CST → Clojure forms for calc-lang.")
 
-defn-( resolve-number
-  [raw]
+defn-( resolve-number [raw]
   if( or(
       .contains(^String raw ".")
       .contains(^String raw "e")
@@ -12,8 +11,7 @@ defn-( resolve-number
   )
 )
 
-defn-( resolve-string
-  [raw]
+defn-( resolve-string [raw]
   ->( subs(raw 1 dec(count(raw)))
     .replace("\\n" "\n")
     .replace("\\t" "\t")
@@ -22,20 +20,17 @@ defn-( resolve-string
   )
 )
 
-defn-( resolve-identifier
-  [raw]
+defn-( resolve-identifier [raw]
   case(raw "true" true "false" false "nil" nil symbol(raw))
 )
 
 declare(read-node)
 
-defn-( read-infix
-  [node op-sym]
+defn-( read-infix [node op-sym]
   list(op-sym read-node(:left(node)) read-node(:right(node)))
 )
 
-defn( read-node
-  [node]
+defn( read-node [node]
   case( :node(node)
     :atom
     let(

@@ -3,16 +3,15 @@ ns( calc-lang.lexlets
   :require([meme.tools.parser :as pratt])
 )
 
-defn(digit? [ch] and(ch <=(int(\0) int(ch) int(\9))))
+defn( digit? [ch] and(ch <=(int(\0) int(ch) int(\9))))
 
-defn( ident-start?
-  [ch]
+defn( ident-start? [ch]
   and(ch or(<=(int(\a) int(ch) int(\z)) <=(int(\A) int(ch) int(\Z)) =(ch \_)))
 )
 
-defn(ident-char? [ch] or(ident-start?(ch) digit?(ch)))
+defn( ident-char? [ch] or(ident-start?(ch) digit?(ch)))
 
-defn(whitespace-char? [ch] and(ch or(=(ch \space) =(ch \tab) =(ch \,))))
+defn( whitespace-char? [ch] and(ch or(=(ch \space) =(ch \tab) =(ch \,))))
 
 defn( consume-number
   "Consume integer or float: digits [. digits] [e/E [+/-] digits]"
@@ -87,8 +86,7 @@ defn( consume-string
   )
 )
 
-defn( ws-consumer
-  [engine]
+defn( ws-consumer [engine]
   let(
     [
       start
@@ -111,8 +109,7 @@ defn( ws-consumer
   )
 )
 
-defn( newline-consumer
-  [engine]
+defn( newline-consumer [engine]
   let(
     [
       start
