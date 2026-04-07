@@ -50,31 +50,39 @@
 
 (defn- resolve-lang-fns
   "Resolve the API functions for a built-in lang by requiring its namespace.
-   Returns a map of {:meme->forms fn, :meme->clj fn, :clj->meme fn, :run fn}."
-  [lang-name]
-  (let [;; Convention: :meme → meme-lang.api
-        ns-sym 'meme-lang.api]
-    (require ns-sym)
-    {:meme->forms (ns-resolve (find-ns ns-sym) 'meme->forms)
-     :meme->clj   (ns-resolve (find-ns ns-sym) 'meme->clj)
-     :clj->meme   (ns-resolve (find-ns ns-sym) 'clj->meme)}))
+   Returns a map of {:meme->forms fn, :meme->clj fn, :clj->meme fn}, or nil
+   if the lang has no meme-compatible API (e.g. wlj)."
+  [lang-kw]
+  (when (= lang-kw :meme)
+    (let [ns-sym 'meme-lang.api]
+      (require ns-sym)
+      {:meme->forms (ns-resolve (find-ns ns-sym) 'meme->forms)
+       :meme->clj   (ns-resolve (find-ns ns-sym) 'meme->clj)
+       :clj->meme   (ns-resolve (find-ns ns-sym) 'clj->meme)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Eval-based tests (test/examples/tests/*.meme — self-asserting)
 ;; ---------------------------------------------------------------------------
 
+(defn- lang-extension
+  "Return the primary file extension for a lang-map (e.g. \".meme\", \".wlj\")."
+  [lang-map]
+  (or (:extension lang-map)
+      (first (:extensions lang-map))))
+
 (defn- run-eval-tests-for-lang
-  "Run all .meme files in dir via eval using the given lang's :run fn."
-  [dir lang-name lang-map]
-  (let [run-fn (:run lang-map)]
+  "Run test files in dir matching the lang's extension via eval."
+  [dir _lang-name lang-map]
+  (let [run-fn (:run lang-map)
+        ext    (lang-extension lang-map)]
     (if-not run-fn
       (do (println (str "  SKIP (no :run command)")) 0)
     (let [file-obj (io/file dir)
           files (sort (or (.listFiles file-obj) []))
-          meme-files (filter #(.endsWith (.getName %) ".meme") files)]
+          meme-files (filter #(.endsWith (.getName %) ext) files)]
       (if (empty? meme-files)
-        (do (println (str "  ERROR: no .meme files found in " dir))
-            1)
+        (do (println (str "  SKIP (no " ext " files in " dir ")"))
+            0)
         (let [results (doall
                        (for [f meme-files]
                          (do (print (str "  " (.getName f) " ... "))

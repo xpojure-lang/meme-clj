@@ -22,7 +22,7 @@
   (testing "single form"
     (is (= "+(1 2)" (lang/forms->meme ['(+ 1 2)]))))
   (testing "multiple forms separated by blank line"
-    (is (= "def( x 42)\n\nprintln(x)"
+    (is (= "def(x 42)\n\nprintln(x)"
            (lang/forms->meme ['(def x 42) '(println x)])))))
 
 ;; ---------------------------------------------------------------------------

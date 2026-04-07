@@ -1,11 +1,12 @@
 (ns meme-lang.formatter.flat
-  "Flat formatter: single-line meme output.
-   Composes printer (form → Doc) with render (layout @ infinite width)."
+  "Flat formatter: single-line meme output — true pass-through.
+   Composes printer (form → Doc) with render (layout @ infinite width).
+   No style opinions: no definition-form spacing, no head-line splitting."
   (:require [meme-lang.printer :as printer]
             [meme.tools.render :as render]))
 
 (defn format-form
-  "Format a single Clojure form as flat meme text (single-line)."
+  "Format a single Clojure form as flat meme text (single-line, no style)."
   [form]
   (render/layout (printer/to-doc form :meme) ##Inf))
 

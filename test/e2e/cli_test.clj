@@ -195,7 +195,7 @@
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
         {:keys [out exit]} (bb-meme "format" (str f) "--stdout")]
     (is (zero? exit))
-    (is (= "defn(foo [x] +(x 1))\n" out))))
+    (is (= "defn( foo [x] +(x 1))\n" out))))
 
 (deftest format-style-flat-test
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
@@ -218,7 +218,7 @@
     (is (> (count (str/split-lines out)) 1))))
 
 (deftest format-check-clean-test
-  (let [f (tmp-meme "defn(foo [x] +(x 1))\n")
+  (let [f (tmp-meme "defn( foo [x] +(x 1))\n")
         {:keys [exit]} (bb-meme "format" (str f) "--check")]
     (is (zero? exit))))
 
@@ -232,7 +232,7 @@
   (let [f (tmp-meme "defn(foo    [x]    +(x    1))")
         {:keys [exit]} (bb-meme "format" (str f))]
     (is (zero? exit))
-    (is (= "defn(foo [x] +(x 1))\n" (slurp f)))))
+    (is (= "defn( foo [x] +(x 1))\n" (slurp f)))))
 
 ;; ---------------------------------------------------------------------------
 ;; format with --lang
@@ -242,7 +242,7 @@
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
         {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme-classic")]
     (is (zero? exit))
-    (is (= "defn(foo [x] +(x 1))\n" out))))
+    (is (= "defn( foo [x] +(x 1))\n" out))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #3 — Babashka warns about .meme require limitation
@@ -251,13 +251,13 @@
 ;; doing nothing.
 ;; ---------------------------------------------------------------------------
 
-(deftest run-babashka-loader-warning
+(deftest run-babashka-loader-no-warning
   (let [f (tmp-meme "println(\"hello\")")
         {:keys [out err exit]} (bb-meme "run" (str f))]
     (is (zero? exit))
     (is (str/includes? out "hello"))
-    (is (str/includes? err "Babashka")
-        "Should warn that .meme require is not available on Babashka")))
+    (is (str/blank? err)
+        "Babashka loader should be silent (SCI bypasses clojure.core/load)")))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #4 — bb meme run with nested .meme require
