@@ -368,6 +368,37 @@ All four extension points compose via `assoc`/`merge`:
 
 Project-local defaults live in `.meme-format.edn`, consumed by `meme.config` and merged into `meme format` invocations. See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint, refactor).
 
+## Registry as pure infrastructure — inverted control for built-in langs
+
+The registry (`meme.registry`) owns generic infrastructure: a keyword-to-lang-map index, extension dispatch, user-lang registration via EDN, safety guards.  It does *not* own the list of built-in langs.
+
+Earlier the registry imported `meme-lang.api` and `wlj-lang.api` directly and called `register-builtin!` on each.  That had two costs:
+
+1. A circular dependency.  The registry imported `meme-lang.api`; `meme-lang.api` transitively used `meme-lang.run`; `meme-lang.run` needed the registry back to dispatch by file extension.  The cycle was worked around with `requiring-resolve` calls in `meme-lang.run`, `meme-lang.repl`, `meme.cli`, and `meme.loader` — four invisible runtime dependencies that didn't show up in the static `:require` graph.
+
+2. A hidden manifest.  The "lang registry" was secretly also the "list of built-in langs," which meant adding a lang required editing two namespaces: the new lang and the registry.  Worse, every `meme` invocation (even `meme format`) paid for fully loading every built-in's namespace graph, because all were imported unconditionally at registry ns-load.
+
+Both problems have the same fix: invert the control.
+
+- The **registry** imports no langs.  It's pure data + generic operations.
+- Each lang's **`api` namespace** calls `registry/register-builtin!` at the bottom of its file.  Loading the ns has a registration side-effect.
+- The **app** (`meme.cli` in this project) is what decides which built-ins to ship by explicitly requiring their api namespaces:
+
+```clojure
+(ns meme.cli
+  (:require [meme.registry :as registry]
+            [meme.loader :as loader]
+            [meme-lang.api]      ;; side-effect: registers :meme
+            [wlj-lang.api]       ;; side-effect: registers :wlj
+            ...))
+```
+
+The dependency graph becomes acyclic.  The registry is what it claims to be.  Adding a built-in is now one `:require` in the app plus one `register-builtin!` at the new lang's ns bottom — two lines, both at appropriate layers.
+
+Why a side-effecting ns-load instead of, say, declarative metadata?  Because Clojure's ns-load is already the thing we want: when the app says "I want this lang available," it requires it.  Registration happens as part of that.  The alternative (a separate declarative manifest) would duplicate what `:require` already does.
+
+User langs continue to go through `register!`, which validates EDN-style config, resolves symbols, and refuses to shadow built-ins.  The two registration paths serve different audiences: `register-builtin!` for langs that ship as code in the same process, `register!` for langs declared via EDN config.
+
 ## Lang backend
 
 meme uses a single implementation of the meme↔Clojure translation, registered as `:meme` in the lang registry.

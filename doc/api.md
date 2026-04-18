@@ -548,9 +548,32 @@ Format an exception for display. Produces a multi-line string with:
 If `source` is `nil`/blank or the exception lacks `:line`/`:col`, only the prefixed message is returned.
 
 
-## meme.registry — User lang registration
+## meme.registry — Lang registration
 
-In addition to built-in langs and EDN-loaded langs, user langs can be registered at runtime for extension-based auto-detection by `run-file` and the CLI.
+The registry is generic infrastructure: it imports no concrete langs.  Each lang's api namespace calls `register-builtin!` at its own load time; the CLI (or any host application) triggers this by explicitly requiring the langs it ships with.  User langs use `register!`, which goes through EDN resolution and guards against overriding built-ins.
+
+### register-builtin!
+
+```clojure
+(meme.registry/register-builtin! lang-name lang-map)
+```
+
+Register a built-in lang with a pre-resolved `lang-map`.  Called at ns-load time from each lang's own api namespace — the registry itself imports no langs to avoid a circular dependency:
+
+```clojure
+;; src/my_lang/api.cljc
+(def lang-map
+  {:extension ".mylang"
+   :to-clj    to-clj
+   #?@(:clj [:run  run-string
+             :repl start])})
+
+#?(:clj (registry/register-builtin! :my-lang lang-map))
+```
+
+Then the host app (e.g. `meme.cli`) explicitly `(:require [my-lang.api])` — the require side-effects the registration.  The lang is then available via `registry/resolve-lang` and `registry/resolve-by-extension`.
+
+Tags the lang with `:builtin? true` metadata so `register!` can refuse user attempts to shadow it.
 
 ### register!
 
