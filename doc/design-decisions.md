@@ -331,6 +331,43 @@ via metadata):
 - `#()` vs `fn()`: preserved via `:meme-lang/sugar` (see above section).
 
 
+## Three layers of formatting: notation, form-shape, style
+
+The printer and formatter were originally one concern: "given a form, produce meme text." As style knobs accumulated (`head-line-args`, `definition-forms`, `pair-body-forms`, `binding-forms`, a hardcoded `defn` bump), the one-layer design started carrying three different kinds of knowledge at once. Pulling them apart made each one addressable on its own.
+
+The three concerns, ranked by how often they change:
+
+1. **Notation** — how the call syntax renders: parens, delimiter placement, `:meme` vs `:clj` mode. This is fixed per language and lives in `meme-lang.printer`. The printer knows *no form names and no slot semantics* beyond its fallback recursion.
+2. **Form-shape** — what the parts of a special form *mean*. A registry keyed by head symbol maps to decomposers; each decomposer emits `[slot-name value]` pairs (e.g. `(defn foo [x] body)` → `[[:name foo] [:params [x]] [:body body]]`). This is language-level semantic vocabulary and lives in `meme-lang.form-shape`. **One per lang** — meme-lang has its own registry; wlj-lang will have its own when its printer materializes.
+3. **Style** — opinions *per slot name*, not per form. `:head-line-slots #{:name :params ...}` says "keep these slots with the call head on break," and `:force-open-space-for #{:name}` handles the `defn( ` convention. **N per lang** — canon and flat today, compact or project-local styles tomorrow.
+
+The ratio is **N styles : 1 form-shape : 1 lang**. Style and form-shape live at different layers of composition — style is *formatter-owned*, form-shape is *lang-owned* — which is why they're distinct keys in the lang-map rather than folded into one.
+
+### Why three rather than two
+
+An earlier sketch had just notation + style. The trouble was that style ended up with two kinds of entries: numeric priorities (`{defn 1, defmethod 2}`) and form-name sets (`:pair-body-forms #{case cond condp}`). Those are *form-shape* knowledge wearing a style-map hat. A user macro `my-defn` couldn't get the same layout as `defn` without editing style — even though the user's opinion about layout hadn't changed.
+
+Splitting form-shape out gives each axis a single, clean vocabulary. Style talks about slots; form-shape talks about decomposition. A new `my-defn` macro needs one registry entry and inherits every style opinion that mentions slots it produces.
+
+### Worked examples
+
+**The `defn` bump.** Before the split, the printer had this special case: if `head ∈ #{defn defn- defmacro}` and `(vector? (second args))`, bump the head-line count from 1 to 2. The rule was incomplete (a docstring arg pushed params to body, missing the intended layout) and unreachable for user macros. After the split, `decompose-defn-like` emits `[:name] [:doc?] [:params] [:body*]` slots, and canon's style declares `:head-line-slots` includes both `:name` and `:params`. The "bump" falls out of the decomposition; the docstring case now also renders correctly.
+
+**Defmethod's graceful break.** `(defmethod area :circle [{:keys [radius]}] ...)` at narrow widths used to have name + dispatch-val on the head line and push `[params]` to body by fiat. Under the new model, all three signature slots sit on the head line when they fit, and break uniformly when they don't. No arbitrary third-arg demotion.
+
+**User macro inheritance.** `(my-defn foo [x] body)` with a registered `{'my-defn (get registry 'defn)}` alias — or with `with-structural-fallback` wrapping the registry — renders with the full defn layout, including the open-paren space. Notation, form-shape, and style compose via plain map operations: no code change.
+
+### Override seams
+
+All four extension points compose via `assoc`/`merge`:
+
+- **Swap a style** — pass different `:style` to `canon/format-form`.
+- **Extend a registry** — `(assoc registry 'my-macro my-decomposer)`.
+- **Enable inference** — `(with-structural-fallback registry)`.
+- **Override one slot's rendering** — `{:slot-renderers {:clause my-fn}}` in style; merges over printer defaults.
+
+Project-local defaults live in `.meme-format.edn`, consumed by `meme.config` and merged into `meme format` invocations. See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint, refactor).
+
 ## Lang backend
 
 meme uses a single implementation of the meme↔Clojure translation, registered as `:meme` in the lang registry.

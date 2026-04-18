@@ -111,6 +111,17 @@ the CLI itself is written in `.meme`.
 | P12 | Proper indentation | Done |
 | P13 | Roundtrip: read then print produces re-parseable output | Done |
 
+### Formatter
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| F1 | Three-layer formatter architecture: notation (`meme-lang.printer`), form-shape (`meme-lang.form-shape`), style (`canon/style` or alternative). Each independently composable via plain-data operations. | Done |
+| F2 | Public slot vocabulary: `:name`, `:doc`, `:params`, `:bindings`, `:dispatch-val`, `:dispatch-fn`, `:test`, `:expr`, `:as-name`, `:clause`, `:default`, `:arity`, `:body`. Documented in `doc/form-shape.md`. | Done |
+| F3 | Form-shape registry per lang; exposed under `:form-shape` in `lang-map`. `decompose (registry head args)` takes registry explicitly so langs are sovereign. | Done |
+| F4 | Opt-in structural fallback via `with-structural-fallback` — infers defn-like and let-like shapes for unregistered heads. | Done |
+| F5 | Style's `:slot-renderers` composes over `printer/default-slot-renderers` via plain map merge. Overrides compose independently of other style keys. | Done |
+| F6 | Project-local `.meme-format.edn` — `meme format` discovers config by walking up from CWD. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol-to-symbol aliases), `:style` (partial canon override). Strict EDN parsing; unknown reader tags rejected; unknown keys warn but don't fail. | Done |
+
 ### REPL
 
 | ID | Requirement | Status |
@@ -208,6 +219,27 @@ meme rules inside. No opaque regions.
     `step-parse`, `:prelude` option in `run-string`.
   - **Example languages** in `examples/languages/`: calc, prefix, superficie.
 
+- **Three-layer formatter architecture.** The printer, form-shape, and
+  style concerns are now separate namespaces with independent extension
+  points, all composable via plain-data operations:
+  - `meme-lang.printer` — notation only. Dispatches on slots from the
+    form-shape registry provided via ctx. No hardcoded form names.
+  - `meme-lang.form-shape` — language-owned registry of decomposers.
+    Each decomposer emits `[slot-name value]` pairs. 13-slot vocabulary
+    (`:name`, `:doc`, `:params`, `:bindings`, `:clause`, `:body`, etc.)
+    is public and documented in `doc/form-shape.md`. `with-structural-fallback`
+    enables opt-in inference for user macros matching defn-like or let-like
+    shapes.
+  - `meme-lang.formatter.canon/style` — slot-keyed opinions
+    (`:head-line-slots`, `:force-open-space-for`, `:slot-renderers`).
+    The canon style collapsed from ~60 form-keyed entries to 11 slot-keyed
+    entries. Formatters accept `:style` override in opts for project-level
+    tweaks.
+  - `meme.config` — reads `.meme-format.edn` from project root (walking up
+    from CWD) and translates it into formatter opts. Schema: `:width`,
+    `:structural-fallback?`, `:form-shape` (symbol-to-symbol aliases),
+    `:style` (partial override).
+
 ### Platform requirements
 
 | ID | Requirement | Status |
@@ -240,10 +272,3 @@ meme rules inside. No opaque regions.
   (parse, read, format, to-clj, to-meme) as MCP tools for AI agents.
   Enables LLMs to read, write, and transform `.meme` code natively
   without converting through Clojure first.
-- **Formatter style extraction**: The printer (`meme-lang.printer`) currently
-  mixes notation mapping (how meme syntax maps to Doc nodes) with style
-  policy (head-line-args, definition-forms, binding-forms, columnar alignment,
-  pair grouping, inline layout). Extract style policy into a config map that
-  formatters pass to the printer. Each formatter (canon, flat) carries its own
-  style, and new formatting styles are new configs — not printer code changes.
-  The render engine stays unchanged (pure Doc→string).
