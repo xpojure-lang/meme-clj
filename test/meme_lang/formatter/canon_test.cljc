@@ -49,12 +49,22 @@
                   {:width 30})]
       (is (re-find #"^if\( >\(x 0\)" result)))))
 
-(deftest multi-line-defmethod-keeps-two
-  (testing "defmethod (head-line-args=2) keeps name and dispatch"
+(deftest multi-line-defmethod-keeps-signature
+  (testing "defmethod signature slots (name, dispatch-val, params) stay on head line when they fit"
+    (let [result (fmt-canon/format-form
+                  '(defmethod area :circle [x] (* Math/PI (* x x)))
+                  {:width 35})]
+      (is (re-find #"^defmethod\( area :circle \[x\]" result))))
+  (testing "narrow width breaks all head-line slots uniformly"
     (let [result (fmt-canon/format-form
                   '(defmethod area :circle [{:keys [radius]}] (* Math/PI (* radius radius)))
                   {:width 40})]
-      (is (re-find #"^defmethod\( area :circle" result)))))
+      ;; At a width that cannot fit the full signature, the head group
+      ;; breaks — each slot on its own line — rather than demoting some
+      ;; arbitrary suffix to the body.
+      (is (re-find #"^defmethod\( area" result))
+      (is (re-find #":circle" result))
+      (is (re-find #"\[\{:keys \[radius\]\}\]" result)))))
 
 (deftest head-args-fallback-when-too-wide
   (testing "head-line args that don't fit fall back to all-in-body"

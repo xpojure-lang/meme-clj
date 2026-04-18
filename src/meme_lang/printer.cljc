@@ -11,7 +11,8 @@
   (:require [clojure.string :as str]
             [meme.tools.render :as render]
             [meme-lang.values :as values]
-            [meme-lang.forms :as forms]))
+            [meme-lang.forms :as forms]
+            [meme-lang.form-shape :as form-shape]))
 
 ;; ---------------------------------------------------------------------------
 ;; Comment extraction from :meme-lang/leading-trivia metadata
@@ -61,24 +62,23 @@
 ;; ---------------------------------------------------------------------------
 ;; Style — layout policy owned by formatters, threaded through ctx
 ;; ---------------------------------------------------------------------------
-;; The printer is notation; the formatter is layout.  Style maps control
-;; how calls are structured (head-line splitting, pair grouping, binding
-;; layout, definition-form spacing).  Formatters define and pass these.
+;; The printer is notation; the formatter is layout.  Style maps opine on
+;; semantic slot names (emitted by `meme-lang.form-shape/decompose`), not
+;; on form names — so `defn`, `defn-`, `defmacro`, and any user macro that
+;; decomposes to the same slots all get identical layout for free.
 ;;
-;; A nil style means "no layout opinions" — true pass-through.  The
-;; private empty-style provides safe empty defaults for nil lookups.
-
-(def ^:private empty-style
-  "No layout opinions — pass-through formatting."
-  {:head-line-args   {}
-   :definition-forms #{}
-   :pair-body-forms  #{}
-   :binding-forms    #{}})
+;; Style keys:
+;;   :head-line-slots       set of slot names that stay on the head line
+;;   :force-open-space-for  set of slot names whose presence forces `head( `
+;;                          (open-paren followed by space even when flat)
+;;
+;; A nil style means "no layout opinions" — all slots collapse into the
+;; body and nothing is force-spaced: true pass-through (flat formatter).
 
 (defn- ctx-style
-  "Get the resolved style from a ctx, defaulting nil to empty-style."
+  "Get the resolved style from a ctx, defaulting nil to an empty map."
   [ctx]
-  (or (:style ctx) empty-style))
+  (or (:style ctx) {}))
 
 (defn- anon-fn-shorthand?
   "Can (fn [params] body) be printed as #(body)?
@@ -208,89 +208,96 @@
     :else
     (render/doc-cat doc-caret (to-doc-form m ctx))))
 
+(defn- slot->doc
+  "Render a form-shape slot value to a Doc.
+
+   Clauses (`:clause`) and bindings (`:bindings`) are semantically
+   structural — the decomposer labels them and the printer honors the
+   structure regardless of style.  Pair values like `[test value]` render
+   as `test value` on one line; binding vectors use columnar layout.
+   All other slots delegate to `to-doc-inner`."
+  [[slot-name value] ctx]
+  (case slot-name
+    :bindings (binding-vector-doc value ctx)
+    :clause   (let [[a b] value]
+                (render/doc-cat (to-doc-inner a ctx) doc-space (to-doc-inner b ctx)))
+    (to-doc-inner value ctx)))
+
+(defn- body-sequence-doc
+  "Render a sequence of arg-docs as a parenthesized body with all args
+   on separate lines when broken: `(` line0 d1 line d2 ... line0 `)`."
+  [head-doc arg-docs]
+  (if (empty? arg-docs)
+    (render/group (render/doc-cat head-doc doc-open-paren doc-close-paren))
+    (render/group
+     (render/doc-cat
+      head-doc doc-open-paren
+      (render/nest 2 (render/doc-cat render/line0 (intersperse render/line arg-docs)))
+      render/line0
+      doc-close-paren))))
+
+(defn- head-body-split-doc
+  "Render head-line args + body args: `head( [ensure-space] h1 h2 nl b1 nl b2 nl0 )`.
+   after-paren is `doc-space` to force open-space, or DocIfBreak for break-only."
+  [head-doc head-docs body-docs after-paren]
+  (render/group
+   (render/doc-cat
+    head-doc doc-open-paren after-paren
+    (render/nest 2
+                 (render/doc-cat
+                  (render/group (intersperse render/line head-docs))
+                  (reduce (fn [acc d] (render/doc-cat acc render/line d)) nil body-docs)))
+    render/line0
+    doc-close-paren)))
+
+(defn- call-doc-clj
+  "Clojure mode: (head arg1 arg2) with no head-line split."
+  [head-doc arg-docs]
+  (if (empty? arg-docs)
+    (render/group (render/doc-cat doc-open-paren head-doc doc-close-paren))
+    (render/group
+     (render/doc-cat
+      doc-open-paren head-doc
+      (render/nest 2 (render/doc-cat render/line (intersperse render/line arg-docs)))
+      doc-close-paren))))
+
 (defn- call-doc
-  "Build Doc for a call form. Reads layout policy from (:style ctx)."
+  "Build Doc for a call form.
+
+   Dispatches on mode (meme vs clj) and on whether form-shape provides a
+   semantic decomposition for the head.  When a decomposition is present,
+   style opines on which slot names stay on the head line; when absent
+   (plain calls, user fns without a registered shape), all args render in
+   the body."
   [head args ctx]
-  (let [style    (ctx-style ctx)
-        mode     (:mode ctx)
-        head-doc (to-doc-inner head ctx)
-        binding? (and (contains? (:binding-forms style) head)
-                      (seq args)
-                      (vector? (first args)))
-        arg-docs (if binding?
-                   (into [(binding-vector-doc (first args) ctx)]
-                         (map #(to-doc-inner % ctx)) (rest args))
-                   (mapv #(to-doc-inner % ctx) args))]
+  (let [mode     (:mode ctx)
+        head-doc (to-doc-inner head ctx)]
     (if (= mode :clj)
-      ;; Clojure mode: (head arg1 arg2)
-      (if (empty? arg-docs)
-        (render/group (render/doc-cat doc-open-paren head-doc doc-close-paren))
-        (render/group
-         (render/doc-cat
-          doc-open-paren head-doc
-          (render/nest 2 (render/doc-cat render/line (intersperse render/line arg-docs)))
-          doc-close-paren)))
-      ;; Meme mode: head(arg1 arg2) with head-line-args
-      ;; When broken: space after ( and closing ) on its own line.
-      ;; Definition forms get space after ( even when flat (if style says so).
-      (let [n-head (let [n (get (:head-line-args style) head)]
-                     ;; defn/defn-/defmacro: bump to 2 when second arg is a
-                     ;; vector (params) — keeps name + params on head line.
-                     ;; Docstring (string) or multi-arity (list) stays at 1.
-                     (if (and (= n 1)
-                              (contains? #{'defn 'defn- 'defmacro} head)
-                              (>= (count args) 2)
-                              (vector? (second args)))
-                       2
-                       n))
-            def-form? (contains? (:definition-forms style) head)
-            after-paren (if def-form?
-                          doc-space
-                          (render/->DocIfBreak doc-space nil))]
+      (call-doc-clj head-doc (mapv #(to-doc-inner % ctx) args))
+      (if-let [slots (form-shape/decompose head args)]
+        ;; Slot-aware rendering
+        (let [style        (ctx-style ctx)
+              head-set     (:head-line-slots style #{})
+              force-set    (:force-open-space-for style #{})
+              {head-slots  true
+               body-slots  false} (group-by #(contains? head-set (first %)) slots)
+              head-docs    (mapv #(slot->doc % ctx) head-slots)
+              body-docs    (mapv #(slot->doc % ctx) body-slots)
+              force-space? (boolean (some #(contains? force-set (first %)) head-slots))
+              after-paren  (if force-space?
+                             doc-space
+                             (render/->DocIfBreak doc-space nil))]
           (cond
-            ;; Zero args: head()
-            (empty? arg-docs)
-            (render/group (render/doc-cat head-doc doc-open-paren doc-close-paren))
+            ;; Both head and body non-empty — split layout applies.
+            (and (seq head-docs) (seq body-docs))
+            (head-body-split-doc head-doc head-docs body-docs after-paren)
 
-            ;; Head-line args: keep n args on head line, rest in body
-            (and n-head (pos? n-head) (> (count arg-docs) n-head))
-            (let [head-docs (subvec arg-docs 0 n-head)
-                  body (subvec arg-docs n-head)
-                  ;; For case/cond/condp: pair up body args (test value, odd default)
-                  body-docs (if (contains? (:pair-body-forms style) head)
-                              (let [pairs (partition-all 2 body)]
-                                (mapv (fn [pair]
-                                        (if (= 2 (count pair))
-                                          (render/doc-cat (first pair) doc-space (second pair))
-                                          (first pair)))
-                                      pairs))
-                              body)]
-              (render/group
-               (render/doc-cat
-                head-doc doc-open-paren after-paren
-                (render/nest 2
-                             (render/doc-cat
-                              (render/group (intersperse render/line head-docs))
-                              (reduce (fn [acc d] (render/doc-cat acc render/line d)) nil body-docs)))
-                render/line0
-                doc-close-paren)))
-
-            ;; Default: all args in body
+            ;; Only one side has entries — treat as a single body sequence.
+            ;; Matches prior behavior: `defn(foo)` flat, not `defn( foo)`.
             :else
-            (let [body-docs (if (contains? (:pair-body-forms style) head)
-                              (let [pairs (partition-all 2 arg-docs)]
-                                (mapv (fn [pair]
-                                        (if (= 2 (count pair))
-                                          (render/doc-cat (first pair) doc-space (second pair))
-                                          (first pair)))
-                                      pairs))
-                              arg-docs)]
-              (render/group
-               (render/doc-cat
-                head-doc doc-open-paren
-                (render/nest 2 (render/doc-cat render/line0 (intersperse render/line body-docs)))
-                render/line0
-                doc-close-paren))))))))
+            (body-sequence-doc head-doc (into head-docs body-docs))))
+        ;; No form-shape registered — plain call, all args in body.
+        (body-sequence-doc head-doc (mapv #(to-doc-inner % ctx) args))))))
 
 (defn- collection-doc
   "Build Doc for a delimited collection: [elems], #{elems}, #(body).
