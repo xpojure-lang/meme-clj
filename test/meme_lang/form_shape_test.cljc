@@ -212,3 +212,50 @@
       (is (fn? defn-fn))
       (is (= (fs/decompose fs/registry 'defn '[foo [x] x])
              (defn-fn '[foo [x] x]))))))
+
+;; ---------------------------------------------------------------------------
+;; Structural fallback — opt-in via with-structural-fallback
+;; ---------------------------------------------------------------------------
+
+(deftest default-registry-has-no-fallback
+  (testing "plain registry returns nil for unregistered heads"
+    (is (nil? (fs/decompose fs/registry 'my-defn '[foo [x] (+ x 1)])))
+    (is (nil? (fs/decompose fs/registry 'my-let '[[x 1] (+ x 1)])))))
+
+(deftest fallback-infers-defn-like-shape
+  (testing "with fallback enabled, name + params vector infers defn-like slots"
+    (let [reg (fs/with-structural-fallback fs/registry)]
+      (is (= [[:name 'foo] [:params '[x]] [:body '(+ x 1)]]
+             (fs/decompose reg 'my-defn '[foo [x] (+ x 1)]))))))
+
+(deftest fallback-infers-let-like-shape
+  (testing "with fallback enabled, leading bindings vector infers let-like slots"
+    (let [reg (fs/with-structural-fallback fs/registry)]
+      (is (= [[:bindings '[x 1]] [:body '(+ x 1)]]
+             (fs/decompose reg 'my-let '[[x 1] (+ x 1)]))))))
+
+(deftest fallback-leaves-plain-calls-alone
+  (testing "fallback only fires when the args match a recognized pattern"
+    (let [reg (fs/with-structural-fallback fs/registry)]
+      ;; Plain function call with no vector arg — no inference
+      (is (nil? (fs/decompose reg 'my-fn '[1 2 3])))
+      ;; Single non-vector arg — no inference
+      (is (nil? (fs/decompose reg 'my-fn '[42]))))))
+
+(deftest fallback-does-not-override-registered-entries
+  (testing "registered heads still dispatch to their own decomposer"
+    (let [reg (fs/with-structural-fallback fs/registry)]
+      ;; defn is registered; use its registered decomposer, not the fallback
+      (is (= (fs/decompose fs/registry 'defn '[foo [x] x])
+             (fs/decompose reg 'defn '[foo [x] x]))))))
+
+(deftest fallback-composes-with-user-extensions
+  (testing "user-added entries + structural fallback both work"
+    (let [reg (-> fs/registry
+                  (assoc 'my-special (fn [_args] [[:name 'special]]))
+                  (fs/with-structural-fallback))]
+      ;; User-registered head hits the explicit decomposer
+      (is (= [[:name 'special]] (fs/decompose reg 'my-special [])))
+      ;; Unregistered but defn-shaped head hits the fallback
+      (is (= [[:name 'foo] [:params '[x]] [:body 'x]]
+             (fs/decompose reg 'my-defn '[foo [x] x]))))))

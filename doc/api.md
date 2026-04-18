@@ -220,7 +220,7 @@ Format a single Clojure form as canonical meme text. Width-aware — uses indent
 
 Options:
 - `:width` — target line width (default: 80)
-- `:form-shape` — form-shape registry (default: `meme-lang.form-shape/registry`). Override to add user-defined defining macros or to disable decomposition entirely (pass `nil` for plain-call layout).
+- `:form-shape` — form-shape registry (default: `meme-lang.form-shape/registry`). Override to add user-defined defining macros or to disable decomposition entirely (pass `nil` for plain-call layout). Wrap with `meme-lang.form-shape/with-structural-fallback` to enable structural inference for user macros that mirror `defn` (name + params vector) or `let` (leading bindings vector) shapes.
 
 ### format-forms
 

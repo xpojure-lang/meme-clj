@@ -248,8 +248,55 @@
    own form-shape vocabulary (see `meme-lang.form-shape/registry` for
    the meme-lang built-in).  When `registry` is nil — e.g. a bare call
    to `printer/to-doc` without a lang in play — every head is treated
-   as having no shape."
+   as having no shape.
+
+   A registry may opt into structural fallback by carrying a metadata
+   key `::fallback-fn` — a function `(fn [head args] → slots)`.  When
+   the direct lookup misses, the fallback is consulted; this lets user
+   macros with a defn- or let-like shape inherit layout without being
+   registered.  See `with-structural-fallback`."
   [registry head args]
   (when (and registry (some? head))
-    (when-let [f (get registry head)]
-      (f (vec args)))))
+    (let [args-vec (vec args)]
+      (or (when-let [f (get registry head)]
+            (f args-vec))
+          (when-let [fallback (::fallback-fn (meta registry))]
+            (fallback head args-vec))))))
+
+;; ---------------------------------------------------------------------------
+;; Structural fallback — infer shape for unregistered heads
+;; ---------------------------------------------------------------------------
+;;
+;; When a head isn't in the registry but its argument shape resembles a
+;; known pattern, inference can recover the decomposition.  This covers
+;; user macros like `my-defn`/`my-let`/DSL forms that mirror built-ins.
+;;
+;; Two patterns are recognized — the unambiguous ones.  Anything narrower
+;; (test-then-else, expr-followed-by-clauses, ...) would match too many
+;; plain calls and risk misrendering.
+
+(defn- infer-structurally
+  "Infer a decomposition from structural cues.  Recognizes:
+     (HEAD name [params] body*) — defn-like  (second arg is a vector)
+     (HEAD [bindings] body*)    — let-like   (first arg is a vector)
+   Returns nil for any other shape."
+  [_head args]
+  (cond
+    (and (>= (count args) 2)
+         (symbol? (first args))
+         (vector? (second args)))
+    (decompose-defn-like args)
+
+    (and (seq args)
+         (vector? (first args)))
+    (decompose-bindings-body args)
+
+    :else nil))
+
+(defn with-structural-fallback
+  "Return a registry (same entries) that uses structural inference when
+   no entry matches a given head.  Users of the returned registry get
+   automatic layout for user macros whose shape resembles `defn`
+   (name + params) or `let` (bindings vector)."
+  [registry]
+  (vary-meta registry assoc ::fallback-fn infer-structurally))
