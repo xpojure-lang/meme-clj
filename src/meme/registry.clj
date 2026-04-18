@@ -12,21 +12,42 @@
    Plus optional metadata:
      :extension   \".ext\"           — file extension (string or vector)
      :extensions  [\".ext\" \".e\"]  — file extensions (string or vector)
-   Both forms are accepted and normalized to :extensions [...].
+     :form-shape  registry           — lang-owned decomposer map consumed by
+                                       the printer/formatter (see
+                                       `meme-lang.form-shape`)
+   Both extension forms are accepted and normalized to :extensions [...].
 
    Every key is optional. A lang supports exactly the commands it has keys for.
 
    Built-in langs are self-describing: each defines a lang-map in its own namespace.
-   User langs can be registered via register! with EDN-style config maps."
+   User langs can be registered via register! with EDN-style config maps.
+
+   String values in a lang-map (e.g. `:run \"prelude.meme\"` in EDN) are
+   resolved through handlers installed via `register-string-handler!`. This
+   keeps the registry lang-agnostic — langs install their own conventions
+   rather than the registry hardcoding meme's."
   (:require [clojure.edn :as edn]
-            [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry
 ;; ---------------------------------------------------------------------------
 
 (defonce ^:private registry (atom {}))
+
+;; Command slots whose EDN/register! value is a string are resolved through a
+;; handler that a lang installs via `register-string-handler!`. The registry
+;; itself stays lang-agnostic — it does not know how to interpret a string
+;; path; whichever lang wants string-convention support (e.g. meme's "path is a
+;; prelude file") installs its own handler at load time.
+(defonce ^:private string-handlers (atom {}))
+
+(defn register-string-handler!
+  "Install a handler for resolving string values in the given command slot.
+   `handler` is (fn [string-value] → command-fn) and is called once per
+   register!/load-edn. Later registrations override earlier ones."
+  [command handler]
+  (swap! string-handlers assoc command handler))
 
 (defn- normalize-extensions
   "Normalize :extension/:extensions into a flat vector of dot-prefixed strings.
@@ -66,7 +87,9 @@
 (defn- resolve-value
   "Resolve a single EDN value for a command.
    symbol   → requiring-resolve to a function
-   string   → for :run, wraps as: eval .meme file then eval user source
+   string   → dispatched through the handler installed via
+              register-string-handler! for this command slot (e.g. meme
+              installs a :run handler that treats the string as a prelude path)
    keyword  → look up that command from a registered lang
    fn/other → pass through (for register! with pre-resolved fns)"
   [command value]
@@ -78,14 +101,13 @@
     (do (when (str/includes? value "..")
           (throw (ex-info (str "Path must not contain '..': " (pr-str value))
                           {:command command :value value})))
-        (let [run-string-fn (resolve-symbol 'meme-lang.run/run-string)]
-          (case command
-            :run (fn [source opts]
-                   (run-string-fn (slurp value) (dissoc opts :prelude :lang))
-                   (run-string-fn source opts))
-            (throw (ex-info (str "String value not supported for :" (name command)
-                                 " — use a qualified symbol or keyword")
-                            {:command command :value value})))))
+        (if-let [handler (get @string-handlers command)]
+          (handler value)
+          (throw (ex-info (str "String value not supported for :" (name command)
+                               " — no string handler registered for this command. "
+                               "Use a qualified symbol, keyword, or fn, or install "
+                               "one via meme.registry/register-string-handler!.")
+                          {:command command :value value}))))
 
     (keyword? value)
     (let [base (get @registry value)]
@@ -128,8 +150,10 @@
 (defn load-edn
   "Load a lang from an EDN file. Returns a lang map with functions.
    H5 WARNING: this function executes code. Symbols in the EDN are resolved
-   via requiring-resolve (loads namespaces from classpath). String values for
-   :run are slurp'd and eval'd. Only use with trusted EDN files."
+   via requiring-resolve (loads namespaces from classpath). String values are
+   dispatched through string handlers a lang installed via
+   register-string-handler! (meme installs a :run handler that slurps and
+   runs the string as a prelude file). Only use with trusted EDN files."
   [path]
   (let [edn-data (edn/read-string (slurp path))]
     (when-not (map? edn-data)

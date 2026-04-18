@@ -173,7 +173,7 @@
   "Read a single CST node into a Clojure form."
   [node opts]
   (let [depth (or (::depth opts) 0)]
-    (when (> depth forms/max-parse-depth)
+    (when (>= depth forms/max-parse-depth)
       (errors/meme-error "Maximum nesting depth exceeded" (node-loc node))))
   (let [opts (update opts ::depth (fnil inc 0))]
   (case (:node node)

@@ -181,3 +181,30 @@
     (let [ns-before *ns*]
       (load-file "test/resources/test_meme_ns/greeter.meme")
       (is (= ns-before *ns*) "*ns* should be restored after load-file"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: a .meme file with an `ns` form must produce a fully-interned
+;; namespace (find-ns returns it), its vars carry correct :ns metadata, and
+;; the caller's *ns* is unchanged after require. The code review flagged
+;; that (binding [*ns* *ns*] ...) alone doesn't guarantee this when the
+;; loaded file's ns form calls in-ns via a custom eval path.
+;; ---------------------------------------------------------------------------
+
+(deftest require-meme-ns-interns-namespace-and-preserves-caller
+  (testing "the loaded namespace is interned and discoverable via find-ns"
+    (require 'test-meme-ns.greeter :reload)
+    (let [loaded-ns (find-ns 'test-meme-ns.greeter)]
+      (is (some? loaded-ns)
+          "find-ns must return the namespace, not just ns-resolve'd vars")
+      (is (= 'test-meme-ns.greeter (ns-name loaded-ns)))))
+  (testing "vars in the loaded ns carry correct :ns metadata"
+    (let [hello-var (ns-resolve 'test-meme-ns.greeter 'hello)]
+      (is (some? hello-var))
+      (is (= 'test-meme-ns.greeter
+             (ns-name (.-ns ^clojure.lang.Var hello-var)))
+          "var's home namespace must be the loaded one, not the caller's")))
+  (testing "caller's *ns* is unchanged after require"
+    (let [ns-before *ns*]
+      (require 'test-meme-ns.greeter :reload)
+      (is (= ns-before *ns*)
+          "require must not leak *ns* changes from the .meme ns form"))))

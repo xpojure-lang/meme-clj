@@ -176,6 +176,7 @@
   [{:keys [lang] :as opts}]
   (let [[lang-name l] (get-lang lang nil)]
     (registry/check-support l lang-name :repl)
+    (loader/install!)
     ((:repl l) (lang-opts opts))))
 
 (defn to-clj

@@ -38,17 +38,28 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Common character predicates
+;;
+;; Cross-platform: on JVM a character literal is a Character and `int`
+;; returns its code point; on CLJS it's a String of length 1 and `int`
+;; returns NaN|0=0 for non-numeric strings, which made the old
+;; `(<= (int \0) (int ch) (int \9))` check trivially true. `char-code`
+;; normalizes both platforms to the character code point.
 ;; ---------------------------------------------------------------------------
 
+(defn- char-code [ch]
+  #?(:clj  (int ^Character ch)
+     :cljs (.charCodeAt ^String ch 0)))
+
 (defn digit? [ch]
-  (and ch (<= (int \0) (int ch) (int \9))))
+  (and ch (let [c (char-code ch)] (and (>= c 0x30) (<= c 0x39)))))
 
 (defn ident-start?
   "Default identifier start: [a-zA-Z_]. Override for language-specific rules."
   [ch]
-  (and ch (or (<= (int \a) (int ch) (int \z))
-              (<= (int \A) (int ch) (int \Z))
-              (= ch \_))))
+  (and ch (let [c (char-code ch)]
+            (or (and (>= c 0x61) (<= c 0x7A))   ; a-z
+                (and (>= c 0x41) (<= c 0x5A))   ; A-Z
+                (= c 0x5F)))))                   ; _
 
 (defn ident-char? [ch]
   (or (ident-start? ch) (digit? ch)))

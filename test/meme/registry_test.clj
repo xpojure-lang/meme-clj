@@ -20,6 +20,16 @@
 
 (use-fixtures :each (fn [f] (registry/clear-user-langs!) (f) (registry/clear-user-langs!)))
 
+(defn- registry-resolver
+  "Test-side glue matching what the CLI wires: :lang opt wins, extension falls
+   through to the registry. Used to exercise run-file's injected dispatch hook."
+  [path opts]
+  (let [explicit (:lang opts)]
+    (if explicit
+      (:run (registry/resolve-lang explicit))
+      (when-let [[_n l] (registry/resolve-by-extension path)]
+        (:run l)))))
+
 ;; ============================================================
 ;; Every built-in lang has the expected shape
 ;; ============================================================
@@ -145,7 +155,7 @@
                            :run "examples/languages/prefix/core.meme"})
     (let [f (tmp-file "test-lang-dispatch" ".pfx")]
       (spit f "+(21 21)")
-      (is (= 42 (run/run-file f))))))
+      (is (= 42 (run/run-file f {:resolve-lang-for-path registry-resolver}))))))
 
 (deftest register-with-pre-resolved-fn
   (testing "register! accepts pre-resolved functions"
@@ -156,7 +166,7 @@
                                     (run-string source opts)))})
     (let [f (tmp-file "test-mini" ".mini")]
       (spit f "greet(\"world\")")
-      (is (= "Hi world" (run/run-file f))))))
+      (is (= "Hi world" (run/run-file f {:resolve-lang-for-path registry-resolver}))))))
 
 (deftest run-with-explicit-lang
   (testing ":lang opt overrides extension detection"
@@ -165,7 +175,16 @@
     ;; Run a .meme file AS pfx (explicit lang, mismatched extension)
     (let [f (tmp-file "test-explicit" ".meme")]
       (spit f "+(21 21)")
-      (is (= 42 (run/run-file f {:lang :pfx}))))))
+      (is (= 42 (run/run-file f {:lang :pfx
+                                 :resolve-lang-for-path registry-resolver}))))))
+
+(deftest run-with-unregistered-lang-throws
+  (testing ":lang with an unregistered name throws"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Unknown lang"
+                          (run/run-file "/tmp/test.meme"
+                            {:lang :nonexistent
+                             :resolve-lang-for-path registry-resolver})))))
 
 (deftest clear-user-langs-works
   (testing "clear-user-langs! empties user registry"

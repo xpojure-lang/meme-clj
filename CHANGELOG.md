@@ -4,6 +4,21 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **`meme.registry/register-string-handler!`** — lang-agnostic hook for resolving string values (e.g. `:run "prelude.meme"`) in lang-map slots. Meme installs its own `:run` handler at load time. Replaces the previous hardcoded `requiring-resolve` of `meme-lang.run/run-string` inside the registry.
+- **`meme-lang.run/run-file` opts** — `:resolve-lang-for-path` (extension-based lang dispatch hook) and `:install-loader` (zero-arg fn, typically `meme.loader/install!`). The CLI wires these so the language tier no longer requires `meme.registry` or `meme.loader` directly.
+- **`meme-lang.repl/start` opts** — `:install-loader` mirrors the above; REPL no longer auto-installs the classpath loader (the CLI does before calling).
+- **Direct unit tests for `meme.tools.parser` and `meme.tools.lexer`** using a minimal synthetic calculator grammar, covering precedence (left/right-assoc), EOF recovery, max-depth, trivia attachment, `:when` predicate gating, and all scanlet/parselet factories.
+
+### Changed
+- **`meme-lang.run` and `meme-lang.repl` no longer import `meme.registry` or `meme.loader`.** Architectural cleanup: the language tier stays lang-agnostic; extension dispatch and loader installation are injected by the CLI. Callers that relied on `run-file`'s implicit registry dispatch now pass `:resolve-lang-for-path`.
+
+### Fixed
+- **Off-by-one in CST reader's depth guard** (`src/meme_lang/cst_reader.cljc`). Reader allowed one more level of recursion than the parser's limit (`>` → `>=`). Behavior now matches the parser at exactly `max-parse-depth` levels.
+- **`meme.tools.lexer` cross-platform bug** — `digit?`/`ident-start?`/`ident-char?` claimed portability but returned wrong results on CLJS because `(int ch)` on a single-char string returns `NaN|0 = 0` rather than the code point. Fixed with a private `char-code` helper that uses `.charCodeAt` on CLJS. Meme's grammar was unaffected (it uses its own `meme-lang.lexlets` with the same pattern); `calc-lang` relied on the generic helpers and would have silently failed on CLJS.
+
 ## [3.0.0] — 2026-04-05
 
 ### Added

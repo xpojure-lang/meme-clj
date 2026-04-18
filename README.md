@@ -133,9 +133,21 @@ Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sit
 
 ## Documentation
 
+Grouped by who the doc is for:
+
+**Writing `.meme` code**
 - [Language Reference](doc/language-reference.md) — complete syntax guide
-- [API Reference](doc/api.md) — public functions
+
+**Embedding meme in a Clojure project**
+- [API Reference](doc/api.md) — public functions (`meme->forms`, `forms->meme`, `format-meme-forms`, run/repl helpers, registry)
+
+**Extending the formatter or building a sibling lang**
+- [Form-Shape Vocabulary](doc/form-shape.md) — slot names, decomposers, and the three-layer formatter model
 - [Design Decisions](doc/design-decisions.md) — rationale behind each choice
-- [Product Requirements](doc/PRD.md) — requirements and known limitations
+
+**Project tracking**
+- [Product Requirements](doc/PRD.md) — requirement table and known limitations
 - [Changelog](CHANGELOG.md) — release history
-- [Development](CLAUDE.md) — testing, architecture
+
+**Contributing**
+- [Development](CLAUDE.md) — testing, architecture, conventions

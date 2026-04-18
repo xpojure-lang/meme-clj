@@ -353,12 +353,22 @@ On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's
 (meme-lang.run/run-file path opts)
 ```
 
-Read and eval a `.meme` file. Returns the last result. Uses `slurp` internally (JVM/Babashka only). Second argument follows same convention as `run-string`.
+Read and eval a `.meme` file. Returns the last result. Uses `slurp` internally (JVM/Babashka only). Second argument follows the same convention as `run-string`.
 
-Automatically detects guest languages from file extension via `meme.registry/resolve-by-extension`. If a registered lang matches the extension, its `:run` function handles prelude and custom parser.
+Language-tier only: by default runs the file as meme. To get extension-based lang dispatch, inject a resolver via opts — the CLI wires this to `meme.registry`:
+
+- `:resolve-lang-for-path` — `(fn [path opts] → run-fn-or-nil)`. When non-nil return value handles the file; otherwise falls through to meme.
+- `:install-loader` — zero-arg fn called before eval (typically `meme.loader/install!` for classpath `.meme` require support).
 
 ```clojure
+;; Default — always runs as meme
 (run-file "test/examples/tests/01_core_rules.meme")
+
+;; With registry-driven dispatch
+(run-file "app.calc"
+          {:resolve-lang-for-path
+           (fn [p _] (when-let [[_n l] (registry/resolve-by-extension p)]
+                      (:run l)))})
 ```
 
 
@@ -635,6 +645,27 @@ Both `:extension` (string) and `:extensions` (vector) are accepted. Both are nor
                              :run 'my-lang.run/run-string})
 ;; Normalizes to :extensions [".hyb" ".hybx"]
 ```
+
+### register-string-handler!
+
+```clojure
+(meme.registry/register-string-handler! command handler)
+```
+
+Install a handler for resolving string values in the given command slot. `handler` is `(fn [string-value] → command-fn)` and is called once per `register!`/`load-edn` for each string value in that slot.
+
+The registry itself is lang-agnostic: it does not know how to interpret a string path. Meme installs its own `:run` handler at load time, which treats the string as a prelude `.meme` file path:
+
+```clojure
+;; meme-lang.api (JVM only)
+(registry/register-string-handler! :run
+  (fn [prelude-path]
+    (fn [source opts]
+      (run/run-string (slurp prelude-path) (dissoc opts :prelude :lang))
+      (run/run-string source opts))))
+```
+
+A sibling lang with different string conventions would install its own handler (later registrations override earlier ones). Without a handler, string values for that command throw with a clear error.
 
 ### resolve-by-extension
 

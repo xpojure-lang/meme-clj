@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
 
             [meme-lang.api :as lang]
+            [meme-lang.cst-reader :as cst-reader]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.forms :as forms]
             [meme-lang.expander :as expander]
@@ -139,6 +140,25 @@
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"depth"
                             (lang/meme->forms input))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: CST reader's depth guard must cap at max-parse-depth, not
+;; max-parse-depth+1. Bug: `(> depth forms/max-parse-depth)` allowed one extra
+;; level vs. the parser's effective cap, diverging the two limits. Fix: `>=`.
+;; Isolated from the parser by seeding ::depth directly so the boundary is
+;; observable on a trivial CST.
+;; ---------------------------------------------------------------------------
+
+(deftest cst-reader-depth-boundary-matches-parse-depth
+  (let [atom-node {:node :atom :token {:type :symbol :raw "x" :line 1 :col 1}}]
+    (testing "reading with depth = max-parse-depth - 1 succeeds"
+      (is (= 'x (cst-reader/read-node atom-node
+                  {:meme-lang.cst-reader/depth (dec forms/max-parse-depth)}))))
+    (testing "reading with depth = max-parse-depth throws with a clean error"
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                            #"depth"
+                            (cst-reader/read-node atom-node
+                              {:meme-lang.cst-reader/depth forms/max-parse-depth}))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: consecutive #_ discards must discard N forms (Clojure semantics).

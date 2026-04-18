@@ -144,3 +144,13 @@
 ;; The registry imports no langs; langs register themselves — this keeps
 ;; the registry pure infrastructure and avoids the old circular dep.
 #?(:clj (registry/register-builtin! :meme lang-map))
+
+;; Install meme's string handler for :run — a string value is a prelude
+;; .meme path that runs before user source. Keeps this meme convention
+;; inside the meme namespace rather than hardcoded in the registry.
+#?(:clj
+   (registry/register-string-handler! :run
+     (fn [prelude-path]
+       (fn [source opts]
+         (run/run-string (slurp prelude-path) (dissoc opts :prelude :lang))
+         (run/run-string source opts)))))

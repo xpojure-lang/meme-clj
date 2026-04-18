@@ -1,11 +1,13 @@
 (ns meme-lang.run
   "Meme-specific eval pipeline. Wires meme stages, syntax-quote resolution,
    and BOM stripping into the generic run infrastructure.
+
+   Stays in the language tier: no dependency on meme.registry or meme.loader.
+   Callers that need extension-based lang dispatch or classpath loader support
+   inject them via opts (:resolve-lang-for-path, :install-loader).
    JVM/Babashka only."
   (:require [clojure.string :as str]
             [meme.tools.run :as run]
-            [meme.registry :as registry]
-            [meme.loader :as loader]
             [meme-lang.stages :as stages]))
 
 ;; ---------------------------------------------------------------------------
@@ -77,19 +79,19 @@
                         :eval (:eval opts)
                         :prelude (:prelude opts)}))))
 
-(defn- resolve-lang-run
-  [path opts]
-  (let [explicit (:lang opts)]
-    (if explicit
-      (:run (registry/resolve-lang explicit))
-      (when-let [[_name l] (registry/resolve-by-extension path)]
-        (:run l)))))
-
 (defn run-file
-  "Read and eval a meme file. Returns the last result."
+  "Read and eval a meme file. Returns the last result.
+
+   Optional opts:
+     :install-loader        — zero-arg fn, called before eval (for classpath
+                              .meme require support; the CLI passes
+                              meme.loader/install!)
+     :resolve-lang-for-path — (fn [path opts] → run-fn-or-nil) for extension-
+                              based lang dispatch. When provided, its return
+                              value (if non-nil) runs the file instead of meme.
+                              The CLI wires this to meme.registry."
   ([path] (run-file path {}))
   ([path eval-fn-or-opts]
-   (loader/install!)
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})
          stages-impl (:stages opts)
          reader-opts (default-reader-opts opts)
@@ -97,7 +99,9 @@
                        :expand-forms (or (:expand-forms stages-impl) stages/expand-syntax-quotes)
                        :reader-opts reader-opts
                        :eval (:eval opts)
-                       :prelude (:prelude opts)}]
+                       :prelude (:prelude opts)}
+         resolve-lang (:resolve-lang-for-path opts)]
+     (when-let [install (:install-loader opts)] (install))
      (run/run-file path generic-opts
-                   (fn [p _generic-opts]
-                     (resolve-lang-run p opts))))))
+                   (when resolve-lang
+                     (fn [p _generic-opts] (resolve-lang p opts)))))))

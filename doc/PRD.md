@@ -144,8 +144,11 @@ the CLI itself is written in `.meme`.
 | C7 | `require` interception — `(require 'my.ns)` finds `.meme` files on the classpath (JVM only; Babashka's SCI bypasses `clojure.core/load`) | Done |
 
 Note: Requirement IDs are not sequential — gaps (R2–R4, R11–R12, R14,
-P2–P4, P10) are requirements that were merged into other IDs or removed
-during design iteration. IDs are stable references and are not renumbered.
+P2–P4, P10) are requirements that were merged into other IDs or dropped
+during design iteration (the largest removal was the wlj-lang
+proof-of-concept, which carried its own reader/printer requirements
+before it was retired). IDs are stable references and are not
+renumbered, so git history and this table stay cross-referenceable.
 
 ## Architecture
 
@@ -192,6 +195,11 @@ meme rules inside. No opaque regions.
   maps (`#:ns{}`), char literals, ratio literals, BigInt/BigDecimal
   are JVM/Babashka only. The core call rule and all standard forms
   work on ClojureScript.
+
+- **ClojureScript: `-0.0` does not roundtrip.** On CLJS, `(js/parseFloat
+  "-0.0")` returns `-0` and `(pr-str -0)` returns `"0"`, so negative zero
+  is indistinguishable from zero after a read/print cycle. JVM preserves
+  it correctly.
 
 - **Reader conditionals and roundtrips.** The printer emits meme syntax
   inside `#?(...)` natively. By default, meme's reader evaluates `#?`

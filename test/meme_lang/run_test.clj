@@ -113,11 +113,8 @@
     (let [result (run/run-string "`x#")]
       (is (re-find #"__auto__$" (name result))))))
 
-(deftest run-file-unregistered-lang-throws
-  (testing "explicit :lang with unregistered name throws"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Unknown lang"
-                          (run/run-file "/tmp/test.meme" {:lang :nonexistent})))))
+;; Test moved to meme.registry-test — lang dispatch is no longer a
+;; meme-lang.run concern (see run-file's :resolve-lang-for-path opt).
 
 (deftest bom-stripping
   (testing "BOM prefix is stripped before parsing"

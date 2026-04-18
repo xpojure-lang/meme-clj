@@ -23,7 +23,13 @@
      :body         ordinary body expression
 
    Slots are emitted in source order; style maps opine on slot names to
-   choose head-line vs body placement and open-paren spacing.")
+   choose head-line vs body placement and open-paren spacing.
+
+   Each `decompose-*` helper below takes the call's args and returns a
+   vector `[[slot-name value] ...]` in the shape described in its
+   docstring. Returning nil from a decomposer signals the args do not
+   match — `decompose` then falls through to structural inference (if
+   enabled) or to plain-call rendering.")
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers

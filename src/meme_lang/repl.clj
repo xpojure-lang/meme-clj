@@ -1,9 +1,11 @@
 (ns meme-lang.repl
   "Meme-specific REPL. Wires meme stages, error formatting, keyword resolution,
    and syntax-quote resolution into the generic REPL infrastructure.
+
+   Stays in the language tier: no dependency on meme.loader. Callers that need
+   classpath .meme require support inject it via opts (:install-loader).
    JVM/Babashka only."
   (:require [meme.tools.repl :as repl]
-            [meme.loader :as loader]
             [meme-lang.stages :as stages]
             [meme-lang.errors :as errors]
             [meme-lang.run :as meme-run]
@@ -18,10 +20,15 @@
    (repl/input-state s run-fn opts)))
 
 (defn start
-  "Start the meme REPL."
+  "Start the meme REPL.
+
+   Optional opts:
+     :install-loader — zero-arg fn, called before the REPL loop starts (for
+                       classpath .meme require support; the CLI passes
+                       meme.loader/install!)."
   ([] (start {}))
   ([opts]
-   (loader/install!)
+   (when-let [install (:install-loader opts)] (install))
    (let [stages-impl (:stages opts)
          run-fn (or (:run-fn stages-impl) stages/run)
          expand-fn (or (:expand-forms stages-impl) stages/expand-syntax-quotes)
