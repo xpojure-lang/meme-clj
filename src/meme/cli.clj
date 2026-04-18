@@ -2,6 +2,7 @@
   "Unified CLI. Commands dispatch through lang maps."
   (:require [meme-lang.errors :as errors]
             [meme.registry :as registry]
+            [meme.config :as config]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -175,12 +176,29 @@
     {:cmd :to-meme, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
      :verb "converted", :usage "Usage: meme to-meme <file|dir> [--lang name] [--stdout]"}))
 
+(defn- resolve-format-config
+  "Discover and read `.meme-format.edn` from CWD, returning derived opts.
+   Errors in the config file are reported to stderr and cause an exit;
+   absence of a config file is silent."
+  []
+  (try (config/resolve-project-opts)
+       (catch Exception e
+         (binding [*out* *err*]
+           (println (str "Error in .meme-format.edn: " (ex-message e))))
+         (cli-exit! 1))))
+
 (defn format-files
-  "Format meme source files in canonical style."
+  "Format meme source files in canonical style.
+
+   Reads `.meme-format.edn` from the working directory (walking up) if
+   present; its settings are applied as defaults under CLI flags."
   [opts]
-  (file-command opts
-    {:cmd :format, :pred meme-file?, :output-fn nil
-     :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"}))
+  (let [project-opts (resolve-format-config)
+        ;; CLI flags override project config; project config overrides defaults.
+        merged (merge project-opts opts)]
+    (file-command merged
+      {:cmd :format, :pred meme-file?, :output-fn nil
+       :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"})))
 
 (defn compile-meme
   "Compile .meme files to .clj in a separate output directory.

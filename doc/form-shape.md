@@ -145,6 +145,43 @@ The default `meme-lang.form-shape/registry` registers these Clojure forms:
 | `let` family | `let`, `loop`, `for`, `doseq`, `binding`, `with-open`, `with-local-vars`, `with-redefs`, `if-let`, `when-let`, `if-some`, `when-some` |
 | `if` family | `if`, `if-not`, `when`, `when-not` |
 
+## Project-local configuration (`.meme-format.edn`)
+
+`meme format` discovers a `.meme-format.edn` file by walking up from the current working directory. If present, its settings become defaults under CLI flags.
+
+Schema:
+
+```clojure
+{:width                 80
+ :structural-fallback?  true
+ :form-shape            {my-defn defn
+                         my-let  let
+                         deftask defn}
+ :style                 {:head-line-slots #{:name :params :bindings}}}
+```
+
+| Key | Meaning |
+|---|---|
+| `:width` | Target line width (positive integer). |
+| `:structural-fallback?` | Enable shape inference for unregistered heads that look like `defn` or `let`. |
+| `:form-shape` | Map `{user-sym → built-in-sym}`. Each entry aliases a user macro to an existing registry entry. The target must be a registered head (e.g. `defn`, `let`, `defmethod`). |
+| `:style` | Partial override of `canon/style`, merged on top of the defaults. Supports `:head-line-slots` and `:force-open-space-for`. `:slot-renderers` isn't supported from EDN (renderers are functions). |
+
+Unknown keys are ignored with a warning so configs remain forward-compatible.
+
+Example — teach the formatter about a project DSL:
+
+```clojure
+;; project-root/.meme-format.edn
+{:width 100
+ :structural-fallback? true
+ :form-shape {my-defn     defn
+              defendpoint defn
+              do-tx       let}}
+```
+
+After this, `my-defn`/`defendpoint` render with defn-like layout, `do-tx` renders with let-like layout, and any other user macro that looks structurally like `defn` or `let` (thanks to `:structural-fallback?`) also gets layout for free.
+
 ## Future consumers
 
 Form-shape is designed to serve tools beyond the canonical formatter. Some directions not yet built:

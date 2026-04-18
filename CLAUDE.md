@@ -132,6 +132,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `compile`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
 - `meme.registry` (.clj) — Lang registry: registration, resolution, and EDN loading. `default-lang`, `resolve-lang`, `supports?`, `check-support`, `load-edn`, `register!`, `resolve-by-extension`, `registered-langs`, `clear-user-langs!`, `available-langs`. Built-in lang is `:meme`; user langs register via EDN. JVM/Babashka only.
 - `meme.loader` (.clj) — Namespace loader: intercepts `clojure.core/load` (JVM only) and `clojure.core/load-file` (JVM + Babashka) to handle `.meme` files transparently. Installed automatically by `run-file`, REPL `start`, and the CLI `run` command. `require` finds `.meme` namespaces on the classpath (JVM only — Babashka's SCI bypasses `clojure.core/load`). `load-file` handles `.meme` files by filesystem path on both platforms. `.meme` takes precedence when both `.meme` and `.clj` exist. `install!`/`uninstall!` for manual control. JVM/Babashka only.
+- `meme.config` (.clj) — Project-local formatter config: reads `.meme-format.edn` (walking up from CWD) and translates it into opts for `canon/format-form`. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol → built-in alias), `:style` (partial canon override). Consumed by `meme format` CLI; CLI flags override config. JVM/Babashka only.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
 ### Platform tiers
@@ -190,6 +191,7 @@ Tests are split across `test/meme_lang/` (language-specific) and `test/meme/` (i
 | `meme_lang/api_test` | Language API (`meme->forms`, `forms->meme`, `format-meme-forms`, etc.) |
 | `meme/registry_test` | Lang registry: command maps, EDN loading, extension dispatch, user lang registration. JVM only. |
 | `meme/cli_test` | CLI unit tests: file type checking, extension swapping |
+| `meme/config_test` | `.meme-format.edn` validation, discovery (walking up), EDN parsing, config→opts translation |
 | `e2e/cli_test` | End-to-end CLI integration tests. JVM only. |
 | `meme_lang/repl_test` | REPL infrastructure (`input-state`, `read-input`). JVM only. |
 | `meme_lang/run_test` | File runner: `run-string`, `run-file`, shebang handling, custom eval-fn |
