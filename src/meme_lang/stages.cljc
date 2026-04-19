@@ -25,7 +25,7 @@
             [meme-lang.grammar :as grammar]
             [meme-lang.cst-reader :as cst-reader]
             [meme.tools.clj.errors :as errors]
-            [meme-lang.expander :as expander]
+            [meme.tools.clj.expander :as expander]
             [meme.tools.clj.forms :as forms]
             [meme.tools.parser :as pratt]))
 

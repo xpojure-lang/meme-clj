@@ -9,7 +9,7 @@
             [meme-lang.form-shape :as form-shape]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
-            [meme-lang.expander :as expander]
+            [meme.tools.clj.expander :as expander]
             #?(:clj [meme-lang.run :as run])
             #?(:clj [meme-lang.repl :as repl])
             #?(:clj [meme.registry :as registry])))

@@ -1,10 +1,10 @@
-(ns meme-lang.expander-test
-  "Unit tests for meme-lang.expander: syntax-quote expansion and
+(ns meme.tools.clj.expander-test
+  "Unit tests for meme.tools.clj.expander: syntax-quote expansion and
    MemeRaw unwrapping."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.expander :as expander]))
+            [meme.tools.clj.expander :as expander]))
 
 ;; ---------------------------------------------------------------------------
 ;; expand-forms — no-op path (no AST nodes)
