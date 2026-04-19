@@ -46,7 +46,7 @@
   "Namespace path prefixes that the loader must never intercept.
    These are core JVM/Clojure/tooling namespaces."
   ["clojure/" "java/" "javax/" "cljs/" "nrepl/" "cider/"
-   "cognitect/" "clj_kondo/" "clj-kondo/" "meme/" "meme_lang/"])
+   "cognitect/" "clj_kondo/" "clj-kondo/" "meme/" "meme_lang/" "implojure_lang/"])
 
 (defn- denied-namespace?
   "Return true if the load path is for a denied namespace."

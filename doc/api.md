@@ -394,7 +394,7 @@ Pipelines:
 (meme.tools.clj.stages/step-parse ctx)
 ```
 
-Parse source string into a lossless CST via the unified Pratt parser. Scanning (character dispatch, trivia) and parsing (structure) are handled in a single pass. Uses meme grammar by default, or `(:grammar opts)` if provided. Reads `:source`, assocs `:cst`.
+Parse source string into a lossless CST via the unified Pratt parser. Scanning (character dispatch, trivia) and parsing (structure) are handled in a single pass. Requires `:grammar` in `:opts` — no implicit default; each lang passes its own grammar (e.g. `meme-lang.grammar/grammar`). Reads `:source`, assocs `:cst`.
 
 ### step-read
 
