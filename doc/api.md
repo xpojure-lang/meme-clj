@@ -29,8 +29,9 @@ Read a meme source string. Returns a vector of Clojure forms. All platforms.
 
 Options:
 - `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time. When absent on JVM/Babashka, `::` keywords are deferred to eval time via `(read-string "::foo")`. Required on CLJS (errors without it, since `cljs.reader` cannot resolve `::` in the correct namespace).
-- `:read-cond` — `:preserve` to return `ReaderConditional` objects instead of evaluating reader conditionals. Default: evaluate `#?` for the current platform. Use `:preserve` for lossless `clj->meme->clj` roundtrips of `.cljc` files.
 - `:resolve-symbol` — function that resolves symbols during syntax-quote expansion (e.g., `foo` → `my.ns/foo`). On JVM/Babashka, `run-string`/`run-file`/`start` inject a default that matches Clojure's `SyntaxQuoteReader` (inlined in `meme-lang.run`). When calling `meme->forms` directly, symbols in syntax-quote are left unqualified unless this option is provided. On CLJS, no default is available.
+
+Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` records. To materialize the platform branch, compose `meme-lang.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:meme-lang/deprecated-opt`.
 
 ```clojure
 (meme->forms "+(1 2 3)")
@@ -113,9 +114,11 @@ Options:
 (meme-lang.api/meme->clj meme-src opts)
 ```
 
-Convert meme source string to Clojure source string. All platforms. Equivalent to `(forms->clj (meme->forms meme-src opts))`.
+Convert meme source string to Clojure source string (lossless by default). All platforms. Equivalent to `(forms->clj (meme->forms meme-src opts))`.
 
-Options: same as `meme->forms` (`:resolve-keyword`, `:read-cond`).
+Reader conditionals are preserved as `#?(...)` in the output — faithful for `.cljc` conversion. For the eval-time value, use `run-string` instead.
+
+Options: same as `meme->forms` (`:resolve-keyword`, `:resolve-symbol`).
 
 ```clojure
 (meme->clj "println(\"hello\")")
@@ -373,12 +376,17 @@ Each stage validates its required keys at entry against `stage-contracts` — mi
 
 ```clojure
 meme-lang.stages/stage-contracts
-;=> {:step-parse                 {:requires #{:source} :produces #{:cst}}
-;    :step-read                  {:requires #{:cst}    :produces #{:forms}}
-;    :step-expand-syntax-quotes  {:requires #{:forms}  :produces #{:forms}}}
+;=> {:step-parse                         {:requires #{:source} :produces #{:cst}}
+;    :step-read                          {:requires #{:cst}    :produces #{:forms}}
+;    :step-evaluate-reader-conditionals  {:requires #{:forms}  :produces #{:forms}}
+;    :step-expand-syntax-quotes          {:requires #{:forms}  :produces #{:forms}}}
 ```
 
 Machine-readable pipeline contract.  Tools that compose custom stages can extend their own contracts in the same shape.
+
+Pipelines:
+- **Tooling** (`meme->forms`, `meme->clj`, `format-meme`): `step-parse → step-read`.
+- **Eval** (`run-string`, `run-file`, REPL): `step-parse → step-read → step-evaluate-reader-conditionals → step-expand-syntax-quotes`.
 
 ### step-parse
 
@@ -394,7 +402,18 @@ Parse source string into a lossless CST via the unified Pratt parser. Scanning (
 (meme-lang.stages/step-read ctx)
 ```
 
-Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`.
+Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `MemeReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:meme-lang/deprecated-opt`.
+
+### step-evaluate-reader-conditionals
+
+```clojure
+(meme-lang.stages/step-evaluate-reader-conditionals ctx)
+```
+
+Evaluate `#?` / `#?@` records in `:forms` for the target platform. `#?` is replaced by the matched branch (or removed if no branch matches); `#?@` splices its matched sequence into the containing collection. Recurses into syntax-quote / unquote / unquote-splicing interiors to match native Clojure's order (the reader evaluates `#?` before `` ` `` is processed). Handles `:default` as fallback when no platform key matches. Validates even-count branch lists.
+
+Opts (via `:opts`):
+- `:platform` — `:clj`, `:cljs`, or any platform keyword. Default: current compile-time platform.
 
 ### step-expand-syntax-quotes
 

@@ -75,10 +75,11 @@ The codebase is organized by *kind* of code, with shared infrastructure that bot
 
 This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli` or `meme.config`**, and **`meme.tools.*` must not require anything from `meme-lang.*` or `meme.*`**.
 
-Composable stages (`meme-lang.stages`), each a `ctx → ctx` function:
+Composable stages (`meme-lang.stages`), each a `ctx → ctx` function. Tooling paths compose 1–2; eval paths (`run-string`, `run-file`, REPL) compose 1–4:
 1. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — Unified scanlet-parselet Pratt parser. Reads directly from source string. Scanning (character dispatch, trivia) and parsing (structure) are both defined in the grammar spec as scanlets and parselets. Produces a lossless CST preserving every token.
-2. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms.
-3. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
+2. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. Reader conditionals (`#?`, `#?@`) are preserved as `MemeReaderConditional` records.
+3. **step-evaluate-reader-conditionals** (`meme-lang.stages`) — materializes the platform branch of `#?`/`#?@` for eval paths. Tooling paths skip this step; records stay records. Supports `:platform` opt and `:default` fallback.
+4. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
 
 The pipeline is lossless (CST preserves all tokens including delimiters and trivia) and data-driven (the Pratt parser is generic — meme syntax is defined by a grammar spec in `meme-lang.grammar`).
 
@@ -117,7 +118,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme-lang.grammar` (.cljc) — Meme language grammar spec: maps characters to scanlets and parselets. The complete syntactic specification of M-expression syntax as data. Portable.
 - `meme-lang.lexlets` (.cljc) — Meme lexical scanlets: character predicates, consume helpers, and trivia consumers. Provides the lexical layer; `meme-lang.grammar` references these by name. Portable.
 - `meme-lang.parselets` (.cljc) — Meme-specific compound parselets: call adjacency detection, `#` dispatch sub-routing, tilde (`~`/`~@`), and the M-expression call rule. Portable.
-- `meme-lang.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. Also provides `run` which composes parse → read. Each stage calls `check-contract!` at entry against the public `stage-contracts` map; miscomposed pipelines throw `:meme-lang/pipeline-error` with the missing key(s) instead of NPEs. Portable.
+- `meme-lang.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-evaluate-reader-conditionals`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. Also provides `run` which composes parse → read (tooling pipeline). Each stage calls `check-contract!` at entry against the public `stage-contracts` map; miscomposed pipelines throw `:meme-lang/pipeline-error` with the missing key(s) instead of NPEs. `step-read` throws `:meme-lang/deprecated-opt` if `:read-cond` is passed. Portable.
 - `meme-lang.cst-reader` (.cljc) — CST reader: walks CST nodes and produces Clojure forms. Handles value resolution, metadata, syntax-quote AST nodes, anonymous functions, namespaced maps, reader conditionals. Portable.
 - `meme-lang.forms` (.cljc) — Shared form-level predicates, constructors, and constants. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding, `percent-param-type`, `strip-internal-meta`). Portable.
 - `meme-lang.form-shape` (.cljc) — Semantic decomposition of special forms into named slots (`:name`, `:params`, `:bindings`, `:clause`, `:body`, etc.). The middle layer between notation (printer) and style (formatter). Owns the stable slot vocabulary consumed by the printer and opined on by styles. `registry` is the built-in meme decomposer map; `decompose` looks up a head and applies its decomposer; `with-structural-fallback` enables inference for user macros whose shape resembles `defn` or `let`. See `doc/form-shape.md`. Portable.

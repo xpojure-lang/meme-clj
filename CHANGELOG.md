@@ -4,6 +4,45 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [5.0.0] — unreleased
+
+Reader-conditional handling is now a pipeline stage instead of a reader flag. `meme->forms` and `meme->clj` are lossless by default for `.cljc` sources.
+
+### Breaking Changes
+
+- **The `:read-cond` option is removed from `meme->forms`, `meme->clj`, and the `step-read` pipeline stage.** Reader conditionals (`#?`, `#?@`) are always returned as `MemeReaderConditional` records. Passing `:read-cond` throws `:meme-lang/deprecated-opt` with migration text.
+
+  **Migration:**
+  - If you used `{:read-cond :preserve}`: remove it. Records are the default now.
+  - If you relied on the old `:eval` behavior (platform materialization at read time): compose `meme-lang.stages/step-evaluate-reader-conditionals` after `step-read`, or use `run-string`/`run-file`/REPL — all of which do so automatically.
+
+- **`meme->clj` is now lossless by default.** Previously it evaluated `#?` for the current platform, silently dropping off-platform branches. Now both branches are preserved in the emitted Clojure text. Use `run-string` for eval-time behavior.
+
+### Added
+
+- **`meme-lang.stages/step-evaluate-reader-conditionals`** — pipeline stage that evaluates `#?`/`#?@` records in `:forms` for a target platform. Supports `:platform` opt (default: compile-time platform). Handles `#?` (branch pick), `#?@` (splice into parent collection), `:default` fallback, and validates even-count branch lists. Recurses into `` ` `` / `~` / `~@` interiors, matching native Clojure's reader-time evaluation order. Does not fire for tooling paths — `meme->forms`, `meme->clj`, `format-meme`, and `to-clj` skip the stage and preserve records.
+
+- **`:default` fallback in reader conditionals.** Previously only matched named platform keys; `#?(:cljs 1 :default 99)` on JVM returned nothing. Now returns `99`.
+
+### Changed
+
+- **`run-string`, `run-file`, REPL** — `step-evaluate-reader-conditionals` inserted automatically between `step-read` and `step-expand-syntax-quotes`.
+- **`meme->forms`, `format-meme`, `to-clj`** — internal `:read-cond :preserve` wiring removed. Records are the default; no opt required.
+- **Pipeline contract map** (`meme-lang.stages/stage-contracts`) gains an entry for the new stage; now has four entries instead of three.
+
+### Fixed
+
+- **`meme->clj` silently dropped off-platform branches of `#?` on `.cljc` sources.** The asymmetry between library `meme->clj` (evaluated) and CLI `to-clj` (preserved) is eliminated — both now preserve faithfully. Scar-tissue regression: `meme->clj-reader-conditional-lossless` in `test/meme/regression/reader_test.cljc`.
+
+### Internal
+
+- **`cst-reader.cljc`** — `:reader-cond` case simplified to a single always-preserve path. `:eval` branch, `::no-match` sentinel for reader conditionals, and `:meme-lang/splice` metadata machinery are gone. `splice-and-filter` now only filters the shebang sentinel.
+- **`meme-lang.run`** and **`meme-lang.repl`** compose the new stage in their run-fn pipelines.
+
+### Known Limitation
+
+- **`#?@` inside a map literal fails at read time** (odd-count children). Matches Clojure's own `:read-cond :preserve` behavior. Use a collection other than map, or construct the map at runtime.
+
 ## [4.0.0] — 2026-04-19
 
 A reorganization release. No breaking changes to `.meme` syntax or runtime behavior; most of the work is in documentation, API hygiene, and internal boundaries.

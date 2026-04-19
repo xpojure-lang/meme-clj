@@ -19,14 +19,14 @@ Everything else is Clojure.
 
 ## Reader stages
 
-The reader has two core stages and one optional stage:
+The reader has two core stages; eval paths compose two additional stages:
 
 1. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — unified scanlet-parselet Pratt parser. Reads directly from a source string. Scanning (character dispatch), trivia classification, and structural parsing are all defined in the grammar spec. Produces a lossless CST. Grammar is a map of characters to scanlet/parselet functions.
-2. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. No `read-string` delegation — all values resolved natively via `meme-lang.resolve`.
-3. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
+2. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. No `read-string` delegation — all values resolved natively via `meme-lang.resolve`. Reader conditionals are preserved as `MemeReaderConditional` records.
+3. **step-evaluate-reader-conditionals** (`meme-lang.stages`) — materializes `#?` / `#?@` for the target platform. Runs on eval paths only; tooling sees records.
+4. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval.
 
-The core `stages/run` calls stages 1–2, returning AST nodes for
-tooling. `run-string` chains all three stages before eval.
+The core `stages/run` calls stages 1–2, returning records for tooling. `run-string` chains 1–4 before eval.
 
 The split makes each stage independently testable and the composition extensible.
 The grammar's lexical scanlets handle all character-level concerns (strings, chars, comments
@@ -35,6 +35,39 @@ not a closing paren). The Pratt parser engine handles all structural concerns.
 
 `meme-lang.stages` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:cst`, `:forms`.
+
+
+## Reader-conditional evaluation as a pipeline stage
+
+An earlier iteration of meme's reader had a `:read-cond` flag with two
+modes: `:eval` (default — pick the current platform's branch at read
+time) and `:preserve` (return a `ReaderConditional` record). The flag
+conflated two orthogonal questions — *is `#?` still a record?* and *are
+these forms eval-ready?* — and created a visible asymmetry: a direct
+`meme->forms` call on `.cljc`-like source silently dropped the
+off-platform branch, while the `to-clj` CLI adapter (which hardcoded
+`:preserve`) did not.
+
+The fix moves platform materialization out of the reader entirely.
+`step-read` unconditionally returns records; a new stage
+`step-evaluate-reader-conditionals` materializes branches when needed.
+Eval paths (`run-string`, `run-file`, REPL) compose the stage between
+read and syntax-quote expansion — matching native Clojure's order, where
+the reader evaluates `#?` before `` ` `` is processed. Tooling paths
+(`meme->forms`, `meme->clj`, `format-meme`, `to-clj`) skip the stage and
+see the full record, making conversion lossless by default.
+
+The stage recurses into `MemeSyntaxQuote`, `MemeUnquote`, and
+`MemeUnquoteSplicing` interiors, so `` `#?(:clj x :cljs y) `` collapses
+to `` `x `` on JVM, matching Clojure. It supports a `:platform` opt for
+cross-platform materialization (generating `.cljs` output on JVM, for
+example) and respects `:default` as a fallback — a gap the old `:eval`
+branch never filled. Odd-count branch lists are validated at the stage,
+not at read time.
+
+Limitation: `#?@` inside a map literal still fails at read time because
+the map requires an even number of children. This matches Clojure's
+`:read-cond :preserve` behavior.
 
 
 ## Centralized value resolution (meme-lang.resolve)
@@ -142,8 +175,11 @@ character(s) to form the head of an M-expression:
 - `#inst "..."`, `#uuid "..."` — tagged literals.
 - `#:ns{...}` — namespaced maps.
 
-Reader conditionals parse all branches but only return the matching
-platform's value — non-matching branches are fully parsed then discarded.
+Reader conditionals parse all branches and return a `MemeReaderConditional`
+record preserving every branch. The `step-evaluate-reader-conditionals`
+pipeline stage materializes the platform branch for eval paths. See
+"Reader-conditional evaluation as a pipeline stage" below for the
+architectural rationale.
 
 Syntax-quote (`` ` ``) is also parsed natively — its interior uses meme
 syntax with `~` (unquote) and `~@` (unquote-splicing). Macro templates

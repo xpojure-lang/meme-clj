@@ -201,12 +201,16 @@ meme rules inside. No opaque regions.
   is indistinguishable from zero after a read/print cycle. JVM preserves
   it correctly.
 
-- **Reader conditionals and roundtrips.** The printer emits meme syntax
-  inside `#?(...)` natively. By default, meme's reader evaluates `#?`
-  to the matching platform's branch at read time. Pass
-  `{:read-cond :preserve}` to `meme->forms` to return `ReaderConditional`
-  objects instead, enabling lossless `clj->meme->clj` roundtrips of
-  `.cljc` files.
+- **Reader conditionals — lossless by default.** The reader always returns
+  `#?`/`#?@` as `MemeReaderConditional` records, so `meme->forms`,
+  `meme->clj`, and `format-meme` preserve all branches faithfully.
+  `run-string`/`run-file`/REPL insert `step-evaluate-reader-conditionals`
+  between read and syntax-quote expansion to materialize the platform
+  branch — matching native Clojure's order (reader evaluates `#?` before
+  `` ` `` is processed). The step supports a `:platform` opt so tooling
+  can materialize for a non-current platform. `:default` is respected as
+  a fallback. `#?@` inside map literals is not supported at read time
+  (same limitation as Clojure's `:read-cond :preserve`).
 
 - **Nesting depth limit.** The parser enforces a maximum nesting depth of
   512 levels. Exceeding this produces a clear error. This prevents stack
