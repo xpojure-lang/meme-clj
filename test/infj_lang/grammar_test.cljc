@@ -26,7 +26,12 @@
   (is (= '(+ 1 2) (parse-one "1 + 2")))
   (is (= '(- 5 3) (parse-one "5 - 3")))
   (is (= '(* 2 3) (parse-one "2 * 3")))
-  (is (= '(/ 10 2) (parse-one "10 / 2"))))
+  (is (= '(/ 10 2) (parse-one "10 / 2")))
+  (is (= '(mod 10 3) (parse-one "10 mod 3"))))
+
+(deftest mod-shares-precedence-with-multiply
+  (is (= '(+ 1 (mod 10 3)) (parse-one "1 + 10 mod 3")))
+  (is (= '(mod (* 2 10) 3) (parse-one "2 * 10 mod 3"))))
 
 (deftest comparison-operators
   (is (= '(< 1 2) (parse-one "1 < 2")))
@@ -89,7 +94,8 @@
   (testing "identifiers that merely start with a word operator stay symbols"
     (is (= '(+ andrew 1) (parse-one "andrew + 1")))
     (is (= '(+ orbital 1) (parse-one "orbital + 1")))
-    (is (= '(+ note 1) (parse-one "note + 1")))))
+    (is (= '(+ note 1) (parse-one "note + 1")))
+    (is (= '(+ modern 1) (parse-one "modern + 1")))))
 
 (deftest bare-word-operator-is-still-a-symbol
   (testing "`and` / `or` alone at top level read as symbols"
