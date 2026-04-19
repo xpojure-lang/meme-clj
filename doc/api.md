@@ -194,15 +194,6 @@ Convert a Clojure form to a Wadler-Lindig Doc tree. The Doc tree is passed to `m
 - `style` — layout policy map (nil = pass-through). Keyed by semantic slot names from `meme-lang.form-shape` (`:name`, `:params`, `:bindings`, etc.), not by form names. See `meme-lang.formatter.canon/style` for the canonical policy.
 - `form-shape` — registry map `{head-symbol → decomposer-fn}`. When nil, no special-form decomposition runs and every call renders as a plain body sequence. Callers normally pass `meme-lang.form-shape/registry`; the lang's `lang-map` exposes its registry under `:form-shape`.
 
-### extract-comments
-
-```clojure
-(meme-lang.printer/extract-comments ws)
-```
-
-Extract comment lines from a `:meme-lang/leading-trivia` metadata string. Returns a vector of trimmed comment strings, or nil.
-
-
 ## meme-lang.formatter.flat
 
 Flat (single-line) formatter. Composes printer + render at infinite width.
@@ -355,10 +346,10 @@ On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's
 
 Read and eval a `.meme` file. Returns the last result. Uses `slurp` internally (JVM/Babashka only). Second argument follows the same convention as `run-string`.
 
-Language-tier only: by default runs the file as meme. To get extension-based lang dispatch, inject a resolver via opts — the CLI wires this to `meme.registry`:
+By default runs the file as meme and installs `meme.loader` so `require`/`load-file` of `.meme` namespaces work from within. Optional opts:
 
-- `:resolve-lang-for-path` — `(fn [path opts] → run-fn-or-nil)`. When non-nil return value handles the file; otherwise falls through to meme.
-- `:install-loader` — zero-arg fn called before eval (typically `meme.loader/install!` for classpath `.meme` require support).
+- `:install-loader?` — default `true`. Pass `false` to skip installing the loader (for hosts that own their own `clojure.core/load` interception).
+- `:resolve-lang-for-path` — `(fn [path opts] → run-fn-or-nil)` for extension-based lang dispatch. When non-nil return value handles the file; otherwise falls through to meme. The CLI wires this to `meme.registry`.
 
 ```clojure
 ;; Default — always runs as meme
@@ -524,7 +515,7 @@ Namespace loader for `.meme` files. Intercepts `clojure.core/load` and `clojure.
 | `require` | `(require 'my.ns)` searches for `my/ns.meme` on the classpath | Yes | No (SCI bypasses `clojure.core/load`) |
 | `load-file` | `(load-file "path/to/file.meme")` runs through the meme pipeline | Yes | Yes |
 
-**Automatic installation:** `run-file` and the REPL's `start` call `install!` automatically. The CLI (`bb meme run`, `bb meme repl`) also installs the loader.
+**Automatic installation:** `meme-lang.run/run-string`, `run-file`, and `meme-lang.repl/start` install the loader by default. The CLI (`bb meme run`, `bb meme repl`) goes through these, so the loader is up before any user code runs. Opt out with `:install-loader? false` (e.g. when embedding meme in a host that owns its own `clojure.core/load` interception).
 
 **Precedence:** When both `my/ns.meme` and `my/ns.clj` exist on the classpath, `.meme` takes priority.
 

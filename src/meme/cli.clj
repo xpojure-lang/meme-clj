@@ -156,14 +156,13 @@
 (defn run
   "Run a meme source file. Requires :file in opts.
    Binds *command-line-args* to the user's args (excluding the command verb and filename).
-   Installs the loader so require of .meme namespaces works from within the file."
+   The lang's :run installs the loader by default."
   [{:keys [file lang rest-args] :as opts}]
   (when-not file
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name] [-- args...]"))
     (cli-exit! 1))
   (let [[lang-name l] (get-lang lang file)]
     (registry/check-support l lang-name :run)
-    (loader/install!)
     (try (binding [*command-line-args* (or rest-args [])]
            ((:run l) (slurp file) (lang-opts opts)))
          (catch Exception e
@@ -176,7 +175,6 @@
   [{:keys [lang] :as opts}]
   (let [[lang-name l] (get-lang lang nil)]
     (registry/check-support l lang-name :repl)
-    (loader/install!)
     ((:repl l) (lang-opts opts))))
 
 (defn to-clj

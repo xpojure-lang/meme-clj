@@ -222,7 +222,8 @@ meme rules inside. No opaque regions.
 - **Platform / guest language system.** Includes:
   - **Lang registration** (`meme.registry`) — `register!` a guest language
     with `:extension`, `:run`, `:parser`, `:format`, `:to-clj`, `:to-meme`.
-    `run-file` and CLI auto-detect guest languages from file extension.
+    The CLI auto-detects guest languages from file extension; `run-file`
+    does the same when a `:resolve-lang-for-path` resolver is injected.
   - **Pipeline integration** — pluggable `:parser` in
     `step-parse`, `:prelude` option in `run-string`.
   - **Example languages** in `examples/languages/`: calc, prefix, superficie.
@@ -253,12 +254,12 @@ meme rules inside. No opaque regions.
 | ID | Requirement | Status |
 |----|-------------|--------|
 | PL3 | Lang registration: `lang/register!`, `lang/resolve-by-extension`, `lang/resolve-lang` | Done |
-| PL4 | `run-file` and CLI auto-detect guest language from file extension | Done |
+| PL4 | CLI auto-detects guest language from file extension; `run-file` does the same when a `:resolve-lang-for-path` resolver is injected (the CLI wires this to `meme.registry`) | Done |
 | PL5 | `run-string` accepts `:prelude` | Done |
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
 | PL8 | Stage contract: spec validation at stage boundaries | Removed — contract validation was deleted during pipeline unification to the scanlet-parselet architecture |
 | PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
-| PL11 | Namespace loader: intercept `clojure.core/load` to find `.meme` files on classpath. `install!`/`uninstall!`, auto-installed by `run-file` and REPL | Done |
+| PL11 | Namespace loader: intercept `clojure.core/load` to find `.meme` files on classpath. `install!`/`uninstall!`, auto-installed by `run-string`/`run-file`/REPL (opt out via `:install-loader? false`) | Done |
 | PL12 | Multi-extension support: `:extension`/`:extensions` normalization, both string and vector accepted | Done |
 | PL13 | Loader namespace denylist: `clojure.*`, `java.*`, `javax.*` etc. cannot be shadowed | Done |
 | PL14 | Registry atomicity: extension conflict check inside `swap!` callback, thread-safe | Done |

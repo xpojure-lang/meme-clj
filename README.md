@@ -102,18 +102,23 @@ unless(empty?(xs)
 
 ## Namespace Loading
 
-On JVM Clojure, `.meme` files work transparently with `require`:
+`.meme` files participate in Clojure's normal namespace machinery — no build plugin, no AOT step, no annotations:
 
 ```clojure
-;; src/myapp/core.meme — just works with require
-(require '[myapp.core])
+;; src/myapp/core.meme exists on the classpath
+require('[myapp.core :as core])
+core/greet("world")
 ```
 
-The loader intercepts `clojure.core/load` so `.meme` files on the classpath are found and compiled automatically — no build plugin needed. `.meme` takes precedence when both `.meme` and `.clj` exist. `load-file` also handles `.meme` on both JVM and Babashka.
+The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JVM + Babashka), so any `.meme` file under a registered extension is found and run on first reference. When both `myapp/core.meme` and `myapp/core.clj` exist, `.meme` wins.
 
-Installed automatically by `run` and `repl` — no manual setup.
+**Auto-installed.** `meme-lang.run/run-string`, `run-file`, and the REPL install the loader before evaluating user code — programmatic embeddings get `.meme` `require` for free, not just the CLI. Hosts that own their own `clojure.core/load` interception opt out with `:install-loader? false`.
 
-Alternatively, compile `.meme` to `.clj` for use without runtime patching:
+**Lang-independent.** The loader is registry-driven: it dispatches on extension to whatever lang is registered. Sibling langs (e.g. `calc-lang`) registered with `:extensions` and `:run` get the same `require`/`load-file` support without writing any loader code.
+
+**Safety.** Core namespaces (`clojure.*`, `java.*`, `javax.*`, `cljs.*`, `nrepl.*`, `cider.*`) are on a denylist and cannot be shadowed by `.meme` files on the classpath.
+
+**Babashka limitation.** Babashka's SCI does not dispatch `require` through `clojure.core/load`, so on Babashka `require` of `.meme` namespaces is not supported. `load-file` works on both platforms. For Babashka projects that need `require`, precompile to `.clj`:
 
 ```bash
 $ bb meme compile src/                                  # output to target/classes/

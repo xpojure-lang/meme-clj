@@ -20,6 +20,23 @@
         exit (.waitFor p)]
     {:out out :err err :exit exit}))
 
+(defn- jvm-meme-run
+  "Shell out to JVM `clojure -T:meme run` with extra-paths added to the classpath.
+   Returns {:out :err :exit}. Used to exercise the JVM require path (Babashka's
+   SCI bypasses clojure.core/load so it can't be tested via bb-meme)."
+  [extra-paths file]
+  (let [paths-edn (str "{:paths [\"src\" \"resources\" "
+                       (str/join " " (map #(str "\"" % "\"") extra-paths))
+                       "]}")
+        pb (ProcessBuilder. ^java.util.List
+            ["clojure" "-Sdeps" paths-edn "-T:meme" "run" ":file" (str "\"" file "\"")])
+        _  (.directory pb (io/file "."))
+        p  (.start pb)
+        out (slurp (.getInputStream p))
+        err (slurp (.getErrorStream p))
+        exit (.waitFor p)]
+    {:out out :err err :exit exit}))
+
 (defn- tmp-meme
   "Write content to a temp .meme file, return the File."
   [content]
@@ -339,6 +356,34 @@
     (is (zero? exit))
     (is (= "hi bb\n" out)
         "load-file of .meme should work from within bb meme run")))
+
+;; ---------------------------------------------------------------------------
+;; JVM require of .meme namespace (loader auto-install via language tier)
+;;
+;; Demonstrates that the loader is a core DX utility installed by
+;; meme-lang.run automatically — the CLI does no manual install, yet
+;; require of a .meme file on the classpath resolves through the meme
+;; pipeline. If meme-lang.run/run-string ever stops auto-installing the
+;; loader, this test fails.
+;; ---------------------------------------------------------------------------
+
+(deftest run-jvm-require-meme-namespace
+  (let [dir (io/file (System/getProperty "java.io.tmpdir")
+                     (str "meme-e2e-req-" (System/nanoTime)))
+        lib-dir (io/file dir "mylib")]
+    (try
+      (.mkdirs lib-dir)
+      (spit (io/file lib-dir "core.meme")
+            "ns(mylib.core)\ndefn(greet [x] str(\"hi \" x))\n")
+      (let [main (io/file dir "main.meme")]
+        (spit main "require('[mylib.core])\nprintln(mylib.core/greet(\"jvm\"))\n")
+        (let [{:keys [out err exit]}
+              (jvm-meme-run [(.getAbsolutePath dir)] (.getAbsolutePath main))]
+          (is (zero? exit) (str "exit=" exit "\nstdout=" out "\nstderr=" err))
+          (is (str/includes? out "hi jvm")
+              "require of .meme namespace from classpath should resolve through the loader")))
+      (finally
+        (doseq [f (reverse (file-seq dir))] (.delete f))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: *command-line-args* must not leak "run" and filename

@@ -2,12 +2,18 @@
   "Meme-specific eval pipeline. Wires meme stages, syntax-quote resolution,
    and BOM stripping into the generic run infrastructure.
 
-   Stays in the language tier: no dependency on meme.registry or meme.loader.
-   Callers that need extension-based lang dispatch or classpath loader support
-   inject them via opts (:resolve-lang-for-path, :install-loader).
+   Installs `meme.loader` by default so that `require` and `load-file` of
+   `.meme` namespaces work from within the evaluated code. Callers embedding
+   meme in a host that owns its own `clojure.core/load` interception can
+   pass `:install-loader? false` to skip.
+
+   Extension-based lang dispatch (running `.calc`/`.prefix` files as their
+   own langs) is opt-in via `:resolve-lang-for-path` — programmatic callers
+   that pass a real `.meme` path don't need it; the CLI wires it.
    JVM/Babashka only."
   (:require [clojure.string :as str]
             [meme.tools.run :as run]
+            [meme.loader :as loader]
             [meme-lang.stages :as stages]))
 
 ;; ---------------------------------------------------------------------------
@@ -65,14 +71,19 @@
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
+(defn- maybe-install-loader! [opts]
+  (when-not (false? (:install-loader? opts)) (loader/install!)))
+
 (defn run-string
-  "Read meme source string, eval each form, return the last result."
+  "Read meme source string, eval each form, return the last result.
+   Installs `meme.loader` unless `:install-loader? false` is passed."
   ([s] (run-string s {}))
   ([s eval-fn-or-opts]
    {:pre [(string? s)]}
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})
          stages-impl (:stages opts)
          reader-opts (default-reader-opts opts)]
+     (maybe-install-loader! opts)
      (run/run-string s {:run-fn (or (:run-fn stages-impl) meme-run-fn)
                         :expand-forms (or (:expand-forms stages-impl) stages/expand-syntax-quotes)
                         :reader-opts reader-opts
@@ -83,9 +94,9 @@
   "Read and eval a meme file. Returns the last result.
 
    Optional opts:
-     :install-loader        — zero-arg fn, called before eval (for classpath
-                              .meme require support; the CLI passes
-                              meme.loader/install!)
+     :install-loader?       — default true; pass false to skip installing
+                              `meme.loader` (e.g. when embedding meme in a
+                              host that owns its own load interception).
      :resolve-lang-for-path — (fn [path opts] → run-fn-or-nil) for extension-
                               based lang dispatch. When provided, its return
                               value (if non-nil) runs the file instead of meme.
@@ -101,7 +112,7 @@
                        :eval (:eval opts)
                        :prelude (:prelude opts)}
          resolve-lang (:resolve-lang-for-path opts)]
-     (when-let [install (:install-loader opts)] (install))
+     (maybe-install-loader! opts)
      (run/run-file path generic-opts
                    (when resolve-lang
                      (fn [p _generic-opts] (resolve-lang p opts)))))))

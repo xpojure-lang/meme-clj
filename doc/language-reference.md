@@ -431,7 +431,7 @@ The CLI auto-detects the lang from file extension: `meme run app.prefix` resolve
 
 ### Namespace loader
 
-After `install!` (called automatically by `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.meme` files transparently:
+After `install!` (called automatically by `run-string`, `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.meme` files transparently:
 
 ```
 ;; In the meme REPL or a running .meme file:

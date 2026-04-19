@@ -8,12 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - **`meme.registry/register-string-handler!`** — lang-agnostic hook for resolving string values (e.g. `:run "prelude.meme"`) in lang-map slots. Meme installs its own `:run` handler at load time. Replaces the previous hardcoded `requiring-resolve` of `meme-lang.run/run-string` inside the registry.
-- **`meme-lang.run/run-file` opts** — `:resolve-lang-for-path` (extension-based lang dispatch hook) and `:install-loader` (zero-arg fn, typically `meme.loader/install!`). The CLI wires these so the language tier no longer requires `meme.registry` or `meme.loader` directly.
-- **`meme-lang.repl/start` opts** — `:install-loader` mirrors the above; REPL no longer auto-installs the classpath loader (the CLI does before calling).
+- **`meme-lang.run/run-file` opts** — `:install-loader?` (default `true`; pass `false` to skip auto-install of `meme.loader`) and `:resolve-lang-for-path` (extension-based lang dispatch hook, injected by the CLI).
+- **`meme-lang.repl/start` opts** — `:install-loader?` mirrors the above.
 - **Direct unit tests for `meme.tools.parser` and `meme.tools.lexer`** using a minimal synthetic calculator grammar, covering precedence (left/right-assoc), EOF recovery, max-depth, trivia attachment, `:when` predicate gating, and all scanlet/parselet factories.
 
 ### Changed
-- **`meme-lang.run` and `meme-lang.repl` no longer import `meme.registry` or `meme.loader`.** Architectural cleanup: the language tier stays lang-agnostic; extension dispatch and loader installation are injected by the CLI. Callers that relied on `run-file`'s implicit registry dispatch now pass `:resolve-lang-for-path`.
+- **`meme-lang.run/run-string`, `run-file`, and `meme-lang.repl/start` install `meme.loader` automatically.** `meme.loader` is multi-lang infrastructure peer to `meme.registry`, not a CLI-tier concern; importing it from the language tier so `require`/`load-file` of `.meme` namespaces work in the common programmatic case. Hosts that own their own `clojure.core/load` interception opt out via `:install-loader? false`.
 
 ### Fixed
 - **Off-by-one in CST reader's depth guard** (`src/meme_lang/cst_reader.cljc`). Reader allowed one more level of recursion than the parser's limit (`>` → `>=`). Behavior now matches the parser at exactly `max-parse-depth` levels.
