@@ -4,8 +4,9 @@
    Pipeline: scanner → trivia-attacher → pratt-parser → cst-reader
    The Pratt parser produces a lossless CST; the CST reader lowers it
    to Clojure forms."
-  (:require [meme-lang.stages :as stages]
+  (:require [meme.tools.clj.stages :as stages]
             [meme.tools.clj.forms :as forms]
+            [meme-lang.grammar :as grammar]
             [meme-lang.form-shape :as form-shape]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
@@ -13,6 +14,11 @@
             #?(:clj [meme-lang.run :as run])
             #?(:clj [meme-lang.repl :as repl])
             #?(:clj [meme.registry :as registry])))
+
+(defn- with-meme-grammar
+  "Inject meme's grammar as :grammar in opts if the caller didn't supply one."
+  [opts]
+  (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar)))
 
 ;; ---------------------------------------------------------------------------
 ;; Lang API — delegates to composable stages
@@ -24,7 +30,7 @@
 
    Reader conditionals (`#?`, `#?@`) are always returned as
    `MemeReaderConditional` records. To evaluate them for the current
-   platform, compose `meme-lang.stages/step-evaluate-reader-conditionals`
+   platform, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals`
    after reading, or use `run-string` / `run-file` (which do so
    automatically). The `:read-cond` option is no longer accepted —
    passing it throws `:meme-lang/deprecated-opt`.
@@ -36,7 +42,7 @@
   ([s] (meme->forms s nil))
   ([s opts]
    {:pre [(string? s)]}
-   (:forms (stages/run s opts))))
+   (:forms (stages/run s (with-meme-grammar opts)))))
 
 (defn forms->meme
   "Print Clojure forms as meme source string (single-line per form).

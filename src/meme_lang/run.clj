@@ -14,7 +14,8 @@
   (:require [clojure.string :as str]
             [meme.tools.run :as run]
             [meme.loader :as loader]
-            [meme-lang.stages :as stages]))
+            [meme.tools.clj.stages :as stages]
+            [meme-lang.grammar :as grammar]))
 
 ;; ---------------------------------------------------------------------------
 ;; Syntax-quote symbol resolution (Clojure's SyntaxQuoteReader)
@@ -58,11 +59,13 @@
 
 (defn- meme-run-fn
   "The meme pipeline: strip shebang, strip BOM, parse, read,
-   evaluate reader conditionals, expand syntax quotes."
+   evaluate reader conditionals, expand syntax quotes. Injects meme's
+   grammar into :opts :grammar so step-parse has a spec to parse with."
   [source opts]
   (let [source (stages/strip-shebang source)
         source (if (and (string? source) (str/starts-with? source "\uFEFF"))
-                 (subs source 1) source)]
+                 (subs source 1) source)
+        opts (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar))]
     (-> {:source source :opts opts}
         stages/step-parse
         stages/step-read

@@ -8,7 +8,9 @@
             [meme-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.expander :as expander]
-            [meme-lang.stages :as stages]))
+            [meme.tools.clj.stages :as stages]
+            [meme-lang.grammar :as grammar]))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: auto-resolve keywords are deferred (MemeAutoKeyword records).
@@ -335,7 +337,7 @@
       (is (forms/meme-reader-conditional? rc))
       (is (= '(:clj 1 :cljs 2) (forms/rc-form rc)))))
   (testing "meme->forms + eval-rc step yields the platform branch"
-    (let [ctx    (-> {:source "#?(:clj 1 :cljs 2)" :opts nil}
+    (let [ctx    (-> {:source "#?(:clj 1 :cljs 2)" :opts {:grammar grammar/grammar}}
                      stages/step-parse
                      stages/step-read
                      stages/step-evaluate-reader-conditionals)]
@@ -355,14 +357,14 @@
 (deftest non-matching-reader-cond-produces-no-form-after-eval
   (testing "eval-rc drops a non-matching reader-conditional at top level"
     (let [src #?(:clj "#?(:cljs x)" :cljs "#?(:clj x)")
-          ctx (-> {:source src :opts nil}
+          ctx (-> {:source src :opts {:grammar grammar/grammar}}
                   stages/step-parse
                   stages/step-read
                   stages/step-evaluate-reader-conditionals)]
       (is (= [] (:forms ctx)))))
   (testing "eval-rc filters a non-matching reader-conditional from inside a vector"
     (let [src #?(:clj "[1 #?(:cljs 2) 3]" :cljs "[1 #?(:clj 2) 3]")
-          ctx (-> {:source src :opts nil}
+          ctx (-> {:source src :opts {:grammar grammar/grammar}}
                   stages/step-parse
                   stages/step-read
                   stages/step-evaluate-reader-conditionals)]
@@ -378,7 +380,7 @@
     (let [src #?(:clj "#?(:clj #_ x)" :cljs "#?(:cljs #_ x)")]
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"even number of forms"
-                            (-> {:source src :opts nil}
+                            (-> {:source src :opts {:grammar grammar/grammar}}
                                 stages/step-parse
                                 stages/step-read
                                 stages/step-evaluate-reader-conditionals))))))
@@ -479,7 +481,7 @@
 ;; reader, not during read. These tests compose the step explicitly to assert
 ;; the post-eval shape.
 (defn- eval-rc-forms [src]
-  (:forms (-> {:source src :opts nil}
+  (:forms (-> {:source src :opts {:grammar grammar/grammar}}
               stages/step-parse
               stages/step-read
               stages/step-evaluate-reader-conditionals)))
@@ -750,7 +752,7 @@
 ;; incorrectly rejected. Clojure accepts `{:a ~@xs} and expands via apply hash-map.
 (deftest unquote-splicing-in-map-syntax-quote
   (testing "~@ in map value position expands correctly"
-    (let [expanded (stages/expand-syntax-quotes (:forms (stages/run "`{:a ~@xs}")) nil)]
+    (let [expanded (stages/expand-syntax-quotes (:forms (stages/run "`{:a ~@xs}" {:grammar grammar/grammar})) nil)]
       (is (= 1 (count expanded)))
       (is (list? (first expanded)))
       ;; Should expand to (apply hash-map (concat (list :a) xs))
@@ -758,9 +760,9 @@
   (testing "bare ~@ still errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"must be inside a collection"
-                          (stages/expand-syntax-quotes (:forms (stages/run "`~@xs")) nil))))
+                          (stages/expand-syntax-quotes (:forms (stages/run "`~@xs" {:grammar grammar/grammar})) nil))))
   (testing "~@ in set now works (Clojure allows it)"
-    (let [expanded (stages/expand-syntax-quotes (:forms (stages/run "`#{~@xs}")) nil)]
+    (let [expanded (stages/expand-syntax-quotes (:forms (stages/run "`#{~@xs}" {:grammar grammar/grammar})) nil)]
       (is (= 1 (count expanded)))
       (is (= 'clojure.core/apply (first (first expanded)))))))
 
@@ -807,7 +809,7 @@
 #?(:clj
    (deftest expanded-reader-conditional-form-is-list
      (testing "reader-conditional form is a list after expansion"
-       (let [ctx (-> {:source "#?(:clj 1 :cljs 2)" :opts nil}
+       (let [ctx (-> {:source "#?(:clj 1 :cljs 2)" :opts {:grammar grammar/grammar}}
                      (stages/step-parse)
                      (stages/step-read)
                      (stages/step-expand-syntax-quotes))

@@ -4,11 +4,11 @@
 
    Implojure reuses everything meme does — scanner trivia, CST reader,
    printer, formatter, stages, run/repl — by injecting its grammar
-   through the existing `:grammar` opt on `meme-lang.stages/step-parse`.
+   through the existing `:grammar` opt on `meme.tools.clj.stages/step-parse`.
    Output forms are normal Clojure forms; the printer/formatter still
    produce M-expression syntax (no infix rendering in v0)."
   (:require [meme-lang.api :as meme-api]
-            [meme-lang.stages :as stages]
+            [meme.tools.clj.stages :as stages]
             [implojure-lang.grammar :as grammar]
             #?(:clj [implojure-lang.run :as run])
             #?(:clj [implojure-lang.repl :as repl])
@@ -19,7 +19,7 @@
 
 (defn implojure->forms
   "Read implojure source string. Returns a vector of Clojure forms.
-   opts are forwarded to `meme-lang.stages/step-read` (e.g.
+   opts are forwarded to `meme.tools.clj.stages/step-read` (e.g.
    `:resolve-keyword`)."
   ([s] (implojure->forms s nil))
   ([s opts]

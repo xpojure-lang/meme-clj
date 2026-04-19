@@ -1,9 +1,16 @@
 (ns meme-lang.stages-test
-  "Tests for the experimental pipeline stages, including
-   step-expand-syntax-quotes and expand-forms."
+  "Integration tests for meme's composition of commons pipeline stages:
+   step-parse (with meme grammar) → step-read → step-evaluate-reader-conditionals
+   → step-expand-syntax-quotes, plus expand-forms."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.stages :as stages]
-            [meme.tools.clj.forms :as forms]))
+            [meme.tools.clj.stages :as stages]
+            [meme.tools.clj.forms :as forms]
+            [meme-lang.grammar :as grammar]))
+
+(defn- run-stages
+  "Run the tooling pipeline with meme's grammar explicitly injected."
+  ([s] (run-stages s nil))
+  ([s opts] (stages/run s (assoc (or opts {}) :grammar grammar/grammar))))
 
 ;; ---------------------------------------------------------------------------
 ;; Full pipeline: scan → trivia → parse → read
@@ -11,18 +18,18 @@
 
 (deftest full-pipeline-basic
   (testing "simple call"
-    (let [ctx (stages/run "+(1 2)")]
+    (let [ctx (run-stages "+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx)))))
   (testing "empty string"
-    (let [ctx (stages/run "")]
+    (let [ctx (run-stages "")]
       (is (= [] (:forms ctx)))))
   (testing "multiple forms"
-    (let [ctx (stages/run "def(x 42)\nx")]
+    (let [ctx (run-stages "def(x 42)\nx")]
       (is (= '[(def x 42) x] (:forms ctx))))))
 
 (deftest full-pipeline-context-keys
   (testing "context contains expected keys"
-    (let [ctx (stages/run "+(1 2)")]
+    (let [ctx (run-stages "+(1 2)")]
       (is (string? (:source ctx)))
       (is (vector? (:cst ctx)))
       (is (vector? (:forms ctx))))))
@@ -33,7 +40,7 @@
 
 (deftest step-expand-syntax-quotes-basic
   (testing "expands syntax-quote AST nodes"
-    (let [ctx (-> (stages/run "`foo")
+    (let [ctx (-> (run-stages "`foo")
                   stages/step-expand-syntax-quotes)
           form (first (:forms ctx))]
       ;; `foo expands to (quote foo) — no longer a MemeSyntaxQuote record
@@ -42,12 +49,12 @@
       (is (not (forms/syntax-quote? form)))))
   #?(:clj
      (testing "unwraps MemeRaw values"
-       (let [ctx (-> (stages/run "0xFF")
+       (let [ctx (-> (run-stages "0xFF")
                      stages/step-expand-syntax-quotes)]
          (is (= 255 (first (:forms ctx))))
          (is (not (forms/raw? (first (:forms ctx))))))))
   (testing "passes through plain forms unchanged"
-    (let [ctx (-> (stages/run "+(1 2)")
+    (let [ctx (-> (run-stages "+(1 2)")
                   stages/step-expand-syntax-quotes)]
       (is (= '[(+ 1 2)] (:forms ctx))))))
 
@@ -58,7 +65,7 @@
 (deftest expand-forms-test
   #?(:clj
      (testing "expands a vector of forms"
-       (let [forms (:forms (stages/run "0xFF"))
+       (let [forms (:forms (run-stages "0xFF"))
              expanded (stages/expand-syntax-quotes forms {})]
          (is (= [255] expanded)))))
   (testing "empty forms"
@@ -70,7 +77,7 @@
 
 (deftest pipeline-with-expansion
   (testing "full pipeline + expansion produces eval-ready forms"
-    (let [ctx (-> (stages/run "`map")
+    (let [ctx (-> (run-stages "`map")
                   stages/step-expand-syntax-quotes)
           form (first (:forms ctx))]
       ;; After expansion, `map becomes (quote map) — plain Clojure, no AST records
@@ -85,20 +92,20 @@
 (deftest incomplete-errors
   (testing "unclosed paren produces :incomplete error"
     (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
-                 (stages/run "+(1 2")))
-    (try (stages/run "+(1 2")
+                 (run-stages "+(1 2")))
+    (try (run-stages "+(1 2")
          (catch #?(:clj Exception :cljs :default) e
            (is (:incomplete (ex-data e))))))
   (testing "unclosed bracket produces :incomplete error"
-    (try (stages/run "[1 2 3")
+    (try (run-stages "[1 2 3")
          (catch #?(:clj Exception :cljs :default) e
            (is (:incomplete (ex-data e))))))
   (testing "unclosed brace produces :incomplete error"
-    (try (stages/run "{:a 1")
+    (try (run-stages "{:a 1")
          (catch #?(:clj Exception :cljs :default) e
            (is (:incomplete (ex-data e))))))
   (testing "valid input does not produce :incomplete"
-    (is (vector? (:forms (stages/run "+(1 2)"))))))
+    (is (vector? (:forms (run-stages "+(1 2)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Pipeline contract — miscomposed stages throw clear errors
@@ -108,10 +115,11 @@
   (testing "stage-contracts is public data, one entry per stage"
     (is (= #{:step-parse :step-read :step-evaluate-reader-conditionals :step-expand-syntax-quotes}
            (set (keys stages/stage-contracts))))
-    (is (= #{:source} (get-in stages/stage-contracts [:step-parse :requires])))
-    (is (= #{:cst}    (get-in stages/stage-contracts [:step-read :requires])))
-    (is (= #{:forms}  (get-in stages/stage-contracts [:step-evaluate-reader-conditionals :requires])))
-    (is (= #{:forms}  (get-in stages/stage-contracts [:step-expand-syntax-quotes :requires])))))
+    (is (= #{:source}   (get-in stages/stage-contracts [:step-parse :requires])))
+    (is (= #{:grammar}  (get-in stages/stage-contracts [:step-parse :requires-opts])))
+    (is (= #{:cst}      (get-in stages/stage-contracts [:step-read :requires])))
+    (is (= #{:forms}    (get-in stages/stage-contracts [:step-evaluate-reader-conditionals :requires])))
+    (is (= #{:forms}    (get-in stages/stage-contracts [:step-expand-syntax-quotes :requires])))))
 
 (deftest step-read-without-parse-throws-pipeline-error
   (testing "calling step-read without :cst in ctx fails with pipeline-error"
@@ -121,7 +129,7 @@
            (let [data (ex-data e)]
              (is (= :meme-lang/pipeline-error (:type data)))
              (is (= :step-read (:stage data)))
-             (is (contains? (set (:missing data)) :cst))
+             (is (contains? (set (:missing-ctx data)) :cst))
              (is (re-find #"missing required ctx key" (ex-message e))))))))
 
 (deftest step-expand-without-read-throws-pipeline-error
@@ -132,7 +140,7 @@
            (let [data (ex-data e)]
              (is (= :meme-lang/pipeline-error (:type data)))
              (is (= :step-expand-syntax-quotes (:stage data)))
-             (is (contains? (set (:missing data)) :forms)))))))
+             (is (contains? (set (:missing-ctx data)) :forms)))))))
 
 (deftest step-parse-without-source-throws-pipeline-error
   (testing "calling step-parse without :source fails with pipeline-error"
@@ -142,17 +150,27 @@
            (let [data (ex-data e)]
              (is (= :meme-lang/pipeline-error (:type data)))
              (is (= :step-parse (:stage data)))
-             (is (contains? (set (:missing data)) :source)))))))
+             (is (contains? (set (:missing-ctx data)) :source)))))))
 
 (deftest step-parse-with-non-string-source-still-type-checks
   (testing "type check on :source value runs after presence check"
-    (try (stages/step-parse {:source 42})
+    (try (stages/step-parse {:source 42 :opts {:grammar grammar/grammar}})
          (is false "step-parse should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
              (is (= :meme-lang/pipeline-error (:type data)))
              (is (= :step-parse (:stage data)))
              (is (re-find #"must be a string" (ex-message e))))))))
+
+(deftest step-parse-without-grammar-throws-pipeline-error
+  (testing "missing :grammar opt fails with pipeline-error"
+    (try (stages/step-parse {:source "x" :opts nil})
+         (is false "step-parse should have thrown")
+         (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
+           (let [data (ex-data e)]
+             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (contains? (set (:missing-opts data)) :grammar))
+             (is (re-find #":grammar" (ex-message e))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; step-evaluate-reader-conditionals
@@ -164,7 +182,7 @@
   ([src] (eval-rc src nil))
   ([src opts]
    (:forms (stages/step-evaluate-reader-conditionals
-             (assoc (stages/run src) :opts opts)))))
+             (assoc (run-stages src) :opts opts)))))
 
 (deftest eval-rc-basic
   (testing "#? with matching platform returns the branch value"
@@ -259,11 +277,11 @@
            (let [data (ex-data e)]
              (is (= :meme-lang/pipeline-error (:type data)))
              (is (= :step-evaluate-reader-conditionals (:stage data)))
-             (is (contains? (set (:missing data)) :forms)))))))
+             (is (contains? (set (:missing-ctx data)) :forms)))))))
 
 (deftest eval-rc-is-idempotent-on-plain-forms
   (testing "running the step twice is a no-op (idempotent on already-evaluated forms)"
-    (let [after-first  (stages/step-evaluate-reader-conditionals (stages/run "#?(:clj 1 :cljs 2)"))
+    (let [after-first  (stages/step-evaluate-reader-conditionals (run-stages "#?(:clj 1 :cljs 2)"))
           after-second (stages/step-evaluate-reader-conditionals after-first)]
       (is (= (:forms after-first) (:forms after-second))))))
 
@@ -272,8 +290,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest tooling-path-preserves-reader-conditionals
-  (testing "stages/run keeps reader conditionals as records"
-    (let [forms (:forms (stages/run "#?(:clj 1 :cljs 2)"))]
+  (testing "run-stages keeps reader conditionals as records"
+    (let [forms (:forms (run-stages "#?(:clj 1 :cljs 2)"))]
       (is (forms/meme-reader-conditional? (first forms))))))
 
 ;; ---------------------------------------------------------------------------
@@ -282,17 +300,17 @@
 
 (deftest shebang-stripping
   (testing "shebang line is stripped"
-    (let [ctx (stages/run "#!/usr/bin/env bb\n+(1 2)")]
+    (let [ctx (run-stages "#!/usr/bin/env bb\n+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx)))))
   (testing "shebang with \\r\\n line ending"
-    (let [ctx (stages/run "#!/usr/bin/env bb\r\n+(1 2)")]
+    (let [ctx (run-stages "#!/usr/bin/env bb\r\n+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx)))))
   (testing "shebang with bare \\r line ending"
-    (let [ctx (stages/run "#!/usr/bin/env bb\r+(1 2)")]
+    (let [ctx (run-stages "#!/usr/bin/env bb\r+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx)))))
   (testing "shebang-only file with no newline"
-    (let [ctx (stages/run "#!/usr/bin/env bb")]
+    (let [ctx (run-stages "#!/usr/bin/env bb")]
       (is (= [] (:forms ctx)))))
   (testing "no shebang — normal parsing"
-    (let [ctx (stages/run "+(1 2)")]
+    (let [ctx (run-stages "+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx))))))
