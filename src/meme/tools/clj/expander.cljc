@@ -243,13 +243,19 @@
 
      (forms/unquote? form)
      (if (:inside-sq opts)
-       (forms/->CljUnquote (expand-syntax-quotes (:form form) opts))
-       (errors/meme-error "Unquote (~) not in syntax-quote" {}))
+       ;; Preserve source :line/:col so check-no-leftover-unquotes! can point
+       ;; at the offending ~ when this record escapes all syntax-quote layers.
+       (with-meta (forms/->CljUnquote (expand-syntax-quotes (:form form) opts))
+                  (select-keys (meta form) [:line :col]))
+       (errors/meme-error "Unquote (~) not in syntax-quote"
+                          (select-keys (meta form) [:line :col])))
 
      (forms/unquote-splicing? form)
      (if (:inside-sq opts)
-       (forms/->CljUnquoteSplicing (expand-syntax-quotes (:form form) opts))
-       (errors/meme-error "Unquote-splicing (~@) not in syntax-quote" {}))
+       (with-meta (forms/->CljUnquoteSplicing (expand-syntax-quotes (:form form) opts))
+                  (select-keys (meta form) [:line :col]))
+       (errors/meme-error "Unquote-splicing (~@) not in syntax-quote"
+                          (select-keys (meta form) [:line :col])))
 
      ;; CljReaderConditional (CLJS defrecord) — recurse into :form while
      ;; preserving the record type. Must be before map? since defrecords satisfy map?.

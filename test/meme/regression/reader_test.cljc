@@ -965,6 +965,33 @@
              (lang/meme->forms "`~42") nil)))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: when `~~x / `~~@x errors via check-no-leftover-unquotes!, the
+;; thrown ex-data must carry :line and :col from the source. Previously the
+;; wrapper constructed a new CljUnquote record with no metadata, so the error
+;; was reported as coming from line 0 / nowhere.
+;; ---------------------------------------------------------------------------
+
+(deftest leftover-unquote-error-has-source-location
+  (testing "`~~x error carries :line/:col from the source"
+    (let [e (try (stages/expand-syntax-quotes
+                   (lang/meme->forms "\n\n  `~~x") nil)
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) ex ex))]
+      (is (some? e))
+      (let [{:keys [line col]} (ex-data e)]
+        (is (pos-int? line))
+        (is (pos-int? col)))))
+  (testing "`~~@x error carries :line/:col from the source"
+    (let [e (try (stages/expand-syntax-quotes
+                   (lang/meme->forms "\n  `~~@[1 2]") nil)
+                 nil
+                 (catch #?(:clj Exception :cljs js/Error) ex ex))]
+      (is (some? e))
+      (let [{:keys [line col]} (ex-data e)]
+        (is (pos-int? line))
+        (is (pos-int? col))))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: duplicate-key detection must unwrap CljRaw.
 ;; Bug: {0xFF 1 255 2} silently succeeded because CljRaw{:value 255 :raw "0xFF"}
 ;; was not = to plain 255 in the frequencies call. Same for sets and
