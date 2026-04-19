@@ -438,7 +438,7 @@ require('[my-lib.core :as lib])   ; finds my_lib/core.meme on classpath (JVM onl
 load-file("examples/demo.meme")   ; loads by filesystem path (JVM + Babashka)
 ```
 
-Files with registered lang extensions take precedence over `.clj` when both exist. Core namespaces (`clojure.*`, `java.*`, etc.) are protected by a denylist and cannot be shadowed.
+Files with registered lang extensions take precedence over `.clj` when both exist. The loader does not reserve any namespace prefix — keeping your lang files under your own namespace is your responsibility.
 
 **Babashka limitation:** `require` of `.meme` namespaces is JVM-only (Babashka's SCI bypasses `clojure.core/load`). `load-file` works on both platforms.
 

@@ -116,7 +116,7 @@ The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JV
 
 **Lang-independent.** The loader is registry-driven: it dispatches on extension to whatever lang is registered. Sibling langs registered with `:extensions` and `:run` get the same `require`/`load-file` support without writing any loader code.
 
-**Safety.** Core namespaces (`clojure.*`, `java.*`, `javax.*`, `cljs.*`, `nrepl.*`, `cider.*`) are on a denylist and cannot be shadowed by `.meme` files on the classpath.
+**Shadowing.** A `.meme` file wins over `.clj` at the same classpath path. The loader does not protect core namespaces — if you put `clojure/core.meme` on your classpath, it will be loaded. Keep your lang files under your own namespace.
 
 **Babashka limitation.** Babashka's SCI does not dispatch `require` through `clojure.core/load`, so on Babashka `require` of `.meme` namespaces is not supported. `load-file` works on both platforms. For Babashka projects that need `require`, precompile to `.clj`:
 

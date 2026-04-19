@@ -9,10 +9,6 @@
 
    Installed implicitly by run-file and the REPL — no manual setup.
 
-   Security: a denylist prevents interception of core infrastructure
-   namespaces (clojure.*, java.*, etc.). Only user/library namespaces
-   are eligible for lang-based loading.
-
    Concurrency: install!/uninstall! serialize on a shared monitor. A
    load counter tracks in-flight lang-loads across threads so that
    uninstall! cannot tear down the var overrides while another thread
@@ -39,39 +35,22 @@
 (defonce ^:private install-lock (Object.))
 
 ;; ---------------------------------------------------------------------------
-;; Namespace denylist — core infrastructure that must never be shadowed
-;; ---------------------------------------------------------------------------
-
-(def ^:private denied-prefixes
-  "Namespace path prefixes that the loader must never intercept.
-   These are core JVM/Clojure/tooling namespaces."
-  ["clojure/" "java/" "javax/" "cljs/" "nrepl/" "cider/"
-   "cognitect/" "clj_kondo/" "clj-kondo/" "meme/" "meme_lang/" "implojure_lang/"])
-
-(defn- denied-namespace?
-  "Return true if the load path is for a denied namespace."
-  [path]
-  (let [base (if (str/starts-with? path "/") (subs path 1) path)]
-    (some #(str/starts-with? base %) denied-prefixes)))
-
-;; ---------------------------------------------------------------------------
 ;; Resource lookup
 ;; ---------------------------------------------------------------------------
 
 (defn- find-lang-resource
   "Search the classpath for a file matching any registered lang extension.
-   Returns [resource run-fn] or nil. Denies core infrastructure namespaces.
-   Uses the eagerly-resolved extensions-fn (set at install! time) to avoid
-   calling requiring-resolve during load interception, which would cause
-   infinite recursion through load → lang-load → find-lang-resource."
+   Returns [resource run-fn] or nil. Uses the eagerly-resolved extensions-fn
+   (set at install! time) to avoid calling requiring-resolve during load
+   interception, which would cause infinite recursion through
+   load → lang-load → find-lang-resource."
   [path]
   (when-let [ext-fn @extensions-fn]
-    (when-not (denied-namespace? path)
-      (let [base (if (str/starts-with? path "/") (subs path 1) path)]
-        (some (fn [[ext run-fn]]
-                (let [resource (io/resource (str base ext))]
-                  (when resource [resource run-fn])))
-              (ext-fn))))))
+    (let [base (if (str/starts-with? path "/") (subs path 1) path)]
+      (some (fn [[ext run-fn]]
+              (let [resource (io/resource (str base ext))]
+                (when resource [resource run-fn])))
+            (ext-fn)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Load interception

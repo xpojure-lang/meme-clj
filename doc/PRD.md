@@ -269,7 +269,7 @@ meme rules inside. No opaque regions.
 | PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
 | PL11 | Namespace loader: intercept `clojure.core/load` to find `.meme` files on classpath. `install!`/`uninstall!`, auto-installed by `run-string`/`run-file`/REPL (opt out via `:install-loader? false`) | Done |
 | PL12 | Multi-extension support: `:extension`/`:extensions` normalization, both string and vector accepted | Done |
-| PL13 | Loader namespace denylist: `clojure.*`, `java.*`, `javax.*` etc. cannot be shadowed | Done |
+| PL13 | Loader namespace denylist: `clojure.*`, `java.*`, `javax.*` etc. cannot be shadowed | Withdrawn — installing a lang is the trust decision; if a user puts `.meme` files at core namespace paths they did it on purpose. Recursion protection is via cached `extensions-fn`, not a denylist. |
 | PL14 | Registry atomicity: extension conflict check inside `swap!` callback, thread-safe | Done |
 | PL15 | Red team hardening: 11 confirmed fixes (OOM, TOCTOU, compat, metadata), 4 plausible concern fixes | Done |
 | PL16 | Registry imports no langs directly — built-ins self-register from their own api ns; CLI is the "app" that requires each lang.  Dissolves the registry ↔ meme-lang cycle and four `requiring-resolve` workarounds. | Done |
