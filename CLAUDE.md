@@ -192,16 +192,16 @@ Tests are split across `test/meme_lang/` (language-specific) and `test/meme/` (i
 | `meme_lang/reader/data_literals_test` | Data literal passthrough: vectors, maps, sets, keywords, numbers |
 | `meme_lang/reader/dispatch_test` | Reader macros and dispatch: @, ^, ', #', #_, #(), regex, char, tagged literals, reader conditionals, namespaced maps |
 | `meme_lang/reader/errors_test` | Error cases, rejected forms (unquote outside backtick), error messages with locations, CLJS-specific errors |
-| `meme_lang/expander_test` | Syntax-quote expansion: `expand-forms` passthrough, `CljSyntaxQuote` expansion, `CljRaw` unwrapping |
-| `meme_lang/resolve_test` | Value resolution: numbers, strings, chars, regex, keywords, tagged literals |
+| `meme/tools/clj/expander_test` | Syntax-quote expansion: `expand-forms` passthrough, `CljSyntaxQuote` expansion, `CljRaw` unwrapping |
+| `meme/tools/clj/resolve_test` | Value resolution: numbers, strings, chars, regex, keywords, tagged literals |
 | `meme_lang/form_shape_test` | Form-shape decomposition: per-form decomposer output, structural fallback, registry extension |
 | `meme_lang/printer_test` | Printer-level seams: `:slot-renderers` override, default slot renderers, unknown-slot fallback |
 | `meme_lang/formatter/flat_test` | Flat formatter: single-line meme/clj output, reader sugar, individual form cases |
 | `meme_lang/formatter/canon_test` | Canonical formatter: width-aware formatting, multi-line layout, comments |
 | `meme/tools/render_test` | Doc algebra and layout engine |
-| `meme_lang/values_test` | Value serialization: regex, chars, numbers, strings |
-| `meme_lang/forms_test` | Form predicates and contracts: AST nodes, metadata, reader conditionals |
-| `meme_lang/errors_test` | Error infrastructure: `source-context`, `meme-error`, `format-error` |
+| `meme/tools/clj/values_test` | Value serialization: regex, chars, numbers, strings |
+| `meme/tools/clj/forms_test` | Form predicates and contracts: AST nodes, metadata, reader conditionals |
+| `meme/tools/clj/errors_test` | Error infrastructure: `source-context`, `meme-error`, `format-error` |
 | `meme/roundtrip_test` | Read → print → re-read identity. Structural invariant tests. |
 | `meme/regression/scan_test` | Scar tissue: scanner bugs (bracket depth, char/string in syntax-quote, symbol parsing, EOF handling, keyword validation, unterminated literals) |
 | `meme/regression/reader_test` | Scar tissue: parser bugs (discard sentinel, depth limits, head types, spacing, duplicates, metadata) |

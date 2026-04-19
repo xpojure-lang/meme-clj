@@ -24,8 +24,6 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 ### Added
 
-- **`meme.registry/all-langs`** — snapshot of `{lang-name → lang-map}` across built-ins and user-registered langs. Used by the CLI to fan out to per-lang `:project-opts`.
-
 - **`|name|>` named pipe operator** in implojure-lang — lowers to `as->`-style chains that desugar to a flat `let`. Supports destructure patterns in the slot position.
 
 - **`mod` word operator** at binding power 70 in implojure-lang.

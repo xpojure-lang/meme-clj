@@ -4,7 +4,14 @@
    that the original suite missed due to test-ordering dependencies and
    missing platform coverage. See commit history for details."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [meme.loader :as loader])
+            [meme.loader :as loader]
+            ;; Required so meme-lang registers itself with the registry.
+            ;; Without this, the loader installs but finds no `.meme` extension,
+            ;; so require/load-file of `.meme` files falls through to Clojure's
+            ;; original load and fails. This made the tests implicitly depend
+            ;; on test-ordering (passing only if some earlier test happened
+            ;; to have loaded meme-lang.api first).
+            [meme-lang.api])
   (:import (java.util.concurrent CountDownLatch TimeUnit)))
 
 (use-fixtures :each
@@ -184,20 +191,22 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #2 — own infrastructure not in denylist
-;; meme/* and meme_lang/* namespaces were not denied, so the loader would
-;; try to intercept its own infrastructure (e.g. meme.registry), enabling
-;; the infinite recursion in bug #1. Defense in depth.
+;; meme/*, meme_lang/*, and implojure_lang/* namespaces were not denied, so
+;; the loader would try to intercept its own infrastructure (e.g. meme.registry),
+;; enabling the infinite recursion in bug #1. Defense in depth.
 ;; ---------------------------------------------------------------------------
 
 (deftest own-infrastructure-not-intercepted
-  (testing "meme.* and meme_lang.* namespaces are denied by the denylist"
+  (testing "meme.*, meme_lang.*, and implojure_lang.* namespaces are denied by the denylist"
     (let [find-fn @(resolve 'meme.loader/find-lang-resource)]
       (is (nil? (find-fn "/meme/registry")) "meme/registry should be denied")
       (is (nil? (find-fn "/meme/loader")) "meme/loader should be denied")
       (is (nil? (find-fn "/meme/cli")) "meme/cli should be denied")
       (is (nil? (find-fn "/meme_lang/api")) "meme_lang/api should be denied")
       (is (nil? (find-fn "/meme_lang/stages")) "meme_lang/stages should be denied")
-      (is (nil? (find-fn "/meme_lang/run")) "meme_lang/run should be denied"))))
+      (is (nil? (find-fn "/meme_lang/run")) "meme_lang/run should be denied")
+      (is (nil? (find-fn "/implojure_lang/api")) "implojure_lang/api should be denied")
+      (is (nil? (find-fn "/implojure_lang/run")) "implojure_lang/run should be denied"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #3 — Babashka detection
