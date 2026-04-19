@@ -383,7 +383,7 @@
 
 (deftest form-snapshot-reader-conditional
   (testing "meme->forms preserves the record; eval-rc yields platform value"
-    (is (forms/meme-reader-conditional? (first (forms-for "#?(:clj 1 :cljs 2)"))))
+    (is (forms/clj-reader-conditional? (first (forms-for "#?(:clj 1 :cljs 2)"))))
     (is (= #?(:clj 1 :cljs 2) (first (eval-rc-forms "#?(:clj 1 :cljs 2)"))))))
 
 #?(:clj

@@ -1,6 +1,6 @@
 (ns meme.tools.clj.expander-test
   "Unit tests for meme.tools.clj.expander: syntax-quote expansion and
-   MemeRaw unwrapping."
+   CljRaw unwrapping."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
@@ -19,14 +19,14 @@
     (is (= [{:a 1}] (expander/expand-forms [{:a 1}])))))
 
 ;; ---------------------------------------------------------------------------
-;; MemeRaw unwrapping
+;; CljRaw unwrapping
 ;; ---------------------------------------------------------------------------
 
 (deftest expand-forms-unwraps-raw
-  (testing "MemeRaw at top level is unwrapped to plain value"
-    (is (= [255] (expander/expand-forms [(forms/->MemeRaw 255 "0xFF")]))))
-  (testing "MemeRaw nested in a list is unwrapped"
-    (let [form (list '+ (forms/->MemeRaw 10 "0xA") 1)
+  (testing "CljRaw at top level is unwrapped to plain value"
+    (is (= [255] (expander/expand-forms [(forms/->CljRaw 255 "0xFF")]))))
+  (testing "CljRaw nested in a list is unwrapped"
+    (let [form (list '+ (forms/->CljRaw 10 "0xA") 1)
           result (first (expander/expand-forms [form]))]
       (is (= 10 (second result))))))
 
@@ -335,10 +335,10 @@
           "ns-qualified x# preserved literally"))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: MemeReaderConditional must survive expand-syntax-quotes.
-;; Bug: on CLJS, MemeReaderConditional is a defrecord satisfying map?, so
+;; Scar tissue: CljReaderConditional must survive expand-syntax-quotes.
+;; Bug: on CLJS, CljReaderConditional is a defrecord satisfying map?, so
 ;; expand-syntax-quotes destructured it into a plain map {form: ... :splicing ...}.
-;; Fix: check meme-reader-conditional? before map? in both expand-sq and
+;; Fix: check clj-reader-conditional? before map? in both expand-sq and
 ;; expand-syntax-quotes.
 ;; ---------------------------------------------------------------------------
 
@@ -347,13 +347,13 @@
     (let [forms (lang/meme->forms "#?(:clj 1 :cljs 2)")
           expanded (expander/expand-forms forms)]
       (is (= 1 (count expanded)))
-      (is (forms/meme-reader-conditional? (first expanded))
+      (is (forms/clj-reader-conditional? (first expanded))
           "reader conditional should survive expand-forms as its original type")))
   (testing "reader conditional inside a list survives expansion"
     (let [forms (lang/meme->forms "f(#?(:clj 1 :cljs 2))")
           expanded (expander/expand-forms forms)
           inner (second (first expanded))]
-      (is (forms/meme-reader-conditional? inner)
+      (is (forms/clj-reader-conditional? inner)
           "nested reader conditional should survive expand-forms")))
   (testing "reader conditional inside syntax-quote survives expand-sq"
     (let [forms (lang/meme->forms "`#?(:clj x :cljs y)")
@@ -396,9 +396,9 @@
       (is (= 'clojure.core/hash-set (second expanded))))))
 
 ;; ---------------------------------------------------------------------------
-;; RT6-F2: Unquote in syntax-quote must unwrap MemeRaw and expand nested SQ.
-;; Bug: expand-sq returned (:form unquote) bare, leaving MemeRaw records
-;; ({:value N :raw "..."}) and MemeSyntaxQuote records in the expansion.
+;; RT6-F2: Unquote in syntax-quote must unwrap CljRaw and expand nested SQ.
+;; Bug: expand-sq returned (:form unquote) bare, leaving CljRaw records
+;; ({:value N :raw "..."}) and CljSyntaxQuote records in the expansion.
 ;; Eval would see these as maps, not as values/expanded syntax-quotes.
 ;; Fix: process the inner form through expand-syntax-quotes.
 ;; ---------------------------------------------------------------------------
@@ -410,7 +410,7 @@
              expanded (expander/expand-forms forms)
              result (first expanded)]
          ;; After expansion, the unquoted value should be the plain number 255,
-         ;; not a MemeRaw record {value: 255, raw: "0xFF"}
+         ;; not a CljRaw record {value: 255, raw: "0xFF"}
          (is (= 255 result) "unquoted hex literal should expand to plain number"))))
   #?(:clj
      (testing "`~0777 — octal literal inside unquote must expand to the number"

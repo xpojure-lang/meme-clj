@@ -276,7 +276,7 @@
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: MemeRaw in canon formatter was rendered as {:value N :raw "..."}.
+;; Scar tissue: CljRaw in canon formatter was rendered as {:value N :raw "..."}.
 ;; ---------------------------------------------------------------------------
 
 (deftest canon-meme-raw-renders-source-notation
@@ -285,7 +285,7 @@
        (let [forms (lang/meme->forms "let([x 0xFF] x)")
              pp (lang/format-meme-forms forms)]
          (is (str/includes? pp "0xFF") "formatter must preserve hex notation")
-         (is (not (str/includes? pp ":value")) "formatter must not leak MemeRaw fields"))))
+         (is (not (str/includes? pp ":value")) "formatter must not leak CljRaw fields"))))
   (testing "scientific notation in canon formatter"
     (let [forms (lang/meme->forms "def(y 1e5)")
           pp (lang/format-meme-forms forms)]
@@ -633,7 +633,7 @@
 
 ;; Known limitation: CLJS cannot distinguish 1.0 from 1 at the value level
 ;; (JavaScript has no integer/float type distinction). The emitter produces "1"
-;; for both. A full fix requires parser-level notation preservation via MemeRaw.
+;; for both. A full fix requires parser-level notation preservation via CljRaw.
 ;; This test documents the JVM behavior as correct and CLJS as a known limitation.
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: format-meme drops reader-conditional branches (P0)
@@ -706,7 +706,7 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Fuzzer finding: control char roundtrip — bare control char prints as
-;; \uHHHH unicode escape, which re-parses as MemeRaw-wrapped char.
+;; \uHHHH unicode escape, which re-parses as CljRaw-wrapped char.
 ;; The semantic value is preserved; the notation change is accepted.
 ;; This test documents the behavior: print→re-parse produces the same value.
 ;; ---------------------------------------------------------------------------
@@ -718,7 +718,7 @@
              printed (fmt-flat/format-form form)
              reparsed (first (lang/meme->forms printed))]
          (is (= "\\u0001" printed))
-         (is (forms/raw? reparsed) "re-parsed control char is MemeRaw-wrapped")
+         (is (forms/raw? reparsed) "re-parsed control char is CljRaw-wrapped")
          (is (= form (:value reparsed)) "semantic value preserved through roundtrip")))))
 
 ;; ---------------------------------------------------------------------------
@@ -730,7 +730,7 @@
 
 (deftest unquote-deref-sugar-no-ambiguity
   (testing "~(deref x) with sugar does not print as ~@x"
-    (let [form (meme.tools.clj.forms/->MemeUnquote
+    (let [form (meme.tools.clj.forms/->CljUnquote
                  (with-meta (list 'clojure.core/deref 'x) {:meme-lang/sugar true}))
           printed (fmt-flat/format-form form)]
       (is (not (str/starts-with? printed "~@"))

@@ -704,7 +704,7 @@
   (testing "#? with two branches"
     (let [[f1 f2 _] (roundtrip-preserve "#?(:clj 1 :cljs 2)")]
       (is (= f1 f2))
-      (is (forms/meme-reader-conditional? (first f1)))))
+      (is (forms/clj-reader-conditional? (first f1)))))
   (testing "#? with :default"
     (let [[f1 f2 _] (roundtrip-preserve "#?(:clj 1 :default 0)")]
       (is (= f1 f2))))

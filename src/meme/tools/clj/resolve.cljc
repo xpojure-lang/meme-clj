@@ -36,7 +36,7 @@
 
 (defn resolve-string
   "Resolve a quoted string token to a string value. Handles escape sequences natively.
-   Wraps in MemeRaw when the string contains unicode escapes (\\uNNNN) that would
+   Wraps in CljRaw when the string contains unicode escapes (\\uNNNN) that would
    be lost through pr-str roundtrip."
   [raw loc]
   (when (or (< (count raw) 2)
@@ -88,7 +88,7 @@
                                (errors/meme-error (str "Unsupported escape sequence \\" esc " in string") loc))))))
                     (recur (inc i) #?(:clj (.append sb ch) :cljs (do (.push sb (str ch)) sb)))))))]
         (if @has-unicode?
-          (forms/->MemeRaw resolved raw)
+          (forms/->CljRaw resolved raw)
           resolved)))))
 
 ;; ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@
             (str "Invalid unicode character \\u" hex
                  " — code point is in the surrogate range (U+D800..U+DFFF)")
             loc))
-        (forms/->MemeRaw (char code) raw))
+        (forms/->CljRaw (char code) raw))
 
       #?@(:clj [(and (str/starts-with? name-part "o")
                      (<= 2 (count name-part) 4))
@@ -146,7 +146,7 @@
                                   (errors/meme-error (str "Invalid octal character \\" name-part) loc)))]
                   (when (> code 0377)
                     (errors/meme-error (str "Octal character out of range: \\" name-part) loc))
-                  (forms/->MemeRaw (char code) raw))])
+                  (forms/->CljRaw (char code) raw))])
 
       :else
       (errors/meme-error (str "Invalid character literal: " raw) loc))))
@@ -233,7 +233,7 @@
                (and (<= Long/MIN_VALUE result) (<= result Long/MAX_VALUE)) (long result)
                :else result))
 
-           ;; Hex — wrap in MemeRaw to preserve notation
+           ;; Hex — wrap in CljRaw to preserve notation
            (or (str/starts-with? raw "0x") (str/starts-with? raw "0X")
                (str/starts-with? raw "+0x") (str/starts-with? raw "+0X")
                (str/starts-with? raw "-0x") (str/starts-with? raw "-0X"))
@@ -244,9 +244,9 @@
                  bi (java.math.BigInteger. hex-str 16)
                  bi (if negative? (.negate bi) bi)
                  val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]
-             (forms/->MemeRaw val raw))
+             (forms/->CljRaw val raw))
 
-           ;; Octal — wrap in MemeRaw to preserve notation
+           ;; Octal — wrap in CljRaw to preserve notation
            (and (or (str/starts-with? raw "0") (str/starts-with? raw "-0") (str/starts-with? raw "+0"))
                 (> (count raw) 1)
                 (not (str/starts-with? raw "0x")) (not (str/starts-with? raw "0X"))
@@ -260,9 +260,9 @@
                  bi (java.math.BigInteger. oct-str 8)
                  bi (if negative? (.negate bi) bi)
                  val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]
-             (forms/->MemeRaw val raw))
+             (forms/->CljRaw val raw))
 
-           ;; Radix NNrDDDD — wrap in MemeRaw to preserve notation
+           ;; Radix NNrDDDD — wrap in CljRaw to preserve notation
            (re-matches #"[+-]?\d{1,2}r[0-9a-zA-Z]+" raw)
            (let [negative? (str/starts-with? raw "-")
                  s (cond-> raw (or (str/starts-with? raw "+") (str/starts-with? raw "-")) (subs 1))
@@ -272,7 +272,7 @@
                  bi (java.math.BigInteger. digits (int radix))
                  bi (if negative? (.negate bi) bi)
                  val (if (< (.bitLength bi) 64) (.longValue bi) (clojure.lang.BigInt/fromBigInteger bi))]
-             (forms/->MemeRaw val raw))
+             (forms/->CljRaw val raw))
 
            ;; Invalid octal — starts with 0, not hex/float/valid-octal, contains 8 or 9.
            ;; Clojure rejects these (e.g. 08, 09, 0189). Must error before the plain integer fallback.
@@ -331,11 +331,11 @@
                 (re-matches #"[+-]?0\d+" raw))
            (errors/meme-error (str "Invalid number: " raw) loc)])
 
-      ;; Float (contains . or e/E) — wrap in MemeRaw when scientific notation
+      ;; Float (contains . or e/E) — wrap in CljRaw when scientific notation
       (or (str/includes? raw ".") (str/includes? raw "e") (str/includes? raw "E"))
       (let [val #?(:clj (Double/parseDouble raw) :cljs (js/parseFloat raw))]
         (if (or (str/includes? raw "e") (str/includes? raw "E"))
-          (forms/->MemeRaw val raw)
+          (forms/->CljRaw val raw)
           val))
 
       ;; Plain integer — auto-promote to BigInt if too large for Long (JVM)

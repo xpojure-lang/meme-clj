@@ -29,7 +29,7 @@
    step-parse → step-read
 
    Reader conditionals (`#?`, `#?@`) are always returned as
-   `MemeReaderConditional` records. To evaluate them for the current
+   `CljReaderConditional` records. To evaluate them for the current
    platform, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals`
    after reading, or use `run-string` / `run-file` (which do so
    automatically). The `:read-cond` option is no longer accepted —
