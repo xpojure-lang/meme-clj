@@ -445,11 +445,11 @@ Files with registered lang extensions take precedence over `.clj` when both exis
 
 ### Precompilation
 
-For environments where runtime loading isn't available (Babashka `require`, nREPL, CI), precompile `.meme` to `.clj`:
+For environments where runtime loading isn't available (Babashka `require`, nREPL, CI), transpile `.meme` to `.clj`:
 
 ```bash
-bb meme compile src/              # default: target/meme
-bb meme compile src/ --out target/classes   # or override
+bb meme transpile src/                       # default: target/meme
+bb meme transpile src/ --out target/classes  # or override
 ```
 
-Add the output directory to `:paths` in `deps.edn` or `bb.edn`. Standard `require` then works without any runtime patching.
+`compile` is accepted as an alias. Add the output directory to `:paths` in `deps.edn` or `bb.edn`. Standard `require` then works without any runtime patching.

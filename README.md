@@ -121,8 +121,8 @@ The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JV
 **Babashka limitation.** Babashka's SCI does not dispatch `require` through `clojure.core/load`, so on Babashka `require` of `.meme` namespaces is not supported. `load-file` works on both platforms. For Babashka projects that need `require`, precompile to `.clj`:
 
 ```bash
-$ bb meme compile src/                                  # output to target/meme/
-$ bb meme compile src/ --out out/                       # custom output directory
+$ bb meme transpile src/                                # output to target/meme/
+$ bb meme transpile src/ --out out/                     # custom output directory
 ```
 
 Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).

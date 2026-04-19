@@ -311,7 +311,7 @@
     (try
       (let [{:keys [out exit]} (bb-meme "compile" (str f) "--out" out-dir)]
         (is (zero? exit))
-        (is (str/includes? out "compiled to"))
+        (is (str/includes? out "transpiled to"))
         ;; Check output file exists and has correct content
         (let [clj-name (str/replace (.getName f) #"\.meme$" ".clj")
               clj-file (io/file out-dir clj-name)]
@@ -344,6 +344,19 @@
         {:keys [exit out]} (bb-meme "compile" (str f) "--out" "")]
     (is (= 1 exit) "empty --out should exit 1")
     (is (str/includes? out "--out cannot be empty"))))
+
+(deftest transpile-is-canonical-name-for-compile
+  (let [f (tmp-meme "defn(foo [x] +(x 1))")
+        out-dir (str (System/getProperty "java.io.tmpdir") "/meme-e2e-tx-" (System/nanoTime))]
+    (try
+      (let [{:keys [out exit]} (bb-meme "transpile" (str f) "--out" out-dir)]
+        (is (zero? exit))
+        (is (str/includes? out "transpiled to"))
+        (let [clj-name (str/replace (.getName f) #"\.meme$" ".clj")]
+          (is (.exists (io/file out-dir clj-name)))))
+      (finally
+        (doseq [f (reverse (file-seq (io/file out-dir)))]
+          (.delete f))))))
 
 (deftest compile-reports-errors
   (let [dir (io/file (System/getProperty "java.io.tmpdir")

@@ -452,7 +452,7 @@ Unified CLI for meme. JVM/Babashka only.
 | `meme to-clj <file\|dir>` | Convert `.meme` files to `.clj` (in-place). Alias: `from-meme`. |
 | `meme to-meme <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.meme`. Alias: `from-clj`. |
 | `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
-| `meme compile <dir\|file...>` | Compile `.meme` to `.clj` in a separate output directory (`--out target/meme` by default). Output preserves relative paths — add the output dir to `:paths` in deps.edn for standard `require` without runtime patching. |
+| `meme transpile <dir\|file...>` | Transpile `.meme` to `.clj` in a separate output directory (`--out target/meme` by default). Output preserves relative paths — add the output dir to `:paths` in deps.edn for standard `require` without runtime patching. Alias: `compile`. |
 | `meme inspect [--lang]` | Show lang info and supported commands |
 | `meme version` | Print version |
 
@@ -538,7 +538,7 @@ Namespace loader for `.meme` files. Intercepts `clojure.core/load` and `clojure.
 
 **Precedence:** When both `my/ns.meme` and `my/ns.clj` exist on the classpath, `.meme` takes priority.
 
-**Babashka limitation:** Babashka's SCI interpreter does not dispatch `require` through `clojure.core/load`, so `require` of `.meme` namespaces is JVM-only. `load-file` works on both platforms. For Babashka projects that need `require`, use `meme compile` to precompile `.meme` to `.clj`.
+**Babashka limitation:** Babashka's SCI interpreter does not dispatch `require` through `clojure.core/load`, so `require` of `.meme` namespaces is JVM-only. `load-file` works on both platforms. For Babashka projects that need `require`, use `meme transpile` to precompile `.meme` to `.clj`.
 
 ## meme.config
 

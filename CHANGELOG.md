@@ -18,7 +18,9 @@ Reader-conditional handling is now a pipeline stage instead of a reader flag. `m
 
 - **`meme->clj` is now lossless by default.** Previously it evaluated `#?` for the current platform, silently dropping off-platform branches. Now both branches are preserved in the emitted Clojure text. Use `run-string` for eval-time behavior.
 
-- **`meme compile` default `--out` is now `target/meme`** (was `target/classes`). Avoids collision with `tools.build`/AOT output in the same directory tree. Projects that relied on the old default should either pass `--out target/classes` explicitly or update `:paths` in `deps.edn` to point at `target/meme`.
+- **`meme compile` renamed to `meme transpile`.** The command is a same-level surface-syntax transform (`.meme` → `.clj`), not a lowering to bytecode — `transpile` is the accurate term. `compile` still works as an alias; no script changes required, but new docs and help text use `transpile`.
+
+- **Default `--out` is now `target/meme`** (was `target/classes`). Avoids collision with `tools.build`/AOT output in the same directory tree. Projects that relied on the old default should either pass `--out target/classes` explicitly or update `:paths` in `deps.edn` to point at `target/meme`.
 
 - **Scanner / reader strictness.** Several malformed inputs that previously read silently now error at read time, matching Clojure's reader:
   - `//`, `//a`, `/foo` — rejected. `/`, `ns//`, `foo/bar/baz` stay valid.

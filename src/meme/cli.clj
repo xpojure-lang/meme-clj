@@ -215,8 +215,8 @@
       {:cmd :format, :pred meme-file?, :output-fn nil
        :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"})))
 
-(defn compile-meme
-  "Compile .meme files to .clj in a separate output directory.
+(defn transpile-meme
+  "Transpile .meme files to .clj in a separate output directory.
    Preserves relative paths. Output can be added to :paths in deps.edn
    so that require, load-file, and nREPL all work without runtime patching."
   [{:keys [file files out lang] :as opts}]
@@ -228,7 +228,7 @@
             (cli-exit! 1))
         out-dir (or out "target/meme")]
     (when (empty? inputs)
-      (println "Usage: meme compile <src-dir|file...> [--out target/meme] [--lang name]")
+      (println "Usage: meme transpile <src-dir|file...> [--out target/meme] [--lang name]")
       (cli-exit! 1))
     (let [[lang-name l] (get-lang lang nil)
           _ (registry/check-support l lang-name :to-clj)
@@ -269,7 +269,7 @@
             total (count results)
             failed (count (filter #{:fail} results))]
         (println)
-        (println (str total " file(s) compiled to " out-dir
+        (println (str total " file(s) transpiled to " out-dir
                       (when (pos? failed) (str ", " failed " failed"))))
         (when (pos? failed) (cli-exit! 1))))))
 
@@ -299,7 +299,7 @@
     (when (has? :to-clj)  (println "  meme to-clj   <file|dir> [--lang name] [--stdout]  (alias: from-meme)"))
     (when (has? :to-meme) (println "  meme to-meme  <file|dir> [--lang name] [--stdout]  (alias: from-clj)"))
     (when (has? :format)  (println "  meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"))
-    (when (has? :to-clj)  (println "  meme compile <src-dir|file...> [--out target/meme] [--lang name]"))
+    (when (has? :to-clj)  (println "  meme transpile <src-dir|file...> [--out target/meme] [--lang name]  (alias: compile)"))
     (println "  meme inspect [--lang name]")
     (println "  meme version")
     (println)
@@ -337,7 +337,9 @@
           :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
                                      :lang {:coerce :string} :style {:coerce :string}
                                      :width {:coerce :long}}}
-         {:cmds ["compile"] :fn (file-cmd compile-meme)
+         {:cmds ["transpile"] :fn (file-cmd transpile-meme)
+          :args->opts [:file] :spec {:out {:coerce :string} :lang {:coerce :string}}}
+         {:cmds ["compile"]   :fn (file-cmd transpile-meme)
           :args->opts [:file] :spec {:out {:coerce :string} :lang {:coerce :string}}}
          {:cmds ["inspect"] :fn (comp inspect-lang :opts) :spec {:lang {:coerce :string}}}
          {:cmds ["version"] :fn (fn [_] (version nil))}
