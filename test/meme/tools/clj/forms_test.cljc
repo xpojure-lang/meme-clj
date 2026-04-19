@@ -4,7 +4,7 @@
             [meme.tools.clj.forms :as forms]))
 
 ;; ============================================================
-;; MemeAutoKeyword
+;; CljAutoKeyword
 ;; ============================================================
 
 (deftest deferred-auto-keyword-roundtrip
@@ -22,11 +22,11 @@
   (is (not (forms/deferred-auto-keyword? nil))))
 
 ;; ============================================================
-;; MemeRaw
+;; CljRaw
 ;; ============================================================
 
 (deftest raw-wrapper
-  (let [r (forms/->MemeRaw 42 "0x2A")]
+  (let [r (forms/->CljRaw 42 "0x2A")]
     (is (forms/raw? r))
     (is (= 42 (:value r)))
     (is (= "0x2A" (:raw r)))))
@@ -41,18 +41,18 @@
 ;; ============================================================
 
 (deftest syntax-quote-nodes
-  (testing "MemeSyntaxQuote"
-    (let [sq (forms/->MemeSyntaxQuote '(+ 1 2))]
+  (testing "CljSyntaxQuote"
+    (let [sq (forms/->CljSyntaxQuote '(+ 1 2))]
       (is (forms/syntax-quote? sq))
       (is (not (forms/unquote? sq)))
       (is (= '(+ 1 2) (:form sq)))))
-  (testing "MemeUnquote"
-    (let [uq (forms/->MemeUnquote 'x)]
+  (testing "CljUnquote"
+    (let [uq (forms/->CljUnquote 'x)]
       (is (forms/unquote? uq))
       (is (not (forms/syntax-quote? uq)))
       (is (= 'x (:form uq)))))
-  (testing "MemeUnquoteSplicing"
-    (let [uqs (forms/->MemeUnquoteSplicing 'xs)]
+  (testing "CljUnquoteSplicing"
+    (let [uqs (forms/->CljUnquoteSplicing 'xs)]
       (is (forms/unquote-splicing? uqs))
       (is (not (forms/unquote? uqs)))
       (is (= 'xs (:form uqs))))))
@@ -63,18 +63,18 @@
 
 (deftest reader-conditional-portable
   (let [rc (forms/make-reader-conditional '(:clj 1 :cljs 2) false)]
-    (is (forms/meme-reader-conditional? rc))
+    (is (forms/clj-reader-conditional? rc))
     (is (= '(:clj 1 :cljs 2) (forms/rc-form rc)))
     (is (not (forms/rc-splicing? rc)))))
 
 (deftest reader-conditional-splicing
   (let [rc (forms/make-reader-conditional '(:clj [1] :cljs [2]) true)]
-    (is (forms/meme-reader-conditional? rc))
+    (is (forms/clj-reader-conditional? rc))
     (is (forms/rc-splicing? rc))))
 
 (deftest reader-conditional-predicate
-  (is (not (forms/meme-reader-conditional? nil)))
-  (is (not (forms/meme-reader-conditional? '(:clj 1)))))
+  (is (not (forms/clj-reader-conditional? nil)))
+  (is (not (forms/clj-reader-conditional? '(:clj 1)))))
 
 ;; ============================================================
 ;; strip-internal-meta

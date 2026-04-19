@@ -1,5 +1,5 @@
 (ns meme.tools.clj.expander
-  "Syntax-quote expansion: MemeSyntaxQuote AST nodes → plain Clojure forms.
+  "Syntax-quote expansion: CljSyntaxQuote AST nodes → plain Clojure forms.
    Called by runtime paths (run, repl) before eval. Not needed for tooling
    (tooling works with AST nodes directly)."
   (:require [clojure.string :as str]
@@ -68,16 +68,16 @@
 (defn- expand-sq
   "Walk a form parsed inside syntax-quote and produce the expansion.
    Mirrors Clojure's SyntaxQuoteReader behavior.
-   Used by expand-syntax-quotes to expand MemeSyntaxQuote AST nodes at eval time."
+   Used by expand-syntax-quotes to expand CljSyntaxQuote AST nodes at eval time."
   [form opts loc]
   (cond
     ;; Unquote: ~x → x (the value, not quoted)
     ;; RT6-F2: process inner form through expand-syntax-quotes so that
-    ;; MemeRaw values (e.g. 0xFF → {:value 255 :raw "0xFF"}) are unwrapped
-    ;; and nested MemeSyntaxQuote nodes (e.g. `~`x) are properly expanded.
+    ;; CljRaw values (e.g. 0xFF → {:value 255 :raw "0xFF"}) are unwrapped
+    ;; and nested CljSyntaxQuote nodes (e.g. `~`x) are properly expanded.
     ;; Nested `~~x` (two unquotes that would overshoot the enclosing ``` ` ```
     ;; levels) is validated at the outer pipeline stage by checking for
-    ;; leftover MemeUnquote / MemeUnquoteSplicing records in the final forms.
+    ;; leftover CljUnquote / CljUnquoteSplicing records in the final forms.
     (forms/unquote? form)
     (expand-syntax-quotes (:form form) (assoc opts :inside-sq true))
 
@@ -131,11 +131,11 @@
                          (list 'clojure.core/seq (cons 'clojure.core/concat items)))]
       (maybe-with-meta expansion form opts loc))
 
-    ;; MemeRaw — unwrap to plain value for expansion
+    ;; CljRaw — unwrap to plain value for expansion
     ;; Must be before map? because defrecords satisfy (map? x)
     (forms/raw? form) (:value form)
 
-    ;; MemeAutoKeyword — pass through unchanged in syntax-quote context.
+    ;; CljAutoKeyword — pass through unchanged in syntax-quote context.
     ;; Must be before map? because defrecords satisfy (map? x).
     ;; Expansion to (read-string ...) happens in step-expand-syntax-quotes.
     (forms/deferred-auto-keyword? form)
@@ -151,13 +151,13 @@
                   (expand-sq (:form form) opts loc))]
       (expand-sq inner opts loc))
 
-    ;; MemeReaderConditional — pass through in syntax-quote context.
+    ;; CljReaderConditional — pass through in syntax-quote context.
     ;; Must be before map? since CLJS defrecords satisfy map?.
-    (forms/meme-reader-conditional? form)
+    (forms/clj-reader-conditional? form)
     form
 
     ;; UnquoteSplicing outside a collection — error.
-    ;; Must be before map? since defrecords (like MemeUnquoteSplicing) satisfy map?.
+    ;; Must be before map? since defrecords (like CljUnquoteSplicing) satisfy map?.
     (forms/unquote-splicing? form)
     (errors/meme-error "Unquote-splicing (~@) must be inside a collection in syntax-quote"
                        (let [form-loc (select-keys (meta form) [:line :col])]
@@ -216,7 +216,7 @@
 
 (defn expand-syntax-quotes
   "Walk a form tree and expand all AST nodes into plain Clojure forms.
-   Expands MemeSyntaxQuote into seq/concat/list, unwraps MemeRaw to plain values.
+   Expands CljSyntaxQuote into seq/concat/list, unwraps CljRaw to plain values.
    Called by runtime paths (run, repl) before eval."
   ([form] (expand-syntax-quotes form nil))
   ([form opts]
@@ -224,7 +224,7 @@
      (forms/raw? form)
      (:value form)
 
-     ;; MemeAutoKeyword — expand to (read-string "::foo") when :expand-auto-keywords
+     ;; CljAutoKeyword — expand to (read-string "::foo") when :expand-auto-keywords
      ;; is set in opts (eval path), otherwise pass through (text-to-text path).
      ;; Must be before map? because defrecords satisfy (map? x).
      (forms/deferred-auto-keyword? form)
@@ -243,17 +243,17 @@
 
      (forms/unquote? form)
      (if (:inside-sq opts)
-       (forms/->MemeUnquote (expand-syntax-quotes (:form form) opts))
+       (forms/->CljUnquote (expand-syntax-quotes (:form form) opts))
        (errors/meme-error "Unquote (~) not in syntax-quote" {}))
 
      (forms/unquote-splicing? form)
      (if (:inside-sq opts)
-       (forms/->MemeUnquoteSplicing (expand-syntax-quotes (:form form) opts))
+       (forms/->CljUnquoteSplicing (expand-syntax-quotes (:form form) opts))
        (errors/meme-error "Unquote-splicing (~@) not in syntax-quote" {}))
 
-     ;; MemeReaderConditional (CLJS defrecord) — recurse into :form while
+     ;; CljReaderConditional (CLJS defrecord) — recurse into :form while
      ;; preserving the record type. Must be before map? since defrecords satisfy map?.
-     (forms/meme-reader-conditional? form)
+     (forms/clj-reader-conditional? form)
      (forms/make-reader-conditional
        (apply list (map #(expand-syntax-quotes % opts) (forms/rc-form form)))
        (forms/rc-splicing? form))
@@ -275,7 +275,7 @@
      :else form)))
 
 (defn- check-no-leftover-unquotes!
-  "Walk an expanded form and error if any MemeUnquote or MemeUnquoteSplicing
+  "Walk an expanded form and error if any CljUnquote or CljUnquoteSplicing
    records survived expansion. They indicate `~`/`~@` with no matching
    enclosing ``` ` ``` — e.g. bare `~~x` at top level. Runs after expansion so
    the valid `` ``~~x `` → x case (unquotes balanced by nested syntax-quotes)

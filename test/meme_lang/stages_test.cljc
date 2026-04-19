@@ -43,12 +43,12 @@
     (let [ctx (-> (run-stages "`foo")
                   stages/step-expand-syntax-quotes)
           form (first (:forms ctx))]
-      ;; `foo expands to (quote foo) — no longer a MemeSyntaxQuote record
+      ;; `foo expands to (quote foo) — no longer a CljSyntaxQuote record
       (is (seq? form))
       (is (= 'quote (first form)))
       (is (not (forms/syntax-quote? form)))))
   #?(:clj
-     (testing "unwraps MemeRaw values"
+     (testing "unwraps CljRaw values"
        (let [ctx (-> (run-stages "0xFF")
                      stages/step-expand-syntax-quotes)]
          (is (= 255 (first (:forms ctx))))
@@ -254,7 +254,7 @@
 (deftest eval-rc-inside-syntax-quote
   (testing "#? inside ` is evaluated (matches native Clojure read-time semantics)"
     (let [[form] (eval-rc "`#?(:clj x :cljs y)" {:platform :clj})]
-      ;; After eval-rc, the SQ wraps just `x (the MemeReaderConditional is gone)
+      ;; After eval-rc, the SQ wraps just `x (the CljReaderConditional is gone)
       (is (forms/syntax-quote? form))
       (is (= 'x (:form form)))))
   (testing "#? inside ` with no match drops the whole syntax-quote form"
@@ -292,7 +292,7 @@
 (deftest tooling-path-preserves-reader-conditionals
   (testing "run-stages keeps reader conditionals as records"
     (let [forms (:forms (run-stages "#?(:clj 1 :cljs 2)"))]
-      (is (forms/meme-reader-conditional? (first forms))))))
+      (is (forms/clj-reader-conditional? (first forms))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Shebang stripping

@@ -13,7 +13,7 @@
 
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: auto-resolve keywords are deferred (MemeAutoKeyword records).
+;; Scar tissue: auto-resolve keywords are deferred (CljAutoKeyword records).
 ;; Covered by resolve_test and roundtrip_test.
 ;; ---------------------------------------------------------------------------
 
@@ -218,7 +218,7 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: unquote (~) outside syntax-quote must error at expansion time.
-;; Bug: MemeUnquote/MemeUnquoteSplicing nodes survived expansion untouched.
+;; Bug: CljUnquote/CljUnquoteSplicing nodes survived expansion untouched.
 ;; Fix: expand-syntax-quotes errors on bare unquote/unquote-splicing nodes.
 ;; ---------------------------------------------------------------------------
 
@@ -326,7 +326,7 @@
 ;; Scar tissue: #? reader conditionals lost non-matching branches on roundtrip.
 ;; Bug: the reader used to evaluate #? at read time, discarding branches for
 ;; other platforms, so clj→meme→clj lost information.
-;; Fix: the reader now always preserves #? as a MemeReaderConditional record;
+;; Fix: the reader now always preserves #? as a CljReaderConditional record;
 ;; step-evaluate-reader-conditionals materializes the platform branch only on
 ;; eval paths. Tooling paths see the full record.
 ;; ---------------------------------------------------------------------------
@@ -334,7 +334,7 @@
 (deftest reader-conditional-preserves-as-record
   (testing "meme->forms returns a ReaderConditional with all branches"
     (let [rc (first (lang/meme->forms "#?(:clj 1 :cljs 2)"))]
-      (is (forms/meme-reader-conditional? rc))
+      (is (forms/clj-reader-conditional? rc))
       (is (= '(:clj 1 :cljs 2) (forms/rc-form rc)))))
   (testing "meme->forms + eval-rc step yields the platform branch"
     (let [ctx    (-> {:source "#?(:clj 1 :cljs 2)" :opts {:grammar grammar/grammar}}
@@ -390,8 +390,8 @@
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: MemeRaw inside syntax-quote was treated as a map by expand-sq.
-;; defrecord instances satisfy (map? x), so MemeRaw{:value 255, :raw "0xFF"}
+;; Scar tissue: CljRaw inside syntax-quote was treated as a map by expand-sq.
+;; defrecord instances satisfy (map? x), so CljRaw{:value 255, :raw "0xFF"}
 ;; hit the map branch and produced (apply hash-map ...) instead of the plain
 ;; value. Fix: check forms/raw? before (map? form) in expand-sq.
 ;; ---------------------------------------------------------------------------
@@ -403,7 +403,7 @@
              expanded (expander/expand-forms forms)]
       ;; The expanded form should contain the number 255, not {:value 255 :raw "0xFF"}
          (is (not (some #(and (map? %) (contains? % :value)) (flatten (map seq expanded))))
-             "MemeRaw must not leak as a map into expanded forms")))
+             "CljRaw must not leak as a map into expanded forms")))
      (testing "scientific notation inside syntax-quote"
        (let [forms (lang/meme->forms "`1e2")
              expanded (expander/expand-forms forms)]
@@ -414,8 +414,8 @@
          (is (= [\a] expanded))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: nested MemeSyntaxQuote inside expand-sq was treated as a map.
-;; ``x produced MemeSyntaxQuote{:form x} inside the outer MemeSyntaxQuote.
+;; Scar tissue: nested CljSyntaxQuote inside expand-sq was treated as a map.
+;; ``x produced CljSyntaxQuote{:form x} inside the outer CljSyntaxQuote.
 ;; expand-sq fell through to (map? form) and produced garbage.
 ;; Fix: check forms/syntax-quote? before (map? form) in expand-sq.
 ;; Scar tissue: lazy map in expand-sq caused nested syntax-quote gensyms to
@@ -449,9 +449,9 @@
              "outer and inner x# must produce different gensyms")))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: MemeRaw inside #() body was corrupted by normalize-bare-percent.
+;; Scar tissue: CljRaw inside #() body was corrupted by normalize-bare-percent.
 ;; normalize-bare-percent dispatches on (map? form) and uses (into {} ...) which
-;; destroys the MemeRaw defrecord, replacing it with a plain map. This caused
+;; destroys the CljRaw defrecord, replacing it with a plain map. This caused
 ;; ClassCastException at runtime when the anonymous function was called.
 ;; Fix: check forms/raw? before (map? form) in normalize-bare-percent and
 ;; find-percent-params.
@@ -467,7 +467,7 @@
          (is (= 'fn (first f)))
       ;; The 0xFF should resolve to 255, not to {:value 255 :raw "0xFF"}
          (is (some #(= 255 %) (flatten (map #(if (seq? %) (seq %) [%]) (rest f))))
-             "0xFF must be resolved to 255, not leaked as a MemeRaw map")))))
+             "0xFF must be resolved to 255, not leaked as a CljRaw map")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #?@(:clj [2 3]) inside a collection did not splice.
@@ -665,7 +665,7 @@
 (deftest empty-reader-conditional-produces-no-form-after-eval
   (testing "empty #?() preserves as an empty-branch record at read time"
     (let [rc (first (lang/meme->forms "#?()"))]
-      (is (forms/meme-reader-conditional? rc))
+      (is (forms/clj-reader-conditional? rc))
       (is (empty? (forms/rc-form rc)))))
   (testing "eval-rc drops an empty #?() from :forms"
     (is (= [] (eval-rc-forms "#?()")))))
@@ -814,7 +814,7 @@
                      (stages/step-read)
                      (stages/step-expand-syntax-quotes))
              form (first (:forms ctx))]
-         (is (forms/meme-reader-conditional? form))
+         (is (forms/clj-reader-conditional? form))
          (is (list? (forms/rc-form form)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -870,7 +870,7 @@
 ;; Scar tissue: meme->clj used to silently drop off-platform branches of
 ;; reader conditionals because the reader's :eval mode materialized the
 ;; current platform's value at read time. After the "eval-rc as pipeline
-;; stage" refactor, the reader always preserves #? as MemeReaderConditional
+;; stage" refactor, the reader always preserves #? as CljReaderConditional
 ;; records, so meme->clj (a text-to-text tooling function, not eval) emits
 ;; both branches faithfully.
 ;; ---------------------------------------------------------------------------
@@ -932,7 +932,7 @@
 ;; Scar tissue: double-unquote `~~x` inside syntax-quote.
 ;; Bug: expand-sq peeled off the outer unquote and recursed into
 ;; expand-syntax-quotes with {:inside-sq true}. When the inner form was
-;; itself an unquote, the outer branch wrapped it in a MemeUnquote record
+;; itself an unquote, the outer branch wrapped it in a CljUnquote record
 ;; and leaked that record to eval instead of erroring.
 ;; Fix: error at expand-sq time when the argument of `~` is itself `~` or
 ;; `~@` — matches Clojure's reader, which rejects bare `~~x`.

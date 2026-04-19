@@ -251,16 +251,16 @@
 
     :syntax-quote
     (let [form (read-node (:form node) opts)]
-      (forms/->MemeSyntaxQuote form))
+      (forms/->CljSyntaxQuote form))
 
     :unquote
     (let [form (read-node (:form node) opts)]
-      (with-meta (forms/->MemeUnquote form)
+      (with-meta (forms/->CljUnquote form)
         (tok-loc (:token node))))
 
     :unquote-splicing
     (let [form (read-node (:form node) opts)]
-      (with-meta (forms/->MemeUnquoteSplicing form)
+      (with-meta (forms/->CljUnquoteSplicing form)
         (tok-loc (:token node))))
 
     :meta
@@ -356,7 +356,7 @@
       (with-meta resolved {:meme-lang/namespace-prefix ns-str}))
 
     :reader-cond
-    ;; The reader always preserves #?/#?@ as MemeReaderConditional records.
+    ;; The reader always preserves #?/#?@ as CljReaderConditional records.
     ;; Platform materialization happens in step-evaluate-reader-conditionals.
     ;; Odd-count validation also lives there — the reader emits the record
     ;; shape faithfully regardless of whether the branches are well-formed.

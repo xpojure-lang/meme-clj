@@ -1,8 +1,8 @@
 (ns meme.tools.clj.forms
   "Clojure-surface AST records and cross-stage form-level predicates.
 
-   Contains the deferred-evaluation wrappers (MemeSyntaxQuote, MemeUnquote,
-   MemeUnquoteSplicing, MemeRaw, MemeAutoKeyword, MemeReaderConditional)
+   Contains the deferred-evaluation wrappers (CljSyntaxQuote, CljUnquote,
+   CljUnquoteSplicing, CljRaw, CljAutoKeyword, CljReaderConditional)
    that the reader produces for forms that don't round-trip through plain
    Clojure data, plus anonymous-function helpers and the shared metadata
    key vocabulary used by reader, stages, and printer.
@@ -21,20 +21,20 @@
 ;; encoding to round-trip :: keywords back to "::foo" text.
 ;; ---------------------------------------------------------------------------
 
-(defrecord MemeAutoKeyword [raw])
+(defrecord CljAutoKeyword [raw])
 
 (defn deferred-auto-keyword
   "Wrap a :: keyword string as a deferred eval form.
-   Returns a MemeAutoKeyword record that the printer can recognize
+   Returns a CljAutoKeyword record that the printer can recognize
    unambiguously and the expander converts to (clojure.core/read-string \"::foo\")
    before eval."
   [raw]
-  (->MemeAutoKeyword raw))
+  (->CljAutoKeyword raw))
 
 (defn deferred-auto-keyword?
   "Is form a deferred auto-resolve keyword produced by the reader?"
   [form]
-  (instance? MemeAutoKeyword form))
+  (instance? CljAutoKeyword form))
 
 (defn deferred-auto-keyword-raw
   "Extract the raw :: keyword string from a deferred form.
@@ -43,9 +43,9 @@
   (:raw form))
 
 (defn deferred-auto-keyword->form
-  "Convert a MemeAutoKeyword to an eval-able list form.
+  "Convert a CljAutoKeyword to an eval-able list form.
    C65: use platform-appropriate read-string (clojure.core on JVM, cljs.reader on CLJS)."
-  [^MemeAutoKeyword ak]
+  [^CljAutoKeyword ak]
   (list #?(:clj 'clojure.core/read-string
            :cljs 'cljs.reader/read-string)
         (:raw ak)))
@@ -61,20 +61,20 @@
 ;; ---------------------------------------------------------------------------
 
 #?(:cljs
-   (defrecord MemeReaderConditional [form splicing]))
+   (defrecord CljReaderConditional [form splicing]))
 
 (defn make-reader-conditional
   "Construct a reader conditional. Portable: uses native type on JVM,
-   MemeReaderConditional on CLJS."
+   CljReaderConditional on CLJS."
   [form splicing?]
   #?(:clj  (reader-conditional form splicing?)
-     :cljs (->MemeReaderConditional form splicing?)))
+     :cljs (->CljReaderConditional form splicing?)))
 
-(defn meme-reader-conditional?
+(defn clj-reader-conditional?
   "Is x a reader conditional? Portable across JVM and CLJS."
   [x]
   #?(:clj  (reader-conditional? x)
-     :cljs (instance? MemeReaderConditional x)))
+     :cljs (instance? CljReaderConditional x)))
 
 (defn rc-form
   "Get the form list from a reader conditional."
@@ -102,35 +102,35 @@
 ;;
 ;; Numbers (0xFF, 010, 1e2), characters (\u0041, \o101), and strings
 ;; ("hello \u0041") are primitive types that can't carry metadata.
-;; MemeRaw wraps the resolved value alongside the raw source text so the
+;; CljRaw wraps the resolved value alongside the raw source text so the
 ;; printer can reproduce the original notation. Runtime paths unwrap
 ;; before eval.
 ;; ---------------------------------------------------------------------------
 
-(defrecord MemeRaw [value raw])
+(defrecord CljRaw [value raw])
 
 (defn raw?
-  "True if x is a MemeRaw wrapper (preserves alternate notation for roundtrip)."
-  [x] (instance? MemeRaw x))
+  "True if x is a CljRaw wrapper (preserves alternate notation for roundtrip)."
+  [x] (instance? CljRaw x))
 
-(defrecord MemeSyntaxQuote [form])
-(defrecord MemeUnquote [form])
-(defrecord MemeUnquoteSplicing [form])
+(defrecord CljSyntaxQuote [form])
+(defrecord CljUnquote [form])
+(defrecord CljUnquoteSplicing [form])
 
 (defn syntax-quote?
   "Is x a syntax-quote AST node?"
   [x]
-  (instance? MemeSyntaxQuote x))
+  (instance? CljSyntaxQuote x))
 
 (defn unquote?
   "Is x an unquote AST node?"
   [x]
-  (instance? MemeUnquote x))
+  (instance? CljUnquote x))
 
 (defn unquote-splicing?
   "Is x an unquote-splicing AST node?"
   [x]
-  (instance? MemeUnquoteSplicing x))
+  (instance? CljUnquoteSplicing x))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared metadata keys — internal keys used by the meme pipeline
@@ -224,9 +224,9 @@
     (vector? form) (with-meta (mapv #(walk-anon-fn-body f %) form) (meta form))
     ;; AST nodes — before map? since defrecords satisfy map?
     (raw? form) (f form)
-    (syntax-quote? form) (->MemeSyntaxQuote (walk-anon-fn-body f (:form form)))
-    (unquote? form) (->MemeUnquote (walk-anon-fn-body f (:form form)))
-    (unquote-splicing? form) (->MemeUnquoteSplicing (walk-anon-fn-body f (:form form)))
+    (syntax-quote? form) (->CljSyntaxQuote (walk-anon-fn-body f (:form form)))
+    (unquote? form) (->CljUnquote (walk-anon-fn-body f (:form form)))
+    (unquote-splicing? form) (->CljUnquoteSplicing (walk-anon-fn-body f (:form form)))
     ;; Maps and sets
     (map? form) (with-meta
                   (into {} (map (fn [[k v]] [(walk-anon-fn-body f k) (walk-anon-fn-body f v)]) form))

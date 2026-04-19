@@ -468,7 +468,7 @@
       (render/doc-cat doc-unquote-splicing (to-doc-inner (:form form) ctx))
 
       ;; Reader conditional — must be before map?
-      (forms/meme-reader-conditional? form)
+      (forms/clj-reader-conditional? form)
       (let [prefix (if (forms/rc-splicing? form) "#?@(" "#?(")
             branches (forms/rc-form form)]
         ;; RT6-F19: guard odd-count — partition 2 silently drops the last element

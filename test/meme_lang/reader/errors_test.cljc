@@ -54,7 +54,7 @@
     (is (some? (first (lang/meme->forms "`if(test then else)"))))))
 
 ;; NOTE: The experimental pipeline accepts ~ and ~@ outside syntax-quote at
-;; parse time (produces MemeUnquote/MemeUnquoteSplicing). Error at eval time.
+;; parse time (produces CljUnquote/CljUnquoteSplicing). Error at eval time.
 (deftest parse-unquote-outside-syntax-quote
   (is (some? (lang/meme->forms "~x"))))
 

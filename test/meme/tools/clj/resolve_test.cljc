@@ -15,7 +15,7 @@
 
 #?(:clj
    (deftest resolve-number-formats
-     (testing "hex wraps in MemeRaw"
+     (testing "hex wraps in CljRaw"
        (let [r (resolve/resolve-number "0xFF" {:line 1 :col 1})]
          (is (forms/raw? r))
          (is (= 255 (:value r)))
@@ -78,7 +78,7 @@
 
 (deftest resolve-auto-keyword-deferred
   #?(:clj
-     (testing "without resolver, emits MemeAutoKeyword on JVM"
+     (testing "without resolver, emits CljAutoKeyword on JVM"
        (let [form (resolve/resolve-auto-keyword "::foo" {:line 1 :col 1} nil)]
          (is (forms/deferred-auto-keyword? form))
          (is (= "::foo" (forms/deferred-auto-keyword-raw form)))))

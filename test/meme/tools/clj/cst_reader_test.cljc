@@ -208,19 +208,19 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest read-syntax-quote-preserves-record
-  (testing "`foo produces a MemeSyntaxQuote node (not expanded)"
+  (testing "`foo produces a CljSyntaxQuote node (not expanded)"
     (let [form (read1 "`foo")]
       (is (forms/syntax-quote? form))
       (is (= 'foo (:form form))))))
 
 (deftest read-unquote-inside-syntax-quote
-  (testing "`~x nests MemeUnquote inside MemeSyntaxQuote"
+  (testing "`~x nests CljUnquote inside CljSyntaxQuote"
     (let [form (read1 "`~x")]
       (is (forms/syntax-quote? form))
       (is (forms/unquote? (:form form))))))
 
 (deftest read-unquote-splicing-inside-syntax-quote
-  (testing "`[~@xs] preserves MemeUnquoteSplicing inside the vector"
+  (testing "`[~@xs] preserves CljUnquoteSplicing inside the vector"
     (let [form (read1 "`[~@xs]")]
       (is (forms/syntax-quote? form))
       (let [inner (:form form)]
@@ -232,9 +232,9 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest read-reader-conditional-preserves-record
-  (testing "#? reads to a MemeReaderConditional — no platform materialization"
+  (testing "#? reads to a CljReaderConditional — no platform materialization"
     (let [form (read1 "#?(:clj 1 :cljs 2)")]
-      (is (forms/meme-reader-conditional? form))
+      (is (forms/clj-reader-conditional? form))
       (is (false? (forms/rc-splicing? form)))
       (is (= '(:clj 1 :cljs 2) (forms/rc-form form))))))
 
@@ -246,7 +246,7 @@
       (is (= 1 form)))
     (let [v (read1 "[1 #?@(:clj [2 3])]")]
       (is (vector? v))
-      (is (forms/meme-reader-conditional? (nth v 1)))
+      (is (forms/clj-reader-conditional? (nth v 1)))
       (is (true? (forms/rc-splicing? (nth v 1)))))))
 
 ;; ---------------------------------------------------------------------------

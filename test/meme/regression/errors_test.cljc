@@ -177,8 +177,8 @@
       (is (re-find #"[Uu]nclosed|end of input" (ex-message e))))))
 
 ;; NOTE: The experimental pipeline's #_ handling inside syntax-quote differs.
-;; `[~#_ x] — #_ consumes x, ~ gets nil. This produces a MemeSyntaxQuote
-;; wrapping [MemeUnquote{nil}] which is valid at parse time.
+;; `[~#_ x] — #_ consumes x, ~ gets nil. This produces a CljSyntaxQuote
+;; wrapping [CljUnquote{nil}] which is valid at parse time.
 (deftest unquote-discard-in-syntax-quote
   (testing "`[~#_ x] — #_ consumes x, ~ unquotes nil"
     (is (some? (lang/meme->forms "`[~#_ x]")))))

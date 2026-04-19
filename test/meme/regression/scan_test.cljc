@@ -20,19 +20,19 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest syntax-quote-native
-  (testing "backtick on symbol produces a MemeSyntaxQuote node"
+  (testing "backtick on symbol produces a CljSyntaxQuote node"
     (let [form (first (lang/meme->forms "`foo"))]
       (is (some? form))
-      (is (instance? meme.tools.clj.forms.MemeSyntaxQuote form))))
-  (testing "backtick on call produces a MemeSyntaxQuote wrapping the call"
+      (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))))
+  (testing "backtick on call produces a CljSyntaxQuote wrapping the call"
     (let [form (first (lang/meme->forms "`a(b c)"))]
-      (is (instance? meme.tools.clj.forms.MemeSyntaxQuote form))
+      (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))
       (is (= '(a b c) (:form form)))))
   (testing "backtick nested inside a call works"
     (let [form (first (lang/meme->forms "foo(`bar)"))]
       (is (seq? form))
       (is (= 'foo (first form)))
-      (is (instance? meme.tools.clj.forms.MemeSyntaxQuote (second form))))))
+      (is (instance? meme.tools.clj.forms.CljSyntaxQuote (second form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Signed number tokenization: sign adjacent to digit = number,
@@ -99,10 +99,10 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest syntax-quote-unquote-forms
-  (testing "`~foo produces MemeSyntaxQuote wrapping MemeUnquote"
+  (testing "`~foo produces CljSyntaxQuote wrapping CljUnquote"
     (let [form (first (lang/meme->forms "`~foo"))]
-      (is (instance? meme.tools.clj.forms.MemeSyntaxQuote form))
-      (is (instance? meme.tools.clj.forms.MemeUnquote (:form form)))
+      (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))
+      (is (instance? meme.tools.clj.forms.CljUnquote (:form form)))
       (is (= 'foo (:form (:form form))))))
   (testing "` + ~ tokenize as separate prefix tokens"
     (let [tokens (tokenizer/tokenize "`~foo")]
@@ -132,7 +132,7 @@
 
 #?(:clj
    (deftest radix-numbers-high-bases
-     (testing "36rZ — base-36, value preserved in MemeRaw"
+     (testing "36rZ — base-36, value preserved in CljRaw"
        (let [form (first (lang/meme->forms "36rZ"))]
          (is (= 35 (:value form)))
          (is (= "36rZ" (:raw form)))))
@@ -173,9 +173,9 @@
   (testing "`~\"foo\" starts with :syntax-quote prefix"
     (let [tokens (tokenizer/tokenize "`~\"foo\"")]
       (is (= :syntax-quote (:type (first tokens))))))
-  (testing "`~\"foo\" produces MemeSyntaxQuote wrapping MemeUnquote of string"
+  (testing "`~\"foo\" produces CljSyntaxQuote wrapping CljUnquote of string"
     (let [form (first (lang/meme->forms "`~\"foo\""))]
-      (is (instance? meme.tools.clj.forms.MemeSyntaxQuote form))
+      (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))
       (is (= "foo" (:form (:form form)))))))
 
 ;; ---------------------------------------------------------------------------

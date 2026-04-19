@@ -101,7 +101,7 @@
   "Lower CST to Clojure forms via the CST reader.
    Reads :cst, writes :forms.
 
-   Reader conditionals are always preserved as MemeReaderConditional records;
+   Reader conditionals are always preserved as CljReaderConditional records;
    the historical :read-cond opt is no longer accepted and throws
    :meme-lang/deprecated-opt. To evaluate #?/#?@ for a target platform,
    compose step-evaluate-reader-conditionals after this stage."
@@ -110,7 +110,7 @@
   (when (contains? (:opts ctx) :read-cond)
     (throw (ex-info
              (str "The :read-cond option is no longer supported. The meme reader "
-                  "always preserves reader conditionals as MemeReaderConditional "
+                  "always preserves reader conditionals as CljReaderConditional "
                   "records. To evaluate them for a platform, compose "
                   "meme.tools.clj.stages/step-evaluate-reader-conditionals after "
                   "step-read, or use meme-lang.run/run-string / run-file.")
@@ -124,7 +124,7 @@
 ;; step-evaluate-reader-conditionals — pick the platform branch of #?, splice #?@
 ;; ---------------------------------------------------------------------------
 ;;
-;; The reader unconditionally produces MemeReaderConditional records (preserve
+;; The reader unconditionally produces CljReaderConditional records (preserve
 ;; semantics). This stage materializes the platform branch: #? is replaced by
 ;; the matched form (or removed); #?@ splices its matched sequence into the
 ;; parent collection. Composed by eval paths; skipped by tooling paths.
@@ -132,14 +132,14 @@
 ;; Native Clojure evaluates `#?` at reader time, *before* syntax-quote is
 ;; processed. We match that order by running this step before
 ;; `step-expand-syntax-quotes`. The walker therefore recurses into
-;; MemeSyntaxQuote / MemeUnquote / MemeUnquoteSplicing interiors so that
+;; CljSyntaxQuote / CljUnquote / CljUnquoteSplicing interiors so that
 ;; `` `#?(:clj x :cljs y) `` collapses to `` `x `` on JVM just as Clojure would.
 ;; ---------------------------------------------------------------------------
 
 (declare ^:private walk-rc)
 
 (defn- eval-rc
-  "Evaluate a MemeReaderConditional for `platform`.
+  "Evaluate a CljReaderConditional for `platform`.
    Returns a vector of 0-or-more forms (splicing produces many, no-match zero).
    Follows Clojure's precedence: named platform key first, then :default."
   [rc platform]
@@ -164,14 +164,14 @@
         :else (walk-rc matched platform)))))
 
 (defn- walk-rc
-  "Walk a form, evaluating any MemeReaderConditional records for `platform`.
+  "Walk a form, evaluating any CljReaderConditional records for `platform`.
    Returns a vector of 0-or-more forms (splicing support).
-   Recurses into all collections and into MemeSyntaxQuote / MemeUnquote /
-   MemeUnquoteSplicing interiors so that #? inside ` is evaluated just like
+   Recurses into all collections and into CljSyntaxQuote / CljUnquote /
+   CljUnquoteSplicing interiors so that #? inside ` is evaluated just like
    native Clojure does at reader time."
   [form platform]
   (cond
-    (forms/meme-reader-conditional? form)
+    (forms/clj-reader-conditional? form)
     (eval-rc form platform)
 
     ;; AST wrappers — recurse into :form; each expects a single result.
@@ -179,7 +179,7 @@
     (let [inner (walk-rc (:form form) platform)]
       (case (count inner)
         0 []
-        1 [(with-meta (forms/->MemeSyntaxQuote (first inner)) (meta form))]
+        1 [(with-meta (forms/->CljSyntaxQuote (first inner)) (meta form))]
         (errors/meme-error
           "Splicing reader conditional produced multiple forms inside syntax-quote"
           (select-keys (meta form) [:line :col]))))
@@ -188,7 +188,7 @@
     (let [inner (walk-rc (:form form) platform)]
       (case (count inner)
         0 []
-        1 [(with-meta (forms/->MemeUnquote (first inner)) (meta form))]
+        1 [(with-meta (forms/->CljUnquote (first inner)) (meta form))]
         (errors/meme-error
           "Splicing reader conditional produced multiple forms inside unquote"
           (select-keys (meta form) [:line :col]))))
@@ -197,7 +197,7 @@
     (let [inner (walk-rc (:form form) platform)]
       (case (count inner)
         0 []
-        1 [(with-meta (forms/->MemeUnquoteSplicing (first inner)) (meta form))]
+        1 [(with-meta (forms/->CljUnquoteSplicing (first inner)) (meta form))]
         (errors/meme-error
           "Splicing reader conditional produced multiple forms inside unquote-splicing"
           (select-keys (meta form) [:line :col]))))
@@ -243,7 +243,7 @@
   #?(:clj :clj :cljs :cljs))
 
 (defn step-evaluate-reader-conditionals
-  "Evaluate MemeReaderConditional records in :forms for the target platform.
+  "Evaluate CljReaderConditional records in :forms for the target platform.
 
    Replaces each #? with its matched branch value (or removes it if no branch
    matches). Splices each #?@ match into its containing collection.
@@ -262,8 +262,8 @@
     (assoc ctx :forms (into [] (mapcat #(walk-rc % platform)) (:forms ctx)))))
 
 (defn step-expand-syntax-quotes
-  "Expand syntax-quote AST nodes, unwrap MemeRaw values, and convert
-   MemeAutoKeyword records to eval-able forms in :forms.
+  "Expand syntax-quote AST nodes, unwrap CljRaw values, and convert
+   CljAutoKeyword records to eval-able forms in :forms.
    Produces plain Clojure forms ready for eval."
   [ctx]
   (check-contract! :step-expand-syntax-quotes ctx)
