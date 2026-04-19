@@ -5,11 +5,9 @@
    CljUnquoteSplicing, CljRaw, CljAutoKeyword, CljReaderConditional)
    that the reader produces for forms that don't round-trip through plain
    Clojure data, plus anonymous-function helpers and the shared metadata
-   key vocabulary used by reader, stages, and printer.
-
-   (The `Meme*` record names and `:meme/*` metadata keys are retained
-   under Clojure commons — their content is Clojure-semantic, not
-   meme-specific; the names are kept for serialization compatibility.)"
+   key vocabulary (`:meme/leading-trivia`, `:meme/sugar`,
+   `:meme/insertion-order`, `:meme/namespace-prefix`, `:meme/meta-chain`,
+   `:meme/bare-percent`) used by reader, stages, and printer."
   (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------

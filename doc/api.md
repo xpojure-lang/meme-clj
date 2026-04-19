@@ -31,7 +31,7 @@ Options:
 - `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time. When absent on JVM/Babashka, `::` keywords are deferred to eval time via `(read-string "::foo")`. Required on CLJS (errors without it, since `cljs.reader` cannot resolve `::` in the correct namespace).
 - `:resolve-symbol` — function that resolves symbols during syntax-quote expansion (e.g., `foo` → `my.ns/foo`). On JVM/Babashka, `run-string`/`run-file`/`start` inject a default that matches Clojure's `SyntaxQuoteReader` (inlined in `meme-lang.run`). When calling `meme->forms` directly, symbols in syntax-quote are left unqualified unless this option is provided. On CLJS, no default is available.
 
-Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` records. To materialize the platform branch, compose `meme-lang.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:meme/deprecated-opt`.
+Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` records. To materialize the platform branch, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:meme/deprecated-opt`.
 
 ```clojure
 (meme->forms "+(1 2 3)")
@@ -41,7 +41,7 @@ Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` rec
 ;=> [(def x 42) (println x)]
 ```
 
-**Note:** `meme->forms` may return internal record types for forms that preserve source notation: `MemeRaw` (for hex numbers, unicode escapes, etc.) wraps a `:value` and `:raw` text; `MemeAutoKeyword` (for `::` keywords) wraps a `:raw` string. These are unwrapped to plain values by `step-expand-syntax-quotes` (which `run-string`/`run-file` call before eval). If you need plain Clojure values from `meme->forms`, compose with `meme-lang.stages/step-expand-syntax-quotes`.
+**Note:** `meme->forms` may return internal record types for forms that preserve source notation: `CljRaw` (for hex numbers, unicode escapes, etc.) wraps a `:value` and `:raw` text; `CljAutoKeyword` (for `::` keywords) wraps a `:raw` string. These are unwrapped to plain values by `step-expand-syntax-quotes` (which `run-string`/`run-file` call before eval). If you need plain Clojure values from `meme->forms`, compose with `meme.tools.clj.stages/step-expand-syntax-quotes`.
 
 #### forms->meme
 
@@ -366,7 +366,7 @@ By default runs the file as meme and installs `meme.loader` so `require`/`load-f
 ```
 
 
-## meme-lang.stages
+## meme.tools.clj.stages
 
 Explicit pipeline composition. Each stage is a `ctx → ctx` function operating on a shared context map with keys `:source`, `:opts`, `:cst`, `:forms`.
 
@@ -375,7 +375,7 @@ Each stage validates its required keys at entry against `stage-contracts` — mi
 ### stage-contracts
 
 ```clojure
-meme-lang.stages/stage-contracts
+meme.tools.clj.stages/stage-contracts
 ;=> {:step-parse                         {:requires #{:source} :produces #{:cst}}
 ;    :step-read                          {:requires #{:cst}    :produces #{:forms}}
 ;    :step-evaluate-reader-conditionals  {:requires #{:forms}  :produces #{:forms}}
@@ -391,7 +391,7 @@ Pipelines:
 ### step-parse
 
 ```clojure
-(meme-lang.stages/step-parse ctx)
+(meme.tools.clj.stages/step-parse ctx)
 ```
 
 Parse source string into a lossless CST via the unified Pratt parser. Scanning (character dispatch, trivia) and parsing (structure) are handled in a single pass. Uses meme grammar by default, or `(:grammar opts)` if provided. Reads `:source`, assocs `:cst`.
@@ -399,15 +399,15 @@ Parse source string into a lossless CST via the unified Pratt parser. Scanning (
 ### step-read
 
 ```clojure
-(meme-lang.stages/step-read ctx)
+(meme.tools.clj.stages/step-read ctx)
 ```
 
-Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `MemeReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:meme/deprecated-opt`.
+Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `CljReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:meme/deprecated-opt`.
 
 ### step-evaluate-reader-conditionals
 
 ```clojure
-(meme-lang.stages/step-evaluate-reader-conditionals ctx)
+(meme.tools.clj.stages/step-evaluate-reader-conditionals ctx)
 ```
 
 Evaluate `#?` / `#?@` records in `:forms` for the target platform. `#?` is replaced by the matched branch (or removed if no branch matches); `#?@` splices its matched sequence into the containing collection. Recurses into syntax-quote / unquote / unquote-splicing interiors to match native Clojure's order (the reader evaluates `#?` before `` ` `` is processed). Handles `:default` as fallback when no platform key matches. Validates even-count branch lists.
@@ -418,22 +418,22 @@ Opts (via `:opts`):
 ### step-expand-syntax-quotes
 
 ```clojure
-(meme-lang.stages/step-expand-syntax-quotes ctx)
+(meme.tools.clj.stages/step-expand-syntax-quotes ctx)
 ```
 
-Expand syntax-quote AST nodes (`MemeSyntaxQuote`) into plain Clojure forms (`seq`/`concat`/`list`). Also unwraps `MemeRaw` values. Only needed before eval — tooling paths work with AST nodes directly.
+Expand syntax-quote AST nodes (`CljSyntaxQuote`) into plain Clojure forms (`seq`/`concat`/`list`). Also unwraps `CljRaw` values. Only needed before eval — tooling paths work with AST nodes directly.
 
 ### run
 
 ```clojure
-(meme-lang.stages/run source)
-(meme-lang.stages/run source opts)
+(meme.tools.clj.stages/run source)
+(meme.tools.clj.stages/run source opts)
 ```
 
-Run the pipeline: `step-parse → step-read`. Returns the complete context map. Does **not** include `step-expand-syntax-quotes` — forms contain AST nodes (`MemeSyntaxQuote`, `MemeRaw`) for tooling access. Call `step-expand-syntax-quotes` separately if you need eval-ready forms.
+Run the pipeline: `step-parse → step-read`. Returns the complete context map. Does **not** include `step-expand-syntax-quotes` — forms contain AST nodes (`CljSyntaxQuote`, `CljRaw`) for tooling access. Call `step-expand-syntax-quotes` separately if you need eval-ready forms.
 
 ```clojure
-(meme-lang.stages/run "+(1 2)")
+(meme.tools.clj.stages/run "+(1 2)")
 ;=> {:source "+(1 2)", :opts nil,
 ;    :cst [...], :forms [(+ 1 2)]}
 ```
@@ -462,7 +462,7 @@ All file commands accept directories (processed recursively) and multiple paths.
 Entry point: `-main` dispatches via `babashka.cli`. For Clojure JVM, use `-T:meme` (e.g., `clojure -T:meme run :file '"hello.meme"'`).
 
 
-## meme-lang.resolve
+## meme.tools.clj.resolve
 
 Native value resolution. Converts raw token text to Clojure values — no `read-string` delegation. Consistent error wrapping and location info.
 
@@ -471,16 +471,16 @@ Native value resolution. Converts raw token text to Clojure values — no `read-
 All resolvers take the raw token text and a `loc` map (`{:line N :col M}`) for error reporting:
 
 ```clojure
-(meme-lang.resolve/resolve-number raw loc)        ;; "42" → 42
-(meme-lang.resolve/resolve-string raw loc)        ;; "\"hi\"" → "hi"
-(meme-lang.resolve/resolve-char raw loc)          ;; "\\newline" → \newline
-(meme-lang.resolve/resolve-regex raw loc)         ;; "#\"\\d+\"" → #"\d+"
+(meme.tools.clj.resolve/resolve-number raw loc)        ;; "42" → 42
+(meme.tools.clj.resolve/resolve-string raw loc)        ;; "\"hi\"" → "hi"
+(meme.tools.clj.resolve/resolve-char raw loc)          ;; "\\newline" → \newline
+(meme.tools.clj.resolve/resolve-regex raw loc)         ;; "#\"\\d+\"" → #"\d+"
 ```
 
 ### resolve-auto-keyword
 
 ```clojure
-(meme-lang.resolve/resolve-auto-keyword raw loc resolve-fn)
+(meme.tools.clj.resolve/resolve-auto-keyword raw loc resolve-fn)
 ```
 
 Resolve an auto-resolve keyword (`::foo`). If `resolve-fn` is provided, resolves at read time. Otherwise, defers to eval time via `(read-string "::foo")`.
@@ -488,7 +488,7 @@ Resolve an auto-resolve keyword (`::foo`). If `resolve-fn` is provided, resolves
 ### resolve-tagged-literal
 
 ```clojure
-(meme-lang.resolve/resolve-tagged-literal tag data loc)
+(meme.tools.clj.resolve/resolve-tagged-literal tag data loc)
 ```
 
 Resolve a tagged literal. JVM: produces a `TaggedLiteral` object via `clojure.core/tagged-literal`. CLJS: throws an error.
@@ -564,14 +564,14 @@ The returned map contains `:width` / `:form-shape` / `:style` as appropriate, pl
 
 Lower-level pieces if you want to drive config loading yourself.  `find-config-file` returns the `File` or nil; `read-config-file` parses and validates an EDN file; `validate-config` checks an already-parsed map; `config->opts` converts a validated config to formatter opts.
 
-## meme-lang.errors
+## meme.tools.clj.errors
 
 Error infrastructure used by the scanner, reader, and resolver. Portable (.cljc).
 
 ### source-context
 
 ```clojure
-(meme-lang.errors/source-context source line)
+(meme.tools.clj.errors/source-context source line)
 ```
 
 Extract the source line at a 1-indexed line number from `source` (a string). Returns the line text, or `nil` if out of range.
@@ -579,7 +579,7 @@ Extract the source line at a 1-indexed line number from `source` (a string). Ret
 ### meme-error
 
 ```clojure
-(meme-lang.errors/meme-error message opts)
+(meme.tools.clj.errors/meme-error message opts)
 ```
 
 Throw `ex-info` with a consistent error structure. `opts` is a map with:
@@ -592,7 +592,7 @@ All scanner, reader, and resolver errors go through this function.
 ### format-error
 
 ```clojure
-(meme-lang.errors/format-error exception source)
+(meme.tools.clj.errors/format-error exception source)
 ```
 
 Format an exception for display. Produces a multi-line string with:

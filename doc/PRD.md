@@ -168,15 +168,15 @@ The codebase has three layers:
 - **`meme-lang.*`** — Meme language: grammar, scanlets, parselets, stages, printer, formatter
 - **`meme.*`** — CLI and lang registry
 
-The pipeline has composable stages (composed by `meme-lang.stages`), each a `ctx → ctx` function with a `step-` prefix:
+The pipeline has composable stages (composed by `meme.tools.clj.stages`), each a `ctx → ctx` function with a `step-` prefix:
 1. **strip-shebang** — remove `#!` line from `:source` (for executable scripts).
-   Defined in `meme-lang.stages`, called by runtime before the core pipeline.
+   Defined in `meme.tools.clj.stages`, called by runtime before the core pipeline.
 2. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — unified scanlet-parselet
    Pratt parser → lossless CST. Scanning (character dispatch, trivia) and parsing (structure)
    are both defined in the grammar spec. Reads directly from source string.
-3. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. Value
-   resolution delegated to `meme-lang.resolve`. No `read-string` delegation.
-4. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes →
+3. **step-read** (`meme.tools.clj.cst-reader`) — lowers CST to Clojure forms. Value
+   resolution delegated to `meme.tools.clj.resolve`. No `read-string` delegation.
+4. **step-expand-syntax-quotes** (`meme.tools.clj.expander`) — syntax-quote AST nodes →
    plain Clojure forms. Only needed before eval, not for tooling.
    `stages/run` intentionally omits this stage, returning AST
    nodes for tooling access.
@@ -205,7 +205,7 @@ meme rules inside. No opaque regions.
   it correctly.
 
 - **Reader conditionals — lossless by default.** The reader always returns
-  `#?`/`#?@` as `MemeReaderConditional` records, so `meme->forms`,
+  `#?`/`#?@` as `CljReaderConditional` records, so `meme->forms`,
   `meme->clj`, and `format-meme` preserve all branches faithfully.
   `run-string`/`run-file`/REPL insert `step-evaluate-reader-conditionals`
   between read and syntax-quote expansion to materialize the platform

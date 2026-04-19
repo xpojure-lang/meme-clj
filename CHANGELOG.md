@@ -4,6 +4,48 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-lang rename, pipe operator, correctness pack.
+
+### Breaking Changes
+
+- **AST record names: `Meme*` → `Clj*`.** `MemeSyntaxQuote`, `MemeUnquote`, `MemeUnquoteSplicing`, `MemeRaw`, `MemeAutoKeyword`, `MemeReaderConditional` → `CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional`. Content is Clojure-semantic; names follow suit. Predicate `meme-reader-conditional?` → `clj-reader-conditional?`.
+
+- **Namespace moves: `meme-lang.*` → `meme.tools.clj.*`** for the Clojure-surface commons shared by every Clojure-flavored frontend (meme, implojure). Moved: `stages`, `cst-reader`, `resolve`, `expander`, `forms`, `errors`, `values`, plus `lex` (extracted from `meme-lang.lexlets`), `run`, `repl`. `meme-lang.{stages,cst-reader,...}` no longer exist as namespaces; import from `meme.tools.clj.*`. `meme-lang.run`, `meme-lang.repl`, `meme-lang.lexlets` remain as thin shims that inject meme's grammar/banner and delegate.
+
+- **Metadata + ex-info keys: `:meme-lang/*` → `:meme/*`** for toolkit-emitted vocabulary. Affects `:meme/leading-trivia`, `:meme/sugar`, `:meme/insertion-order`, `:meme/namespace-prefix`, `:meme/meta-chain`, `:meme/bare-percent`, `:meme/pipeline-error`, `:meme/deprecated-opt`, `:meme/missing-grammar`. The keys are emitted by `meme.tools.clj.*` (platform toolkit) and were mis-namespaced after the lang. External code walking meme-emitted forms or catching pipeline ex-infos must update.
+
+- **Sibling lang rename: `infj-lang` → `implojure-lang`.** File extensions `.infj` → `.implj`, plus `.impljc`/`.impljs` for cljc/cljs variants.
+
+- **`meme.config` → `meme-lang.config`.** Formatter config is meme-lang-specific (validates against meme-lang's form-shape registry, merges onto meme-lang's canon style), so it moved out of the platform namespace. The CLI no longer requires it directly — each lang-map exposes a `:project-opts` fn, and `meme format` merges the results from every registered lang. A sibling lang with its own formatter plugs in the same way.
+
+- **calc-lang demo and `examples/languages/` directory removed.** The multi-lang platform claim is now carried by meme + implojure + the user-registerable lang mechanism. The demo added maintenance surface without further demonstrating anything.
+
+### Added
+
+- **`meme.registry/all-langs`** — snapshot of `{lang-name → lang-map}` across built-ins and user-registered langs. Used by the CLI to fan out to per-lang `:project-opts`.
+
+- **`|name|>` named pipe operator** in implojure-lang — lowers to `as->`-style chains that desugar to a flat `let`. Supports destructure patterns in the slot position.
+
+- **`mod` word operator** at binding power 70 in implojure-lang.
+
+### Changed
+
+- **implojure-lang operator set** — dropped `%`/`==`/`!=`; added `=`, `not=`, `and`, `or`, `not` as word operators.
+
+- **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
+
+### Fixed
+
+- **Duplicate-key detection across notations.** `{0xFF 1 255 2}` and `{\u0041 1 \A 2}` silently accepted two keys that resolve to the same value because `CljRaw` records don't `=` their unwrapped equivalents. The check now unwraps `CljRaw` before `frequencies`; same for sets.
+
+- **`cli/run` double-slurp.** The file was read twice — once for execution and once in the error formatter — so a changing file or a transient I/O error on the second read could mangle the displayed source context. Source is now bound once and reused.
+
+- **`with-load-tracking` counter imbalance.** If `swap! inc` threw, the surrounding `try/finally` still ran the `dec`, leaving the counter at N-1. Moved the `inc` outside the `try`.
+
+- **Leftover unquote errors lost source location.** When expand-sq delegated `~x` to expand-syntax-quotes with `:inside-sq`, a further `~` was re-wrapped as a `CljUnquote` record with no metadata, so `check-no-leftover-unquotes!` reported the error with empty `:line`/`:col`. Source metadata is now threaded through.
+
 ## [5.0.0] — 2026-04-19
 
 Reader-conditional handling is now a pipeline stage instead of a reader flag. `meme->forms` and `meme->clj` are lossless by default for `.cljc` sources.
