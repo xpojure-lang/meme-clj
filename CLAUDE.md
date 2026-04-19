@@ -66,10 +66,14 @@ clojure -T:build deploy
                (step-parse)         (step-read)
 ```
 
-The codebase is organized into three layers:
-- **`meme.tools.*`** — Generic, language-agnostic infrastructure (parser engine, scanlet builders, render engine)
-- **`meme-lang.*`** — Meme language implementation (grammar, parselets, lexlets, stages, printer, formatter)
-- **`meme.*`** — CLI and lang registry
+The codebase is organized by *kind* of code, with shared infrastructure that both language implementations and the CLI depend on:
+
+- **`meme.tools.*`** — Generic, language-agnostic building blocks (parser engine, scanlet builders, render engine).
+- **`meme-lang.*`** — Meme language implementation (grammar, parselets, lexlets, stages, printer, formatter, run/repl).
+- **`meme.registry`, `meme.loader`** — Shared runtime infrastructure, peer to `meme.tools.*`. Both langs and the CLI depend on them: langs push themselves into the registry at load time and rely on the loader for `require`/`load-file`; the CLI dispatches through the registry.
+- **`meme.cli`, `meme.config`** — App tier. Only consumer-facing code lives here.
+
+This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli` or `meme.config`**, and **`meme.tools.*` must not require anything from `meme-lang.*` or `meme.*`**.
 
 Composable stages (`meme-lang.stages`), each a `ctx → ctx` function:
 1. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — Unified scanlet-parselet Pratt parser. Reads directly from source string. Scanning (character dispatch, trivia) and parsing (structure) are both defined in the grammar spec as scanlets and parselets. Produces a lossless CST preserving every token.
@@ -127,11 +131,14 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme-lang.repl` (.clj) — Meme-specific REPL. Wires meme stages, error formatting, keyword resolution, and syntax-quote resolution into the generic REPL infrastructure. JVM/Babashka only.
 - `meme-lang.run` (.clj) — Meme-specific eval pipeline. Wires meme stages, syntax-quote resolution, and BOM stripping into the generic run infrastructure. JVM/Babashka only.
 
-**CLI** (`meme.*`):
+**Shared infrastructure** (`meme.*`, peer to `meme.tools.*`):
+
+- `meme.registry` (.clj) — Lang registry: registration, resolution, and EDN loading. `default-lang`, `resolve-lang`, `supports?`, `check-support`, `load-edn`, `register!`, `register-builtin!`, `register-string-handler!`, `resolve-by-extension`, `registered-langs`, `available-langs`, `builtin-langs`. The registry imports no langs directly — each lang's api ns calls `register-builtin!` on its own load. The CLI is the "app" that triggers built-in registration by explicitly requiring each lang's api namespace. JVM/Babashka only.
+- `meme.loader` (.clj) — Namespace loader: intercepts `clojure.core/load` (JVM only) and `clojure.core/load-file` (JVM + Babashka) to handle `.meme` files transparently. Installed automatically by `run-file`, REPL `start`, and the CLI `run` command. `require` finds `.meme` namespaces on the classpath (JVM only — Babashka's SCI bypasses `clojure.core/load`). `load-file` handles `.meme` files by filesystem path on both platforms. `.meme` takes precedence when both `.meme` and `.clj` exist. `install!`/`uninstall!` for manual control. JVM/Babashka only.
+
+**App tier** (`meme.*`):
 
 - `meme.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `compile`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
-- `meme.registry` (.clj) — Lang registry: registration, resolution, and EDN loading. `default-lang`, `resolve-lang`, `supports?`, `check-support`, `load-edn`, `register!`, `register-builtin!`, `resolve-by-extension`, `registered-langs`, `clear-user-langs!`, `available-langs`. The registry imports no langs directly — each lang's api ns calls `register-builtin!` on its own load. The CLI (`meme.cli`) is the "app" that triggers built-in registration by explicitly requiring each lang's api namespace. JVM/Babashka only.
-- `meme.loader` (.clj) — Namespace loader: intercepts `clojure.core/load` (JVM only) and `clojure.core/load-file` (JVM + Babashka) to handle `.meme` files transparently. Installed automatically by `run-file`, REPL `start`, and the CLI `run` command. `require` finds `.meme` namespaces on the classpath (JVM only — Babashka's SCI bypasses `clojure.core/load`). `load-file` handles `.meme` files by filesystem path on both platforms. `.meme` takes precedence when both `.meme` and `.clj` exist. `install!`/`uninstall!` for manual control. JVM/Babashka only.
 - `meme.config` (.clj) — Project-local formatter config: reads `.meme-format.edn` (walking up from CWD) and translates it into opts for `canon/format-form`. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol → built-in alias), `:style` (partial canon override). Consumed by `meme format` CLI; CLI flags override config. JVM/Babashka only.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
@@ -141,7 +148,8 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 |------|---------|-----------|
 | Generic tools | meme.tools.{parser, lexer, render} | JVM, Babashka, ClojureScript |
 | Core translation | meme-lang.{api, grammar, lexlets, parselets, stages, cst-reader, forms, form-shape, errors, resolve, expander, printer, values, formatter.flat, formatter.canon} | JVM, Babashka, ClojureScript |
-| Runtime | meme.tools.{run, repl}, meme-lang.{run, repl}, meme.{registry, cli, loader} | JVM, Babashka |
+| Runtime infra | meme.tools.{run, repl}, meme-lang.{run, repl}, meme.{registry, loader} | JVM, Babashka |
+| App | meme.{cli, config} | JVM, Babashka |
 | Test infra | meme.test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
 ## Documentation

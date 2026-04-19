@@ -26,7 +26,10 @@
             [meme-lang.form-shape :as form-shape]
             [meme-lang.formatter.canon :as canon]))
 
-(def config-filename ".meme-format.edn")
+(def config-filename
+  "Filename used for project-local formatter config. Discovered by walking
+   up the directory tree from the CWD."
+  ".meme-format.edn")
 
 (def ^:private known-keys
   #{:width :structural-fallback? :form-shape :style})

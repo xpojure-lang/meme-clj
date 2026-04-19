@@ -79,7 +79,10 @@
 ;; Engine state
 ;; ---------------------------------------------------------------------------
 
-(defn make-engine [source spec]
+(defn make-engine
+  "Build a parser engine state map for `source` driven by grammar `spec`.
+   Intended for custom drivers — most callers should use `parse`."
+  [source spec]
   {:source      source
    :len         (count source)
    :pos         (volatile! 0)

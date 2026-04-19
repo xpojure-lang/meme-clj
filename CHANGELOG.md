@@ -4,20 +4,81 @@ All notable changes to meme-clj will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [4.0.0] — 2026-04-19
+
+A reorganization release. No breaking changes to `.meme` syntax or runtime behavior; most of the work is in documentation, API hygiene, and internal boundaries.
+
+### Architecture
+
+- **Registry inversion** — `meme.registry` imports no concrete langs. Each lang's api namespace calls `register-builtin!` at its own load time, and the CLI triggers registration by explicitly requiring each lang it ships with. Dissolves the old registry↔lang cycle and four `requiring-resolve` workarounds.
+- **Shared infrastructure reclassification** — `meme.registry` and `meme.loader` are now documented as shared infrastructure peer to `meme.tools.*`, not as a strict "above" tier over `meme-lang.*`. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional; the CLAUDE.md tier table has been updated to match.
+- **Pipeline contract validation** — stages declare required ctx keys via `stage-contracts`; `check-contract!` runs at entry and throws `:meme-lang/pipeline-error` with the missing key(s) when pipelines are miscomposed, instead of deep NPEs.
+- **Engine seal** — `meme.tools.parser` exposes only `trivia-pending?` to language grammars; other engine internals are no longer part of the grammar-author contract.
+- **`char-code` consolidated into `meme.tools.lexer`** — duplicate helper in `meme-lang.lexlets` removed.
 
 ### Added
+
 - **`meme.registry/register-string-handler!`** — lang-agnostic hook for resolving string values (e.g. `:run "prelude.meme"`) in lang-map slots. Meme installs its own `:run` handler at load time. Replaces the previous hardcoded `requiring-resolve` of `meme-lang.run/run-string` inside the registry.
 - **`meme-lang.run/run-file` opts** — `:install-loader?` (default `true`; pass `false` to skip auto-install of `meme.loader`) and `:resolve-lang-for-path` (extension-based lang dispatch hook, injected by the CLI).
-- **`meme-lang.repl/start` opts** — `:install-loader?` mirrors the above.
+- **`meme-lang.repl/start` opt** — `:install-loader?` mirrors the above.
 - **Direct unit tests for `meme.tools.parser` and `meme.tools.lexer`** using a minimal synthetic calculator grammar, covering precedence (left/right-assoc), EOF recovery, max-depth, trivia attachment, `:when` predicate gating, and all scanlet/parselet factories.
+- **Scar-tissue tests** for regex roundtrip and empty splice expansion.
 
 ### Changed
-- **`meme-lang.run/run-string`, `run-file`, and `meme-lang.repl/start` install `meme.loader` automatically.** `meme.loader` is multi-lang infrastructure peer to `meme.registry`, not a CLI-tier concern; importing it from the language tier so `require`/`load-file` of `.meme` namespaces work in the common programmatic case. Hosts that own their own `clojure.core/load` interception opt out via `:install-loader? false`.
+
+- **`run-string`, `run-file`, and `repl/start` auto-install `meme.loader`.** `require`/`load-file` of `.meme` namespaces work in the common programmatic case, not just via the CLI. Hosts that own their own `clojure.core/load` interception opt out via `:install-loader? false`.
+- **Babashka loader warning suppressed** when SCI bypasses `clojure.core/load` — no cosmetic noise on REPL start.
 
 ### Fixed
+
 - **Off-by-one in CST reader's depth guard** (`src/meme_lang/cst_reader.cljc`). Reader allowed one more level of recursion than the parser's limit (`>` → `>=`). Behavior now matches the parser at exactly `max-parse-depth` levels.
-- **`meme.tools.lexer` cross-platform bug** — `digit?`/`ident-start?`/`ident-char?` claimed portability but returned wrong results on CLJS because `(int ch)` on a single-char string returns `NaN|0 = 0` rather than the code point. Fixed with a private `char-code` helper that uses `.charCodeAt` on CLJS. Meme's grammar was unaffected (it uses its own `meme-lang.lexlets` with the same pattern); `calc-lang` relied on the generic helpers and would have silently failed on CLJS.
+- **`meme.tools.lexer` cross-platform bug** — `digit?`/`ident-start?`/`ident-char?` claimed portability but returned wrong results on CLJS because `(int ch)` on a single-char string returns `NaN|0 = 0` rather than the code point. Fixed with a `char-code` helper that uses `.charCodeAt` on CLJS. Meme's grammar was unaffected (its own `meme-lang.lexlets` had the same pattern); `calc-lang` relied on the generic helpers and would have silently failed on CLJS.
+
+### Internal / API hygiene
+
+- **`meme-lang.api/to-clj` and `to-meme`** marked `^:no-doc`. These are CLI-dispatch adapters (they always apply `:read-cond :preserve`); library callers should use `meme->clj` / `clj->meme` directly.
+- **`meme.registry/clear-user-langs!`** and **`registered-extensions`** marked `^:no-doc` — internal plumbing used by tests and the loader respectively.
+- **`meme-lang.parselets/reader-cond-extra`** made private (used only within the file).
+- **Missing docstrings** added: `meme.tools.parser/make-engine`, `meme.tools.lexer/{digit?, ident-char?, newline-consumer}`, `meme.config/config-filename`.
+
+## [3.3.3] — 2026-04-12
+
+### Fixed
+
+- **Red team findings** — reader-cond validation, registry TOCTOU around extension conflicts, CLI testability improvements.
+- **Deterministic depth guard in `clj->forms`** — no longer relies on catching `StackOverflowError` at CI JVM sizes; walks the returned forms against `max-parse-depth` instead.
+- **Fuzzer state consolidated under `fuzz/`** — corpus and crash artifacts moved out of the project root.
+
+### Documentation
+
+- Added namespace-loading and `compile` sections to the README.
+- Updated installation version pin.
+
+## [3.3.0] — 2026-04-09
+
+### Added
+
+- **`load-file` interception** — `(load-file "path/to/file.meme")` runs through the meme pipeline on both JVM and Babashka.
+- **`meme compile` CLI command** — compiles `.meme` to `.clj` into a separate output directory (`--out target/classes` by default) so `.meme` namespaces work via standard `require` without runtime patching. Primary use: Babashka projects that need `require` (SCI bypasses `clojure.core/load`, so runtime interception isn't enough).
+- **Project-local `.meme-format.edn` config** — `meme format` discovers config by walking up from CWD. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol→built-in alias), `:style` (partial canon override). Strict EDN, unknown tags rejected, unknown keys warn.
+
+### Changed — Formatter (three-layer architecture)
+
+- **Style policy extracted from the printer into the formatters.** The printer is now notation-only; `meme-lang.formatter.canon/style` carries the slot-keyed opinions.
+- **Form-shape layer** (`meme-lang.form-shape`) — semantic decomposition of special forms into named slots (`:name`, `:doc`, `:params`, `:bindings`, `:clause`, `:body`, `:dispatch-val`, etc.). Lang-owned: each lang carries its own registry. The printer dispatches on slots, not form names. Documented as a public contract in `doc/form-shape.md`.
+- **Opt-in structural fallback** — `with-structural-fallback` wraps a registry so user macros shaped like `defn` (name + params vector) or `let` (leading bindings vector) inherit canonical layout.
+- **Slot renderers as override-able defaults** — style's `:slot-renderers` composes over `printer/default-slot-renderers` via plain map merge; formatters accept `:style` override in opts for project-level tweaks. The canon style collapsed from ~60 form-keyed entries to 11 slot-keyed entries.
+- **Canon layout refinements:**
+  - Inline vector/map/set layout — first element right after the open delimiter.
+  - Binding vectors keep their head form (`let`/`loop`/`for`/`doseq`/...) on the head line; bindings render as pairs per line with columnar alignment.
+  - Definition forms (`defn`/`defn-`/`defmacro`) keep name + params on the head line; always space after `(` for definition forms.
+  - `case`, `cond`, `condp` render their bodies as paired clauses.
+  - Multi-line values in paired layouts nest at the key column.
+  - Closing paren moves to its own line for multi-line calls.
+
+### Fixed
+
+- **Four loader bugs** found during the loader work.
 
 ## [3.0.0] — 2026-04-05
 

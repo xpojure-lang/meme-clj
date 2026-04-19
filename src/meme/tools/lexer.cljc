@@ -55,7 +55,10 @@
   #?(:clj  (int ^Character ch)
      :cljs (.charCodeAt (str ch) 0)))
 
-(defn digit? [ch]
+(defn digit?
+  "True if `ch` is an ASCII digit (0–9). Cross-platform (normalizes JVM
+   Character vs CLJS single-char String via `char-code`)."
+  [ch]
   (and ch (let [c (char-code ch)] (and (>= c 0x30) (<= c 0x39)))))
 
 (defn ident-start?
@@ -66,7 +69,10 @@
                 (and (>= c 0x41) (<= c 0x5A))   ; A-Z
                 (= c 0x5F)))))                   ; _
 
-(defn ident-char? [ch]
+(defn ident-char?
+  "Default identifier-continuation predicate: `ident-start?` or `digit?`.
+   Override for language-specific rules."
+  [ch]
   (or (ident-start? ch) (digit? ch)))
 
 ;; ---------------------------------------------------------------------------
@@ -128,7 +134,10 @@
          (do (parser/set-pos! engine i)
              (parser/make-trivia-token! engine :whitespace start)))))))
 
-(defn newline-consumer [engine]
+(defn newline-consumer
+  "Trivia consumer for a single newline. Advances past `\\r\\n` or `\\n` and
+   emits a `:newline` trivia token. Plug into a grammar's trivia table."
+  [engine]
   (let [start (parser/cursor engine)
         source (parser/source-str engine)
         len (parser/source-len engine)

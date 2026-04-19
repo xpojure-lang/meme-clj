@@ -115,14 +115,16 @@
         "clj"  (fmt-flat/format-clj forms)
         (fmt-canon/format-forms forms opts)))))
 
-(defn to-clj
-  "Convert meme source to Clojure text with reader conditionals preserved."
+(defn ^:no-doc to-clj
+  "CLI-dispatch adapter: meme source → Clojure text with `:read-cond :preserve`.
+   Library callers should use `meme->clj` directly."
   ([source] (meme->clj source {:read-cond :preserve}))
   ([source _opts] (to-clj source)))
 
 #?(:clj
-   (defn to-meme
-     "Convert Clojure source text to meme syntax. JVM only."
+   (defn ^:no-doc to-meme
+     "CLI-dispatch adapter: Clojure source → meme. JVM only.
+      Library callers should use `clj->meme` directly."
      ([source] (clj->meme source))
      ([source _opts] (to-meme source))))
 

@@ -218,8 +218,9 @@
   []
   (keep (fn [[n l]] (when-not (:builtin? (meta l)) n)) @registry))
 
-(defn clear-user-langs!
-  "Clear all registered user languages, preserving built-ins. For testing."
+(defn ^:no-doc clear-user-langs!
+  "Clear all registered user languages, preserving built-ins. Test-only
+   helper — not part of the public API."
   []
   (swap! registry (fn [m] (into {} (filter (fn [[_ v]] (:builtin? (meta v)))) m))))
 
@@ -228,9 +229,10 @@
   []
   (set (keys @registry)))
 
-(defn registered-extensions
+(defn ^:no-doc registered-extensions
   "Return a seq of [dot-extension run-fn] for all langs with :extensions and :run.
-   Used by the generic loader to search the classpath for lang source files."
+   Internal plumbing — consumed only by `meme.loader` to search the classpath
+   for lang source files. Not part of the public API."
   []
   (mapcat (fn [[_name lang-map]]
             (when-let [run-fn (:run lang-map)]

@@ -28,7 +28,7 @@
 ;; Parselet extras
 ;; ---------------------------------------------------------------------------
 
-(defn reader-cond-extra
+(defn- reader-cond-extra
   "Extract :splicing? from a reader-cond token (#? vs #?@)."
   [tok]
   (let [raw (:raw tok)]

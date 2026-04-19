@@ -674,11 +674,3 @@ Given a file path, find the user lang whose `:extension` matches. Returns `[lang
 
 List all registered user language names (keywords).
 
-### clear-user-langs!
-
-```clojure
-(meme.registry/clear-user-langs!)
-```
-
-Clear all registered user languages. For testing.
-
