@@ -111,16 +111,28 @@
 ;; EDN lang loading
 ;; ============================================================
 
-(deftest load-edn-prefix
-  (testing "prefix lang EDN loads and :run works"
-    (let [l (registry/load-edn "examples/languages/prefix/lang.edn")]
-      (is (fn? (:run l)))
-      (is (= [".pfx"] (:extensions l))))))
+(deftest load-edn-lang
+  (testing "EDN lang file loads and :run resolves to a fn"
+    (let [core-path (tmp-file "test-edn-core" ".meme")
+          edn-path  (tmp-file "test-edn-lang" ".edn")]
+      (spit core-path "; empty prelude")
+      (spit edn-path (str "{:extension \".myl\"\n"
+                          " :run \"" core-path "\"\n"
+                          " :format :meme}"))
+      (let [l (registry/load-edn edn-path)]
+        (is (fn? (:run l)))
+        (is (= [".myl"] (:extensions l)))))))
 
 (deftest load-edn-format-delegates
   (testing ":format :meme in EDN resolves to built-in format"
-    (let [l (registry/load-edn "examples/languages/prefix/lang.edn")]
-      (is (= "def( x 42)" ((:format l) "def( x 42)" {}))))))
+    (let [core-path (tmp-file "test-edn-core" ".meme")
+          edn-path  (tmp-file "test-edn-lang" ".edn")]
+      (spit core-path "; empty prelude")
+      (spit edn-path (str "{:extension \".myl\"\n"
+                          " :run \"" core-path "\"\n"
+                          " :format :meme}"))
+      (let [l (registry/load-edn edn-path)]
+        (is (= "def( x 42)" ((:format l) "def( x 42)" {})))))))
 
 (deftest load-edn-run-evals-core-then-user
   (testing "EDN :run evals core.meme before user source"
@@ -151,11 +163,13 @@
 
 (deftest register-with-prelude-file
   (testing "registered lang auto-loads prelude from extension via run-file"
-    (registry/register! :pfx {:extension ".pfx"
-                           :run "examples/languages/prefix/core.meme"})
-    (let [f (tmp-file "test-lang-dispatch" ".pfx")]
-      (spit f "+(21 21)")
-      (is (= 42 (run/run-file f {:resolve-lang-for-path registry-resolver}))))))
+    (let [core-path (tmp-file "test-prelude-core" ".meme")]
+      (spit core-path "defn(double [x] *(2 x))")
+      (registry/register! :myl {:extension ".myl"
+                                :run core-path})
+      (let [f (tmp-file "test-lang-dispatch" ".myl")]
+        (spit f "double(21)")
+        (is (= 42 (run/run-file f {:resolve-lang-for-path registry-resolver})))))))
 
 (deftest register-with-pre-resolved-fn
   (testing "register! accepts pre-resolved functions"
@@ -170,13 +184,14 @@
 
 (deftest run-with-explicit-lang
   (testing ":lang opt overrides extension detection"
-    (registry/register! :pfx {:extension ".pfx"
-                           :run "examples/languages/prefix/core.meme"})
-    ;; Run a .meme file AS pfx (explicit lang, mismatched extension)
-    (let [f (tmp-file "test-explicit" ".meme")]
-      (spit f "+(21 21)")
-      (is (= 42 (run/run-file f {:lang :pfx
-                                 :resolve-lang-for-path registry-resolver}))))))
+    (let [core-path (tmp-file "test-explicit-core" ".meme")]
+      (spit core-path "; empty prelude")
+      (registry/register! :myl {:extension ".myl" :run core-path})
+      ;; Run a .meme file AS :myl (explicit lang, mismatched extension)
+      (let [f (tmp-file "test-explicit" ".meme")]
+        (spit f "+(21 21)")
+        (is (= 42 (run/run-file f {:lang :myl
+                                   :resolve-lang-for-path registry-resolver})))))))
 
 (deftest run-with-unregistered-lang-throws
   (testing ":lang with an unregistered name throws"

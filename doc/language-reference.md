@@ -409,8 +409,7 @@ meme serves as a platform for guest languages. A guest language can define:
 2. **A custom parser** — optionally replacing the meme parser entirely
 
 Guest languages are defined as EDN files and registered via `meme.registry`.
-They are dispatched by file extension. See `examples/languages/` for working
-examples (prefix).
+They are dispatched by file extension.
 
 ### Extension registration
 
@@ -418,8 +417,8 @@ A lang registers one or more file extensions. Both `:extension` (string) and `:e
 
 ```clojure
 ;; EDN file — single extension
-{:extension ".prefix"
- :run "examples/languages/prefix/core.meme"
+{:extension ".ml"
+ :run "path/to/prelude.meme"
  :format :meme}
 
 ;; Runtime — multiple extensions
@@ -427,7 +426,7 @@ A lang registers one or more file extensions. Both `:extension` (string) and `:e
                               :run 'my-lang.run/run-string})
 ```
 
-The CLI auto-detects the lang from file extension: `meme run app.prefix` resolves to the `:prefix` lang. `run-file` does the same. When multiple extensions are registered, all are recognized.
+The CLI auto-detects the lang from file extension: `meme run app.ml` resolves to the `:my-lang` lang. `run-file` does the same. When multiple extensions are registered, all are recognized.
 
 ### Namespace loader
 
