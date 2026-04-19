@@ -626,7 +626,7 @@
       (let [forms (lang/meme->forms char-text)]
         (and (= 1 (count forms))
              (char? (let [f (first forms)]
-                      (if (instance? meme_lang.forms.MemeRaw f) (:value f) f)))))
+                      (if (instance? meme.tools.clj.forms.MemeRaw f) (:value f) f)))))
       (catch Exception _ false))))
 
 (defspec prop-invalid-char-literal-errors 100

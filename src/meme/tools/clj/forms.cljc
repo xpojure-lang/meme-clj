@@ -1,6 +1,15 @@
-(ns meme-lang.forms
-  "Shared form-level predicates and constructors.
-   Cross-stage contracts that both the parser and printer depend on."
+(ns meme.tools.clj.forms
+  "Clojure-surface AST records and cross-stage form-level predicates.
+
+   Contains the deferred-evaluation wrappers (MemeSyntaxQuote, MemeUnquote,
+   MemeUnquoteSplicing, MemeRaw, MemeAutoKeyword, MemeReaderConditional)
+   that the reader produces for forms that don't round-trip through plain
+   Clojure data, plus anonymous-function helpers and the shared metadata
+   key vocabulary used by reader, stages, and printer.
+
+   (The `Meme*` record names and `:meme-lang/*` metadata keys are retained
+   under Clojure commons — their content is Clojure-semantic, not
+   meme-specific; the names are kept for serialization compatibility.)"
   (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
   "Value resolution: converts raw token text to Clojure values.
    All resolution is native — no delegation to read-string."
   (:require [meme.tools.clj.errors :as errors]
-            [meme-lang.forms :as forms]
+            [meme.tools.clj.forms :as forms]
             [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------

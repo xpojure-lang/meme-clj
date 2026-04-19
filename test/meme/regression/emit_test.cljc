@@ -7,7 +7,7 @@
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
             [meme.tools.clj.values :as values]
-            [meme-lang.forms :as forms]))
+            [meme.tools.clj.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
@@ -730,7 +730,7 @@
 
 (deftest unquote-deref-sugar-no-ambiguity
   (testing "~(deref x) with sugar does not print as ~@x"
-    (let [form (meme-lang.forms/->MemeUnquote
+    (let [form (meme.tools.clj.forms/->MemeUnquote
                  (with-meta (list 'clojure.core/deref 'x) {:meme-lang/sugar true}))
           printed (fmt-flat/format-form form)]
       (is (not (str/starts-with? printed "~@"))

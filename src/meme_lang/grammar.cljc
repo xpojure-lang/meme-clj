@@ -9,7 +9,7 @@
             [meme.tools.lexer :as lexer]
             [meme-lang.lexlets :as lex]
             [meme-lang.parselets :as mp]
-            [meme-lang.forms :as forms]))
+            [meme.tools.clj.forms :as forms]))
 
 (def grammar
   "Meme language grammar: characters → scanlets."

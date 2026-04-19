@@ -9,7 +9,7 @@
    position info for malformed input."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.cst-reader :as cst-reader]
-            [meme-lang.forms :as forms]
+            [meme.tools.clj.forms :as forms]
             [meme-lang.grammar :as grammar]
             [meme.tools.parser :as pratt]))
 

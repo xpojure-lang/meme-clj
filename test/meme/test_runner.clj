@@ -1,7 +1,7 @@
 (ns meme.test-runner
   "Run .meme tests: eval-based and fixture-based.
    All test sections run against every built-in lang pipeline."
-  (:require [meme-lang.forms :as forms]
+  (:require [meme.tools.clj.forms :as forms]
             [meme.tools.clj.errors :as errors]
             [meme.registry :as registry]
             ;; Explicit requires trigger self-registration of each built-in

@@ -4,7 +4,7 @@
    (tooling works with AST nodes directly)."
   (:require [clojure.string :as str]
             [meme.tools.clj.errors :as errors]
-            [meme-lang.forms :as forms]))
+            [meme.tools.clj.forms :as forms]))
 
 (declare expand-syntax-quotes)
 

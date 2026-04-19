@@ -3,7 +3,7 @@
    step-expand-syntax-quotes and expand-forms."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.stages :as stages]
-            [meme-lang.forms :as forms]))
+            [meme.tools.clj.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------
 ;; Full pipeline: scan → trivia → parse → read

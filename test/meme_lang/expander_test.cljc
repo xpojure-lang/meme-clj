@@ -3,7 +3,7 @@
    MemeRaw unwrapping."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
-            [meme-lang.forms :as forms]
+            [meme.tools.clj.forms :as forms]
             [meme-lang.expander :as expander]))
 
 ;; ---------------------------------------------------------------------------
