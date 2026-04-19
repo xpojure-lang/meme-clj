@@ -963,3 +963,37 @@
     (is (= [42]
            (stages/expand-syntax-quotes
              (lang/meme->forms "`~42") nil)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: duplicate-key detection must unwrap CljRaw.
+;; Bug: {0xFF 1 255 2} silently succeeded because CljRaw{:value 255 :raw "0xFF"}
+;; was not = to plain 255 in the frequencies call. Same for sets and
+;; unicode-escaped chars (\u0041 vs \A both resolve to \A but wrap differently).
+;; ---------------------------------------------------------------------------
+
+(deftest duplicate-map-key-across-notations
+  (testing "{\\u0041 1 \\A 2} — unicode-escape and char literal of same char"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate key"
+                          (lang/meme->forms "{\\u0041 1 \\A 2}")))))
+
+#?(:clj
+   (deftest duplicate-map-key-hex-vs-decimal
+     (testing "{0xFF 1 255 2} — hex and decimal of same value are duplicates (JVM only — hex not supported on CLJS)"
+       (is (thrown-with-msg? Exception #"Duplicate key"
+                             (lang/meme->forms "{0xFF 1 255 2}"))))
+     (testing "{0xFF 1 0xFF 2} — two identical hex literals (control; already errored)"
+       (is (thrown-with-msg? Exception #"Duplicate key"
+                             (lang/meme->forms "{0xFF 1 0xFF 2}"))))
+     (testing "{0xFF 1 0x10 2} — different hex values parse fine"
+       (let [[m] (lang/meme->forms "{0xFF 1 0x10 2}")]
+         (is (= 2 (count m)))))))
+
+#?(:clj
+   (deftest duplicate-set-key-across-notations
+     (testing "#{0xFF 255} — hex and decimal of same value are duplicates (JVM only)"
+       (is (thrown-with-msg? Exception #"Duplicate key"
+                             (lang/meme->forms "#{0xFF 255}"))))
+     (testing "#{0xFF 0x10} — different hex values parse fine"
+       (let [[s] (lang/meme->forms "#{0xFF 0x10}")]
+         (is (= 2 (count s)))))))

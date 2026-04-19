@@ -37,6 +37,21 @@
   (or (tok-loc (or (:token node) (:open node) (:ns node)))
       {:line 1 :col 1}))
 
+(defn- canonical-key
+  "Unwrap CljRaw (hex numbers, unicode-escaped chars, etc.) to its :value so
+   duplicate-key detection compares resolved Clojure values, not notation.
+   Plain values pass through unchanged."
+  [k]
+  (if (forms/raw? k) (:value k) k))
+
+(defn- first-duplicate
+  "Return the first element of coll whose canonical-key form appears more
+   than once, or nil. Preserves the original element (with notation) for
+   error reporting."
+  [coll]
+  (let [freqs (frequencies (map canonical-key coll))]
+    (first (filter #(> (get freqs (canonical-key %)) 1) coll))))
+
 (defn- ws-before
   "Get the whitespace string from trivia/before on a token."
   [tok]
@@ -226,7 +241,7 @@
         (errors/meme-error "Map must contain an even number of forms"
                            (node-loc node)))
       (let [ks (take-nth 2 items)]
-        (when-let [dup (first (for [[k freq] (frequencies ks) :when (> freq 1)] k))]
+        (when-let [dup (first-duplicate ks)]
           (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node))))
       (cond-> (apply array-map items)
         ws (vary-meta assoc :meme-lang/leading-trivia ws)))
@@ -235,7 +250,7 @@
     (let [_ (check-closed! node "set")
           items (read-children (:children node) opts)
           ws (ws-before (:open node))]
-      (when-let [dup (first (for [[v freq] (frequencies items) :when (> freq 1)] v))]
+      (when-let [dup (first-duplicate items)]
         (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
       (cond-> (set items)
         ws (vary-meta assoc :meme-lang/leading-trivia ws)
