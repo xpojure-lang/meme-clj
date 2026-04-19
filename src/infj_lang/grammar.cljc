@@ -14,11 +14,16 @@
      =, not=       bp 40
      and           bp 35
      or            bp 30
+     |name|>       bp 20   — named pipeline: `lhs |n|> rhs` → `(as-> lhs n rhs)`
      not           nud prefix, parses operand at bp 35
 
    All binary operators are left-associative. Word operators (`and`,
    `or`, `mod`, `not=`, `not`) require a word boundary after them —
-   `andrew` / `modern` / `orbital` stay symbols."
+   `andrew` / `modern` / `orbital` stay symbols.
+
+   The named-pipeline operator `|name|>` matches only when the `|name|>`
+   shape is present at cursor; otherwise `|` falls through to Clojure's
+   regular symbol parsing, so `|foo|` stays readable as a symbol."
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]
             [meme-lang.grammar :as meme-grammar]
@@ -90,6 +95,47 @@
              (= word (subs src pos (+ pos word-len)))
              (or (>= (+ pos word-len) len)
                  (not (lex/symbol-char? (.charAt ^String src (+ pos word-len))))))))))
+
+;; ---------------------------------------------------------------------------
+;; Named-pipeline operator `|name|>`
+;; ---------------------------------------------------------------------------
+
+(defn- pipe-op-at-cursor?
+  "Matches iff cursor is on `|` and the source from cursor has shape
+   `|<name>|>` where <name> is one or more non-whitespace chars that
+   don't contain `|`. Used as the `:when` gate so non-matching `|`s
+   fall through to regular symbol parsing."
+  [engine]
+  (let [src ^String (pratt/source-str engine)
+        len (pratt/source-len engine)
+        pos (pratt/cursor engine)]
+    (loop [i (inc pos)]
+      (cond
+        (>= (inc i) len) false
+        (let [ch (.charAt src i)]
+          (or (= ch \space) (= ch \tab) (= ch \newline) (= ch \return)))
+        false
+        (and (= (.charAt src i) \|) (= (.charAt src (inc i)) \>))
+        (> i (inc pos))    ; name must be non-empty
+        (= (.charAt src i) \|) false    ; stray `||` — not a pipe op
+        :else (recur (inc i))))))
+
+(defn- led-as-pipe
+  "Factory: led parselet for `|name|>`. Lowers to `(as-> lhs name rhs)`.
+   Left-associative at bp — chained uses produce nested `as->` calls,
+   which are semantically equivalent to the multi-body form."
+  [bp]
+  (fn [engine lhs op-tok]
+    ;; Dispatch loop has already consumed the first `|`; cursor is at
+    ;; the start of the name. Scan for the closing `|`.
+    (let [src ^String (pratt/source-str engine)
+          name-start (pratt/cursor engine)
+          name-end   (loop [i name-start]
+                       (if (= (.charAt src i) \|) i (recur (inc i))))
+          name-str   (subs src name-start name-end)]
+      (pratt/set-pos! engine (+ name-end 2))    ; skip past `|>`
+      (let [rhs (pratt/parse-expr engine bp)]
+        (make-call op-tok "as->" [lhs (op-atom op-tok name-str) rhs])))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unary `not` — nud position
@@ -192,4 +238,7 @@
                      :fn   (led-infix-call "not=" 40 3)}
                     {:char \m :bp 70 :open-type :mod-op
                      :when (word-at-cursor? "mod")
-                     :fn   (led-infix-call "mod" 70 2)}]))))
+                     :fn   (led-infix-call "mod" 70 2)}
+                    {:char \| :bp 20 :open-type :pipe-op
+                     :when pipe-op-at-cursor?
+                     :fn   (led-as-pipe 20)}]))))
