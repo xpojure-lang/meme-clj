@@ -13,7 +13,6 @@
             [meme.tools.clj.expander :as expander]
             #?(:clj [meme-lang.run :as run])
             #?(:clj [meme-lang.repl :as repl])
-            #?(:clj [meme-lang.config :as config])
             #?(:clj [meme.registry :as registry])))
 
 (defn- with-meme-grammar
@@ -159,10 +158,9 @@
    :format     format-meme
    :to-clj     to-clj
    :form-shape form-shape/registry
-   #?@(:clj [:to-meme      to-meme
-              :run          (fn [source opts] (run/run-string source opts))
-              :repl         (fn [opts] (repl/start opts))
-              :project-opts (fn [] (config/resolve-project-opts))])})
+   #?@(:clj [:to-meme to-meme
+              :run     (fn [source opts] (run/run-string source opts))
+              :repl    (fn [opts] (repl/start opts))])})
 
 ;; Self-register as a built-in when this ns is loaded on JVM/Babashka.
 ;; The registry imports no langs; langs register themselves — this keeps

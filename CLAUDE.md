@@ -75,9 +75,9 @@ The codebase is organized by *kind* of code, with shared infrastructure that bot
 - **`meme.tools.clj.*`** — Clojure-surface commons shared by any Clojure-flavored frontend (meme, implojure, future siblings): lexical conventions, CST reader, stages framework, error infrastructure, atom resolution, syntax-quote expander, the `Clj*` AST records, value serialization, eval pipeline, and REPL harness. Sits inside the toolkit tier but carries Clojure bias explicitly in the path.
 - **`meme-lang.*`** — Meme language implementation. The *syntactic* surface lives here (grammar, parselets, printer, form-shape, formatters). Infrastructure files like `meme-lang.lexlets`, `meme-lang.run`, `meme-lang.repl` are thin shims that inject meme's grammar/banner and delegate to `meme.tools.clj.*`.
 - **`meme.registry`, `meme.loader`** — Shared runtime infrastructure, peer to `meme.tools.*`. Both langs and the CLI depend on them: langs push themselves into the registry at load time and rely on the loader for `require`/`load-file`; the CLI dispatches through the registry.
-- **`meme.cli`, `meme-lang.config`** — App tier. Only consumer-facing code lives here.
+- **`meme.cli`** — App tier. Only consumer-facing code lives here.
 
-This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli` or `meme-lang.config`**, and **`meme.tools.*` must not require anything from `meme-lang.*` or `meme.*`**.
+This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli`**, and **`meme.tools.*` must not require anything from `meme-lang.*` or `meme.*`**.
 
 Composable stages (`meme.tools.clj.stages`), each a `ctx → ctx` function. Tooling paths compose 1–2; eval paths (`run-string`, `run-file`, REPL) compose 1–4. `step-parse` requires `:grammar` in opts (no implicit default) — each lang passes its own grammar explicitly:
 1. **step-parse** (`meme.tools.parser` driven by a lang-supplied grammar) — Unified scanlet-parselet Pratt parser. Reads directly from source string. Scanning (character dispatch, trivia) and parsing (structure) are both defined in the grammar spec as scanlets and parselets. Produces a lossless CST preserving every token.
@@ -150,7 +150,6 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 **App tier** (`meme.*`):
 
 - `meme.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `transpile` (alias: `compile`), `build`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
-- `meme-lang.config` (.clj) — Project-local formatter config: reads `.meme-format.edn` (walking up from CWD) and translates it into opts for `canon/format-form`. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol → built-in alias), `:style` (partial canon override). Consumed by `meme format` CLI; CLI flags override config. JVM/Babashka only.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
 ### Platform tiers
@@ -161,7 +160,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 | Clojure-surface commons | meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values} | JVM, Babashka, ClojureScript |
 | Core translation | meme-lang.{api, grammar, parselets, lexlets, form-shape, printer, formatter.flat, formatter.canon} | JVM, Babashka, ClojureScript |
 | Runtime infra | meme.tools.{run, repl}, meme.tools.clj.{run, repl}, meme-lang.{run, repl}, meme.{registry, loader} | JVM, Babashka |
-| App | meme.{cli, config} | JVM, Babashka |
+| App | meme.cli | JVM, Babashka |
 | Test infra | meme.test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
 ## Documentation
@@ -211,7 +210,6 @@ Tests are split across `test/meme_lang/` (language-specific) and `test/meme/` (i
 | `meme_lang/api_test` | Language API (`meme->forms`, `forms->meme`, `format-meme-forms`, etc.) |
 | `meme/registry_test` | Lang registry: command maps, EDN loading, extension dispatch, user lang registration. JVM only. |
 | `meme/cli_test` | CLI unit tests: file type checking, extension swapping |
-| `meme-lang/config_test` | `.meme-format.edn` validation, discovery (walking up), EDN parsing, config→opts translation |
 | `e2e/cli_test` | End-to-end CLI integration tests. JVM only. |
 | `meme_lang/repl_test` | REPL infrastructure (`input-state`, `read-input`). JVM only. |
 | `meme_lang/run_test` | File runner: `run-string`, `run-file`, shebang handling, custom eval-fn |
