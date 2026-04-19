@@ -1,8 +1,8 @@
-(ns meme-lang.resolve-test
-  "Unit tests for meme-lang.resolve: value resolution from raw token text."
+(ns meme.tools.clj.resolve-test
+  "Unit tests for meme.tools.clj.resolve: value resolution from raw token text."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.resolve :as resolve]))
+            [meme.tools.clj.resolve :as resolve]))
 
 ;; ---------------------------------------------------------------------------
 ;; Numbers

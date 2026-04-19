@@ -9,7 +9,7 @@
   (:require [clojure.string :as str]
             [meme.tools.clj.errors :as errors]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.resolve :as resolve]))
+            [meme.tools.clj.resolve :as resolve]))
 
 ;; ---------------------------------------------------------------------------
 ;; Top-level shebang sentinel

@@ -1,4 +1,4 @@
-(ns meme-lang.resolve
+(ns meme.tools.clj.resolve
   "Value resolution: converts raw token text to Clojure values.
    All resolution is native — no delegation to read-string."
   (:require [meme.tools.clj.errors :as errors]
