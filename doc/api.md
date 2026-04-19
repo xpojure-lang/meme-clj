@@ -358,8 +358,8 @@ By default runs the file as meme and installs `meme.loader` so `require`/`load-f
 ;; Default — always runs as meme
 (run-file "test/examples/tests/01_core_rules.meme")
 
-;; With registry-driven dispatch
-(run-file "app.calc"
+;; With registry-driven dispatch (e.g. to run a sibling lang by extension)
+(run-file "app.sibling"
           {:resolve-lang-for-path
            (fn [p _] (when-let [[_n l] (registry/resolve-by-extension p)]
                       (:run l)))})
