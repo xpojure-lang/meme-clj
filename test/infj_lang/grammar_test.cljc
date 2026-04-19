@@ -49,28 +49,30 @@
   (is (= '(not x) (parse-one "not x"))))
 
 ;; ---------------------------------------------------------------------------
-;; Named pipeline  `|name|>`  →  `(as-> lhs name rhs)`
+;; Named pipeline `|name|>` — lowers chains to a single flat `let`
 ;; ---------------------------------------------------------------------------
 
 (deftest named-pipeline-basic
-  (is (= '(as-> x n (f n))     (parse-one "x |n|> f(n)")))
-  (is (= '(as-> 42 v (+ v 1))  (parse-one "42 |v|> v + 1"))))
+  (is (= '(let [n x] (f n))     (parse-one "x |n|> f(n)")))
+  (is (= '(let [v 42] (+ v 1))  (parse-one "42 |v|> v + 1"))))
 
-(deftest named-pipeline-chain-nests
-  (testing "chained pipes produce nested `as->` — semantically equivalent to the multi-body form"
-    (is (= '(as-> (as-> x n (f n)) n (g n))
+(deftest named-pipeline-chain-flattens
+  (testing "chained pipes collapse into a single `let` with sequential rebindings"
+    (is (= '(let [n x n (f n)] (g n))
            (parse-one "x |n|> f(n) |n|> g(n)")))
-    (is (= '(as-> (as-> x a (f a)) b (g b))
-           (parse-one "x |a|> f(a) |b|> g(b)")))))
+    (is (= '(let [a x b (f a)] (g b))
+           (parse-one "x |a|> f(a) |b|> g(b)")))
+    (is (= '(let [xs coll xs (filter pred xs)] (count xs))
+           (parse-one "coll |xs|> filter(pred xs) |xs|> count(xs)")))))
 
 (deftest named-pipeline-has-lowest-precedence
   (testing "LHS of |n|> captures the whole boolean/arithmetic expression before it"
-    (is (= '(as-> (or x y) n (f n))  (parse-one "x or y |n|> f(n)")))
-    (is (= '(as-> (+ 1 2) n (* n 3)) (parse-one "1 + 2 |n|> n * 3")))))
+    (is (= '(let [n (or x y)] (f n))  (parse-one "x or y |n|> f(n)")))
+    (is (= '(let [n (+ 1 2)] (* n 3)) (parse-one "1 + 2 |n|> n * 3")))))
 
 (deftest named-pipeline-name-scoped-to-rhs
-  (testing "the name in `|n|>` is the binding symbol used by `as->`"
-    (is (= '(as-> m k (get m k))  (parse-one "m |k|> get(m k)")))))
+  (testing "the name in `|n|>` becomes the binding symbol in the emitted `let`"
+    (is (= '(let [k m] (get m k))  (parse-one "m |k|> get(m k)")))))
 
 (deftest pipe-non-match-falls-through-to-symbol
   (testing "`|foo|` without a closing `|>` reads as a normal Clojure symbol"
