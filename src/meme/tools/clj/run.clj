@@ -11,9 +11,9 @@
    embedding meme in a host that owns its own `clojure.core/load`
    interception can pass `:install-loader? false` to skip.
 
-   Extension-based lang dispatch (running `.calc`/`.implj` files as their
-   own langs) is opt-in via `:resolve-lang-for-path` — programmatic
-   callers that pass a real `.meme` path don't need it; the CLI wires it.
+   Extension-based lang dispatch (running `.implj` or other sibling-lang
+   files) is opt-in via `:resolve-lang-for-path` — programmatic callers
+   that pass a real `.meme` path don't need it; the CLI wires it.
    JVM/Babashka only."
   (:require [clojure.string :as str]
             [meme.tools.run :as run]

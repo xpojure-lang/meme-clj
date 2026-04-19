@@ -9,9 +9,8 @@
    `\\uXXXX` / `\\oNNN` / named char literals, `#` and `\\` as
    non-symbol chars, UTF-16 surrogate rejection in atoms, etc.
 
-   Languages with non-Clojure lexical conventions (calc-lang and similar
-   experiments) should define their own lexlets rather than depend on
-   this namespace."
+   Languages with non-Clojure lexical conventions should define their own
+   lexlets rather than depend on this namespace."
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]))
 

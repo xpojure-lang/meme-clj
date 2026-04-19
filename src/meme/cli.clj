@@ -7,7 +7,6 @@
    require here plus the lang's own register-builtin! call."
   (:require [meme.tools.clj.errors :as errors]
             [meme.registry :as registry]
-            [meme.loader :as loader]
             [meme.config :as config]
             ;; Built-in lang registrations fire on ns-load:
             [meme-lang.api]
@@ -15,14 +14,6 @@
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]))
-
-;; calc-lang is a demo implemented in .meme files — optional, lazy-loaded.
-;; Register it if the loader is available and calc-lang is on the classpath.
-(when-not (some? (System/getProperty "babashka.version"))
-  (try
-    (loader/install!)
-    (registry/register-builtin! :calc @(requiring-resolve 'calc-lang.api/lang-map))
-    (catch Exception _)))
 
 ;; ---------------------------------------------------------------------------
 ;; CLI exit — throw instead of System/exit so commands are testable

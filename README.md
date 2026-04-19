@@ -114,7 +114,7 @@ The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JV
 
 **Auto-installed.** `meme-lang.run/run-string`, `run-file`, and the REPL install the loader before evaluating user code — programmatic embeddings get `.meme` `require` for free, not just the CLI. Hosts that own their own `clojure.core/load` interception opt out with `:install-loader? false`.
 
-**Lang-independent.** The loader is registry-driven: it dispatches on extension to whatever lang is registered. Sibling langs (e.g. `calc-lang`) registered with `:extensions` and `:run` get the same `require`/`load-file` support without writing any loader code.
+**Lang-independent.** The loader is registry-driven: it dispatches on extension to whatever lang is registered. Sibling langs registered with `:extensions` and `:run` get the same `require`/`load-file` support without writing any loader code.
 
 **Safety.** Core namespaces (`clojure.*`, `java.*`, `javax.*`, `cljs.*`, `nrepl.*`, `cider.*`) are on a denylist and cannot be shadowed by `.meme` files on the classpath.
 

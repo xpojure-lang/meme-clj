@@ -233,7 +233,7 @@ meme rules inside. No opaque regions.
     does the same when a `:resolve-lang-for-path` resolver is injected.
   - **Pipeline integration** — pluggable `:parser` in
     `step-parse`, `:prelude` option in `run-string`.
-  - **Example languages** in `examples/languages/`: calc, prefix, superficie.
+  - **Example languages** in `examples/languages/`: prefix, superficie.
 
 - **Three-layer formatter architecture.** The printer, form-shape, and
   style concerns are now separate namespaces with independent extension
