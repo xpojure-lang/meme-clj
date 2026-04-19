@@ -72,18 +72,18 @@ clojure -T:build deploy
 The codebase is organized by *kind* of code, with shared infrastructure that both language implementations and the CLI depend on:
 
 - **`meme.tools.*`** — Generic, language-agnostic building blocks (parser engine, scanlet builders, render engine).
-- **`meme.tools.clj.*`** — Clojure-surface commons: lexical conventions (and future shared bits) that any Clojure-flavored frontend can depend on. Sits inside the toolkit tier but carries Clojure bias explicitly in the path.
-- **`meme-lang.*`** — Meme language implementation (grammar, parselets, lexlets, stages, printer, formatter, run/repl). Meme-lang's lexlets forward to `meme.tools.clj.lex` — the language's lex layer is just Clojure's, but the `meme-lang.lexlets` ns is kept as meme-lang's lexical identity.
+- **`meme.tools.clj.*`** — Clojure-surface commons shared by any Clojure-flavored frontend (meme, implojure, future siblings): lexical conventions, CST reader, stages framework, error infrastructure, atom resolution, syntax-quote expander, the `Clj*` AST records, value serialization, eval pipeline, and REPL harness. Sits inside the toolkit tier but carries Clojure bias explicitly in the path.
+- **`meme-lang.*`** — Meme language implementation. The *syntactic* surface lives here (grammar, parselets, printer, form-shape, formatters). Infrastructure files like `meme-lang.lexlets`, `meme-lang.run`, `meme-lang.repl` are thin shims that inject meme's grammar/banner and delegate to `meme.tools.clj.*`.
 - **`meme.registry`, `meme.loader`** — Shared runtime infrastructure, peer to `meme.tools.*`. Both langs and the CLI depend on them: langs push themselves into the registry at load time and rely on the loader for `require`/`load-file`; the CLI dispatches through the registry.
 - **`meme.cli`, `meme.config`** — App tier. Only consumer-facing code lives here.
 
 This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli` or `meme.config`**, and **`meme.tools.*` must not require anything from `meme-lang.*` or `meme.*`**.
 
-Composable stages (`meme-lang.stages`), each a `ctx → ctx` function. Tooling paths compose 1–2; eval paths (`run-string`, `run-file`, REPL) compose 1–4:
-1. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — Unified scanlet-parselet Pratt parser. Reads directly from source string. Scanning (character dispatch, trivia) and parsing (structure) are both defined in the grammar spec as scanlets and parselets. Produces a lossless CST preserving every token.
-2. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. Reader conditionals (`#?`, `#?@`) are preserved as `MemeReaderConditional` records.
-3. **step-evaluate-reader-conditionals** (`meme-lang.stages`) — materializes the platform branch of `#?`/`#?@` for eval paths. Tooling paths skip this step; records stay records. Supports `:platform` opt and `:default` fallback.
-4. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
+Composable stages (`meme.tools.clj.stages`), each a `ctx → ctx` function. Tooling paths compose 1–2; eval paths (`run-string`, `run-file`, REPL) compose 1–4. `step-parse` requires `:grammar` in opts (no implicit default) — each lang passes its own grammar explicitly:
+1. **step-parse** (`meme.tools.parser` driven by a lang-supplied grammar) — Unified scanlet-parselet Pratt parser. Reads directly from source string. Scanning (character dispatch, trivia) and parsing (structure) are both defined in the grammar spec as scanlets and parselets. Produces a lossless CST preserving every token.
+2. **step-read** (`meme.tools.clj.cst-reader`) — lowers CST to Clojure forms. Reader conditionals (`#?`, `#?@`) are preserved as `CljReaderConditional` records.
+3. **step-evaluate-reader-conditionals** (`meme.tools.clj.stages`) — materializes the platform branch of `#?`/`#?@` for eval paths. Tooling paths skip this step; records stay records. Supports `:platform` opt and `:default` fallback.
+4. **step-expand-syntax-quotes** (`meme.tools.clj.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval, not for tooling.
 
 The pipeline is lossless (CST preserves all tokens including delimiters and trivia) and data-driven (the Pratt parser is generic — meme syntax is defined by a grammar spec in `meme-lang.grammar`).
 
@@ -118,27 +118,29 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 
 **Clojure-surface commons** (`meme.tools.clj.*`) — inside the toolkit tier, but with Clojure-specific decisions baked in. Use only from Clojure-flavored langs (meme, implojure); don't use from langs with non-Clojure lex (e.g. calc-lang — it owns its own lexlets).
 
-- `meme.tools.clj.lex` (.cljc) — Clojure-surface lexical conventions: character predicates (`symbol-start?`, `symbol-char?`, `whitespace-char?`, `newline-char?`, `digit?`), consume helpers (`consume-keyword`, `consume-number`, `consume-char-literal`, `consume-string`, `consume-symbol`), and trivia consumers (`ws-consumer`, `newline-consumer`, `comment-consumer`, `bom-consumer`). Handles comma-as-whitespace, invisible-char rejection in identifiers, `::` auto-resolve keyword syntax, `\\uXXXX`/`\\oNNN`/named char literals. Portable.
+- `meme.tools.clj.lex` (.cljc) — Clojure-surface lexical conventions: character predicates (`symbol-start?`, `symbol-char?`, `whitespace-char?`, `newline-char?`, `digit?`), consume helpers (`consume-keyword`, `consume-number`, `consume-char-literal`, `consume-string`, `consume-symbol`), and trivia consumers (`ws-consumer`, `newline-consumer`, `comment-consumer`, `bom-consumer`). Handles comma-as-whitespace, invisible-char rejection in identifiers, `::` auto-resolve keyword syntax, `\uXXXX`/`\oNNN`/named char literals. Portable.
+- `meme.tools.clj.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Portable.
+- `meme.tools.clj.forms` (.cljc) — Shared AST records (`CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional` polyfill), anonymous-function helpers (`find-percent-params`, `normalize-bare-percent`, `walk-anon-fn-body`), and the internal metadata vocabulary (`:meme-lang/leading-trivia`, `:meme-lang/sugar`, etc.). Portable.
+- `meme.tools.clj.resolve` (.cljc) — Native atom resolution: raw token text → Clojure values. Numbers, strings, chars, regex, keywords, tagged literals all resolved natively (no `read-string` delegation). Handles JVM/CLJS asymmetries. Portable.
+- `meme.tools.clj.expander` (.cljc) — Syntax-quote expansion: `CljSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Auto-gensym (`foo#`). Called by runtime paths before eval. Also unwraps `CljRaw`. Portable.
+- `meme.tools.clj.cst-reader` (.cljc) — CST → Clojure forms: walks CST nodes (`:atom`, `:call`, `:list`, `:vector`, `:map`, `:set`, sugar forms, `:meta`, `:anon-fn`, `:namespaced-map`, `:reader-cond`, `:tagged`, `:error`, etc.) and produces forms with preserved metadata. Portable.
+- `meme.tools.clj.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-evaluate-reader-conditionals`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. `run` composes parse+read (tooling pipeline). `stage-contracts` declares required ctx keys and opts keys; `check-contract!` throws `:meme-lang/pipeline-error` on miscomposition. `step-parse` requires `:grammar` in opts (no implicit default). Portable.
+- `meme.tools.clj.values` (.cljc) — Value → string serialization for the printer: atomic Clojure values (strings, numbers, chars, regex, tagged literals). Portable.
+- `meme.tools.clj.run` (.clj) — Clojure-surface eval pipeline: source → shebang/BOM strip → stages → eval. Grammar-agnostic (caller passes `:grammar`). `default-resolve-symbol` matches Clojure's `SyntaxQuoteReader`. Installs `meme.loader` unless `:install-loader? false`. JVM/Babashka only.
+- `meme.tools.clj.repl` (.clj) — Clojure-surface REPL harness: `input-state` (complete/incomplete/invalid detection), `start`. Default `::kw` resolver via `*ns*` aliases. Grammar-agnostic. JVM/Babashka only.
 
 **Meme language** (`meme-lang.*`) — meme-specific implementation:
 
-- `meme-lang.api` (.cljc) — Public API and lang composition. Provides `meme->forms`, `forms->meme`, `forms->clj`, `clj->forms`, `meme->clj`, `clj->meme`, `format-meme-forms`. Also lang commands: `format-meme`, `to-clj`, `to-meme`, `lang-map`. Orchestrates the lossless CST-based pipeline. `clj->forms` and `clj->meme` are JVM only. Portable.
+- `meme-lang.api` (.cljc) — Public API and lang composition. Provides `meme->forms`, `forms->meme`, `forms->clj`, `clj->forms`, `meme->clj`, `clj->meme`, `format-meme-forms`. Also lang commands: `format-meme`, `to-clj`, `to-meme`, `lang-map`. Injects meme's grammar into the commons pipeline. `clj->forms` and `clj->meme` are JVM only. Portable.
 - `meme-lang.grammar` (.cljc) — Meme language grammar spec: maps characters to scanlets and parselets. The complete syntactic specification of M-expression syntax as data. Portable.
-- `meme-lang.lexlets` (.cljc) — Meme-lang's lexical identity. All entries forward to `meme.tools.clj.lex` — M-expressions don't change the lex layer, only the parser layer. The namespace exists so meme-lang has a home for any future meme-specific lexical rule. Portable.
 - `meme-lang.parselets` (.cljc) — Meme-specific compound parselets: call adjacency detection, `#` dispatch sub-routing, tilde (`~`/`~@`), and the M-expression call rule. Portable.
-- `meme-lang.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-evaluate-reader-conditionals`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. Also provides `run` which composes parse → read (tooling pipeline). Each stage calls `check-contract!` at entry against the public `stage-contracts` map; miscomposed pipelines throw `:meme-lang/pipeline-error` with the missing key(s) instead of NPEs. `step-read` throws `:meme-lang/deprecated-opt` if `:read-cond` is passed. Portable.
-- `meme-lang.cst-reader` (.cljc) — CST reader: walks CST nodes and produces Clojure forms. Handles value resolution, metadata, syntax-quote AST nodes, anonymous functions, namespaced maps, reader conditionals. Portable.
-- `meme-lang.forms` (.cljc) — Shared form-level predicates, constructors, and constants. Cross-stage contracts that both the parser and printer depend on (e.g. deferred auto-resolve keyword encoding, `percent-param-type`, `strip-internal-meta`). Portable.
-- `meme-lang.form-shape` (.cljc) — Semantic decomposition of special forms into named slots (`:name`, `:params`, `:bindings`, `:clause`, `:body`, etc.). The middle layer between notation (printer) and style (formatter). Owns the stable slot vocabulary consumed by the printer and opined on by styles. `registry` is the built-in meme decomposer map; `decompose` looks up a head and applies its decomposer; `with-structural-fallback` enables inference for user macros whose shape resembles `defn` or `let`. See `doc/form-shape.md`. Portable.
-- `meme-lang.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Used by scanner, reader, and REPL. Portable.
-- `meme-lang.resolve` (.cljc) — Native value resolution: converts raw token text to Clojure values. No `read-string` delegation — numbers, strings, chars, regex, keywords, tagged literals all resolved natively. Handles platform asymmetries (JVM vs CLJS). Portable.
-- `meme-lang.expander` (.cljc) — Syntax-quote expansion: `MemeSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Called by runtime paths (run, repl) before eval. Also unwraps `MemeRaw` to plain values. Portable.
-- `meme-lang.printer` (.cljc) — Wadler-Lindig Doc tree builder: `to-doc` (form → Doc tree). Single source of truth for meme and Clojure output modes. Delegates layout to `meme.tools.render`. Dispatches on form-shape slots (from the registry passed via ctx) and applies style's slot-keyed opinions; `default-slot-renderers` provides defaults for `:bindings` and `:clause` that styles can override via `:slot-renderers`. Portable.
-- `meme-lang.values` (.cljc) — Shared value → string serialization for the printer. Handles atomic Clojure values (strings, numbers, chars, regex). Portable.
+- `meme-lang.lexlets` (.cljc) — Thin shim forwarding to `meme.tools.clj.lex`. Meme inherits all Clojure lexical conventions; this namespace keeps meme-lang's lexical identity and is the place where any future meme-specific lexical rule would live. Portable.
+- `meme-lang.form-shape` (.cljc) — Semantic decomposition of special forms into named slots (`:name`, `:params`, `:bindings`, `:clause`, `:body`, etc.). The middle layer between notation (printer) and style (formatter). Owns the stable slot vocabulary. See `doc/form-shape.md`. Portable.
+- `meme-lang.printer` (.cljc) — Wadler-Lindig Doc tree builder: `to-doc` (form → Doc tree). Single source of truth for meme and Clojure output modes. Delegates layout to `meme.tools.render`. Dispatches on form-shape slots and applies style's slot-keyed opinions. Portable.
 - `meme-lang.formatter.flat` (.cljc) — Flat formatter: composes printer + render at infinite width. `format-form`, `format-forms`, `format-clj`. Single-line output. Portable.
 - `meme-lang.formatter.canon` (.cljc) — Canonical formatter: composes printer + render at target width. `format-form`, `format-forms`. Width-aware multi-line output. Used by `meme format` CLI. Portable.
-- `meme-lang.repl` (.clj) — Meme-specific REPL. Wires meme stages, error formatting, keyword resolution, and syntax-quote resolution into the generic REPL infrastructure. JVM/Babashka only.
-- `meme-lang.run` (.clj) — Meme-specific eval pipeline. Wires meme stages, syntax-quote resolution, and BOM stripping into the generic run infrastructure. JVM/Babashka only.
+- `meme-lang.run` (.clj) — Thin shim: injects meme's grammar and delegates to `meme.tools.clj.run`. Re-exports `default-resolve-symbol` for backwards compat. JVM/Babashka only.
+- `meme-lang.repl` (.clj) — Thin shim: injects meme's grammar and banner and delegates to `meme.tools.clj.repl`. JVM/Babashka only.
 
 **Shared infrastructure** (`meme.*`, peer to `meme.tools.*`):
 
@@ -156,9 +158,9 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 | Tier | Modules | Platforms |
 |------|---------|-----------|
 | Generic tools | meme.tools.{parser, lexer, render} | JVM, Babashka, ClojureScript |
-| Clojure-surface commons | meme.tools.clj.{lex} | JVM, Babashka, ClojureScript |
-| Core translation | meme-lang.{api, grammar, lexlets, parselets, stages, cst-reader, forms, form-shape, errors, resolve, expander, printer, values, formatter.flat, formatter.canon} | JVM, Babashka, ClojureScript |
-| Runtime infra | meme.tools.{run, repl}, meme-lang.{run, repl}, meme.{registry, loader} | JVM, Babashka |
+| Clojure-surface commons | meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values} | JVM, Babashka, ClojureScript |
+| Core translation | meme-lang.{api, grammar, parselets, lexlets, form-shape, printer, formatter.flat, formatter.canon} | JVM, Babashka, ClojureScript |
+| Runtime infra | meme.tools.{run, repl}, meme.tools.clj.{run, repl}, meme-lang.{run, repl}, meme.{registry, loader} | JVM, Babashka |
 | App | meme.{cli, config} | JVM, Babashka |
 | Test infra | meme.test-runner, dogfood-test, vendor-roundtrip-test | JVM only |
 
