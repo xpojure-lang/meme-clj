@@ -1,5 +1,5 @@
-(ns meme.config
-  "Project-local formatter configuration.
+(ns meme-lang.config
+  "Meme-lang project-local formatter configuration.
 
    Discovers `.meme-format.edn` by walking up the directory ancestor
    chain from a starting directory (the CWD, by default) and returning
@@ -7,12 +7,13 @@
    ancestor wins. Validates the file and translates it into opts for
    `meme-lang.formatter.canon/format-form`.
 
-   The config is meme-flavored: `:form-shape` aliases resolve against
-   `meme-lang.form-shape/registry` and `:style` merges onto
-   `meme-lang.formatter.canon/style`. Clojure-flavored sibling langs
-   (implojure) reuse the same formatter through their lang-map and so
-   inherit this config for free; a lang with its own formatter would
-   need its own config mechanism.
+   Owned by meme-lang, not the platform: `:form-shape` aliases resolve
+   against `meme-lang.form-shape/registry` and `:style` merges onto
+   `meme-lang.formatter.canon/style`. The CLI reaches this via the
+   lang-map's `:project-opts` entry, so a sibling lang with its own
+   formatter can supply its own config mechanism the same way.
+   Clojure-flavored siblings (implojure) that reuse meme's formatter
+   can point their lang-map `:project-opts` here to inherit this config.
 
    Config schema:
 

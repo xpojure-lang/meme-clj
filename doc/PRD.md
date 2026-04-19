@@ -250,7 +250,7 @@ meme rules inside. No opaque regions.
     The canon style collapsed from ~60 form-keyed entries to 11 slot-keyed
     entries. Formatters accept `:style` override in opts for project-level
     tweaks.
-  - `meme.config` — reads `.meme-format.edn` from project root (walking up
+  - `meme-lang.config` — reads `.meme-format.edn` from project root (walking up
     from CWD) and translates it into formatter opts. Schema: `:width`,
     `:structural-fallback?`, `:form-shape` (symbol-to-symbol aliases),
     `:style` (partial override).

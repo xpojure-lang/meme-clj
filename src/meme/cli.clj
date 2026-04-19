@@ -7,7 +7,6 @@
    require here plus the lang's own register-builtin! call."
   (:require [meme.tools.clj.errors :as errors]
             [meme.registry :as registry]
-            [meme.config :as config]
             ;; Built-in lang registrations fire on ns-load:
             [meme-lang.api]
             [implojure-lang.api]
@@ -186,21 +185,29 @@
      :verb "converted", :usage "Usage: meme to-meme <file|dir> [--lang name] [--stdout]"}))
 
 (defn- resolve-format-config
-  "Discover and read `.meme-format.edn` from CWD, returning derived opts.
-   Errors in the config file are reported to stderr and cause an exit;
-   absence of a config file is silent."
+  "Ask each registered lang for its project-local formatter config via the
+   lang-map's `:project-opts` fn, merging the results (earlier langs win on
+   key clashes). Errors are reported to stderr and cause an exit; a lang
+   without `:project-opts` is silent."
   []
-  (try (config/resolve-project-opts)
-       (catch Exception e
-         (binding [*out* *err*]
-           (println (str "Error in .meme-format.edn: " (ex-message e))))
-         (cli-exit! 1))))
+  (try
+    (reduce (fn [acc [_name lang]]
+              (if-let [project-opts-fn (:project-opts lang)]
+                (merge acc (project-opts-fn))
+                acc))
+            {}
+            (registry/all-langs))
+    (catch Exception e
+      (binding [*out* *err*]
+        (println (str "Error in project format config: " (ex-message e))))
+      (cli-exit! 1))))
 
 (defn format-files
   "Format meme source files in canonical style.
 
-   Reads `.meme-format.edn` from the working directory (walking up) if
-   present; its settings are applied as defaults under CLI flags."
+   Reads project-local formatter config via each lang's `:project-opts`
+   lang-map entry (meme-lang's walks up for `.meme-format.edn`); settings
+   are applied as defaults under CLI flags."
   [opts]
   (let [project-opts (resolve-format-config)
         ;; CLI flags override project config; project config overrides defaults.
