@@ -1,25 +1,40 @@
 (ns meme.config
   "Project-local formatter configuration.
 
-   Reads `.meme-format.edn` from the project root (walking up from a
-   starting directory), validates it, and translates it into opts
-   suitable for `meme-lang.formatter.canon/format-form`.
+   Discovers `.meme-format.edn` by walking up the directory ancestor
+   chain from a starting directory (the CWD, by default) and returning
+   the first match — there is no project-root concept; the nearest
+   ancestor wins. Validates the file and translates it into opts for
+   `meme-lang.formatter.canon/format-form`.
+
+   The config is meme-flavored: `:form-shape` aliases resolve against
+   `meme-lang.form-shape/registry` and `:style` merges onto
+   `meme-lang.formatter.canon/style`. Clojure-flavored sibling langs
+   (implojure) reuse the same formatter through their lang-map and so
+   inherit this config for free; a lang with its own formatter would
+   need its own config mechanism.
 
    Config schema:
 
-     {:width                 positive integer (default 80)
-      :structural-fallback?  boolean — infer defn-/let-like shapes
-                             for unregistered heads
+     {:width                 positive integer — forwarded as :width
+                             (canon's own default is 80 if absent)
+      :structural-fallback?  boolean — wrap the registry with
+                             form-shape/with-structural-fallback so
+                             unregistered heads whose args look like
+                             defn (sym + vector) or let (leading vector)
+                             still decompose
       :form-shape            map of symbol → symbol.  Each entry aliases
                              a user macro to an existing registry entry,
-                             e.g. {my-defn defn, my-let let}.
-      :style                 partial override of the canonical style.
-                             Merged on top of canon/style; supports
-                             :head-line-slots and :force-open-space-for.
-                             :slot-renderers is not supported from EDN
-                             (renderers are fns — not EDN-representable).}
+                             e.g. {my-defn defn, my-let let}.  Alias
+                             targets must already be in the meme-lang
+                             registry; unknown targets are rejected.
+      :style                 partial override of canon/style.  Merged on
+                             top; supports :head-line-slots and
+                             :force-open-space-for. :slot-renderers is
+                             not supported from EDN (renderers are fns —
+                             not EDN-representable).}
 
-   Unknown keys are ignored with a warning so that newer configs stay
+   Unknown keys are ignored with a warning so newer configs stay
    forward-compatible with older tooling."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
