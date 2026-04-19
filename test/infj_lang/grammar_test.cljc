@@ -1,6 +1,6 @@
 (ns infj-lang.grammar-test
-  "Tests for infj-lang: infix operators, precedence, grouping, and
-   interaction with meme syntax (calls, reader sugar)."
+  "Tests for infj-lang: infix operators, precedence, grouping, word-
+   operator boundaries, and interaction with meme syntax."
   (:require [clojure.test :refer [deftest is testing]]
             [infj-lang.api :as infj]))
 
@@ -26,8 +26,7 @@
   (is (= '(+ 1 2) (parse-one "1 + 2")))
   (is (= '(- 5 3) (parse-one "5 - 3")))
   (is (= '(* 2 3) (parse-one "2 * 3")))
-  (is (= '(/ 10 2) (parse-one "10 / 2")))
-  (is (= '(mod 10 3) (parse-one "10 % 3"))))
+  (is (= '(/ 10 2) (parse-one "10 / 2"))))
 
 (deftest comparison-operators
   (is (= '(< 1 2) (parse-one "1 < 2")))
@@ -36,8 +35,13 @@
   (is (= '(>= 2 2) (parse-one "2 >= 2"))))
 
 (deftest equality-operators
-  (is (= '(= 1 1) (parse-one "1 == 1")))
-  (is (= '(not= 1 2) (parse-one "1 != 2"))))
+  (is (= '(= 1 1) (parse-one "1 = 1")))
+  (is (= '(not= 1 2) (parse-one "1 not= 2"))))
+
+(deftest boolean-operators
+  (is (= '(and x y) (parse-one "x and y")))
+  (is (= '(or x y) (parse-one "x or y")))
+  (is (= '(not x) (parse-one "not x"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Precedence
@@ -51,12 +55,46 @@
   (is (= '(< (+ 1 2) 5) (parse-one "1 + 2 < 5"))))
 
 (deftest comparison-binds-tighter-than-equality
-  (is (= '(= (< 1 2) true) (parse-one "1 < 2 == true"))))
+  (is (= '(= (< 1 2) true) (parse-one "1 < 2 = true"))))
+
+(deftest equality-binds-tighter-than-and
+  (is (= '(and (= 1 1) (= 2 2)) (parse-one "1 = 1 and 2 = 2"))))
+
+(deftest and-binds-tighter-than-or
+  (testing "`a or b and c` → `(or a (and b c))`"
+    (is (= '(or x (and y z)) (parse-one "x or y and z"))))
+  (testing "`a and b or c` → `(or (and a b) c)`"
+    (is (= '(or (and x y) z) (parse-one "x and y or z")))))
+
+(deftest not-binds-tighter-than-and
+  (is (= '(and (not x) y) (parse-one "not x and y"))))
+
+(deftest not-binds-looser-than-comparison-and-equality
+  (testing "`not` scoops up a comparison or equality RHS"
+    (is (= '(not (= x y))  (parse-one "not x = y")))
+    (is (= '(not (< x y))  (parse-one "not x < y")))))
 
 (deftest left-associative
   (testing "same-precedence ops associate left to right"
     (is (= '(- (+ 1 2) 3) (parse-one "1 + 2 - 3")))
-    (is (= '(/ (* 10 2) 5) (parse-one "10 * 2 / 5")))))
+    (is (= '(/ (* 10 2) 5) (parse-one "10 * 2 / 5")))
+    (is (= '(and (and a b) c) (parse-one "a and b and c")))
+    (is (= '(or (or a b) c) (parse-one "a or b or c")))))
+
+;; ---------------------------------------------------------------------------
+;; Word boundaries
+;; ---------------------------------------------------------------------------
+
+(deftest word-operators-require-trailing-boundary
+  (testing "identifiers that merely start with a word operator stay symbols"
+    (is (= '(+ andrew 1) (parse-one "andrew + 1")))
+    (is (= '(+ orbital 1) (parse-one "orbital + 1")))
+    (is (= '(+ note 1) (parse-one "note + 1")))))
+
+(deftest bare-word-operator-is-still-a-symbol
+  (testing "`and` / `or` alone at top level read as symbols"
+    (is (= 'and (parse-one "and")))
+    (is (= 'or (parse-one "or")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Grouping
@@ -113,7 +151,8 @@
 
 (deftest to-clj-produces-clojure-syntax
   (is (= "(+ 1 2)" (infj/infj->clj "1 + 2")))
-  (is (= "(+ (f 1) (g 2))" (infj/infj->clj "f(1) + g(2)"))))
+  (is (= "(+ (f 1) (g 2))" (infj/infj->clj "f(1) + g(2)")))
+  (is (= "(and x y)" (infj/infj->clj "x and y"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry dispatch
@@ -122,7 +161,7 @@
 #?(:clj
    (deftest lang-registered
      (testing ":infj is registered and .infj extension resolves to it"
-       (let [reg (requiring-resolve 'meme.registry/resolve-lang)
+       (let [reg    (requiring-resolve 'meme.registry/resolve-lang)
              by-ext (requiring-resolve 'meme.registry/resolve-by-extension)]
          (is (some? (reg :infj)))
          (let [[lang-kw lang-map] (by-ext ".infj")]
@@ -138,4 +177,6 @@
      (let [run-str (requiring-resolve 'infj-lang.run/run-string)]
        (is (= 3 (run-str "1 + 2")))
        (is (= 20 (run-str "def(x 10) x * 2")))
-       (is (= :yes (run-str "if(1 < 2 :yes :no)"))))))
+       (is (= :yes (run-str "if(1 < 2 :yes :no)")))
+       (is (= true (run-str "1 = 1 and 2 < 3")))
+       (is (= false (run-str "not (1 = 1)"))))))
