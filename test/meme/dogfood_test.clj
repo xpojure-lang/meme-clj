@@ -48,7 +48,7 @@
 ;; and document the specific failing forms in a comment.
 
 (deftest dogfood-per-form-cst-reader
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/cst_reader.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/clj/cst_reader.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -115,7 +115,7 @@
 (deftest dogfood-semantic-equivalence
   (doseq [path ["src/meme_lang/api.cljc" "src/meme_lang/run.clj"
                 "src/meme_lang/repl.clj" "test/meme/test_runner.clj"
-                "src/meme_lang/cst_reader.cljc"
+                "src/meme/tools/clj/cst_reader.cljc"
                 "src/meme_lang/printer.cljc"
                 "src/meme/tools/clj/resolve.cljc"
                 "src/meme_lang/stages.cljc"

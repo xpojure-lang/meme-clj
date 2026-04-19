@@ -4,7 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
 
             [meme-lang.api :as lang]
-            [meme-lang.cst-reader :as cst-reader]
+            [meme.tools.clj.cst-reader :as cst-reader]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.expander :as expander]
@@ -153,12 +153,12 @@
   (let [atom-node {:node :atom :token {:type :symbol :raw "x" :line 1 :col 1}}]
     (testing "reading with depth = max-parse-depth - 1 succeeds"
       (is (= 'x (cst-reader/read-node atom-node
-                  {:meme-lang.cst-reader/depth (dec forms/max-parse-depth)}))))
+                  {:meme.tools.clj.cst-reader/depth (dec forms/max-parse-depth)}))))
     (testing "reading with depth = max-parse-depth throws with a clean error"
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"depth"
                             (cst-reader/read-node atom-node
-                              {:meme-lang.cst-reader/depth forms/max-parse-depth}))))))
+                              {:meme.tools.clj.cst-reader/depth forms/max-parse-depth}))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: clj->forms depth guard must match cst-reader at exactly

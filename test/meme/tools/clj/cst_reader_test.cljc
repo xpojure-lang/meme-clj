@@ -1,5 +1,5 @@
-(ns meme-lang.cst-reader-test
-  "Isolated unit tests for meme-lang.cst-reader.
+(ns meme.tools.clj.cst-reader-test
+  "Isolated unit tests for meme.tools.clj.cst-reader.
 
    These tests drive the CST reader directly via meme.tools.parser/parse →
    cst-reader/read-forms, bypassing the higher-level stages pipeline and the
@@ -8,7 +8,7 @@
    right Clojure values, preserves the right metadata, and raises errors with
    position info for malformed input."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.cst-reader :as cst-reader]
+            [meme.tools.clj.cst-reader :as cst-reader]
             [meme.tools.clj.forms :as forms]
             [meme-lang.grammar :as grammar]
             [meme.tools.parser :as pratt]))

@@ -23,7 +23,7 @@
    Skip step-read for tooling that works with CST directly."
   (:require [clojure.string :as str]
             [meme-lang.grammar :as grammar]
-            [meme-lang.cst-reader :as cst-reader]
+            [meme.tools.clj.cst-reader :as cst-reader]
             [meme.tools.clj.errors :as errors]
             [meme.tools.clj.expander :as expander]
             [meme.tools.clj.forms :as forms]
