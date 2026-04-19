@@ -1,4 +1,4 @@
-(ns meme-lang.expander
+(ns meme.tools.clj.expander
   "Syntax-quote expansion: MemeSyntaxQuote AST nodes → plain Clojure forms.
    Called by runtime paths (run, repl) before eval. Not needed for tooling
    (tooling works with AST nodes directly)."

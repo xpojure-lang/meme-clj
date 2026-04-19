@@ -7,7 +7,7 @@
             [meme-lang.cst-reader :as cst-reader]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.expander :as expander]
+            [meme.tools.clj.expander :as expander]
             [meme-lang.stages :as stages]))
 
 ;; ---------------------------------------------------------------------------
