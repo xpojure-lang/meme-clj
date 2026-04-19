@@ -8,29 +8,35 @@
    JVM/Babashka only."
   (:require [meme.tools.repl :as repl]
             [meme.loader :as loader]
-            [meme-lang.stages :as stages]
+            [meme.tools.clj.stages :as stages]
             [meme.tools.clj.errors :as errors]
+            [meme-lang.grammar :as grammar]
             [meme-lang.run :as meme-run]
             [clojure.string :as str]
             [clojure.java.io :as io]))
+
+(defn- with-meme-grammar [opts]
+  (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar)))
 
 (defn input-state
   "Returns :complete, :incomplete, or :invalid for the given input string.
    Uses `stages/run` (parse + read) — completeness checking needs no eval."
   ([s] (input-state s nil))
-  ([s opts] (input-state s opts stages/run))
+  ([s opts] (input-state s opts
+              (fn [s opts] (stages/run s (with-meme-grammar opts)))))
   ([s opts run-fn]
    (repl/input-state s run-fn opts)))
 
 (defn- meme-repl-pipeline
   "REPL eval pipeline: parse, read, evaluate reader conditionals.
    Syntax-quote expansion is applied separately via expand-fn by the
-   generic REPL harness."
+   generic REPL harness. Injects meme's grammar if not provided."
   [source opts]
-  (-> {:source source :opts opts}
-      stages/step-parse
-      stages/step-read
-      stages/step-evaluate-reader-conditionals))
+  (let [opts (with-meme-grammar opts)]
+    (-> {:source source :opts opts}
+        stages/step-parse
+        stages/step-read
+        stages/step-evaluate-reader-conditionals)))
 
 (defn start
   "Start the meme REPL.

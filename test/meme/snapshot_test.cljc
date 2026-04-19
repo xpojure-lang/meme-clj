@@ -5,13 +5,14 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.stages :as stages]
+            [meme.tools.clj.stages :as stages]
+            [meme-lang.grammar :as grammar]
             [meme-lang.test-util :as tokenizer]))
 
 (defn- eval-rc-forms
   "Read src and run step-evaluate-reader-conditionals; return :forms."
   [src]
-  (:forms (-> {:source src :opts nil}
+  (:forms (-> {:source src :opts {:grammar grammar/grammar}}
               stages/step-parse
               stages/step-read
               stages/step-evaluate-reader-conditionals)))

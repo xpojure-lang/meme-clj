@@ -1,4 +1,4 @@
-(ns meme-lang.stages
+(ns meme.tools.clj.stages
   "Composable pipeline stages for the lossless reader.
 
    Tooling pipeline: step-parse → step-read
@@ -19,10 +19,12 @@
    with the missing key(s) and the actual ctx-keys present, instead of
    surfacing deep-inside NPEs.
 
+   `step-parse` requires `:grammar` in opts (no implicit default) — each
+   lang's api/run/repl knows its grammar and passes it explicitly.
+
    Stages are independent.  Compose in any order respecting dependencies.
    Skip step-read for tooling that works with CST directly."
   (:require [clojure.string :as str]
-            [meme-lang.grammar :as grammar]
             [meme.tools.clj.cst-reader :as cst-reader]
             [meme.tools.clj.errors :as errors]
             [meme.tools.clj.expander :as expander]
@@ -35,32 +37,45 @@
 
 (def stage-contracts
   "Machine-readable pipeline contract.  Each entry is
-   `{:requires #{ctx-keys} :produces #{ctx-keys}}`.
+   `{:requires #{ctx-keys} :requires-opts #{opt-keys} :produces #{ctx-keys}}`.
 
-   `:requires` is enforced at runtime by `check-contract!`; `:produces`
-   is documentation — if a stage fails to produce what it claims, the
-   next stage's `:requires` check catches the mistake, so post-condition
-   runtime checks would be redundant."
-  {:step-parse                         {:requires #{:source} :produces #{:cst}}
+   `:requires` (ctx keys) and `:requires-opts` (opts keys) are enforced
+   at runtime by `check-contract!`; `:produces` is documentation — if a
+   stage fails to produce what it claims, the next stage's `:requires`
+   check catches the mistake, so post-condition runtime checks would be
+   redundant."
+  {:step-parse                         {:requires #{:source}
+                                        :requires-opts #{:grammar}
+                                        :produces #{:cst}}
    :step-read                          {:requires #{:cst}    :produces #{:forms}}
    :step-evaluate-reader-conditionals  {:requires #{:forms}  :produces #{:forms}}
    :step-expand-syntax-quotes          {:requires #{:forms}  :produces #{:forms}}})
 
 (defn- check-contract!
   "Throw a clear pipeline-error if `ctx` is missing any of `stage-name`'s
-   required keys.  Keeps miscomposition errors near the actual mistake."
+   required ctx keys or opts keys.  Keeps miscomposition errors near the
+   actual mistake."
   [stage-name ctx]
-  (when-let [required (get-in stage-contracts [stage-name :requires])]
-    (let [missing (remove #(contains? ctx %) required)]
-      (when (seq missing)
-        (throw (ex-info
-                 (str "Pipeline stage " stage-name " missing required ctx key(s): "
-                      (str/join ", " (map pr-str missing))
-                      ". Did you skip an earlier stage?")
-                 {:type :meme-lang/pipeline-error
-                  :stage stage-name
-                  :missing (vec missing)
-                  :ctx-keys (vec (keys ctx))}))))))
+  (let [contract (get stage-contracts stage-name)
+        missing-ctx (remove #(contains? ctx %) (:requires contract))
+        missing-opts (remove #(contains? (:opts ctx) %) (:requires-opts contract))]
+    (when (or (seq missing-ctx) (seq missing-opts))
+      (throw (ex-info
+               (str "Pipeline stage " stage-name " missing required "
+                    (cond
+                      (and (seq missing-ctx) (seq missing-opts))
+                      (str "ctx key(s): " (str/join ", " (map pr-str missing-ctx))
+                           " and opts key(s): " (str/join ", " (map pr-str missing-opts)))
+                      (seq missing-ctx)
+                      (str "ctx key(s): " (str/join ", " (map pr-str missing-ctx)))
+                      :else
+                      (str "opts key(s): " (str/join ", " (map pr-str missing-opts))))
+                    ". Did you skip an earlier stage or forget to pass :grammar?")
+               {:type :meme-lang/pipeline-error
+                :stage stage-name
+                :missing-ctx (vec missing-ctx)
+                :missing-opts (vec missing-opts)
+                :ctx-keys (vec (keys ctx))})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Pipeline stages
@@ -68,7 +83,7 @@
 
 (defn step-parse
   "Parse source string into CST using the unified Pratt parser.
-   Uses meme grammar by default, or (:grammar opts) if provided.
+   Requires `:grammar` in opts — caller supplies the language's grammar spec.
    Reads :source, writes :cst."
   [ctx]
   (check-contract! :step-parse ctx)
@@ -79,7 +94,7 @@
                                #?(:clj (.getName (class source))
                                   :cljs (pr-str (type source)))))
                       {:type :meme-lang/pipeline-error :stage :step-parse})))
-    (let [spec (or (get-in ctx [:opts :grammar]) grammar/grammar)]
+    (let [spec (get-in ctx [:opts :grammar])]
       (assoc ctx :cst (pratt/parse source spec)))))
 
 (defn step-read
@@ -97,7 +112,7 @@
              (str "The :read-cond option is no longer supported. The meme reader "
                   "always preserves reader conditionals as MemeReaderConditional "
                   "records. To evaluate them for a platform, compose "
-                  "meme-lang.stages/step-evaluate-reader-conditionals after "
+                  "meme.tools.clj.stages/step-evaluate-reader-conditionals after "
                   "step-read, or use meme-lang.run/run-string / run-file.")
              {:type    :meme-lang/deprecated-opt
               :opt     :read-cond

@@ -4,16 +4,21 @@
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
             [meme-lang.repl]
-            [meme-lang.stages :as stages]
+            [meme-lang.grammar :as grammar]
+            [meme.tools.clj.stages :as stages]
             [meme.tools.repl]))
 
 ;; Access private fns via var.
 (def ^:private input-state meme-lang.repl/input-state)
 (def ^:private read-input* @#'meme.tools.repl/read-input)
+(defn- stages-with-meme-grammar
+  "Wrapper that passes meme's grammar to the commons stages pipeline."
+  [s opts]
+  (stages/run s (assoc (or opts {}) :grammar grammar/grammar)))
 (defn- read-input
   "Wrapper that injects meme stages/run as the run-fn."
   [prompt read-line-fn reader-opts]
-  (read-input* prompt read-line-fn reader-opts stages/run))
+  (read-input* prompt read-line-fn reader-opts stages-with-meme-grammar))
 
 (deftest input-state-complete
   (testing "simple balanced call"

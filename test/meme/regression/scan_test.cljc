@@ -5,7 +5,8 @@
             [meme-lang.api :as lang]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.stages :as stages]
+            [meme.tools.clj.stages :as stages]
+            [meme-lang.grammar :as grammar]
             [meme-lang.test-util :as tokenizer]))
 
 (defn- semantic-tokens
@@ -85,7 +86,7 @@
      (testing "#? with bracket char literals parses to matched value (after eval-rc)"
        (let [eval-rc (fn [src]
                        (first (:forms
-                                (-> {:source src :opts nil}
+                                (-> {:source src :opts {:grammar grammar/grammar}}
                                     stages/step-parse
                                     stages/step-read
                                     stages/step-evaluate-reader-conditionals))))]
