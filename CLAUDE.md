@@ -142,7 +142,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 
 **App tier** (`meme.*`):
 
-- `meme.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `compile`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
+- `meme.cli` (.clj) — Unified CLI: `run`, `repl`, `to-clj`, `to-meme`, `format`, `transpile` (alias: `compile`), `build`, `inspect`, `version`. Generic dispatcher — commands delegate to lang map functions. Babashka entry point via `bb.edn`.
 - `meme.config` (.clj) — Project-local formatter config: reads `.meme-format.edn` (walking up from CWD) and translates it into opts for `canon/format-form`. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol → built-in alias), `:style` (partial canon override). Consumed by `meme format` CLI; CLI flags override config. JVM/Babashka only.
 - `meme.test-runner` (.clj) — Eval + fixture test runner. Lives in `test/`, not `src/`. JVM only.
 
