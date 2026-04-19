@@ -191,10 +191,12 @@ meme rules inside. No opaque regions.
 ## Known limitations
 
 - **ClojureScript: some value types unsupported.** Tagged literals
-  (`#uuid`, `#inst`), reader conditionals (`#?`, `#?@`), namespaced
-  maps (`#:ns{}`), char literals, ratio literals, BigInt/BigDecimal
-  are JVM/Babashka only. The core call rule and all standard forms
-  work on ClojureScript.
+  (`#uuid`, `#inst`), ratio literals (`1/2`), BigInt (`42N`), and
+  BigDecimal (`42M`) are JVM/Babashka only. Char literals read but
+  return JS single-char strings (not chars — platform limitation).
+  Reader conditionals (`#?`/`#?@`) and namespaced maps (`#:ns{}`) parse
+  successfully on ClojureScript. The core call rule and all standard
+  forms work on ClojureScript.
 
 - **ClojureScript: `-0.0` does not roundtrip.** On CLJS, `(js/parseFloat
   "-0.0")` returns `-0` and `(pr-str -0)` returns `"0"`, so negative zero

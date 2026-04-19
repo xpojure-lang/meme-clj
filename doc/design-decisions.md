@@ -509,9 +509,33 @@ This is a known limitation shared by all Clojure-based formatting tools (cljfmt,
 
 Leading and trailing comments (before/after top-level forms) are always preserved, as they are attached to the forms vector or to forms that support metadata.
 
-### U+00A0 NBSP in symbols
+### Invisible characters in symbols
 
-The non-breaking space character (U+00A0, NBSP) is rejected as an invalid character in symbols. The `invisible-char?` predicate catches it, producing an `:invalid` token. This prevents invisible-character attacks where NBSP (common in web copy-paste) would create symbols that look identical but are semantically different.
+A set of Unicode control and glyph-modifier characters is rejected inside symbols by `meme-lang.lexlets/invisible-char?`. They'd otherwise let an attacker (or an unlucky copy-paste) construct two symbols that render identically but compare as different values. Meme is stricter than Clojure here — Clojure's reader accepts most of these. The blocked ranges:
+
+- C0 controls (U+0000–U+001F), DEL (U+007F), C1 controls (U+0080–U+009F).
+- NBSP (U+00A0) and soft hyphen (U+00AD).
+- Surrogates (U+D800–U+DFFF).
+- Zero-width joiners and formatting chars: U+200B–U+200F, U+202A–U+202E, U+2060–U+2069.
+- BOM (U+FEFF).
+- Variation selectors VS1–VS16 (U+FE00–U+FE0F) — invisible glyph modifiers.
+
+### Unicode line separators count as line breaks
+
+U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are recognized as line terminators by `meme.tools.parser/build-line-starts`, alongside `\n`, `\r`, and `\r\n`. Without this, error positions after a U+2028/U+2029 would be reported on the preceding line.
+
+### Slash in symbol and keyword tokens
+
+- Bare `/` — valid symbol (division).
+- `ns/name` — valid.
+- `ns//` — valid (the special division-in-namespace case, matching Clojure's `clojure.core//`).
+- Bare `:/` — valid, reads as `(keyword "/")`.
+- Symbols starting with `/` that aren't just `/` (e.g. `//`, `//a`, `/foo`) — rejected at read time. Matches Clojure.
+- Multi-slash `foo/bar/baz`, `:ns/a/b` — accepted. Clojure also accepts these; the first `/` is the ns/name separator and the rest becomes part of the name.
+
+### Char literal `\uNNNN` tail validation
+
+Exactly four hex digits follow `\u`. Any trailing alphanumeric character on a `\uNNNN` token is rejected as an invalid character literal: `\u00410`, `\u0041G`, `\u00g1` all error. A lone `\u` with no hex digits still reads as the char `u` (pre-existing meme behavior retained).
 
 
 ### Scanner: structural vs semantic validation
