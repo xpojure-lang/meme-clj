@@ -15,11 +15,22 @@
             [clojure.java.io :as io]))
 
 (defn input-state
-  "Returns :complete, :incomplete, or :invalid for the given input string."
+  "Returns :complete, :incomplete, or :invalid for the given input string.
+   Uses `stages/run` (parse + read) — completeness checking needs no eval."
   ([s] (input-state s nil))
   ([s opts] (input-state s opts stages/run))
   ([s opts run-fn]
    (repl/input-state s run-fn opts)))
+
+(defn- meme-repl-pipeline
+  "REPL eval pipeline: parse, read, evaluate reader conditionals.
+   Syntax-quote expansion is applied separately via expand-fn by the
+   generic REPL harness."
+  [source opts]
+  (-> {:source source :opts opts}
+      stages/step-parse
+      stages/step-read
+      stages/step-evaluate-reader-conditionals))
 
 (defn start
   "Start the meme REPL.
@@ -31,7 +42,7 @@
   ([opts]
    (when-not (false? (:install-loader? opts)) (loader/install!))
    (let [stages-impl (:stages opts)
-         run-fn (or (:run-fn stages-impl) stages/run)
+         run-fn (or (:run-fn stages-impl) meme-repl-pipeline)
          expand-fn (or (:expand-forms stages-impl) stages/expand-syntax-quotes)
          reader-opts (let [rk (or (:resolve-keyword opts)
                                   (fn [raw]

@@ -263,6 +263,22 @@
              (is (= :step-evaluate-reader-conditionals (:stage data)))
              (is (contains? (set (:missing data)) :forms)))))))
 
+(deftest eval-rc-is-idempotent-on-plain-forms
+  (testing "running the step twice is a no-op (idempotent on already-evaluated forms)"
+    (let [after-first  (stages/step-evaluate-reader-conditionals
+                         (stages/run "#?(:clj 1 :cljs 2)" {:read-cond :preserve}))
+          after-second (stages/step-evaluate-reader-conditionals after-first)]
+      (is (= (:forms after-first) (:forms after-second))))))
+
+;; ---------------------------------------------------------------------------
+;; Pipeline composition — tooling vs. eval paths
+;; ---------------------------------------------------------------------------
+
+(deftest tooling-path-preserves-reader-conditionals
+  (testing "stages/run alone keeps reader conditionals as records when :preserve is set"
+    (let [forms (:forms (stages/run "#?(:clj 1 :cljs 2)" {:read-cond :preserve}))]
+      (is (forms/meme-reader-conditional? (first forms))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Shebang stripping
 ;; ---------------------------------------------------------------------------

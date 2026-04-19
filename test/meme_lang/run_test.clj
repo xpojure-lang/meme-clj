@@ -45,6 +45,25 @@
            (run/run-string "foo()\nbar()" {:eval (fn [form] (if (= 'bar (first form)) :second :first))})))))
 
 ;; ---------------------------------------------------------------------------
+;; Reader-conditional evaluation in eval pipeline
+;; ---------------------------------------------------------------------------
+
+(deftest run-string-evaluates-reader-conditional
+  (testing "#? picks the matching platform branch"
+    (is (= 1 (run/run-string "#?(:clj 1 :cljs 2)")))))
+
+(deftest run-string-reader-conditional-splicing
+  (testing "#?@ splices into call arguments"
+    (is (= [1 2] (run/run-string "vector(#?@(:clj [1 2] :cljs [3]))")))))
+
+(deftest run-string-reader-conditional-in-syntax-quote
+  (testing "` around #? evaluates and returns a symbol (matches Clojure)"
+    ;; `x on JVM evals to 'user-ns/x — a symbol whose name is "x".
+    (let [result (run/run-string "`#?(:clj x :cljs y)")]
+      (is (symbol? result))
+      (is (= "x" (name result))))))
+
+;; ---------------------------------------------------------------------------
 ;; run-file
 ;; ---------------------------------------------------------------------------
 

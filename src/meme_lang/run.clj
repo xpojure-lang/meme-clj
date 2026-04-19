@@ -57,7 +57,8 @@
       (assoc :resolve-symbol default-resolve-symbol))))
 
 (defn- meme-run-fn
-  "The meme pipeline: strip shebang, strip BOM, parse, read, expand."
+  "The meme pipeline: strip shebang, strip BOM, parse, read,
+   evaluate reader conditionals, expand syntax quotes."
   [source opts]
   (let [source (stages/strip-shebang source)
         source (if (and (string? source) (str/starts-with? source "\uFEFF"))
@@ -65,6 +66,7 @@
     (-> {:source source :opts opts}
         stages/step-parse
         stages/step-read
+        stages/step-evaluate-reader-conditionals
         stages/step-expand-syntax-quotes)))
 
 ;; ---------------------------------------------------------------------------
