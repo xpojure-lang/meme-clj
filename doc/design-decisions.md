@@ -258,11 +258,13 @@ behavior to the host platform without depending on its reader.
 
 ## Platform tiers
 
-The codebase is split into three platform tiers:
+The codebase is split into four platform tiers:
 
-- **Generic tools + core translation** (`meme.tools.{parser, lexer, render}`, `meme-lang.{api, grammar, lexlets, parselets, stages, cst-reader, forms, errors, resolve, expander, printer, values, formatter.flat, formatter.canon}`) — portable `.cljc`, runs on JVM, Babashka, and ClojureScript. Pure functions with no eval or I/O dependency.
-- **Runtime** (`meme.tools.{repl, run}`, `meme-lang.{repl, run}`, `meme.{registry, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`.
-- **Test infrastructure** (test-runner, dogfood-test) — `.clj`, JVM only.
+- **Generic tools** (`meme.tools.{parser, lexer, render}`) — portable `.cljc`, runs on JVM, Babashka, and ClojureScript. Language-agnostic library surface: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
+- **Clojure-surface commons** (`meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values}`) — portable `.cljc`. Shared across any Clojure-flavored frontend (meme-lang, implojure-lang, future siblings): lexical conventions, Clojure atom resolution, CST reader, stages, the `Clj*` AST records.
+- **Core translation** (`meme-lang.{api, grammar, lexlets, parselets, form-shape, printer, formatter.flat, formatter.canon}`) — portable `.cljc`. Meme's syntactic identity: grammar spec, scanlet/parselet glue, semantic decomposition, Doc-tree builder, formatters. Pure functions with no eval or I/O dependency.
+- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `meme-lang.{repl, run}`, `implojure-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
+- **Test infrastructure** (test-runner, dogfood-test, vendor-roundtrip-test) — `.clj`, JVM only.
   These use `java.io`, `PushbackReader`, `System/exit`.
 
 This separation is honest about what's portable. The `.clj` extension
@@ -408,7 +410,7 @@ See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint
 
 The registry (`meme.registry`) owns generic infrastructure: a keyword-to-lang-map index, extension dispatch, user-lang registration via EDN, safety guards.  It does *not* own the list of built-in langs.
 
-Earlier the registry imported each built-in's `api` namespace directly (`meme-lang.api`, and at that time a second proof-of-concept lang, `wlj-lang.api`) and called `register-builtin!` on each.  That had two costs:
+Earlier the registry imported each built-in's `api` namespace directly (`meme-lang.api`, and at that time a second peer lang, `implojure-lang.api`) and called `register-builtin!` on each.  That had two costs:
 
 1. A circular dependency.  The registry imported `meme-lang.api`; `meme-lang.api` transitively used `meme-lang.run`; `meme-lang.run` needed the registry back to dispatch by file extension.  The cycle was worked around with `requiring-resolve` calls in `meme-lang.run`, `meme-lang.repl`, `meme.cli`, and `meme.loader` — four invisible runtime dependencies that didn't show up in the static `:require` graph.
 
@@ -440,18 +442,61 @@ User langs continue to go through `register!`, which validates EDN-style config,
 Each stage in `meme.tools.clj.stages` declares its required ctx keys in a public `stage-contracts` map:
 
 ```clojure
-{:step-parse                {:requires #{:source} :produces #{:cst}}
- :step-read                 {:requires #{:cst}    :produces #{:forms}}
- :step-expand-syntax-quotes {:requires #{:forms}  :produces #{:forms}}}
+{:step-parse                        {:requires #{:source} :requires-opts #{:grammar} :produces #{:cst}}
+ :step-read                         {:requires #{:cst}    :produces #{:forms}}
+ :step-evaluate-reader-conditionals {:requires #{:forms}  :produces #{:forms}}
+ :step-expand-syntax-quotes         {:requires #{:forms}  :produces #{:forms}}}
 ```
 
-Stages call `check-contract!` at entry and throw `:meme/pipeline-error` with the missing key(s) and the actual ctx keys present.  Miscomposed pipelines (e.g. calling `step-read` before `step-parse`) surface their mistake at the point of composition instead of raising a deep-inside NPE.
+Stages validate their ctx against the contract at entry (via an internal `check-contract!`) and throw `:meme/pipeline-error` with the missing key(s) and the actual ctx keys present.  Miscomposed pipelines (e.g. calling `step-read` before `step-parse`) surface their mistake at the point of composition instead of raising a deep-inside NPE.
 
 A heavier spec-based validation (PL8 in `PRD.md`) was tried and removed during an earlier refactor.  This replacement is deliberately lighter:
 
 - **Only `:requires` is runtime-enforced.**  `:produces` is documentation — if a stage fails to produce what it claims, the next stage's `:requires` check catches it, so post-condition checks would be redundant.
 - **Presence, not type.**  Type-specific checks stay inline in the stages that need them (e.g. `step-parse` still verifies `(string? source)` after the presence check).  Generalizing to types would re-introduce a schema language without clear payoff.
 - **Data, not macros.**  `stage-contracts` is a plain map.  Custom stages for lang extensions can extend their own contracts in the same shape without adopting a DSL.
+
+## Clojure-surface commons (`meme.tools.clj.*`)
+
+Between the lang-agnostic `meme.tools.{parser, lexer, render}` and the meme-specific `meme-lang.*`, a middle tier `meme.tools.clj.*` carries Clojure-flavored concerns: symbol/keyword lexical conventions, numeric atom resolution, the `Clj*` AST records, CST-to-Clojure-forms lowering, the stages framework, the syntax-quote expander, value serialization, and the run/repl harnesses.
+
+The commons were extracted from `meme-lang.*` once a second Clojure-flavored frontend (`implojure-lang`) proved that none of these concerns are meme-specific. They describe what any frontend targeting Clojure-the-host needs to handle — surface syntax aside. Keeping them under `meme-lang` made the namespace a misnomer: `meme-lang.cst-reader` read CST nodes but emitted plain Clojure, not anything meme-shaped; `meme-lang.resolve` resolved *Clojure* atom text, not meme constructs.
+
+The sibling-lang test is the rubric: if meme and implojure both need the function and neither needs to specialize it, it belongs in `meme.tools.clj.*`. Grammar, parselets, form-shape, and the printer stay in `meme-lang.*` because those are where the two diverge.
+
+The toolkit stays accessible to guest frontends that want the same commons without inheriting meme's surface: a `.mcj` lang (McCarthy's original brackets) or a user's own Clojure frontend requires only a grammar and a handful of parselets.
+
+## `Clj*` AST records named for content, not surface
+
+The records the CST reader emits (`CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional`) wrap Clojure-semantic values — not meme-surface ones. They record *what the form means at the Clojure host level*, whether the caller wrote it in meme or any other frontend.
+
+Earlier these were named `Meme*` (`MemeSyntaxQuote`, etc.). That name was misleading: a `MemeUnquote` inside a .implj file is not meme-specific, it's a Clojure unquote. The sibling-lang extraction made the naming drift obvious — `implojure-lang` had no business importing a `Meme*` record to represent its own unquotes.
+
+Predicates follow: `meme-reader-conditional?` → `clj-reader-conditional?`. The predicate answers "is this a Clojure reader conditional as represented in our AST?", nothing about meme.
+
+## `:meme/*` metadata reserved for toolkit emissions
+
+The internal metadata keys the toolkit attaches (`:meme/leading-trivia`, `:meme/sugar`, `:meme/insertion-order`, `:meme/namespace-prefix`, `:meme/meta-chain`, `:meme/bare-percent`, `:meme/splice`) live in the bare `:meme/` namespace — not `:meme-lang/`.
+
+These keys are emitted by the generic toolkit (`meme.tools.clj.cst-reader`, printer, etc.), not by the meme language per se. A user's `.mcj` lang using the same toolkit would produce the same trivia and sugar metadata. The keys describe toolkit artefacts, so their namespace matches the toolkit, not any one frontend.
+
+There's a brief history here (see CHANGELOG): bare `:meme/*` → namespaced `:meme-lang/*` in 3.0.0 to carve out `:meme/` for generic tooling; then back to `:meme/*` post-5.0.0 once the keys were recognised as toolkit-emitted rather than lang-emitted. The direction of travel was driven each time by the same question — *who emits this?* — and the second move corrected the first.
+
+## `implojure-lang` is a peer lang, not a meme mode
+
+`implojure-lang` ships alongside `meme-lang` as a separate registered frontend. Both languages share the Clojure-surface commons (`meme.tools.clj.*`) and the generic tools (`meme.tools.{parser,lexer,render}`), but each owns its own grammar, parselets, form-shape registry, and printer.
+
+A mode flag (`meme format --lang implojure`) would have been cheaper in files — but wrong in design. The languages have different scanners (implojure has infix word operators like `mod`, `and`, `not`), different parselets (the `|name|>` named-pipe form has no meme equivalent), different form-shape registries (implojure decomposes `let*`-via-pipe differently), and different printers. A mode flag would have been a euphemism for two languages in one file.
+
+The peer structure makes the Clojure-surface commons load-bearing: anything shared between the two has to live there and be reusable. If only one lang used it, it wasn't a commons candidate. Keeping the langs symmetrical (`meme-lang.api`/`run`/`repl` ↔ `implojure-lang.api`/`run`/`repl`) codifies the contract: a new Clojure-flavored frontend is a grammar + a parselets file + a form-shape registry + a printer, plus a 20-line shim trio.
+
+## CAS retry for `register!` atomicity
+
+`meme.registry/register!` validates a new user-lang registration against the current registry state, then commits via `compare-and-set!` in a retry loop. Earlier shapes did validation inside the `swap!` updater; that pattern conflated two concerns: the validation *decision* (which requires reading the snapshot) and the *atomic commit* (which the swap provides).
+
+The split matters under concurrency. Two threads racing to register the same extension had to both fail, not one succeed silently: the CAS loop revalidates on each snapshot, so the second thread sees the first commit and rejects. Throwing from inside `swap!` also had a quieter cost: `swap!` is documented to retry on CAS failure, which meant validation code was implicitly idempotent-or-die. The retry-at-call-site shape makes the atomicity guarantee the registry provides honest rather than accidental.
+
+EDN resolution (`resolve-edn`, which reads the classpath for the lang's grammar) runs *once* outside the loop — it's pure and expensive, and the loop body must stay fast.
 
 ## Lang backend
 
@@ -511,7 +556,7 @@ Leading and trailing comments (before/after top-level forms) are always preserve
 
 ### Invisible characters in symbols
 
-A set of Unicode control and glyph-modifier characters is rejected inside symbols by `meme-lang.lexlets/invisible-char?`. They'd otherwise let an attacker (or an unlucky copy-paste) construct two symbols that render identically but compare as different values. Meme is stricter than Clojure here — Clojure's reader accepts most of these. The blocked ranges:
+A set of Unicode control and glyph-modifier characters is rejected inside symbols by `meme.tools.clj.lex/invisible-char?`. They'd otherwise let an attacker (or an unlucky copy-paste) construct two symbols that render identically but compare as different values. Meme is stricter than Clojure here — Clojure's reader accepts most of these. The blocked ranges:
 
 - C0 controls (U+0000–U+001F), DEL (U+007F), C1 controls (U+0080–U+009F).
 - NBSP (U+00A0) and soft hyphen (U+00AD).
@@ -540,7 +585,7 @@ Exactly four hex digits follow `\u`. Any trailing alphanumeric character on a `\
 
 ### Scanner: structural vs semantic validation
 
-The scanner layer (lexical scanlets in `meme-lang.lexlets`) is a structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. Semantic validation is split between the resolver (`meme.tools.clj.resolve`) and the CST reader (`meme.tools.clj.cst-reader`):
+The scanner layer (lexical scanlets in `meme.tools.clj.lex`, wrapped by `meme-lang.lexlets` for meme's grammar) is a structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. Semantic validation is split between the resolver (`meme.tools.clj.resolve`) and the CST reader (`meme.tools.clj.cst-reader`):
 
 - **Reserved dispatch chars** (`#<`, `#=`, `#%`): The scanner classifies `#=foo` as `:tagged-literal` (structurally, it IS `#` + symbol). Whether `=` is a reserved dispatch character is a semantic rule enforced downstream.
 - **Unterminated strings/regex**: The scanner returns the EOF position without signaling error, but the resolver (`resolve-string`, `resolve-regex`) detects the missing closing delimiter and throws with `:incomplete true` — enabling the REPL to prompt for continuation.
@@ -564,7 +609,7 @@ The infrastructure exists: the unified Pratt parser takes a grammar spec, trivia
 
 ### Completed: Data-driven scanner (unified scanlet-parselet architecture)
 
-The scanner is now fully data-driven. The unified scanlet-parselet Pratt parser (`meme.tools.parser`) defines scanning as part of the grammar spec. Character dispatch, trivia classification, and structural parsing are all configured via the grammar map. Language-specific consume functions live in `meme-lang.lexlets`, wrapped into scanlets by the generic builders in `meme.tools.lexer`. This replaces the previous separate tokenizer that had Clojure-family knowledge baked in.
+The scanner is now fully data-driven. The unified scanlet-parselet Pratt parser (`meme.tools.parser`) defines scanning as part of the grammar spec. Character dispatch, trivia classification, and structural parsing are all configured via the grammar map. Clojure-surface consume functions live in `meme.tools.clj.lex` (shared across any Clojure-flavored frontend) and are wrapped into scanlets by the generic builders in `meme.tools.lexer`; `meme-lang.lexlets` is a thin shim that forwards to `meme.tools.clj.lex`. This replaces the previous separate tokenizer that had Clojure-family knowledge baked in.
 
 The grammar spec shape:
 ```clojure

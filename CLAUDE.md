@@ -77,7 +77,7 @@ The codebase is organized by *kind* of code, with shared infrastructure that bot
 - **`meme.registry`, `meme.loader`** — Shared runtime infrastructure, peer to `meme.tools.*`. Both langs and the CLI depend on them: langs push themselves into the registry at load time and rely on the loader for `require`/`load-file`; the CLI dispatches through the registry.
 - **`meme.cli`** — App tier. Only consumer-facing code lives here.
 
-This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli`**, and **`meme.tools.*` must not require anything from `meme-lang.*` or `meme.*`**.
+This is a "kinds + infrastructure" layout, not a strict top-down tiered architecture. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional — the infrastructure is shared. The real layering rule is: **`meme-lang.*` must not require `meme.cli`**, and **`meme.tools.{parser,lexer,render}` plus `meme.tools.clj.*` must not require anything from `meme-lang.*` or `meme.*`** — with one carve-out: `meme.tools.clj.run` and `meme.tools.clj.repl` depend on `meme.loader` so embedders get `.meme` `require`/`load-file` for free. That coupling is intentional and narrow (one `install!` call each); no other `meme.tools.*` ns reaches into `meme.*`.
 
 Composable stages (`meme.tools.clj.stages`), each a `ctx → ctx` function. Tooling paths compose 1–2; eval paths (`run-string`, `run-file`, REPL) compose 1–4. `step-parse` requires `:grammar` in opts (no implicit default) — each lang passes its own grammar explicitly:
 1. **step-parse** (`meme.tools.parser` driven by a lang-supplied grammar) — Unified scanlet-parselet Pratt parser. Reads directly from source string. Scanning (character dispatch, trivia) and parsing (structure) are both defined in the grammar spec as scanlets and parselets. Produces a lossless CST preserving every token.
@@ -124,7 +124,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme.tools.clj.resolve` (.cljc) — Native atom resolution: raw token text → Clojure values. Numbers, strings, chars, regex, keywords, tagged literals all resolved natively (no `read-string` delegation). Handles JVM/CLJS asymmetries. Portable.
 - `meme.tools.clj.expander` (.cljc) — Syntax-quote expansion: `CljSyntaxQuote` AST nodes → plain Clojure forms (`seq`/`concat`/`list`). Auto-gensym (`foo#`). Called by runtime paths before eval. Also unwraps `CljRaw`. Portable.
 - `meme.tools.clj.cst-reader` (.cljc) — CST → Clojure forms: walks CST nodes (`:atom`, `:call`, `:list`, `:vector`, `:map`, `:set`, sugar forms, `:meta`, `:anon-fn`, `:namespaced-map`, `:reader-cond`, `:tagged`, `:error`, etc.) and produces forms with preserved metadata. Portable.
-- `meme.tools.clj.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-evaluate-reader-conditionals`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. `run` composes parse+read (tooling pipeline). `stage-contracts` declares required ctx keys and opts keys; `check-contract!` throws `:meme/pipeline-error` on miscomposition. `step-parse` requires `:grammar` in opts (no implicit default). Portable.
+- `meme.tools.clj.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-evaluate-reader-conditionals`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. `run` composes parse+read (tooling pipeline). `stage-contracts` (public data) declares required ctx keys and opts keys per stage; each stage validates its ctx against the contract at entry and throws `:meme/pipeline-error` on miscomposition via an internal `check-contract!`. `step-parse` requires `:grammar` in opts (no implicit default). Portable.
 - `meme.tools.clj.values` (.cljc) — Value → string serialization for the printer: atomic Clojure values (strings, numbers, chars, regex, tagged literals). Portable.
 - `meme.tools.clj.run` (.clj) — Clojure-surface eval pipeline: source → shebang/BOM strip → stages → eval. Grammar-agnostic (caller passes `:grammar`). `default-resolve-symbol` matches Clojure's `SyntaxQuoteReader`. Installs `meme.loader` unless `:install-loader? false`. JVM/Babashka only.
 - `meme.tools.clj.repl` (.clj) — Clojure-surface REPL harness: `input-state` (complete/incomplete/invalid detection), `start`. Default `::kw` resolver via `*ns*` aliases. Grammar-agnostic. JVM/Babashka only.
@@ -221,6 +221,11 @@ Tests are split across `test/meme_lang/` (language-specific) and `test/meme/` (i
 | `meme/generative_test` | Property-based tests with test.check. Print→read roundtrip on generated forms. JVM only. |
 | `meme/generative_cljs_test` | Cross-platform property-based tests. |
 | `meme/vendor_roundtrip_test` | Vendor roundtrip: real-world Clojure libraries (git submodules in `test/vendor/`) roundtripped per-form through clj→meme→clj. JVM only. |
+| `meme/tools/parser_test` | Generic Pratt parser engine: grammar-driven scanning, precedence, depth guards. |
+| `meme/tools/lexer_test` | Scanlet builders (wrappers that turn consume-fns into scanlet nodes). |
+| `meme/tools/run_test` | Generic run pipeline (grammar-agnostic): source → stages → eval, error paths, custom eval-fn halt semantics. |
+| `meme/tools/clj/cst_reader_test` | CST → Clojure forms: node types (atom/call/list/vector/map/set/meta/anon-fn/namespaced-map/reader-cond/tagged), metadata propagation. |
+| `implojure_lang/grammar_test` | Implojure grammar: operator precedence, associativity, `|name|>` named pipeline, `mod` word op, meme interop, word-boundary guards. |
 
 ## Development tools
 
@@ -234,7 +239,7 @@ clojure-lsp (with clj-kondo) provides useful static analysis for development, te
 - **Call hierarchy**: `incomingCalls`/`outgoingCalls` map the call graph between namespaces.
 - **Diagnostics (clj-kondo)**: Catches unused requires, unresolved symbols, unused bindings. Known noise to ignore:
   - `generative_test.clj` "unresolved symbol" errors — macro-generated `deftest` names from `defspec`.
-  - `.cljc` files with `#?` reader conditionals — clj-kondo analyzes one platform branch and flags requires/vars used only in the other branch as unused. Affects `resolve.cljc`, `repl_test.cljc`, `errors_test.cljc`, `dispatch_test.cljc`, `scan_test.cljc`.
+  - `.cljc` files with `#?` reader conditionals — clj-kondo analyzes one platform branch and flags requires/vars used only in the other branch as unused. Affects `meme/tools/clj/resolve.cljc`, `meme_lang/repl_test.cljc`, `meme/tools/clj/errors_test.cljc`, `meme/regression/errors_test.cljc`, `meme_lang/reader/dispatch_test.cljc`, `meme/regression/scan_test.cljc`.
   - `repl.clj` "unused public var `start`" / `test_runner.clj` "unused public var `run-all-meme-tests`" — entry points called externally (bb.edn, CLI), not from Clojure source.
 
 clojure-lsp is configured via the `.claude-plugin/` directory for Claude Code integration. Requires `clojure-lsp` on PATH (`brew install clojure-lsp/brew/clojure-lsp`).

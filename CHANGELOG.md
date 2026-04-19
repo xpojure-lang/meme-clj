@@ -34,6 +34,8 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
 
+- **Loader denylist extended** — `denied-prefixes` in `meme.loader` now covers `meme/`, `meme_lang/`, `implojure_lang/`, `cognitect/`, `clj_kondo/`, `clj-kondo/` (was: just core Clojure/Java/JS/nREPL/CIDER prefixes). Prevents the loader from intercepting its own infrastructure namespaces or the analyzer toolchain, closing a potential infinite-recursion path and keeping `.meme` resources on the classpath from shadowing core tooling.
+
 ### Fixed
 
 - **Duplicate-key detection across notations.** `{0xFF 1 255 2}` and `{\u0041 1 \A 2}` silently accepted two keys that resolve to the same value because `CljRaw` records don't `=` their unwrapped equivalents. The check now unwraps `CljRaw` before `frequencies`; same for sets.
@@ -54,7 +56,7 @@ Reader-conditional handling is now a pipeline stage instead of a reader flag. `m
 
   **Migration:**
   - If you used `{:read-cond :preserve}`: remove it. Records are the default now.
-  - If you relied on the old `:eval` behavior (platform materialization at read time): compose `meme-lang.stages/step-evaluate-reader-conditionals` after `step-read`, or use `run-string`/`run-file`/REPL — all of which do so automatically.
+  - If you relied on the old `:eval` behavior (platform materialization at read time): compose `meme-lang.stages/step-evaluate-reader-conditionals` after `step-read`, or use `run-string`/`run-file`/REPL — all of which do so automatically. *(Post-5.0.0 note: `meme-lang.stages` was subsequently moved to `meme.tools.clj.stages`. See Unreleased ›Breaking Changes› namespace moves.)*
 
 - **`meme->clj` is now lossless by default.** Previously it evaluated `#?` for the current platform, silently dropping off-platform branches. Now both branches are preserved in the emitted Clojure text. Use `run-string` for eval-time behavior.
 
@@ -199,7 +201,7 @@ A reorganization release. No breaking changes to `.meme` syntax or runtime behav
 
 ### Changed
 - **Architecture**: three-layer reorganization — `meme.tools.*` (generic parser/render), `meme-lang.*` (meme language), `meme.*` (CLI/registry/loader). The Pratt parser is fully data-driven via grammar spec.
-- **Metadata namespace hygiene**: all internal metadata keys moved from `:meme/*` to `:meme/*`, with descriptive names. `:meme/ws` → `:meme/leading-trivia`, `:meme/sugar` → `:meme/sugar`, `:meme/order` → `:meme/insertion-order`, `:meme/ns` → `:meme/namespace-prefix`, `:meme/meta-chain` → `:meme/meta-chain`, `:meme/bare-percent` → `:meme/bare-percent`, `:meme/splice` → `:meme/splice`. This separates meme-lang metadata from the generic `meme.tools` namespace, preventing collision with both user metadata and future languages built on `meme.tools.*`.
+- **Metadata namespace hygiene**: all internal metadata keys moved from bare `:meme/*` to `:meme-lang/*`, with descriptive names. `:meme/ws` → `:meme-lang/leading-trivia`, `:meme/sugar` → `:meme-lang/sugar`, `:meme/order` → `:meme-lang/insertion-order`, `:meme/ns` → `:meme-lang/namespace-prefix`, `:meme/meta-chain` → `:meme-lang/meta-chain`, `:meme/bare-percent` → `:meme-lang/bare-percent`, `:meme/splice` → `:meme-lang/splice`. This separated meme-lang metadata from the generic `meme.tools` namespace, preventing collision with both user metadata and future languages built on `meme.tools.*`. *(The `:meme-lang/*` keys were later renamed back to `:meme/*` in the post-5.0.0 work once the keys were recognised as toolkit-emitted rather than lang-emitted — see Unreleased.)*
 - **`register!` conflict check is atomic**: extension validation moved inside `swap!` callback, preventing TOCTOU race on concurrent registrations.
 - **CLI reads file once**: `process-files` reads source via `slurp` once and passes content to transform, eliminating TOCTOU between read and write.
 - **`meme-file?` and `swap-ext`** consult the registry for all registered extensions, not just hard-coded `.meme`.
@@ -218,7 +220,7 @@ A reorganization release. No breaking changes to `.meme` syntax or runtime behav
 - **Scar tissue triage**: ~15 comment-only regression blocks in `reader_test.cljc` converted to active tests or documented design decisions. Two stale comments corrected (duplicate keys and `%0` ARE rejected by the current pipeline).
 
 ### Removed
-- **All `:meme/*` internal metadata keys**: replaced by `:meme/*` namespaced equivalents with descriptive names. The `:meme/` namespace is now reserved for generic tooling.
+- **All bare `:meme/*` short-form internal metadata keys**: replaced by `:meme-lang/*` namespaced equivalents with descriptive names. The bare `:meme/` namespace was freed for generic tooling at this release. *(See Unreleased — the keys were later re-homed at `:meme/*` once they were recognised as toolkit-emitted vocabulary.)*
 
 ## [1.0.0] — 2026-04-01
 

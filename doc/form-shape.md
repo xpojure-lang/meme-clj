@@ -94,13 +94,13 @@ Only these two patterns are inferred because they're unambiguous — narrower ru
                    {:width 20
                     :form-shape (fs/with-structural-fallback fs/registry)})
 ;=> "my-defn( foo [x]
-;     body
-;   )"
+;  body
+;)"
 ```
 
 ## The style map
 
-A style opines on layout over *slot names*, not form names. The canonical style (`meme-lang.formatter.canon/style`) is minimal:
+A style opines on layout over *slot names*, not form names. The canonical style ships in `meme-lang.formatter.canon/style` and is minimal:
 
 ```clojure
 {:head-line-slots
@@ -110,11 +110,11 @@ A style opines on layout over *slot names*, not form names. The canonical style 
  #{:name}}
 ```
 
-Keys:
+Keys the formatter understands:
 
 - **`:head-line-slots`** — slot names that stay on the head line with the call head when the form breaks. Other slots go into the indented body.
 - **`:force-open-space-for`** — slot names whose presence triggers `head( ` (space after open paren) even on flat output. For meme, this is the classic "`defn(` becomes `defn( `" rule; any form carrying a `:name` slot gets the treatment.
-- **`:slot-renderers`** *(optional)* — a map `{slot-name → (fn [value ctx] → Doc)}` that overrides printer defaults. Useful when a project wants a slot rendered differently, or a new custom slot needs display logic.
+- **`:slot-renderers`** *(optional; not in the shipped `canon/style`)* — a map `{slot-name → (fn [value ctx] → Doc)}` supplied by callers to override printer defaults. Useful when a project wants a slot rendered differently, or a new custom slot needs display logic. Pass it via the formatter opts or merge it into a style copy.
 
 ### Slot renderers and defaults
 
@@ -125,7 +125,7 @@ The printer ships defaults for structural slots whose values aren't plain forms:
 | `:bindings` | Columnar `[k v\n k v]` layout via `binding-vector-doc` |
 | `:clause` | `[test value]` rendered as `test value` joined by a space |
 
-Overrides compose over defaults via map merge — a style may replace one renderer without affecting the others. See `meme-lang.printer/default-slot-renderers` for the built-ins.
+A style's `:slot-renderers` is layered **on top of** `meme-lang.printer/default-slot-renderers` via map merge, not replacing it wholesale — a style overriding only `:clause` still inherits the `:bindings` default. See the defaults map for the full built-in list.
 
 ## Built-in decomposers
 
