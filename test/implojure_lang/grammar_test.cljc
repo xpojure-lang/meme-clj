@@ -1,13 +1,13 @@
-(ns infj-lang.grammar-test
-  "Tests for infj-lang: infix operators, precedence, grouping, word-
+(ns implojure-lang.grammar-test
+  "Tests for implojure-lang: infix operators, precedence, grouping, word-
    operator boundaries, and interaction with meme syntax."
   (:require [clojure.test :refer [deftest is testing]]
-            [infj-lang.api :as infj]))
+            [implojure-lang.api :as implojure]))
 
-(defn- parse-one [src] (first (infj/infj->forms src)))
+(defn- parse-one [src] (first (implojure/implojure->forms src)))
 
 ;; ---------------------------------------------------------------------------
-;; Atoms still work (everything meme parses, infj parses)
+;; Atoms still work (everything meme parses, implojure parses)
 ;; ---------------------------------------------------------------------------
 
 (deftest atoms-pass-through
@@ -76,8 +76,8 @@
 
 (deftest pipe-non-match-falls-through-to-symbol
   (testing "`|foo|` without a closing `|>` reads as a normal Clojure symbol"
-    (is (= '[x |foo|] (infj/infj->forms "x |foo|")))
-    (is (= '[|foo|]   (infj/infj->forms "|foo|")))))
+    (is (= '[x |foo|] (implojure/implojure->forms "x |foo|")))
+    (is (= '[|foo|]   (implojure/implojure->forms "|foo|")))))
 
 (deftest pipe-slot-accepts-map-destructure
   (is (= '(let [{:keys [a b]} m] (+ a b))
@@ -99,7 +99,7 @@
 
 (deftest pipe-slot-rejects-stray-pipe-at-depth-zero
   (testing "`x |foo| bar` — no `|>` ahead at depth 0, falls through to symbols"
-    (is (= '[x |foo| bar] (infj/infj->forms "x |foo| bar")))))
+    (is (= '[x |foo| bar] (implojure/implojure->forms "x |foo| bar")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Nested pipelines — inner chain is bounded inside maps/vectors/calls
@@ -168,6 +168,37 @@
     (is (= '(+ note 1) (parse-one "note + 1")))
     (is (= '(+ modern 1) (parse-one "modern + 1")))))
 
+;; ---------------------------------------------------------------------------
+;; Operator-as-call-head  (meme convention: `op(args)` is always a call)
+;; ---------------------------------------------------------------------------
+
+(deftest operator-adjacent-paren-is-a-call-not-infix
+  (testing "single-char ops followed immediately by `(` read as call heads"
+    (is (= '(+ x 1)  (parse-one "+(x 1)")))
+    (is (= '(- x 1)  (parse-one "-(x 1)")))
+    (is (= '(* x 1)  (parse-one "*(x 1)")))
+    (is (= '(/ x 1)  (parse-one "/(x 1)")))
+    (is (= '(= x 1)  (parse-one "=(x 1)"))))
+  (testing "compound comparison ops followed by `(` read as call heads"
+    (is (= '(< x 1)  (parse-one "<(x 1)")))
+    (is (= '(> x 1)  (parse-one ">(x 1)")))
+    (is (= '(<= x 1) (parse-one "<=(x 1)")))
+    (is (= '(>= x 1) (parse-one ">=(x 1)"))))
+  (testing "word operators followed by `(` read as call heads"
+    (is (= '(and x y)  (parse-one "and(x y)")))
+    (is (= '(or x y)   (parse-one "or(x y)")))
+    (is (= '(mod x 3)  (parse-one "mod(x 3)")))
+    (is (= '(not= x y) (parse-one "not=(x y)")))))
+
+(deftest operator-after-form-does-not-latch
+  (testing "`foo +(x 1)` is two forms — infix `+` does not latch onto `foo` (meme compat)"
+    (is (= '[foo (+ x 1)] (implojure/implojure->forms "foo +(x 1)")))
+    (is (= '[foo (+ x 1)] (implojure/implojure->forms "foo\n+(x 1)"))))
+  (testing "inside a map, `:k +(x 1)` reads `:k` and `(+ x 1)` as key/value"
+    (is (= {:k '(+ x 1)} (parse-one "{:k +(x 1)}"))))
+  (testing "inside a vector, `+(x 1)` after another element reads as a call"
+    (is (= [1 '(+ x 1) 2] (parse-one "[1 +(x 1) 2]")))))
+
 (deftest bare-word-operator-is-still-a-symbol
   (testing "`and` / `or` alone at top level read as symbols"
     (is (= 'and (parse-one "and")))
@@ -220,16 +251,16 @@
 
 (deftest multiple-top-level-forms
   (is (= '[(def x 10) (* x 2)]
-         (infj/infj->forms "def(x 10)\nx * 2"))))
+         (implojure/implojure->forms "def(x 10)\nx * 2"))))
 
 ;; ---------------------------------------------------------------------------
-;; infj->clj
+;; implojure->clj
 ;; ---------------------------------------------------------------------------
 
 (deftest to-clj-produces-clojure-syntax
-  (is (= "(+ 1 2)" (infj/infj->clj "1 + 2")))
-  (is (= "(+ (f 1) (g 2))" (infj/infj->clj "f(1) + g(2)")))
-  (is (= "(and x y)" (infj/infj->clj "x and y"))))
+  (is (= "(+ 1 2)" (implojure/implojure->clj "1 + 2")))
+  (is (= "(+ (f 1) (g 2))" (implojure/implojure->clj "f(1) + g(2)")))
+  (is (= "(and x y)" (implojure/implojure->clj "x and y"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry dispatch
@@ -237,12 +268,12 @@
 
 #?(:clj
    (deftest lang-registered
-     (testing ":infj is registered and .infj extension resolves to it"
+     (testing ":implojure is registered and .implj extension resolves to it"
        (let [reg    (requiring-resolve 'meme.registry/resolve-lang)
              by-ext (requiring-resolve 'meme.registry/resolve-by-extension)]
-         (is (some? (reg :infj)))
-         (let [[lang-kw lang-map] (by-ext ".infj")]
-           (is (= :infj lang-kw))
+         (is (some? (reg :implojure)))
+         (let [[lang-kw lang-map] (by-ext ".implj")]
+           (is (= :implojure lang-kw))
            (is (some? (:format lang-map))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -251,7 +282,7 @@
 
 #?(:clj
    (deftest run-string-evaluates-infix
-     (let [run-str (requiring-resolve 'infj-lang.run/run-string)]
+     (let [run-str (requiring-resolve 'implojure-lang.run/run-string)]
        (is (= 3 (run-str "1 + 2")))
        (is (= 20 (run-str "def(x 10) x * 2")))
        (is (= :yes (run-str "if(1 < 2 :yes :no)")))
@@ -260,7 +291,7 @@
 
 #?(:clj
    (deftest run-string-evaluates-named-pipeline
-     (let [run-str (requiring-resolve 'infj-lang.run/run-string)]
+     (let [run-str (requiring-resolve 'implojure-lang.run/run-string)]
        (testing "single-stage pipeline"
          (is (= 11 (run-str "def(x 10) x |n|> n + 1"))))
        (testing "chained pipeline with same name"

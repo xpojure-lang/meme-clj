@@ -1,7 +1,7 @@
-(ns infj-lang.grammar
-  "Infj-lang grammar spec — infix meme.
+(ns implojure-lang.grammar
+  "Implojure-lang grammar spec — infix meme.
 
-   Infj is meme (M-expressions) plus a fixed set of conventional infix
+   Implojure is meme (M-expressions) plus a fixed set of conventional infix
    operators. Infix parselets emit `:call` CST nodes whose head is a
    synthetic symbol atom, so every module downstream of the parser
    (cst-reader, printer, formatter, stages, run, repl) reuses meme's
@@ -100,6 +100,45 @@
              (= word (subs src pos (+ pos word-len)))
              (or (>= (+ pos word-len) len)
                  (not (lex/symbol-char? (.charAt ^String src (+ pos word-len))))))))))
+
+;; ---------------------------------------------------------------------------
+;; Not-adjacent-call predicates
+;;
+;; Meme's convention is `name(args)` is a call, regardless of what
+;; `name` is. We preserve that here so that `+(1 2)`, `<=(1 2)`,
+;; `and(x y)`, and `not=(x y)` all read as calls — the operator is
+;; just the head symbol, not an infix. Each infix led gates on a
+;; predicate that rejects it when an open-paren follows the operator
+;; with no trivia between.
+;; ---------------------------------------------------------------------------
+
+(defn- not-adjacent-call?
+  "Factory: returns a :when that rejects infix when `(` appears `offset`
+   chars past cursor. Use 1 for single-char ops like +, -, *, /."
+  [offset]
+  (fn [engine]
+    (not= (pratt/peek-char engine offset) \()))
+
+(defn- compare-led-when
+  "Gate for `<` / `>` leds. At cursor the operator's first char has
+   not yet been consumed. Reject when the operator would be `<(` /
+   `>(` or `<=(` / `>=(` — all four are call-head forms, not infix."
+  [engine]
+  (case (pratt/peek-char engine 1)
+    \= (not= (pratt/peek-char engine 2) \()
+    \( false
+    true))
+
+(defn- word-op-when
+  "Compose word-boundary matching with the not-adjacent-call guard.
+   Makes `and(x)` / `or(x)` / `mod(x)` / `not=(x y)` read as calls,
+   not as infix operators with bogus RHS."
+  [word]
+  (let [word-len (count word)
+        matcher  (word-at-cursor? word)]
+    (fn [engine]
+      (and (matcher engine)
+           (not= (pratt/peek-char engine word-len) \()))))
 
 ;; ---------------------------------------------------------------------------
 ;; Named-pipeline operator `|name|>`
@@ -219,9 +258,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- nud-group-or-empty
-  "Nud parselet for `(` in infj: `()` is the empty list, `(expr)` is
+  "Nud parselet for `(` in implojure: `()` is the empty list, `(expr)` is
    grouping (returns expr), and `(a b)` is an error. Meme's nud for
-   `(` rejects any non-empty bare parens; infj carves out single-
+   `(` rejects any non-empty bare parens; implojure carves out single-
    expression grouping so `(1 + 2) * 3` parses intuitively."
   [engine open-tok]
   (pratt/skip-trivia! engine)
@@ -255,7 +294,7 @@
   80)
 
 (def grammar
-  "Infj grammar: meme's grammar with extra :led entries for infix
+  "Implojure grammar: meme's grammar with extra :led entries for infix
    operators, `(` overridden in nud position to mean grouping, reader-
    sugar prefix operators bumped to bp 80, and a `not` nud-pred
    prepended ahead of meme's symbol-start predicate."
@@ -275,25 +314,26 @@
                 (into [[not-nud-pred not-nud-scanlet]] preds)))
       (assoc :led
              (into (:led meme-grammar/grammar)
-                   [{:char \+ :bp 60 :open-type :plus-op  :fn (led-infix-call "+" 60 0)}
-                    {:char \- :bp 60 :open-type :minus-op :fn (led-infix-call "-" 60 0)}
-                    {:char \* :bp 70 :open-type :star-op  :fn (led-infix-call "*" 70 0)}
-                    {:char \/ :bp 70 :open-type :slash-op :fn (led-infix-call "/" 70 0)}
-                    {:char \= :bp 40 :open-type :eq-op    :fn (led-infix-call "=" 40 0)}
-                    {:char \< :bp 50 :open-type :lt-op    :fn (led-compare-or-eq "<" "<=" 50)}
-                    {:char \> :bp 50 :open-type :gt-op    :fn (led-compare-or-eq ">" ">=" 50)}
-                    {:char \a :bp 35 :open-type :and-op
-                     :when (word-at-cursor? "and")
-                     :fn   (led-infix-call "and" 35 2)}
-                    {:char \o :bp 30 :open-type :or-op
-                     :when (word-at-cursor? "or")
-                     :fn   (led-infix-call "or" 30 1)}
-                    {:char \n :bp 40 :open-type :not=-op
-                     :when (word-at-cursor? "not=")
-                     :fn   (led-infix-call "not=" 40 3)}
-                    {:char \m :bp 70 :open-type :mod-op
-                     :when (word-at-cursor? "mod")
-                     :fn   (led-infix-call "mod" 70 2)}
-                    {:char \| :bp 20 :open-type :pipe-op
-                     :when pipe-op-at-cursor?
-                     :fn   (led-as-pipe 20)}]))))
+                   (let [simple-gate (not-adjacent-call? 1)]
+                     [{:char \+ :bp 60 :open-type :plus-op  :when simple-gate :fn (led-infix-call "+" 60 0)}
+                      {:char \- :bp 60 :open-type :minus-op :when simple-gate :fn (led-infix-call "-" 60 0)}
+                      {:char \* :bp 70 :open-type :star-op  :when simple-gate :fn (led-infix-call "*" 70 0)}
+                      {:char \/ :bp 70 :open-type :slash-op :when simple-gate :fn (led-infix-call "/" 70 0)}
+                      {:char \= :bp 40 :open-type :eq-op    :when simple-gate :fn (led-infix-call "=" 40 0)}
+                      {:char \< :bp 50 :open-type :lt-op    :when compare-led-when :fn (led-compare-or-eq "<" "<=" 50)}
+                      {:char \> :bp 50 :open-type :gt-op    :when compare-led-when :fn (led-compare-or-eq ">" ">=" 50)}
+                      {:char \a :bp 35 :open-type :and-op
+                       :when (word-op-when "and")
+                       :fn   (led-infix-call "and" 35 2)}
+                      {:char \o :bp 30 :open-type :or-op
+                       :when (word-op-when "or")
+                       :fn   (led-infix-call "or" 30 1)}
+                      {:char \n :bp 40 :open-type :not=-op
+                       :when (word-op-when "not=")
+                       :fn   (led-infix-call "not=" 40 3)}
+                      {:char \m :bp 70 :open-type :mod-op
+                       :when (word-op-when "mod")
+                       :fn   (led-infix-call "mod" 70 2)}
+                      {:char \| :bp 20 :open-type :pipe-op
+                       :when pipe-op-at-cursor?
+                       :fn   (led-as-pipe 20)}])))))
