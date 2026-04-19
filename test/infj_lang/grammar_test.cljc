@@ -79,6 +79,46 @@
     (is (= '[x |foo|] (infj/infj->forms "x |foo|")))
     (is (= '[|foo|]   (infj/infj->forms "|foo|")))))
 
+(deftest pipe-slot-accepts-map-destructure
+  (is (= '(let [{:keys [a b]} m] (+ a b))
+         (parse-one "m |{:keys [a b]}|> +(a b)"))))
+
+(deftest pipe-slot-accepts-vector-destructure
+  (is (= '(let [[x y] pair] (+ x y))
+         (parse-one "pair |[x y]|> +(x y)"))))
+
+(deftest pipe-slot-accepts-mixed-chain
+  (testing "a single chain can mix symbol slots and destructure slots"
+    (is (= '(let [n x {:keys [a b]} (f n)] (+ a b))
+           (parse-one "x |n|> f(n) |{:keys [a b]}|> +(a b)")))))
+
+(deftest pipe-slot-handles-destructure-with-nested-brackets
+  (testing "slot balance tracking lets nested `[...]` inside `{...}` work"
+    (is (= '(let [{:keys [a b c]} m] (+ a b c))
+           (parse-one "m |{:keys [a b c]}|> +(a b c)")))))
+
+(deftest pipe-slot-rejects-stray-pipe-at-depth-zero
+  (testing "`x |foo| bar` — no `|>` ahead at depth 0, falls through to symbols"
+    (is (= '[x |foo| bar] (infj/infj->forms "x |foo| bar")))))
+
+;; ---------------------------------------------------------------------------
+;; Nested pipelines — inner chain is bounded inside maps/vectors/calls
+;; ---------------------------------------------------------------------------
+
+(deftest nested-pipeline-inside-map-value
+  (testing "inner pipe chain inside a map value flattens independently"
+    (is (= '(let [x (source)
+                  {:keys [simple complex other]}
+                  {:simple (f x)
+                   :complex (let [y x z (parse y) w (validate z)] (enrich w))
+                   :other   (g x)}]
+              (combine simple complex other))
+           (parse-one
+             "source() |x|> {:simple f(x)
+                             :complex x |y|> parse(y) |z|> validate(z) |w|> enrich(w)
+                             :other g(x)}
+              |{:keys [simple complex other]}|> combine(simple complex other)")))))
+
 ;; ---------------------------------------------------------------------------
 ;; Precedence
 ;; ---------------------------------------------------------------------------

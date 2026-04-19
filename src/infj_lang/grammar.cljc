@@ -14,8 +14,12 @@
      =, not=       bp 40
      and           bp 35
      or            bp 30
-     |name|>       bp 20   — named pipeline: lowers chains to a single flat
-                              `(let [n x, n e1, …] final-e)`
+     |slot|>       bp 20   — named pipeline. The slot is any tight meme
+                              expression (bp 100) — a symbol (`|n|>`), a
+                              map destructure (`|{:keys [a b]}|>`), or a
+                              vector destructure (`|[x y]|>`). Chains
+                              collapse into a single flat
+                              `(let [slot₁ x, slot₂ e₁, …] final-e)`.
      not           nud prefix, parses operand at bp 35
 
    All binary operators are left-associative. Word operators (`and`,
@@ -101,25 +105,36 @@
 ;; Named-pipeline operator `|name|>`
 ;; ---------------------------------------------------------------------------
 
+(defn- find-pipe-close
+  "Scan from `start` in `src` looking for the `|` of a closing `|>`
+   with balanced `{}`, `[]`, `()` in between. Returns the position of
+   the `|` in `|>` if found, else nil."
+  [^String src ^long len ^long start]
+  (loop [i start depth 0]
+    (cond
+      (>= (inc i) len) nil
+      (and (zero? depth)
+           (= (.charAt src i) \|)
+           (= (.charAt src (inc i)) \>)
+           (> i start))
+      i
+      (or (= (.charAt src i) \{) (= (.charAt src i) \[) (= (.charAt src i) \())
+      (recur (inc i) (inc depth))
+      (or (= (.charAt src i) \}) (= (.charAt src i) \]) (= (.charAt src i) \)))
+      (recur (inc i) (dec depth))
+      (and (zero? depth) (= (.charAt src i) \|))
+      nil
+      :else (recur (inc i) depth))))
+
 (defn- pipe-op-at-cursor?
-  "Matches iff cursor is on `|` and the source from cursor has shape
-   `|<name>|>` where <name> is one or more non-whitespace chars that
-   don't contain `|`. Used as the `:when` gate so non-matching `|`s
-   fall through to regular symbol parsing."
+  "Matches iff cursor is on `|` and a closing `|>` (with balanced
+   brackets in between) exists ahead. `|foo|` without `|>` still
+   falls through to regular symbol parsing."
   [engine]
-  (let [src ^String (pratt/source-str engine)
-        len (pratt/source-len engine)
-        pos (pratt/cursor engine)]
-    (loop [i (inc pos)]
-      (cond
-        (>= (inc i) len) false
-        (let [ch (.charAt src i)]
-          (or (= ch \space) (= ch \tab) (= ch \newline) (= ch \return)))
-        false
-        (and (= (.charAt src i) \|) (= (.charAt src (inc i)) \>))
-        (> i (inc pos))    ; name must be non-empty
-        (= (.charAt src i) \|) false    ; stray `||` — not a pipe op
-        :else (recur (inc i))))))
+  (boolean
+    (find-pipe-close (pratt/source-str engine)
+                     (pratt/source-len engine)
+                     (inc (pratt/cursor engine)))))
 
 (defn- pipe-let-call
   "Build a :call CST node for `(let [binding-pairs...] body)` tagged with
@@ -138,10 +153,17 @@
          ::pipe-chain? true))
 
 (defn- led-as-pipe
-  "Factory: led parselet for `|name|>`. Lowers a chain
-     `x |n|> e1 |n|> e2 ... |n|> eN`
-   into a single flat
-     `(let [n x, n e1, ..., n e(N-1)] eN)`.
+  "Factory: led parselet for `|<slot>|>`. The slot is parsed as a tight
+   meme expression (bp 100) against a bounded view of the source that
+   ends at the closing `|>` — this prevents meme's symbol consumer
+   (which treats `|` and `>` as symbol chars) from overshooting.
+
+   A bare symbol (`|n|>`), a map destructure (`|{:keys [a b]}|>`), or
+   a vector destructure (`|[a b]|>`) all parse correctly and feed
+   straight into the emitted `let` as a binding pattern.
+
+   Chaining lowers to one flat let:
+     x |n|> e1 |n|> e2 ... |n|> eN  →  (let [n x, n e1, ..., n e(N-1)] eN)
 
    Detection: if lhs is a call CST previously tagged ::pipe-chain?, its
    binding vector is extended in place (the old body becomes the value
@@ -149,19 +171,26 @@
    tagged let-call is emitted."
   [bp]
   (fn [engine lhs op-tok]
-    (let [src ^String (pratt/source-str engine)
-          name-start (pratt/cursor engine)
-          name-end   (loop [i name-start]
-                       (if (= (.charAt src i) \|) i (recur (inc i))))
-          name-str   (subs src name-start name-end)]
-      (pratt/set-pos! engine (+ name-end 2))
-      (let [rhs      (pratt/parse-expr engine bp)
-            name-cst (op-atom op-tok name-str)]
-        (if (and (= :call (:node lhs)) (::pipe-chain? lhs))
-          (let [[bindings-vec prior-body] (:args lhs)
-                extended (update bindings-vec :children conj name-cst prior-body)]
-            (assoc lhs :args [extended rhs]))
-          (pipe-let-call op-tok [name-cst lhs] rhs))))))
+    (let [src       (pratt/source-str engine)
+          full-len  (pratt/source-len engine)
+          start-pos (pratt/cursor engine)
+          close-pos (find-pipe-close src full-len start-pos)]
+      (if (nil? close-pos)
+        (pratt/cst :error
+                   {:message "Pipe slot not terminated by `|>`"
+                    :token op-tok})
+        ;; Bounded parse of the slot — :len capped at close-pos. The
+        ;; engine's :pos volatile is shared, so position updates here
+        ;; are visible to the outer engine.
+        (let [bounded  (assoc engine :len close-pos)
+              slot-cst (pratt/parse-expr bounded 100)]
+          (pratt/set-pos! engine (+ close-pos 2))
+          (let [rhs (pratt/parse-expr engine bp)]
+            (if (and (= :call (:node lhs)) (::pipe-chain? lhs))
+              (let [[bindings-vec prior-body] (:args lhs)
+                    extended (update bindings-vec :children conj slot-cst prior-body)]
+                (assoc lhs :args [extended rhs]))
+              (pipe-let-call op-tok [slot-cst lhs] rhs))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unary `not` — nud position
