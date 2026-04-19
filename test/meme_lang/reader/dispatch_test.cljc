@@ -181,7 +181,7 @@
        (let [result (first (lang/meme->forms "#::{:a 1}"))]
          (is (map? result))
          (is (= 1 (:a result)) "keys should stay unqualified (defer to eval)")
-         (is (= "::" (:meme-lang/namespace-prefix (meta result))) "metadata signals bare auto-resolve")))
+         (is (= "::" (:meme/namespace-prefix (meta result))) "metadata signals bare auto-resolve")))
      (testing "#::{:a 1} roundtrips through printer"
        (let [forms (lang/meme->forms "#::{:a 1}")
              printed (fmt-flat/format-forms forms)

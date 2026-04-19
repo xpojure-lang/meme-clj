@@ -33,7 +33,7 @@
    platform, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals`
    after reading, or use `run-string` / `run-file` (which do so
    automatically). The `:read-cond` option is no longer accepted —
-   passing it throws `:meme-lang/deprecated-opt`.
+   passing it throws `:meme/deprecated-opt`.
 
    opts keys:
      :resolve-keyword  — fn to resolve auto-resolve keywords (::kw)

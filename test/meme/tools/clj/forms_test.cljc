@@ -81,8 +81,8 @@
 ;; ============================================================
 
 (deftest strip-internal-meta-removes-pipeline-keys
-  (let [m {:line 1 :col 2 :meme-lang/leading-trivia " " :meme-lang/sugar true :meme-lang/insertion-order [1] :meme-lang/namespace-prefix "foo"
-           :meme-lang/meta-chain [] :user-key "val" :tag 'String}]
+  (let [m {:line 1 :col 2 :meme/leading-trivia " " :meme/sugar true :meme/insertion-order [1] :meme/namespace-prefix "foo"
+           :meme/meta-chain [] :user-key "val" :tag 'String}]
     (is (= {:user-key "val" :tag 'String} (forms/strip-internal-meta m)))))
 
 (deftest strip-internal-meta-preserves-empty

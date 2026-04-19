@@ -107,22 +107,22 @@
     (is (re-find #"\}$" result))))
 
 ;; ---------------------------------------------------------------------------
-;; Comments from :meme-lang/leading-trivia metadata
+;; Comments from :meme/leading-trivia metadata
 ;; ---------------------------------------------------------------------------
 
 (deftest comment-before-form
-  (let [form (with-meta '(foo x) {:meme-lang/leading-trivia "; a comment\n"})
+  (let [form (with-meta '(foo x) {:meme/leading-trivia "; a comment\n"})
         result (fmt-canon/format-form form)]
     (is (re-find #"^; a comment\n" result))
     (is (re-find #"foo\(x\)" result))))
 
 (deftest multiple-comment-lines
-  (let [form (with-meta '(foo) {:meme-lang/leading-trivia "; line 1\n; line 2\n"})
+  (let [form (with-meta '(foo) {:meme/leading-trivia "; line 1\n; line 2\n"})
         result (fmt-canon/format-form form)]
     (is (re-find #"; line 1\n; line 2\n" result))))
 
 (deftest no-ws-metadata
-  (testing "form without :meme-lang/leading-trivia has no comment prefix"
+  (testing "form without :meme/leading-trivia has no comment prefix"
     (is (= "+(1 2)" (fmt-canon/format-form '(+ 1 2))))))
 
 ;; ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@
 ;; Comment preservation roundtrip: source → parse → format → comments intact
 ;; ---------------------------------------------------------------------------
 
-;; NOTE: The experimental pipeline's CST reader attaches trivia (:meme-lang/leading-trivia) from
+;; NOTE: The experimental pipeline's CST reader attaches trivia (:meme/leading-trivia) from
 ;; the head token's trivia, which may not propagate to call-level metadata.
 ;; Comments on the head of a call may be lost. Tests verify form correctness.
 (deftest comment-roundtrip-before-form

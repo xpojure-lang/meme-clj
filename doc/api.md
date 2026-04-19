@@ -31,7 +31,7 @@ Options:
 - `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time. When absent on JVM/Babashka, `::` keywords are deferred to eval time via `(read-string "::foo")`. Required on CLJS (errors without it, since `cljs.reader` cannot resolve `::` in the correct namespace).
 - `:resolve-symbol` — function that resolves symbols during syntax-quote expansion (e.g., `foo` → `my.ns/foo`). On JVM/Babashka, `run-string`/`run-file`/`start` inject a default that matches Clojure's `SyntaxQuoteReader` (inlined in `meme-lang.run`). When calling `meme->forms` directly, symbols in syntax-quote are left unqualified unless this option is provided. On CLJS, no default is available.
 
-Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` records. To materialize the platform branch, compose `meme-lang.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:meme-lang/deprecated-opt`.
+Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` records. To materialize the platform branch, compose `meme-lang.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:meme/deprecated-opt`.
 
 ```clojure
 (meme->forms "+(1 2 3)")
@@ -95,7 +95,7 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 (meme-lang.api/format-meme-forms forms opts)
 ```
 
-Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:meme-lang/leading-trivia` metadata (attached by the pipeline's scan stage). All platforms.
+Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:meme/leading-trivia` metadata (attached by the pipeline's scan stage). All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -248,7 +248,7 @@ Canonical (width-aware) formatter. Composes printer + render at target width. Us
 (meme-lang.formatter.canon/format-form form opts)
 ```
 
-Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:meme-lang/leading-trivia` metadata.
+Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:meme/leading-trivia` metadata.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -262,7 +262,7 @@ Options:
 (meme-lang.formatter.canon/format-forms forms opts)
 ```
 
-Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:meme-lang/leading-trivia` metadata, including trailing comments after the last form.
+Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:meme/leading-trivia` metadata, including trailing comments after the last form.
 
 
 ## meme-lang.repl
@@ -370,7 +370,7 @@ By default runs the file as meme and installs `meme.loader` so `require`/`load-f
 
 Explicit pipeline composition. Each stage is a `ctx → ctx` function operating on a shared context map with keys `:source`, `:opts`, `:cst`, `:forms`.
 
-Each stage validates its required keys at entry against `stage-contracts` — miscomposed pipelines (e.g. calling `step-read` before `step-parse`) throw a clear `:meme-lang/pipeline-error` with the missing key(s) and the actual ctx keys present, instead of surfacing a deep-inside NPE.
+Each stage validates its required keys at entry against `stage-contracts` — miscomposed pipelines (e.g. calling `step-read` before `step-parse`) throw a clear `:meme/pipeline-error` with the missing key(s) and the actual ctx keys present, instead of surfacing a deep-inside NPE.
 
 ### stage-contracts
 
@@ -402,7 +402,7 @@ Parse source string into a lossless CST via the unified Pratt parser. Scanning (
 (meme-lang.stages/step-read ctx)
 ```
 
-Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `MemeReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:meme-lang/deprecated-opt`.
+Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `MemeReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:meme/deprecated-opt`.
 
 ### step-evaluate-reader-conditionals
 
