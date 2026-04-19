@@ -2,7 +2,7 @@
   "Parser tests for data literal passthrough (vectors, maps, sets, keywords, numbers)."
   (:require [clojure.test :refer [deftest is]]
             [meme-lang.api :as lang]
-            [meme-lang.forms :as forms]))
+            [meme.tools.clj.forms :as forms]))
 
 (deftest parse-vector-literal
   (is (= '[[1 2 3]] (lang/meme->forms "[1 2 3]"))))

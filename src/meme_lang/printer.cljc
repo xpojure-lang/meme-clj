@@ -11,7 +11,7 @@
   (:require [clojure.string :as str]
             [meme.tools.render :as render]
             [meme.tools.clj.values :as values]
-            [meme-lang.forms :as forms]
+            [meme.tools.clj.forms :as forms]
             [meme-lang.form-shape :as form-shape]))
 
 ;; ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@
        (every? #(and (symbol? %) (str/starts-with? (name %) "%"))
                (second form))))
 
-;; restore-bare-percent moved to meme-lang.forms (co-located with normalize-bare-percent)
+;; restore-bare-percent moved to meme.tools.clj.forms (co-located with normalize-bare-percent)
 
 ;; ---------------------------------------------------------------------------
 ;; Doc constants — avoid per-form allocation of common Doc nodes (P6)

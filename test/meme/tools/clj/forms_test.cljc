@@ -1,7 +1,7 @@
-(ns meme-lang.forms-test
+(ns meme.tools.clj.forms-test
   "Tests for shared form-level predicates, constructors, and constants."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.forms :as forms]))
+            [meme.tools.clj.forms :as forms]))
 
 ;; ============================================================
 ;; MemeAutoKeyword

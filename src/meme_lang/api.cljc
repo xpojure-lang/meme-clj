@@ -5,7 +5,7 @@
    The Pratt parser produces a lossless CST; the CST reader lowers it
    to Clojure forms."
   (:require [meme-lang.stages :as stages]
-            [meme-lang.forms :as forms]
+            [meme.tools.clj.forms :as forms]
             [meme-lang.form-shape :as form-shape]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]

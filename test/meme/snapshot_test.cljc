@@ -4,7 +4,7 @@
    output — if any of these break, something changed observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
             [meme-lang.api :as lang]
-            [meme-lang.forms :as forms]
+            [meme.tools.clj.forms :as forms]
             [meme-lang.stages :as stages]
             [meme-lang.test-util :as tokenizer]))
 
