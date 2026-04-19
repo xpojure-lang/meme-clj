@@ -2,7 +2,7 @@
   "Run .meme tests: eval-based and fixture-based.
    All test sections run against every built-in lang pipeline."
   (:require [meme-lang.forms :as forms]
-            [meme-lang.errors :as errors]
+            [meme.tools.clj.errors :as errors]
             [meme.registry :as registry]
             ;; Explicit requires trigger self-registration of each built-in
             ;; lang (post-refactor: registry imports no langs).

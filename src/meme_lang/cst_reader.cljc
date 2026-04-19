@@ -7,7 +7,7 @@
 
    Pipeline: scanner → trivia-attacher → pratt-parser → **cst-reader**"
   (:require [clojure.string :as str]
-            [meme-lang.errors :as errors]
+            [meme.tools.clj.errors :as errors]
             [meme-lang.forms :as forms]
             [meme-lang.resolve :as resolve]))
 

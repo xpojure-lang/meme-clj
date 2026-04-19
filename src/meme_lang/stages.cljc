@@ -24,7 +24,7 @@
   (:require [clojure.string :as str]
             [meme-lang.grammar :as grammar]
             [meme-lang.cst-reader :as cst-reader]
-            [meme-lang.errors :as errors]
+            [meme.tools.clj.errors :as errors]
             [meme-lang.expander :as expander]
             [meme-lang.forms :as forms]
             [meme.tools.parser :as pratt]))

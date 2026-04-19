@@ -1,7 +1,10 @@
-(ns meme-lang.errors
-  "Consistent error infrastructure for the meme reader/tokenizer.
+(ns meme.tools.clj.errors
+  "Consistent error infrastructure for Clojure-surface readers/tokenizers.
    All error throw sites should use `meme-error` to ensure uniform
-   location tracking and message formatting."
+   location tracking and message formatting.
+
+   (The `meme-error` function name is retained for ubiquity across the
+   codebase; the function itself has no meme-specific content.)"
   (:require [clojure.string :as str]))
 
 (defn ^:no-doc source-context
