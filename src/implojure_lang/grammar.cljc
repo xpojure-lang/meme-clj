@@ -31,8 +31,8 @@
    regular symbol parsing, so `|foo|` stays readable as a symbol."
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]
-            [meme-lang.grammar :as meme-grammar]
-            [meme-lang.lexlets :as lex]))
+            [meme.tools.clj.lex :as clj-lex]
+            [meme-lang.grammar :as meme-grammar]))
 
 ;; ---------------------------------------------------------------------------
 ;; Synthetic CST node helpers
@@ -99,7 +99,7 @@
         (and (<= (+ pos word-len) len)
              (= word (subs src pos (+ pos word-len)))
              (or (>= (+ pos word-len) len)
-                 (not (lex/symbol-char? (.charAt ^String src (+ pos word-len))))))))))
+                 (not (clj-lex/symbol-char? (.charAt ^String src (+ pos word-len))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Not-adjacent-call predicates
