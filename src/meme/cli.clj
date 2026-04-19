@@ -184,37 +184,13 @@
     {:cmd :to-meme, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
      :verb "converted", :usage "Usage: meme to-meme <file|dir> [--lang name] [--stdout]"}))
 
-(defn- resolve-format-config
-  "Ask each registered lang for its project-local formatter config via the
-   lang-map's `:project-opts` fn, merging the results (earlier langs win on
-   key clashes). Errors are reported to stderr and cause an exit; a lang
-   without `:project-opts` is silent."
-  []
-  (try
-    (reduce (fn [acc [_name lang]]
-              (if-let [project-opts-fn (:project-opts lang)]
-                (merge acc (project-opts-fn))
-                acc))
-            {}
-            (registry/all-langs))
-    (catch Exception e
-      (binding [*out* *err*]
-        (println (str "Error in project format config: " (ex-message e))))
-      (cli-exit! 1))))
-
 (defn format-files
-  "Format meme source files in canonical style.
-
-   Reads project-local formatter config via each lang's `:project-opts`
-   lang-map entry (meme-lang's walks up for `.meme-format.edn`); settings
-   are applied as defaults under CLI flags."
+  "Format meme source files in canonical style. Pass --width, --style,
+   --stdout, --check as needed."
   [opts]
-  (let [project-opts (resolve-format-config)
-        ;; CLI flags override project config; project config overrides defaults.
-        merged (merge project-opts opts)]
-    (file-command merged
-      {:cmd :format, :pred meme-file?, :output-fn nil
-       :verb "formatted", :usage "Usage: meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"})))
+  (file-command opts
+    {:cmd :format, :pred meme-file?, :output-fn nil
+     :verb "formatted", :usage "Usage: meme format <file|dir> [--width N] [--style canon|flat|clj] [--stdout] [--check]"}))
 
 (defn transpile-meme
   "Transpile .meme files to .clj in a separate output directory.

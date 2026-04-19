@@ -18,7 +18,7 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **Sibling lang rename: `infj-lang` → `implojure-lang`.** File extensions `.infj` → `.implj`, plus `.impljc`/`.impljs` for cljc/cljs variants.
 
-- **`meme.config` → `meme-lang.config`.** Formatter config is meme-lang-specific (validates against meme-lang's form-shape registry, merges onto meme-lang's canon style), so it moved out of the platform namespace. The CLI no longer requires it directly — each lang-map exposes a `:project-opts` fn, and `meme format` merges the results from every registered lang. A sibling lang with its own formatter plugs in the same way.
+- **`.meme-format.edn` / `meme.config` removed.** The project-local formatter config feature (added as requirement F6) was never adopted — no `.meme-format.edn` file ever existed in this repo or any consumer. The 196-line reader plus 19 validation tests were dead weight. `meme format` now takes CLI flags only (`--width`, `--style`, `--stdout`, `--check`); if project-local config is ever wanted for real, a ~40-line reader can be rebuilt when the need materializes.
 
 - **calc-lang demo and `examples/languages/` directory removed.** The multi-lang platform claim is now carried by meme + implojure + the user-registerable lang mechanism. The demo added maintenance surface without further demonstrating anything.
 

@@ -120,7 +120,7 @@ the CLI itself is written in `.meme`.
 | F3 | Form-shape registry per lang; exposed under `:form-shape` in `lang-map`. `decompose (registry head args)` takes registry explicitly so langs are sovereign. | Done |
 | F4 | Opt-in structural fallback via `with-structural-fallback` — infers defn-like and let-like shapes for unregistered heads. | Done |
 | F5 | Style's `:slot-renderers` composes over `printer/default-slot-renderers` via plain map merge. Overrides compose independently of other style keys. | Done |
-| F6 | Project-local `.meme-format.edn` — `meme format` discovers config by walking up from CWD. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol-to-symbol aliases), `:style` (partial canon override). Strict EDN parsing; unknown reader tags rejected; unknown keys warn but don't fail. | Done |
+| F6 | ~~Project-local `.meme-format.edn`~~ | Removed — feature was unused; CLI flags cover practical formatting needs |
 
 ### REPL
 
@@ -250,10 +250,6 @@ meme rules inside. No opaque regions.
     The canon style collapsed from ~60 form-keyed entries to 11 slot-keyed
     entries. Formatters accept `:style` override in opts for project-level
     tweaks.
-  - `meme-lang.config` — reads `.meme-format.edn` from project root (walking up
-    from CWD) and translates it into formatter opts. Schema: `:width`,
-    `:structural-fallback?`, `:form-shape` (symbol-to-symbol aliases),
-    `:style` (partial override).
 
 ### Platform requirements
 

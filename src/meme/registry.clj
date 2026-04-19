@@ -229,13 +229,6 @@
   []
   (keep (fn [[n l]] (when-not (:builtin? (meta l)) n)) @registry))
 
-(defn all-langs
-  "Return the current `{lang-name → lang-map}` registry snapshot
-   (built-ins plus user-registered). Use this when you want to iterate
-   every lang — e.g. to collect the `:project-opts` each lang contributes."
-  []
-  @registry)
-
 (defn ^:no-doc clear-user-langs!
   "Clear all registered user languages, preserving built-ins. Test-only
    helper — not part of the public API."
