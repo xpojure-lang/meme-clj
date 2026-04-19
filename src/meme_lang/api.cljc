@@ -78,7 +78,7 @@
      (def ^:private eof-sentinel (Object.))
      (defn- check-depth
        "Walk form and throw if nesting exceeds max-parse-depth.
-       Uses `>=` to match `meme-lang.cst-reader/read-node`: both entry points
+       Uses `>=` to match `meme.tools.clj.cst-reader/read-node`: both entry points
        reject at exactly `max-parse-depth` levels of nesting."
        [form depth]
        (when (>= depth forms/max-parse-depth)

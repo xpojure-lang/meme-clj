@@ -1,4 +1,4 @@
-(ns meme-lang.cst-reader
+(ns meme.tools.clj.cst-reader
   "CST reader: walks CST nodes from the Pratt parser and produces Clojure forms.
 
    This is the lowering step: CST → Clojure forms. It mirrors the classic
