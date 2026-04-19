@@ -106,10 +106,11 @@
 
 (deftest stage-contracts-are-exposed
   (testing "stage-contracts is public data, one entry per stage"
-    (is (= #{:step-parse :step-read :step-expand-syntax-quotes}
+    (is (= #{:step-parse :step-read :step-evaluate-reader-conditionals :step-expand-syntax-quotes}
            (set (keys stages/stage-contracts))))
     (is (= #{:source} (get-in stages/stage-contracts [:step-parse :requires])))
     (is (= #{:cst}    (get-in stages/stage-contracts [:step-read :requires])))
+    (is (= #{:forms}  (get-in stages/stage-contracts [:step-evaluate-reader-conditionals :requires])))
     (is (= #{:forms}  (get-in stages/stage-contracts [:step-expand-syntax-quotes :requires])))))
 
 (deftest step-read-without-parse-throws-pipeline-error
@@ -152,6 +153,115 @@
              (is (= :meme-lang/pipeline-error (:type data)))
              (is (= :step-parse (:stage data)))
              (is (re-find #"must be a string" (ex-message e))))))))
+
+;; ---------------------------------------------------------------------------
+;; step-evaluate-reader-conditionals
+;; ---------------------------------------------------------------------------
+
+(defn- eval-rc
+  "Helper: read src (with preserve), run eval-rc step, return the resulting :forms vector.
+   Opts may set :platform to override the default compile-time platform.
+   (The explicit :read-cond :preserve is transitional — commit (c) flips the
+   reader default to always-preserve, after which it is unnecessary.)"
+  ([src] (eval-rc src nil))
+  ([src opts]
+   (:forms (stages/step-evaluate-reader-conditionals
+             (assoc (stages/run src {:read-cond :preserve}) :opts opts)))))
+
+(deftest eval-rc-basic
+  (testing "#? with matching platform returns the branch value"
+    (is (= [1] (eval-rc "#?(:clj 1 :cljs 2)" {:platform :clj})))
+    (is (= [2] (eval-rc "#?(:clj 1 :cljs 2)" {:platform :cljs}))))
+  (testing "#? with no matching platform removes the form"
+    (is (= [] (eval-rc "#?(:cljs 1)" {:platform :clj}))))
+  (testing "#? with :default fallback"
+    (is (= [99] (eval-rc "#?(:cljs 1 :default 99)" {:platform :clj}))))
+  (testing "named platform wins over :default"
+    (is (= [1] (eval-rc "#?(:clj 1 :default 99)" {:platform :clj})))))
+
+(deftest eval-rc-recurses-into-collections
+  (testing "#? nested inside a list"
+    (is (= '[(f 1)] (eval-rc "f(#?(:clj 1 :cljs 2))" {:platform :clj}))))
+  (testing "#? nested inside a vector"
+    (is (= [[:a 1 :b]] (eval-rc "[:a #?(:clj 1 :cljs 2) :b]" {:platform :clj}))))
+  (testing "#? as a map value"
+    (is (= [{:a 1}] (eval-rc "{:a #?(:clj 1 :cljs 2)}" {:platform :clj}))))
+  (testing "#? as a map key"
+    (is (= [{:a 1}] (eval-rc "{#?(:clj :a :cljs :b) 1}" {:platform :clj}))))
+  (testing "#? inside a set"
+    (is (= [#{:a 1}] (eval-rc "#{:a #?(:clj 1 :cljs 2)}" {:platform :clj})))))
+
+(deftest eval-rc-splicing
+  (testing "#?@ inside a vector splices items in"
+    (is (= [[:a 1 2 :b]] (eval-rc "[:a #?@(:clj [1 2] :cljs [3]) :b]" {:platform :clj}))))
+  (testing "#?@ inside a list splices"
+    (is (= '[(f x y)] (eval-rc "f(#?@(:clj [x y] :cljs [z]))" {:platform :clj}))))
+  (testing "#?@ inside a set splices"
+    (is (= [#{:a 1 2}] (eval-rc "#{:a #?@(:clj [1 2] :cljs [3])}" {:platform :clj}))))
+  (testing "#?@ at top level splices into :forms"
+    (is (= [1 2] (eval-rc "#?@(:clj [1 2])" {:platform :clj}))))
+  (testing "#?@ with no match contributes zero forms"
+    (is (= [[:a :b]] (eval-rc "[:a #?@(:cljs [1 2]) :b]" {:platform :clj})))))
+
+(deftest eval-rc-errors
+  (testing "odd-count branch list throws"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+                 (eval-rc "#?(:clj)"))))
+  (testing "#?@ matched value must be sequential"
+    (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+                          #"non-sequential"
+                          (eval-rc "[:a #?@(:clj 42) :b]" {:platform :clj})))))
+
+(deftest eval-rc-platform-opt
+  (testing ":platform opt overrides the compile-time default"
+    (is (= [:cljs-thing]
+           (eval-rc "#?(:clj :jvm-thing :cljs :cljs-thing)" {:platform :cljs})))))
+
+(deftest eval-rc-passthrough-for-non-rc
+  (testing "plain atoms pass through unchanged"
+    (is (= '[x] (eval-rc "x")))
+    (is (= [42] (eval-rc "42")))
+    (is (= [:k] (eval-rc ":k")))
+    (is (= ["s"] (eval-rc "\"s\""))))
+  (testing "plain collections with no RC pass through"
+    (is (= '[(f x y)] (eval-rc "f(x y)")))
+    (is (= [[:a :b]] (eval-rc "[:a :b]")))
+    (is (= [{:a 1 :b 2}] (eval-rc "{:a 1 :b 2}")))))
+
+(deftest eval-rc-deeply-nested
+  (testing "nested #? evaluates inside-out"
+    (is (= [[1]] (eval-rc "[#?(:clj #?(:clj 1 :cljs 2) :cljs 3)]" {:platform :clj}))))
+  (testing "#? deep inside nested collections"
+    (is (= '[(f [:a {:k 1}])]
+           (eval-rc "f([:a {:k #?(:clj 1 :cljs 2)}])" {:platform :clj})))))
+
+(deftest eval-rc-inside-syntax-quote
+  (testing "#? inside ` is evaluated (matches native Clojure read-time semantics)"
+    (let [[form] (eval-rc "`#?(:clj x :cljs y)" {:platform :clj})]
+      ;; After eval-rc, the SQ wraps just `x (the MemeReaderConditional is gone)
+      (is (forms/syntax-quote? form))
+      (is (= 'x (:form form)))))
+  (testing "#? inside ` with no match drops the whole syntax-quote form"
+    (is (= [] (eval-rc "`#?(:cljs y)" {:platform :clj}))))
+  (testing "#? inside ~ (unquote)"
+    ;; `f(~#?(:clj a :cljs b)) — syntax-quote around a call whose single arg is ~#?
+    (let [[outer] (eval-rc "`f(~#?(:clj a :cljs b))" {:platform :clj})
+          call (:form outer)
+          arg  (second call)]
+      (is (forms/syntax-quote? outer))
+      (is (= 'f (first call)))
+      (is (forms/unquote? arg))
+      (is (= 'a (:form arg))))))
+
+(deftest eval-rc-contract-check
+  (testing "missing :forms fails with pipeline-error"
+    (try (stages/step-evaluate-reader-conditionals {:source "" :cst []})
+         (is false "should have thrown")
+         (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
+           (let [data (ex-data e)]
+             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :step-evaluate-reader-conditionals (:stage data)))
+             (is (contains? (set (:missing data)) :forms)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Shebang stripping
