@@ -81,13 +81,15 @@
   "Run body-fn while this thread is considered mid-load. Increments the
    shared load-counter on entry and decrements it in finally. uninstall!
    reads the counter under install-lock to refuse quiescence if any thread
-   is still inside a load."
+   is still inside a load.
+
+   The increment runs before the try/finally so a throw from swap! itself
+   leaves the counter in its original state rather than triggering a
+   decrement that was never balanced by an increment."
   [body-fn]
-  (try
-    (swap! load-counter inc)
-    (body-fn)
-    (finally
-      (swap! load-counter dec))))
+  (swap! load-counter inc)
+  (try (body-fn)
+       (finally (swap! load-counter dec))))
 
 (defn- lang-load
   "Replacement for clojure.core/load that checks registered lang extensions.
