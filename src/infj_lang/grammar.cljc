@@ -14,7 +14,8 @@
      =, not=       bp 40
      and           bp 35
      or            bp 30
-     |name|>       bp 20   — named pipeline: `lhs |n|> rhs` → `(as-> lhs n rhs)`
+     |name|>       bp 20   — named pipeline: lowers chains to a single flat
+                              `(let [n x, n e1, …] final-e)`
      not           nud prefix, parses operand at bp 35
 
    All binary operators are left-associative. Word operators (`and`,
@@ -120,22 +121,47 @@
         (= (.charAt src i) \|) false    ; stray `||` — not a pipe op
         :else (recur (inc i))))))
 
+(defn- pipe-let-call
+  "Build a :call CST node for `(let [binding-pairs...] body)` tagged with
+   ::pipe-chain? so subsequent led-as-pipe steps can detect and extend it
+   in place instead of nesting."
+  [op-tok binding-pairs body]
+  (assoc (pratt/cst :call
+                    {:head  (op-atom op-tok "let")
+                     :open  op-tok
+                     :args  [(pratt/cst :vector
+                                        {:open op-tok
+                                         :children (vec binding-pairs)
+                                         :close op-tok})
+                             body]
+                     :close op-tok})
+         ::pipe-chain? true))
+
 (defn- led-as-pipe
-  "Factory: led parselet for `|name|>`. Lowers to `(as-> lhs name rhs)`.
-   Left-associative at bp — chained uses produce nested `as->` calls,
-   which are semantically equivalent to the multi-body form."
+  "Factory: led parselet for `|name|>`. Lowers a chain
+     `x |n|> e1 |n|> e2 ... |n|> eN`
+   into a single flat
+     `(let [n x, n e1, ..., n e(N-1)] eN)`.
+
+   Detection: if lhs is a call CST previously tagged ::pipe-chain?, its
+   binding vector is extended in place (the old body becomes the value
+   for the new binding, the new rhs is the new body). Otherwise a fresh
+   tagged let-call is emitted."
   [bp]
   (fn [engine lhs op-tok]
-    ;; Dispatch loop has already consumed the first `|`; cursor is at
-    ;; the start of the name. Scan for the closing `|`.
     (let [src ^String (pratt/source-str engine)
           name-start (pratt/cursor engine)
           name-end   (loop [i name-start]
                        (if (= (.charAt src i) \|) i (recur (inc i))))
           name-str   (subs src name-start name-end)]
-      (pratt/set-pos! engine (+ name-end 2))    ; skip past `|>`
-      (let [rhs (pratt/parse-expr engine bp)]
-        (make-call op-tok "as->" [lhs (op-atom op-tok name-str) rhs])))))
+      (pratt/set-pos! engine (+ name-end 2))
+      (let [rhs      (pratt/parse-expr engine bp)
+            name-cst (op-atom op-tok name-str)]
+        (if (and (= :call (:node lhs)) (::pipe-chain? lhs))
+          (let [[bindings-vec prior-body] (:args lhs)
+                extended (update bindings-vec :children conj name-cst prior-body)]
+            (assoc lhs :args [extended rhs]))
+          (pipe-let-call op-tok [name-cst lhs] rhs))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unary `not` — nud position
