@@ -6,7 +6,7 @@
             [meme-lang.api :as lang]
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
-            [meme-lang.values :as values]
+            [meme.tools.clj.values :as values]
             [meme-lang.forms :as forms]))
 
 ;; ---------------------------------------------------------------------------

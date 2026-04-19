@@ -1,7 +1,7 @@
-(ns meme-lang.values-test
+(ns meme.tools.clj.values-test
   "Tests for shared value serialization."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.values :as values]))
+            [meme.tools.clj.values :as values]))
 
 ;; ============================================================
 ;; emit-regex-str
