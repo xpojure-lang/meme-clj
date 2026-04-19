@@ -1,13 +1,13 @@
-(ns inme-lang.grammar-test
-  "Tests for inme-lang: infix operators, precedence, grouping, and
+(ns infj-lang.grammar-test
+  "Tests for infj-lang: infix operators, precedence, grouping, and
    interaction with meme syntax (calls, reader sugar)."
   (:require [clojure.test :refer [deftest is testing]]
-            [inme-lang.api :as inme]))
+            [infj-lang.api :as infj]))
 
-(defn- parse-one [src] (first (inme/inme->forms src)))
+(defn- parse-one [src] (first (infj/infj->forms src)))
 
 ;; ---------------------------------------------------------------------------
-;; Atoms still work (everything meme parses, inme parses)
+;; Atoms still work (everything meme parses, infj parses)
 ;; ---------------------------------------------------------------------------
 
 (deftest atoms-pass-through
@@ -105,15 +105,15 @@
 
 (deftest multiple-top-level-forms
   (is (= '[(def x 10) (* x 2)]
-         (inme/inme->forms "def(x 10)\nx * 2"))))
+         (infj/infj->forms "def(x 10)\nx * 2"))))
 
 ;; ---------------------------------------------------------------------------
-;; inme->clj
+;; infj->clj
 ;; ---------------------------------------------------------------------------
 
 (deftest to-clj-produces-clojure-syntax
-  (is (= "(+ 1 2)" (inme/inme->clj "1 + 2")))
-  (is (= "(+ (f 1) (g 2))" (inme/inme->clj "f(1) + g(2)"))))
+  (is (= "(+ 1 2)" (infj/infj->clj "1 + 2")))
+  (is (= "(+ (f 1) (g 2))" (infj/infj->clj "f(1) + g(2)"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry dispatch
@@ -121,12 +121,12 @@
 
 #?(:clj
    (deftest lang-registered
-     (testing ":inme is registered and .inme extension resolves to it"
+     (testing ":infj is registered and .infj extension resolves to it"
        (let [reg (requiring-resolve 'meme.registry/resolve-lang)
              by-ext (requiring-resolve 'meme.registry/resolve-by-extension)]
-         (is (some? (reg :inme)))
-         (let [[lang-kw lang-map] (by-ext ".inme")]
-           (is (= :inme lang-kw))
+         (is (some? (reg :infj)))
+         (let [[lang-kw lang-map] (by-ext ".infj")]
+           (is (= :infj lang-kw))
            (is (some? (:format lang-map))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@
 
 #?(:clj
    (deftest run-string-evaluates-infix
-     (let [run-str (requiring-resolve 'inme-lang.run/run-string)]
+     (let [run-str (requiring-resolve 'infj-lang.run/run-string)]
        (is (= 3 (run-str "1 + 2")))
        (is (= 20 (run-str "def(x 10) x * 2")))
        (is (= :yes (run-str "if(1 < 2 :yes :no)"))))))

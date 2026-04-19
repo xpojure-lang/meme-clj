@@ -1,7 +1,7 @@
-(ns inme-lang.grammar
-  "Inme-lang grammar spec — infix meme.
+(ns infj-lang.grammar
+  "Infj-lang grammar spec — infix meme.
 
-   Inme is meme (M-expressions) plus a set of conventional binary infix
+   Infj is meme (M-expressions) plus a set of conventional binary infix
    operators. Infix parselets emit `:call` CST nodes whose head is a
    synthetic symbol atom, so every module downstream of the parser
    (cst-reader, printer, formatter, stages, run, repl) reuses meme's
@@ -85,9 +85,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- nud-group-or-empty
-  "Nud parselet for `(` in inme: `()` is the empty list, `(expr)` is
+  "Nud parselet for `(` in infj: `()` is the empty list, `(expr)` is
    grouping (returns expr), and `(a b)` is an error. Meme's nud for
-   `(` rejects any non-empty bare parens; inme carves out single-
+   `(` rejects any non-empty bare parens; infj carves out single-
    expression grouping so `(1 + 2) * 3` parses intuitively."
   [engine open-tok]
   (pratt/skip-trivia! engine)
@@ -122,7 +122,7 @@
   80)
 
 (def grammar
-  "Inme grammar: meme's grammar with extra :led entries for infix
+  "Infj grammar: meme's grammar with extra :led entries for infix
    operators, `(` overridden in nud position to mean grouping, and
    reader-sugar prefix operators (', @, `, ~) bumped to bp 80 so they
    bind tighter than infix arithmetic. All other behavior (trivia,
