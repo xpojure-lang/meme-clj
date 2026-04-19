@@ -6,17 +6,17 @@
    spec in meme-grammar references these functions by name.
    Generic scanlet builders (atom-scanlet, single-char-scanlet, delimited-scanlet)
    live in meme.tools.lexer."
-  (:require [meme.tools.parser :as pratt]))
+  (:require [meme.tools.parser :as pratt]
+            [meme.tools.lexer :as lexer]))
 
 ;; ---------------------------------------------------------------------------
 ;; Character predicates
 ;; ---------------------------------------------------------------------------
 
-(defn- char-code [ch]
-  #?(:clj (int ch) :cljs (.charCodeAt (str ch) 0)))
+(def digit? lexer/digit?)
 
 (defn whitespace-char? [ch]
-  (and ch (let [c (char-code ch)]
+  (and ch (let [c (lexer/char-code ch)]
             (or (= c 0x20)    ; space
                 (= c 0x09)    ; tab
                 (= c 0x0C)    ; form feed
@@ -31,10 +31,7 @@
                              (= c 0x205F) (= c 0x3000)))))))
 
 (defn newline-char? [ch]
-  (and ch (let [c (char-code ch)] (or (= c 0x0A) (= c 0x0D)))))
-
-(defn digit? [ch]
-  (and ch (let [c (char-code ch)] (and (>= c 0x30) (<= c 0x39)))))
+  (and ch (let [c (lexer/char-code ch)] (or (= c 0x0A) (= c 0x0D)))))
 
 (defn- invisible-char?
   [c]
@@ -50,28 +47,28 @@
        (not (whitespace-char? ch))
        (not (newline-char? ch))
        (not (digit? ch))
-       (let [c (char-code ch)]
+       (let [c (lexer/char-code ch)]
          (not (contains?
                #{0x28 0x29 0x5B 0x5D 0x7B 0x7D
                  0x22 0x3B 0x40 0x5E 0x60 0x7E
                  0x5C 0x23 0x3A 0x27}
                c)))
-       (not (invisible-char? (char-code ch)))))
+       (not (invisible-char? (lexer/char-code ch)))))
 
 (defn symbol-char? [ch]
   (and ch
        (not (whitespace-char? ch))
        (not (newline-char? ch))
-       (let [c (char-code ch)]
+       (let [c (lexer/char-code ch)]
          (not (contains?
                #{0x28 0x29 0x5B 0x5D 0x7B 0x7D
                  0x22 0x3B 0x40 0x5E 0x60 0x7E
                  0x5C}
                c)))
-       (not (invisible-char? (char-code ch)))))
+       (not (invisible-char? (lexer/char-code ch)))))
 
 (defn- number-char? [ch]
-  (and ch (let [c (char-code ch)]
+  (and ch (let [c (lexer/char-code ch)]
             (or (and (>= c 0x30) (<= c 0x39))
                 (and (>= c 0x41) (<= c 0x5A))
                 (and (>= c 0x61) (<= c 0x7A))
@@ -120,7 +117,7 @@
         (= next-ch \u)
         (loop [i (+ pos 2) cnt 0]
           (if (and (< i len) (< cnt 4)
-                   (let [c (char-code (.charAt source i))]
+                   (let [c (lexer/char-code (.charAt source i))]
                      (or (and (>= c 0x30) (<= c 0x39))
                          (and (>= c 0x41) (<= c 0x46))
                          (and (>= c 0x61) (<= c 0x66)))))
@@ -130,16 +127,16 @@
         (= next-ch \o)
         (loop [i (+ pos 2) cnt 0]
           (if (and (< i len) (< cnt 3)
-                   (let [c (char-code (.charAt source i))]
+                   (let [c (lexer/char-code (.charAt source i))]
                      (and (>= c 0x30) (<= c 0x37))))
             (recur (inc i) (inc cnt))
             i))
 
-        (let [c (char-code next-ch)]
+        (let [c (lexer/char-code next-ch)]
           (and (>= c 0x61) (<= c 0x7A)))
         (loop [i (+ pos 2)]
           (if (and (< i len)
-                   (let [c (char-code (.charAt source i))]
+                   (let [c (lexer/char-code (.charAt source i))]
                      (and (>= c 0x61) (<= c 0x7A))))
             (recur (inc i))
             i))

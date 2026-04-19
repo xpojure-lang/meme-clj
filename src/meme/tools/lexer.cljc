@@ -46,9 +46,14 @@
 ;; normalizes both platforms to the character code point.
 ;; ---------------------------------------------------------------------------
 
-(defn- char-code [ch]
+(defn char-code
+  "Character code point. Normalizes the JVM/CLJS asymmetry: on JVM `ch` is a
+   Character and `int` returns the code point; on CLJS `ch` is a one-char
+   String. The CLJS `(str ch)` coercion is defensive against callers passing
+   a char-typed value in the JS world."
+  [ch]
   #?(:clj  (int ^Character ch)
-     :cljs (.charCodeAt ^String ch 0)))
+     :cljs (.charCodeAt (str ch) 0)))
 
 (defn digit? [ch]
   (and ch (let [c (char-code ch)] (and (>= c 0x30) (<= c 0x39)))))
