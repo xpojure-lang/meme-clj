@@ -163,22 +163,28 @@ renumbered, so git history and this table stay cross-referenceable.
                                                      formatter ──→ .meme text
 ```
 
-The codebase has three layers:
-- **`meme.tools.*`** — Generic infrastructure: parser engine, scanlet builders, render engine
-- **`meme-lang.*`** — Meme language: grammar, scanlets, parselets, stages, printer, formatter
-- **`meme.*`** — CLI and lang registry
+The codebase has four layers:
+- **`meme.tools.{parser, lexer, render}`** — Generic, language-agnostic infrastructure: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
+- **`meme.tools.clj.*`** — Clojure-surface commons shared by any Clojure-flavored frontend (meme, implojure, future siblings): lexical conventions, atom resolution, CST reader, stages, syntax-quote expander, the `Clj*` AST records, value serialization, run/repl harnesses.
+- **`meme-lang.*`** — Meme language: grammar, parselets, lexlets shim, form-shape, printer, formatters; plus thin `run`/`repl` shims that inject meme's grammar and delegate to `meme.tools.clj.{run,repl}`.
+- **`meme.*`** — Shared runtime infrastructure (`meme.registry`, `meme.loader`) and app tier (`meme.cli`). Sibling `implojure-lang.*` mirrors the meme-lang shape for its own grammar.
 
 The pipeline has composable stages (composed by `meme.tools.clj.stages`), each a `ctx → ctx` function with a `step-` prefix:
 1. **strip-shebang** — remove `#!` line from `:source` (for executable scripts).
    Defined in `meme.tools.clj.stages`, called by runtime before the core pipeline.
-2. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — unified scanlet-parselet
-   Pratt parser → lossless CST. Scanning (character dispatch, trivia) and parsing (structure)
-   are both defined in the grammar spec. Reads directly from source string.
+2. **step-parse** (`meme.tools.parser` driven by a lang-supplied grammar) — unified
+   scanlet-parselet Pratt parser → lossless CST. Scanning (character dispatch, trivia)
+   and parsing (structure) are both defined in the grammar spec. Reads directly from
+   source string. Requires `:grammar` in `:opts` — no implicit default.
 3. **step-read** (`meme.tools.clj.cst-reader`) — lowers CST to Clojure forms. Value
    resolution delegated to `meme.tools.clj.resolve`. No `read-string` delegation.
-4. **step-expand-syntax-quotes** (`meme.tools.clj.expander`) — syntax-quote AST nodes →
+   Reader conditionals preserved as `CljReaderConditional` records.
+4. **step-evaluate-reader-conditionals** (`meme.tools.clj.stages`) — materializes the
+   platform branch of `#?`/`#?@` for eval paths. Tooling paths skip this step.
+   Supports `:platform` opt and `:default` fallback.
+5. **step-expand-syntax-quotes** (`meme.tools.clj.expander`) — syntax-quote AST nodes →
    plain Clojure forms. Only needed before eval, not for tooling.
-   `stages/run` intentionally omits this stage, returning AST
+   `meme.tools.clj.stages/run` intentionally omits stages 4–5, returning AST
    nodes for tooling access.
 
 The printer pattern-matches on form structure to reverse the transformation.

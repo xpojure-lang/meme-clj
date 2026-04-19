@@ -1,6 +1,6 @@
 # meme API Reference
 
-Namespaces are organized in three layers: `meme.tools.*` (generic), `meme-lang.*` (language), `meme.*` (CLI).
+Namespaces are organized in four tiers: `meme.tools.{parser,lexer,render}` (generic tools), `meme.tools.clj.*` (Clojure-surface commons shared across Clojure-flavored frontends), `meme-lang.*` (meme language), and `meme.*` (shared runtime infra — `meme.registry`, `meme.loader` — plus the `meme.cli` app). A sibling lang `implojure-lang.*` mirrors the `meme-lang` shape with its own grammar.
 
 ## meme-lang.api
 
@@ -101,7 +101,7 @@ Options:
 - `:width` — target line width (default: 80)
 
 ```clojure
-(format-meme ['(defn greet [name] (println (str "Hello " name)))])
+(format-meme-forms ['(defn greet [name] (println (str "Hello " name)))])
 ;=> "defn(greet [name]\n  println(str(\"Hello \" name)))"
 ```
 
@@ -139,6 +139,14 @@ Convert a Clojure source string to meme source string. JVM/Babashka only. Equiva
 (clj->meme "(defn f [x] (+ x 1))")
 ;=> "defn(f [x] +(x 1))"
 ```
+
+### lang-map
+
+```clojure
+meme-lang.api/lang-map
+```
+
+The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:to-meme`, `:run`, `:repl`. Meme registers itself under `:meme` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly. Siblings like `implojure-lang.api/lang-map` follow the same shape.
 
 ## meme-lang.form-shape
 
@@ -376,7 +384,7 @@ Each stage validates its required keys at entry against `stage-contracts` — mi
 
 ```clojure
 meme.tools.clj.stages/stage-contracts
-;=> {:step-parse                         {:requires #{:source} :produces #{:cst}}
+;=> {:step-parse                         {:requires #{:source} :requires-opts #{:grammar} :produces #{:cst}}
 ;    :step-read                          {:requires #{:cst}    :produces #{:forms}}
 ;    :step-evaluate-reader-conditionals  {:requires #{:forms}  :produces #{:forms}}
 ;    :step-expand-syntax-quotes          {:requires #{:forms}  :produces #{:forms}}}
@@ -422,6 +430,22 @@ Opts (via `:opts`):
 ```
 
 Expand syntax-quote AST nodes (`CljSyntaxQuote`) into plain Clojure forms (`seq`/`concat`/`list`). Also unwraps `CljRaw` values. Only needed before eval — tooling paths work with AST nodes directly.
+
+### expand-syntax-quotes (convenience wrapper)
+
+```clojure
+(meme.tools.clj.stages/expand-syntax-quotes forms opts)
+```
+
+Plain-forms convenience wrapper around `step-expand-syntax-quotes` that doesn't require building a ctx map. Takes a vector of forms plus an opts map, returns the expanded forms. Use this when you already have a forms vector in hand (e.g. from `meme->forms`) and want eval-ready output without the stages machinery.
+
+### strip-shebang
+
+```clojure
+(meme.tools.clj.stages/strip-shebang source)
+```
+
+Remove a leading `#!` line from a source string. Invoked by runtime paths before `step-parse` so executable scripts (`#!/usr/bin/env bb meme run`) parse cleanly. Handles both `\n` and `\r\n` line endings. Returns the source unchanged if it does not start with `#!`.
 
 ### run
 
@@ -665,7 +689,7 @@ A sibling lang with different string conventions would install its own handler (
 (meme.registry/resolve-by-extension path)
 ```
 
-Given a file path, find the user lang whose `:extension` matches. Returns `[lang-name lang-map]` or `nil`.
+Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Meme ships with `.meme`, `.memec`, `.memej`, `.memejs`; implojure ships with `.implj`, `.impljc`, `.impljs`.
 
 ### registered-langs
 
@@ -673,5 +697,13 @@ Given a file path, find the user lang whose `:extension` matches. Returns `[lang
 (meme.registry/registered-langs)
 ```
 
-List all registered user language names (keywords).
+List all registered **user** lang names (keywords). Excludes built-ins (meme-lang, implojure-lang).
+
+### available-langs
+
+```clojure
+(meme.registry/available-langs)
+```
+
+List all registered lang names (keywords) — built-ins and user-registered combined. Useful for CLI enumeration or diagnostics.
 

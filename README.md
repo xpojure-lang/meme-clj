@@ -59,7 +59,7 @@ Run a `.meme` file:
 
 ```bash
 $ bb meme run hello.meme                                # Babashka
-$ clojure -T:meme run :file '"hello.meme"'              # Clojure JVM
+$ clojure -X:meme run :file '"hello.meme"'              # Clojure JVM
 Hello, world!
 ```
 
@@ -135,6 +135,10 @@ Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 | [VS Code](https://code.visualstudio.com) | [vscode-meme](https://github.com/xpojure-lang/vscode-meme) | Syntax highlighting, brackets, indentation, folding |
 
 Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sitter-meme)
+
+## Sibling language: implojure
+
+A second frontend, `implojure-lang`, ships in the same jar under extensions `.implj`/`.impljc`/`.impljs`. Same host (Clojure/CLJS), different surface: infix `+`, `*`, `mod` as word operators, a named-pipeline form `|name|>`, and otherwise Clojure semantics. Registered alongside meme in the CLI; uses the same `meme.tools.clj.*` infrastructure. Useful as the worked example of how to build a second Clojure-flavored frontend on top of meme's toolkit.
 
 ## Documentation
 

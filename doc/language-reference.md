@@ -1,6 +1,6 @@
 # meme Language Reference
 
-Complete syntax reference for writing `.meme` code.
+Complete syntax reference for writing `.meme` code. For the sibling Clojure-flavored frontend `implojure-lang` (file extensions `.implj`/`.impljc`/`.impljs`, infix-heavy syntax with `|name|>` pipes), see its own grammar — meme and implojure share the `meme.tools.clj.*` infrastructure but are distinct languages with different surface rules.
 
 
 ## The Rule
@@ -370,7 +370,7 @@ All of these work exactly as in Clojure:
 - Character literals: `\a`, `\newline`, `\space`
 - Tagged literals: `#inst`, `#uuid`
 - Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `meme->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
-- Reader conditionals: `#?(:clj x :cljs y)` — parsed natively; the matching platform branch is selected at read time
+- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`meme->forms`, `meme->clj`, `format-meme-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. Meme call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
 - Namespaced maps: `#:ns{}`
 - Destructuring in all binding positions
 - Commas are whitespace
