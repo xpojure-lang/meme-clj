@@ -37,8 +37,6 @@ Reader-conditional handling is now a pipeline stage instead of a reader flag. `m
 
 - **`meme from-meme` / `meme from-clj` CLI aliases** for users who prefer to name the source rather than the destination. `from-meme` ≡ `to-clj`; `from-clj` ≡ `to-meme`.
 
-- **`meme build` CLI command** — transpile `.meme` → `.clj` then AOT-compile to JVM bytecode. Staging in `--transpile-out target/meme`, output in `--out target/classes`. Stops at bytecode; JAR packaging stays in the user's tools.build layer.
-
 ### Changed
 
 - **`run-string`, `run-file`, REPL** — `step-evaluate-reader-conditionals` inserted automatically between `step-read` and `step-expand-syntax-quotes`.
