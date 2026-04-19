@@ -35,6 +35,17 @@
     (is (= :second
            (run/run-string "foo()\nbar()" (fn [form] (if (= 'bar (first form)) :second :first)))))))
 
+(deftest run-string-eval-fn-throw-halts-remaining-forms
+  (testing "the meme wrapper does not swallow eval-fn exceptions; forms after the throw are not evaluated"
+    (let [seen (atom [])
+          eval-fn (fn [form]
+                    (if (= 'boom (first form))
+                      (throw (ex-info "stop" {}))
+                      (do (swap! seen conj form) form)))]
+      (is (thrown? Exception
+                   (run/run-string "a()\nboom()\nc()" eval-fn)))
+      (is (= '[(a)] @seen)))))
+
 (deftest run-string-opts-map-eval
   (testing "opts map with :eval is used"
     (let [forms-seen (atom [])]
