@@ -453,3 +453,38 @@ bb meme transpile src/ --out target/classes  # or override
 ```
 
 `compile` is accepted as an alias. Add the output directory to `:paths` in `deps.edn` or `bb.edn`. Standard `require` then works without any runtime patching.
+
+### Building to JVM bytecode
+
+Meme doesn't ship a `build` command — AOT compilation composes cleanly with tooling you probably already have. Two equivalent recipes:
+
+**Via transpile + tools.build** (zero meme runtime dep in your build.clj):
+
+```clojure
+;; build.clj
+(require '[clojure.tools.build.api :as b])
+
+(defn compile-clj [_]
+  ;; Shell out to meme transpile, then AOT the result.
+  (b/process {:command-args ["bb" "meme" "transpile" "src"]})
+  (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
+                  :src-dirs  ["target/meme"]
+                  :class-dir "target/classes"}))
+```
+
+**Directly via the meme loader** (no intermediate `.clj` files on disk):
+
+```clojure
+;; build.clj
+(require '[meme.loader :as loader]
+         '[clojure.tools.build.api :as b])
+
+(defn compile-clj [_]
+  (loader/install!)
+  (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
+                  :src-dirs  ["src"]
+                  :class-dir "target/classes"
+                  :ns-compile '[my.ns]}))  ; list .meme namespaces explicitly
+```
+
+Both produce identical bytecode. The first leaves a readable `.clj` staging dir (useful for debugging); the second skips it and requires meme on the build classpath. Pick whichever fits your pipeline.
