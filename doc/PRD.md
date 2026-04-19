@@ -271,7 +271,7 @@ meme rules inside. No opaque regions.
 | PL14 | Registry atomicity: extension conflict check inside `swap!` callback, thread-safe | Done |
 | PL15 | Red team hardening: 11 confirmed fixes (OOM, TOCTOU, compat, metadata), 4 plausible concern fixes | Done |
 | PL16 | Registry imports no langs directly — built-ins self-register from their own api ns; CLI is the "app" that requires each lang.  Dissolves the registry ↔ meme-lang cycle and four `requiring-resolve` workarounds. | Done |
-| PL17 | Lightweight pipeline contract validation: stages declare required ctx keys via `stage-contracts` data; `check-contract!` runs at stage entry and throws `:meme-lang/pipeline-error` with missing keys listed, instead of deep NPEs. | Done |
+| PL17 | Lightweight pipeline contract validation: stages declare required ctx keys via `stage-contracts` data; `check-contract!` runs at stage entry and throws `:meme/pipeline-error` with missing keys listed, instead of deep NPEs. | Done |
 
 ## Future work
 

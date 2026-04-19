@@ -142,7 +142,7 @@
 
 (deftest read-set-preserves-insertion-order-meta
   (let [s (read1 "#{3 1 2}")]
-    (is (= [3 1 2] (:meme-lang/insertion-order (meta s))))))
+    (is (= [3 1 2] (:meme/insertion-order (meta s))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Reader-sugar forms: quote, deref, var-quote
@@ -151,23 +151,23 @@
 (deftest read-quote-produces-sugar-marker
   (let [form (read1 "'x")]
     (is (= '(quote x) form))
-    (is (true? (:meme-lang/sugar (meta form))))))
+    (is (true? (:meme/sugar (meta form))))))
 
 (deftest read-quote-call-has-no-sugar-marker
-  (testing "quote(x) reads to the same Clojure form but without :meme-lang/sugar"
+  (testing "quote(x) reads to the same Clojure form but without :meme/sugar"
     (let [form (read1 "quote(x)")]
       (is (= '(quote x) form))
-      (is (not (:meme-lang/sugar (meta form)))))))
+      (is (not (:meme/sugar (meta form)))))))
 
 (deftest read-deref-sugar
   (let [form (read1 "@x")]
     (is (= '(clojure.core/deref x) form))
-    (is (true? (:meme-lang/sugar (meta form))))))
+    (is (true? (:meme/sugar (meta form))))))
 
 (deftest read-var-quote-sugar
   (let [form (read1 "#'foo")]
     (is (= '(var foo) form))
-    (is (true? (:meme-lang/sugar (meta form))))))
+    (is (true? (:meme/sugar (meta form))))))
 
 (deftest read-var-quote-non-symbol-error
   (let [d (ex-data-of "#'42")]
@@ -193,9 +193,9 @@
     (is (= 1 (:a (meta form))))))
 
 (deftest read-meta-chain-stacks
-  (testing "multiple ^ annotations accumulate on :meme-lang/meta-chain"
+  (testing "multiple ^ annotations accumulate on :meme/meta-chain"
     (let [form (read1 "^:a ^:b x")
-          chain (:meme-lang/meta-chain (meta form))]
+          chain (:meme/meta-chain (meta form))]
       (is (vector? chain))
       (is (= 2 (count chain))))))
 
@@ -258,7 +258,7 @@
     (is (= 'fn (first form)))
     (is (vector? (nth form 1)))
     (is (= 2 (count (nth form 1))))
-    (is (true? (:meme-lang/sugar (meta form))))))
+    (is (true? (:meme/sugar (meta form))))))
 
 (deftest read-anon-fn-rest-arg
   (let [form (read1 "#(apply + %&)")
@@ -282,13 +282,13 @@
     (is (map? form))
     (is (contains? form :user/name))
     (is (contains? form :user/age))
-    (is (= "user" (:meme-lang/namespace-prefix (meta form))))))
+    (is (= "user" (:meme/namespace-prefix (meta form))))))
 
 (deftest read-auto-namespaced-map-preserves-prefix
-  (testing "#::alias{...} preserves :: prefix in :meme-lang/namespace-prefix meta"
+  (testing "#::alias{...} preserves :: prefix in :meme/namespace-prefix meta"
     (let [form (read1 "#::alias{:k 1}")]
       (is (map? form))
-      (is (= "::alias" (:meme-lang/namespace-prefix (meta form)))))))
+      (is (= "::alias" (:meme/namespace-prefix (meta form)))))))
 
 (deftest read-namespaced-map-odd-count-error
   (let [d (ex-data-of "#:user{:a}")]

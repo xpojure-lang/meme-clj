@@ -15,11 +15,11 @@
             [meme-lang.form-shape :as form-shape]))
 
 ;; ---------------------------------------------------------------------------
-;; Comment extraction from :meme-lang/leading-trivia metadata
+;; Comment extraction from :meme/leading-trivia metadata
 ;; ---------------------------------------------------------------------------
 
 (defn- extract-comments
-  "Extract comment lines from a :meme-lang/leading-trivia metadata string.
+  "Extract comment lines from a :meme/leading-trivia metadata string.
    Returns a vector of trimmed comment strings, or nil."
   [ws]
   (when ws
@@ -42,13 +42,13 @@
       body)))
 
 (defn- form-comments
-  "Get comment lines from a form's :meme-lang/leading-trivia metadata, or nil."
+  "Get comment lines from a form's :meme/leading-trivia metadata, or nil."
   [form]
   (when (and (some? form)
              #?(:clj  (instance? clojure.lang.IMeta form)
                 :cljs (satisfies? IMeta form))
              (meta form))
-    (extract-comments (:meme-lang/leading-trivia (meta form)))))
+    (extract-comments (:meme/leading-trivia (meta form)))))
 
 (defn- comment-doc
   "Build a Doc that emits comment lines followed by a hardline.
@@ -82,15 +82,15 @@
 
 (defn- anon-fn-shorthand?
   "Can (fn [params] body) be printed as #(body)?
-   Only when :meme-lang/sugar tagged by reader AND params are %-style."
+   Only when :meme/sugar tagged by reader AND params are %-style."
   [form]
-  (and (:meme-lang/sugar (meta form))
+  (and (:meme/sugar (meta form))
        (seq? form)
        (= 'fn (first form))
        (= 3 (count form))
        (vector? (second form))
        ;; RT6-F21: verify params are %-style — programmatic misuse of
-       ;; :meme-lang/sugar on non-% fns would silently change semantics
+       ;; :meme/sugar on non-% fns would silently change semantics
        (every? #(and (symbol? %) (str/starts-with? (name %) "%"))
                (second form))))
 
@@ -381,7 +381,7 @@
               :cljs (satisfies? IWithMeta form))
            (some? (meta form))
            (seq (forms/strip-internal-meta (meta form))))
-      (let [chain (:meme-lang/meta-chain (meta form))
+      (let [chain (:meme/meta-chain (meta form))
             stripped (with-meta form (select-keys (meta form) forms/notation-meta-keys))
             prefix-docs (if chain
                           (mapv #(emit-meta-prefix-doc % ctx) (reverse chain))
@@ -412,11 +412,11 @@
       ;; Anon-fn shorthand #()
       ;; In :clj mode, only use #() when the body is a list (call).
       ;; #(42) in Clojure means (fn [] (42)) — calling 42 — not (fn [] 42).
-      ;; F7: when :meme-lang/bare-percent, restore % from %1 in body before printing.
+      ;; F7: when :meme/bare-percent, restore % from %1 in body before printing.
       (and (anon-fn-shorthand? form)
            (or (not= mode :clj) (seq? (nth form 2))))
       (let [raw-body (nth form 2)
-            body (if (:meme-lang/bare-percent (meta form))
+            body (if (:meme/bare-percent (meta form))
                    (forms/restore-bare-percent raw-body)
                    raw-body)]
         (if (and (= mode :clj) (seq? body))
@@ -430,15 +430,15 @@
       (let [head (first form)]
         (cond
           ;; @deref sugar
-          (and (= head 'clojure.core/deref) (:meme-lang/sugar (meta form)))
+          (and (= head 'clojure.core/deref) (:meme/sugar (meta form)))
           (render/doc-cat doc-at (to-doc-inner (second form) ctx))
 
           ;; 'quote sugar
-          (and (= head 'quote) (:meme-lang/sugar (meta form)))
+          (and (= head 'quote) (:meme/sugar (meta form)))
           (render/doc-cat doc-quote (to-doc-inner (second form) ctx))
 
           ;; #'var sugar
-          (and (= head 'var) (:meme-lang/sugar (meta form)))
+          (and (= head 'var) (:meme/sugar (meta form)))
           (render/doc-cat doc-var-quote (to-doc-inner (second form) ctx))
 
           ;; Regular call — bounded realization for safety against infinite seqs
@@ -459,8 +459,8 @@
             ;; Suppress @deref sugar inside ~ to prevent ~@J ambiguity
             inner (if (and (seq? inner)
                            (= 'clojure.core/deref (first inner))
-                           (:meme-lang/sugar (meta inner)))
-                    (with-meta inner (dissoc (meta inner) :meme-lang/sugar))
+                           (:meme/sugar (meta inner)))
+                    (with-meta inner (dissoc (meta inner) :meme/sugar))
                     inner)]
         (render/doc-cat doc-unquote (to-doc-inner inner ctx)))
 
@@ -481,9 +481,9 @@
       (vector? form)
       (collection-doc "[" "]" (vec form) ctx true)
 
-      ;; Map — reconstruct #:ns{} or #::alias{} when :meme-lang/namespace-prefix metadata present
+      ;; Map — reconstruct #:ns{} or #::alias{} when :meme/namespace-prefix metadata present
       (map? form)
-      (if-let [ns-str (:meme-lang/namespace-prefix (meta form))]
+      (if-let [ns-str (:meme/namespace-prefix (meta form))]
         (let [;; ns-str is "foo" for #:foo{}, "::foo" for #::foo{}
               actual-ns (if (str/starts-with? ns-str "::") (subs ns-str 2) ns-str)
               prefix (if (str/starts-with? ns-str "::")
@@ -497,10 +497,10 @@
           (pairs-doc prefix "}" (mapv (fn [[k v]] [(strip-ns k) v]) form) ctx))
         (pairs-doc "{" "}" (vec form) ctx))
 
-      ;; Set — use :meme-lang/insertion-order for insertion-order output, validated against actual contents
+      ;; Set — use :meme/insertion-order for insertion-order output, validated against actual contents
       (set? form)
-      (let [order (:meme-lang/insertion-order (meta form))
-            ;; Use :meme-lang/insertion-order when it matches set size (not stale), otherwise fall back
+      (let [order (:meme/insertion-order (meta form))
+            ;; Use :meme/insertion-order when it matches set size (not stale), otherwise fall back
             elements (if (and order (= (count order) (count form)))
                        order
                        (vec form))]

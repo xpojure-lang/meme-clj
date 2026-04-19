@@ -272,7 +272,7 @@ code.
 
 ## `#()` printer shorthand
 
-The printer emits `#(body)` when the form has `:meme-lang/sugar true` metadata —
+The printer emits `#(body)` when the form has `:meme/sugar true` metadata —
 set by the reader when it parses `#(...)` source syntax. A user-written
 `fn([%1] body)` lacks this metadata and prints back as `fn(...)`.
 
@@ -342,11 +342,11 @@ collapses two notations into the same Clojure form, it must tag the form
 with metadata recording which notation was used. The printer checks that
 metadata to reconstruct the original syntax.
 
-**Implementation:** The reader attaches `:meme-lang/sugar true` metadata to
+**Implementation:** The reader attaches `:meme/sugar true` metadata to
 forms produced by sugar syntax (`'`, `@`, `#'`). The printer checks
 this: sugar-tagged forms emit sugar; untagged forms emit the explicit
-call. The `:meme-lang/sugar` key is stripped from display metadata (alongside
-`:line`, `:column`, `:file`, `:meme-lang/leading-trivia`) so it never appears in output.
+call. The `:meme/sugar` key is stripped from display metadata (alongside
+`:line`, `:column`, `:file`, `:meme/leading-trivia`) so it never appears in output.
 
 **Why this matters:** Without this, the stages silently normalize
 user code. `var(x)` becomes `#'x`. `quote(list)` becomes `'list`.
@@ -361,10 +361,10 @@ distinguish them.
 
 **Previously fixed** (these were losses in earlier versions, now preserved
 via metadata):
-- Namespaced maps: preserved via `:meme-lang/namespace-prefix` metadata on the map.
-- Chained metadata annotations: preserved via `:meme-lang/meta-chain`.
-- Set element ordering: preserved via `:meme-lang/insertion-order` (insertion order).
-- `#()` vs `fn()`: preserved via `:meme-lang/sugar` (see above section).
+- Namespaced maps: preserved via `:meme/namespace-prefix` metadata on the map.
+- Chained metadata annotations: preserved via `:meme/meta-chain`.
+- Set element ordering: preserved via `:meme/insertion-order` (insertion order).
+- `#()` vs `fn()`: preserved via `:meme/sugar` (see above section).
 
 
 ## Three layers of formatting: notation, form-shape, style
@@ -445,7 +445,7 @@ Each stage in `meme-lang.stages` declares its required ctx keys in a public `sta
  :step-expand-syntax-quotes {:requires #{:forms}  :produces #{:forms}}}
 ```
 
-Stages call `check-contract!` at entry and throw `:meme-lang/pipeline-error` with the missing key(s) and the actual ctx keys present.  Miscomposed pipelines (e.g. calling `step-read` before `step-parse`) surface their mistake at the point of composition instead of raising a deep-inside NPE.
+Stages call `check-contract!` at entry and throw `:meme/pipeline-error` with the missing key(s) and the actual ctx keys present.  Miscomposed pipelines (e.g. calling `step-read` before `step-parse`) surface their mistake at the point of composition instead of raising a deep-inside NPE.
 
 A heavier spec-based validation (PL8 in `PRD.md`) was tried and removed during an earlier refactor.  This replacement is deliberately lighter:
 
@@ -457,7 +457,7 @@ A heavier spec-based validation (PL8 in `PRD.md`) was tried and removed during a
 
 meme uses a single implementation of the meme↔Clojure translation, registered as `:meme` in the lang registry.
 
-The pipeline combines a unified scanlet-parselet Pratt parser (`meme.tools.parser` with `meme-lang.grammar`) and a Wadler-Lindig document printer (`meme-lang.printer`). It preserves all metadata, sugar flags (`:meme-lang/sugar`), whitespace annotations, and comment positions through roundtrips.
+The pipeline combines a unified scanlet-parselet Pratt parser (`meme.tools.parser` with `meme-lang.grammar`) and a Wadler-Lindig document printer (`meme-lang.printer`). It preserves all metadata, sugar flags (`:meme/sugar`), whitespace annotations, and comment positions through roundtrips.
 
 **Use for:** formatting, tooling integration, roundtrip-sensitive workflows.
 
@@ -473,11 +473,11 @@ Clojure accepts `"\uD800\uDC00"` (a valid UTF-16 surrogate pair encoding U+10000
 
 ### Map key ordering for maps with >8 entries
 
-Clojure's `array-map` preserves insertion order for up to 8 entries. Beyond that, it promotes to `PersistentHashMap` which does not preserve order. Since the meme parser builds maps via `(apply array-map forms)`, maps with 9+ keys may have their key order shuffled in output. Sets preserve order via `:meme-lang/insertion-order` metadata, but maps do not have an equivalent mechanism. This is a Clojure platform limitation, not a meme design choice.
+Clojure's `array-map` preserves insertion order for up to 8 entries. Beyond that, it promotes to `PersistentHashMap` which does not preserve order. Since the meme parser builds maps via `(apply array-map forms)`, maps with 9+ keys may have their key order shuffled in output. Sets preserve order via `:meme/insertion-order` metadata, but maps do not have an equivalent mechanism. This is a Clojure platform limitation, not a meme design choice.
 
 ### Comments on primitive map keys
 
-Comments in meme source (`;; comment`) are attached as `:meme-lang/leading-trivia` metadata to the following form. However, primitive types (keywords, numbers, strings, booleans) do not implement `IMeta` in Clojure and cannot carry metadata. When a comment appears before a keyword map key (e.g., `{; comment\n :a 1}`), the comment is lost because `:a` cannot store metadata. This is a fundamental Clojure platform limitation. Comments before symbols, vectors, maps, and sets are preserved correctly.
+Comments in meme source (`;; comment`) are attached as `:meme/leading-trivia` metadata to the following form. However, primitive types (keywords, numbers, strings, booleans) do not implement `IMeta` in Clojure and cannot carry metadata. When a comment appears before a keyword map key (e.g., `{; comment\n :a 1}`), the comment is lost because `:a` cannot store metadata. This is a fundamental Clojure platform limitation. Comments before symbols, vectors, maps, and sets are preserved correctly.
 
 ### End-of-line comment repositioning
 
@@ -501,7 +501,7 @@ Programmatically constructed symbols containing whitespace, parentheses, or othe
 
 ### Inline comments on primitive values lost during formatting
 
-Comments are preserved through the pipeline via `:meme-lang/leading-trivia` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
+Comments are preserved through the pipeline via `:meme/leading-trivia` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
 
 Comments that **survive** formatting: those before symbols, keywords, collections, and calls. Comments that are **lost**: those before numbers, strings, booleans, characters, nil, and regex literals.
 
@@ -617,7 +617,7 @@ The meme printer converts Clojure forms back to meme syntax. When it encounters 
 
 The printer does not inject `quote` because it cannot know whether the list was intended as a call or as data — that information is not present in the Clojure form. A `(1 2 3)` produced by `(list 1 2 3)` at runtime is indistinguishable from one produced by reading `'(1 2 3)`. This is a consequence of homoiconicity, not a printer limitation.
 
-When the list originates from the meme reader with `'1(2 3)`, the reader attaches `{:meme-lang/sugar true}` metadata to the `(quote ...)` wrapper. The printer uses this to reproduce the quote sugar. Without that metadata (e.g., for programmatically constructed lists), the printer has no way to know whether quote was originally present.
+When the list originates from the meme reader with `'1(2 3)`, the reader attaches `{:meme/sugar true}` metadata to the `(quote ...)` wrapper. The printer uses this to reproduce the quote sugar. Without that metadata (e.g., for programmatically constructed lists), the printer has no way to know whether quote was originally present.
 
 ### Implications for language designers using `meme.tools.*`
 

@@ -127,7 +127,7 @@
          (is false "step-read should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
-             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :meme/pipeline-error (:type data)))
              (is (= :step-read (:stage data)))
              (is (contains? (set (:missing-ctx data)) :cst))
              (is (re-find #"missing required ctx key" (ex-message e))))))))
@@ -138,7 +138,7 @@
          (is false "step-expand should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
-             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :meme/pipeline-error (:type data)))
              (is (= :step-expand-syntax-quotes (:stage data)))
              (is (contains? (set (:missing-ctx data)) :forms)))))))
 
@@ -148,7 +148,7 @@
          (is false "step-parse should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
-             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :meme/pipeline-error (:type data)))
              (is (= :step-parse (:stage data)))
              (is (contains? (set (:missing-ctx data)) :source)))))))
 
@@ -158,7 +158,7 @@
          (is false "step-parse should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
-             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :meme/pipeline-error (:type data)))
              (is (= :step-parse (:stage data)))
              (is (re-find #"must be a string" (ex-message e))))))))
 
@@ -168,7 +168,7 @@
          (is false "step-parse should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
-             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :meme/pipeline-error (:type data)))
              (is (contains? (set (:missing-opts data)) :grammar))
              (is (re-find #":grammar" (ex-message e))))))))
 
@@ -275,7 +275,7 @@
          (is false "should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (let [data (ex-data e)]
-             (is (= :meme-lang/pipeline-error (:type data)))
+             (is (= :meme/pipeline-error (:type data)))
              (is (= :step-evaluate-reader-conditionals (:stage data)))
              (is (contains? (set (:missing-ctx data)) :forms)))))))
 

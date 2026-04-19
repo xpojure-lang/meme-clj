@@ -10,7 +10,7 @@ Reader-conditional handling is now a pipeline stage instead of a reader flag. `m
 
 ### Breaking Changes
 
-- **The `:read-cond` option is removed from `meme->forms`, `meme->clj`, and the `step-read` pipeline stage.** Reader conditionals (`#?`, `#?@`) are always returned as `MemeReaderConditional` records. Passing `:read-cond` throws `:meme-lang/deprecated-opt` with migration text.
+- **The `:read-cond` option is removed from `meme->forms`, `meme->clj`, and the `step-read` pipeline stage.** Reader conditionals (`#?`, `#?@`) are always returned as `MemeReaderConditional` records. Passing `:read-cond` throws `:meme/deprecated-opt` with migration text.
 
   **Migration:**
   - If you used `{:read-cond :preserve}`: remove it. Records are the default now.
@@ -63,7 +63,7 @@ Reader-conditional handling is now a pipeline stage instead of a reader flag. `m
 
 ### Internal
 
-- **`cst-reader.cljc`** — `:reader-cond` case simplified to a single always-preserve path. `:eval` branch, `::no-match` sentinel for reader conditionals, and `:meme-lang/splice` metadata machinery are gone. `splice-and-filter` now only filters the shebang sentinel.
+- **`cst-reader.cljc`** — `:reader-cond` case simplified to a single always-preserve path. `:eval` branch, `::no-match` sentinel for reader conditionals, and `:meme/splice` metadata machinery are gone. `splice-and-filter` now only filters the shebang sentinel.
 - **`meme-lang.run`** and **`meme-lang.repl`** compose the new stage in their run-fn pipelines.
 
 ### Known Limitation
@@ -78,7 +78,7 @@ A reorganization release. No breaking changes to `.meme` syntax or runtime behav
 
 - **Registry inversion** — `meme.registry` imports no concrete langs. Each lang's api namespace calls `register-builtin!` at its own load time, and the CLI triggers registration by explicitly requiring each lang it ships with. Dissolves the old registry↔lang cycle and four `requiring-resolve` workarounds.
 - **Shared infrastructure reclassification** — `meme.registry` and `meme.loader` are now documented as shared infrastructure peer to `meme.tools.*`, not as a strict "above" tier over `meme-lang.*`. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional; the CLAUDE.md tier table has been updated to match.
-- **Pipeline contract validation** — stages declare required ctx keys via `stage-contracts`; `check-contract!` runs at entry and throws `:meme-lang/pipeline-error` with the missing key(s) when pipelines are miscomposed, instead of deep NPEs.
+- **Pipeline contract validation** — stages declare required ctx keys via `stage-contracts`; `check-contract!` runs at entry and throws `:meme/pipeline-error` with the missing key(s) when pipelines are miscomposed, instead of deep NPEs.
 - **Engine seal** — `meme.tools.parser` exposes only `trivia-pending?` to language grammars; other engine internals are no longer part of the grammar-author contract.
 - **`char-code` consolidated into `meme.tools.lexer`** — duplicate helper in `meme-lang.lexlets` removed.
 
@@ -159,7 +159,7 @@ A reorganization release. No breaking changes to `.meme` syntax or runtime behav
 
 ### Changed
 - **Architecture**: three-layer reorganization — `meme.tools.*` (generic parser/render), `meme-lang.*` (meme language), `meme.*` (CLI/registry/loader). The Pratt parser is fully data-driven via grammar spec.
-- **Metadata namespace hygiene**: all internal metadata keys moved from `:meme/*` to `:meme-lang/*`, with descriptive names. `:meme/ws` → `:meme-lang/leading-trivia`, `:meme/sugar` → `:meme-lang/sugar`, `:meme/order` → `:meme-lang/insertion-order`, `:meme/ns` → `:meme-lang/namespace-prefix`, `:meme/meta-chain` → `:meme-lang/meta-chain`, `:meme/bare-percent` → `:meme-lang/bare-percent`, `:meme/splice` → `:meme-lang/splice`. This separates meme-lang metadata from the generic `meme.tools` namespace, preventing collision with both user metadata and future languages built on `meme.tools.*`.
+- **Metadata namespace hygiene**: all internal metadata keys moved from `:meme/*` to `:meme/*`, with descriptive names. `:meme/ws` → `:meme/leading-trivia`, `:meme/sugar` → `:meme/sugar`, `:meme/order` → `:meme/insertion-order`, `:meme/ns` → `:meme/namespace-prefix`, `:meme/meta-chain` → `:meme/meta-chain`, `:meme/bare-percent` → `:meme/bare-percent`, `:meme/splice` → `:meme/splice`. This separates meme-lang metadata from the generic `meme.tools` namespace, preventing collision with both user metadata and future languages built on `meme.tools.*`.
 - **`register!` conflict check is atomic**: extension validation moved inside `swap!` callback, preventing TOCTOU race on concurrent registrations.
 - **CLI reads file once**: `process-files` reads source via `slurp` once and passes content to transform, eliminating TOCTOU between read and write.
 - **`meme-file?` and `swap-ext`** consult the registry for all registered extensions, not just hard-coded `.meme`.
@@ -178,7 +178,7 @@ A reorganization release. No breaking changes to `.meme` syntax or runtime behav
 - **Scar tissue triage**: ~15 comment-only regression blocks in `reader_test.cljc` converted to active tests or documented design decisions. Two stale comments corrected (duplicate keys and `%0` ARE rejected by the current pipeline).
 
 ### Removed
-- **All `:meme/*` internal metadata keys**: replaced by `:meme-lang/*` namespaced equivalents with descriptive names. The `:meme/` namespace is now reserved for generic tooling.
+- **All `:meme/*` internal metadata keys**: replaced by `:meme/*` namespaced equivalents with descriptive names. The `:meme/` namespace is now reserved for generic tooling.
 
 ## [1.0.0] — 2026-04-01
 
