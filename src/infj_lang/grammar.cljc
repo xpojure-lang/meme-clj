@@ -8,7 +8,7 @@
    implementation unchanged — only the grammar is new.
 
    Operators (bp = binding power, higher = tighter):
-     *, /          bp 70
+     *, /, mod     bp 70
      +, -          bp 60
      <, <=, >, >=  bp 50
      =, not=       bp 40
@@ -17,8 +17,8 @@
      not           nud prefix, parses operand at bp 35
 
    All binary operators are left-associative. Word operators (`and`,
-   `or`, `not=`, `not`) require a word boundary after them — `andrew`
-   stays a symbol."
+   `or`, `mod`, `not=`, `not`) require a word boundary after them —
+   `andrew` / `modern` / `orbital` stay symbols."
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]
             [meme-lang.grammar :as meme-grammar]
@@ -189,4 +189,7 @@
                      :fn   (led-infix-call "or" 30 1)}
                     {:char \n :bp 40 :open-type :not=-op
                      :when (word-at-cursor? "not=")
-                     :fn   (led-infix-call "not=" 40 3)}]))))
+                     :fn   (led-infix-call "not=" 40 3)}
+                    {:char \m :bp 70 :open-type :mod-op
+                     :when (word-at-cursor? "mod")
+                     :fn   (led-infix-call "mod" 70 2)}]))))
