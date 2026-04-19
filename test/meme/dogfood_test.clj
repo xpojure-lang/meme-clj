@@ -167,8 +167,7 @@
 
 
 (deftest self-hosting-example-meme-files
-  (doseq [path ["examples/stars.meme"
-                 "examples/languages/prefix/core.meme"]]
+  (doseq [path ["examples/stars.meme"]]
     (testing (str path " roundtrips")
       (let [{:keys [total succeeded failed]} (roundtrip-meme-file path)]
         (is (pos? total) (str path " should have forms"))

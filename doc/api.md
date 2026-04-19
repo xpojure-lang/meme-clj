@@ -643,12 +643,12 @@ Register a user lang. `lang-name` is a keyword. `config` is an EDN-style map —
 Both `:extension` (string) and `:extensions` (vector) are accepted. Both are normalized to a single `:extensions` vector. The `:extension` key is removed after normalization.
 
 ```clojure
-;; Single extension
-(registry/register! :prefix {:extension ".prefix"
-                             :run "examples/languages/prefix/core.meme"
-                             :format :meme})
+;; Single extension — prelude file path
+(registry/register! :my-lang {:extension ".ml"
+                              :run "path/to/prelude.meme"
+                              :format :meme})
 
-;; Multiple extensions
+;; Multiple extensions — pre-resolved run fn
 (registry/register! :my-lang {:extensions [".ml" ".mlx"]
                               :run 'my-lang.run/run-string})
 

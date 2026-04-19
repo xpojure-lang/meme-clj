@@ -233,7 +233,6 @@ A reorganization release. No breaking changes to `.meme` syntax or runtime behav
 - **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.rewrite.tree`)
 - **Stage contracts**: opt-in spec validation at stage boundaries (`meme.stages.contract`)
 - **LANGBOOK.md**: language maker cookbook — patterns for building guest languages on the meme platform
-- **Superficie example**: surface-syntax renderer reimplemented as a guest language (212 lines vs ~2000 original)
 
 ### Fixed
 - **nil/true/false as call heads**: the M-expression rule is purely syntactic — `nil(1 2)` → `(nil 1 2)`. Any value can be a head. Previously these were rejected artificially.
