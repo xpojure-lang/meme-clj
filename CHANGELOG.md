@@ -51,6 +51,8 @@ Reader-conditional handling is now a pipeline stage instead of a reader flag. `m
 
 - **`clj->forms` depth guard off-by-one.** The sibling fix in `cst_reader.cljc` (4.0.0) tightened `>` to `>=`, but `meme-lang.api/clj->forms/check-depth` retained `>`, so Clojure source at exactly `max-parse-depth` levels parsed successfully while meme source at the same depth was rejected. Both entry points now reject at exactly `max-parse-depth`, matching the 4.0.0 CHANGELOG intent. Scar-tissue regression: `clj-forms-depth-boundary-matches-meme-forms` in `test/meme/regression/reader_test.cljc`.
 
+- **`meme.loader/uninstall!` thread-safety.** The in-flight-load guard used a `^:dynamic *loading*` thread-local binding, which only blocked same-thread uninstall. A second thread could call `uninstall!` and restore `clojure.core/load` while the first thread was still inside a `lang-load`, leaving the in-flight load executing against a torn-down override. Replaced with a shared `load-counter` atom and an `install-lock` monitor. `install!`/`uninstall!` now serialize safely across threads; `uninstall!` throws `{:reason :active-load, :in-flight N}` if any thread is still inside a load. Scar-tissue regressions: `uninstall-during-load-rejected`, `uninstall-from-other-thread-blocked-while-loading`, and `concurrent-installs-are-idempotent` in `test/meme/loader_test.clj`.
+
 - **Bare `:/` now reads as `(keyword "/")`** instead of erroring with "Invalid token". Matches Clojure.
 
 - **Bare `~~x` leaked a `MemeUnquote` record to eval** instead of erroring. Added a post-expansion sweep that rejects leftover unquote records. Balanced `` ``~~x `` still works.

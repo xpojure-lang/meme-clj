@@ -526,7 +526,9 @@ Namespace loader for `.meme` files. Intercepts `clojure.core/load` and `clojure.
 (meme.loader/uninstall!)  ;; => :uninstalled
 ```
 
-`install!` is idempotent — safe to call multiple times.
+`install!` is idempotent — safe to call multiple times and safe to call concurrently from multiple threads.
+
+`uninstall!` throws `ex-info` with `{:reason :active-load, :in-flight N}` if any thread — including the calling thread — is currently inside a lang-load when uninstall is requested. This prevents tearing down the `clojure.core/load`/`load-file` overrides while another thread is still dispatching through them. `install!` and `uninstall!` serialize on a shared monitor, so concurrent calls are safe.
 
 ### What gets intercepted
 

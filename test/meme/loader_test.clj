@@ -4,7 +4,8 @@
    that the original suite missed due to test-ordering dependencies and
    missing platform coverage. See commit history for details."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [meme.loader :as loader]))
+            [meme.loader :as loader])
+  (:import (java.util.concurrent CountDownLatch TimeUnit)))
 
 (use-fixtures :each
   (fn [f]
@@ -73,15 +74,78 @@
       (is (nil? (find-fn "/nrepl/core")) "nrepl/core should be denied"))))
 
 ;; ---------------------------------------------------------------------------
-;; C4: Cannot uninstall loader from within a loaded .meme file
+;; C4: Cannot uninstall loader while a lang-load is in flight on any thread.
+;; Replaces the earlier thread-local `*loading*` guard, which only protected
+;; same-thread uninstall and was documented as "not safe concurrently." The
+;; guard now observes a shared load-counter under install-lock.
 ;; ---------------------------------------------------------------------------
 
 (deftest uninstall-during-load-rejected
-  (testing "uninstall! throws when called during lang-load"
-    ;; Simulate: bind *loading* true and try to uninstall
-    (binding [meme.loader/*loading* true]
-      (is (thrown-with-msg? Exception #"Cannot uninstall"
-                            (loader/uninstall!))))))
+  (testing "uninstall! throws when counter shows any thread mid-load"
+    (let [counter @(resolve 'meme.loader/load-counter)]
+      (swap! counter inc)
+      (try
+        (let [ex (is (thrown? Exception (loader/uninstall!)))]
+          (is (= :active-load (:reason (ex-data ex))))
+          (is (pos? (:in-flight (ex-data ex) 0))))
+        (finally (swap! counter dec)))))
+  (testing "uninstall! succeeds once counter drains"
+    ;; counter is 0 now; uninstall + reinstall should both work cleanly
+    (loader/uninstall!)
+    (loader/install!)))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: concurrent uninstall from a second thread must observe the
+;; shared load-counter, not a thread-local binding. The previous
+;; `^:dynamic *loading*` guard silently allowed this to tear down the var
+;; overrides mid-load on the other thread — documented as "not safe
+;; concurrently" but not enforced. See src/meme/loader.clj comments.
+;; ---------------------------------------------------------------------------
+
+(deftest uninstall-from-other-thread-blocked-while-loading
+  (testing "a second thread's uninstall! throws while another is mid-load"
+    (let [entered  (CountDownLatch. 1)
+          release  (CountDownLatch. 1)
+          ;; Use the private `with-load-tracking` helper — it's the same
+          ;; counter hook the real lang-load uses. We simulate a load that
+          ;; parks until the main thread has exercised uninstall!.
+          track    @(resolve 'meme.loader/with-load-tracking)
+          loader-thread
+          (future
+            (track
+              (fn []
+                (.countDown entered)
+                (.await release 5 TimeUnit/SECONDS))))]
+      (try
+        (is (.await entered 5 TimeUnit/SECONDS)
+            "loader thread should enter its tracked section")
+        (let [ex (is (thrown? Exception (loader/uninstall!)))]
+          (is (= :active-load (:reason (ex-data ex)))))
+        (finally
+          (.countDown release)
+          @loader-thread))
+      ;; After the loader thread exits its tracked section the counter is
+      ;; 0 again; uninstall must now succeed and we re-install for the
+      ;; fixture teardown.
+      (loader/uninstall!)
+      (loader/install!))))
+
+(deftest concurrent-installs-are-idempotent
+  (testing "10 threads calling install! in parallel leave loader in install state"
+    (let [n         10
+          start     (CountDownLatch. 1)
+          done      (CountDownLatch. n)
+          futures   (doall (for [_ (range n)]
+                             (future
+                               (.await start)
+                               (try (loader/install!)
+                                    (finally (.countDown done))))))]
+      (.countDown start)
+      (is (.await done 5 TimeUnit/SECONDS))
+      (run! deref futures)
+      ;; install! is idempotent by design; verify final state is consistent.
+      (is (true? @@(resolve 'meme.loader/installed?)))
+      (is (some? @@(resolve 'meme.loader/extensions-fn))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #1 — requiring-resolve infinite recursion
