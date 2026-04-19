@@ -1,29 +1,31 @@
 (ns infj-lang.grammar
   "Infj-lang grammar spec — infix meme.
 
-   Infj is meme (M-expressions) plus a set of conventional binary infix
+   Infj is meme (M-expressions) plus a fixed set of conventional infix
    operators. Infix parselets emit `:call` CST nodes whose head is a
    synthetic symbol atom, so every module downstream of the parser
    (cst-reader, printer, formatter, stages, run, repl) reuses meme's
    implementation unchanged — only the grammar is new.
 
    Operators (bp = binding power, higher = tighter):
-     ==  (→ =)      bp 40
-     !=  (→ not=)   bp 40
-     <, <=          bp 50
-     >, >=          bp 50
-     +, -           bp 60
-     *, /, %  (→ mod)  bp 70
+     *, /          bp 70
+     +, -          bp 60
+     <, <=, >, >=  bp 50
+     =, not=       bp 40
+     and           bp 35
+     or            bp 30
+     not           nud prefix, parses operand at bp 35
 
-   All are left-associative. Unary minus beyond meme's built-in handling
-   of negative numeric literals (`-5`) is NOT supported in v0 — write
-   `(- 0 x)` instead."
+   All binary operators are left-associative. Word operators (`and`,
+   `or`, `not=`, `not`) require a word boundary after them — `andrew`
+   stays a symbol."
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]
-            [meme-lang.grammar :as meme-grammar]))
+            [meme-lang.grammar :as meme-grammar]
+            [meme-lang.lexlets :as lex]))
 
 ;; ---------------------------------------------------------------------------
-;; Led parselet factories
+;; Synthetic CST node helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- op-atom
@@ -36,33 +38,30 @@
                                (dissoc :trivia/before))}))
 
 (defn- make-call
-  "Emit a :call CST node with the named operator as head, wrapping lhs
-   and rhs. :open and :close reuse op-tok — the meme cst-reader only
-   checks :close for truthiness and reads :open's trivia/before, which
-   we strip on the synthetic head."
-  [op-tok op-name lhs rhs]
+  "Emit a :call CST node with op-name as head and the given arg vector.
+   :open and :close reuse op-tok — the meme cst-reader only checks
+   :close for truthiness and reads :open's trivia/before, which is
+   stripped on the synthetic head."
+  [op-tok op-name args]
   (pratt/cst :call {:head  (op-atom op-tok op-name)
                     :open  op-tok
-                    :args  [lhs rhs]
+                    :args  (vec args)
                     :close op-tok}))
 
-(defn- led-infix-call
-  "Factory: single-char binary infix that lowers to `(op lhs rhs)`.
-   Right-BP equals left-BP → left-associative."
-  [op-name bp]
-  (fn [engine lhs op-tok]
-    (let [rhs (pratt/parse-expr engine bp)]
-      (make-call op-tok op-name lhs rhs))))
+;; ---------------------------------------------------------------------------
+;; Binary infix parselets
+;; ---------------------------------------------------------------------------
 
-(defn- led-two-char-call
-  "Factory: two-character binary infix (==, !=). The dispatch loop has
-   already consumed the first char; this consumes the second before
-   parsing RHS."
-  [op-name bp]
+(defn- led-infix-call
+  "Factory: binary infix that lowers to `(op lhs rhs)`. Left-associative.
+   extra-chars is the number of additional characters to consume after
+   the dispatch loop's single-char consume (1 for two-char ops like `or`,
+   2 for `and`, 3 for `not=`, 0 for single-char ops like `+`)."
+  [op-name bp extra-chars]
   (fn [engine lhs op-tok]
-    (pratt/advance! engine 1)
+    (when (pos? extra-chars) (pratt/advance! engine extra-chars))
     (let [rhs (pratt/parse-expr engine bp)]
-      (make-call op-tok op-name lhs rhs))))
+      (make-call op-tok op-name [lhs rhs]))))
 
 (defn- led-compare-or-eq
   "Factory: led parselet for < or > with an optional trailing = (<=, >=)."
@@ -70,15 +69,49 @@
   (fn [engine lhs op-tok]
     (if (and (not (pratt/eof? engine)) (= (pratt/peek-char engine) \=))
       (do (pratt/advance! engine 1)
-          (let [rhs (pratt/parse-expr engine bp)]
-            (make-call op-tok eq-name lhs rhs)))
-      (let [rhs (pratt/parse-expr engine bp)]
-        (make-call op-tok base-name lhs rhs)))))
+          (make-call op-tok eq-name [lhs (pratt/parse-expr engine bp)]))
+      (make-call op-tok base-name [lhs (pratt/parse-expr engine bp)]))))
 
-(def ^:private next-is-eq?
-  "Predicate for `:when` clauses — returns true if the char after
-   cursor is `=`. Used to gate == and != dispatch."
-  (pratt/next-char-is? \=))
+;; ---------------------------------------------------------------------------
+;; Word-boundary predicate
+;; ---------------------------------------------------------------------------
+
+(defn- word-at-cursor?
+  "Returns a predicate on `engine` that's true iff the source at cursor
+   starts with `word` and the char right after `word` is either EOF or
+   a non-symbol-continuation char."
+  [word]
+  (let [word-len (count word)]
+    (fn [engine]
+      (let [pos (pratt/cursor engine)
+            src (pratt/source-str engine)
+            len (pratt/source-len engine)]
+        (and (<= (+ pos word-len) len)
+             (= word (subs src pos (+ pos word-len)))
+             (or (>= (+ pos word-len) len)
+                 (not (lex/symbol-char? (.charAt ^String src (+ pos word-len))))))))))
+
+;; ---------------------------------------------------------------------------
+;; Unary `not` — nud position
+;; ---------------------------------------------------------------------------
+
+(def ^:private not-word? (word-at-cursor? "not"))
+
+(defn- not-nud-pred
+  "Nud-pred: fires when cursor is at `not` with a trailing word boundary."
+  [ch engine]
+  (and (= ch \n) (not-word? engine)))
+
+(defn- not-nud-scanlet
+  "Nud parselet for unary `not`. Consumes `not` then parses one operand
+   at bp 35 (just above `and`), so `not x = y` groups as `(not (= x y))`
+   and `not x and y` groups as `(and (not x) y)`."
+  [engine]
+  (let [start (pratt/cursor engine)]
+    (pratt/advance! engine 3)
+    (let [op-tok   (pratt/make-token! engine :not-op start)
+          operand  (pratt/parse-expr engine 35)]
+      (make-call op-tok "not" [operand]))))
 
 ;; ---------------------------------------------------------------------------
 ;; Grouping parens in nud position
@@ -92,7 +125,6 @@
   [engine open-tok]
   (pratt/skip-trivia! engine)
   (cond
-    ;; ()
     (and (not (pratt/eof? engine)) (= (pratt/peek-char engine) \)))
     (let [start (pratt/cursor engine)]
       (pratt/advance! engine 1)
@@ -116,17 +148,16 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:private prefix-bp
-  "Binding power for unary-prefix reader-sugar operators (', @, `, ~).
-   Sits above infix operators (max 70) and below function-call (100),
-   so `'x + y` parses as `(+ (quote x) y)` rather than `(quote (+ x y))`."
+  "Binding power for reader-sugar prefix operators (', @, `). Bumped
+   above infix operators (max 70) and below function-call (100), so
+   `'x + y` parses as `(+ (quote x) y)` rather than `(quote (+ x y))`."
   80)
 
 (def grammar
   "Infj grammar: meme's grammar with extra :led entries for infix
-   operators, `(` overridden in nud position to mean grouping, and
-   reader-sugar prefix operators (', @, `, ~) bumped to bp 80 so they
-   bind tighter than infix arithmetic. All other behavior (trivia,
-   dispatch, dispatched `#` reader macros) is inherited from meme."
+   operators, `(` overridden in nud position to mean grouping, reader-
+   sugar prefix operators bumped to bp 80, and a `not` nud-pred
+   prepended ahead of meme's symbol-start predicate."
   (-> meme-grammar/grammar
       (assoc-in [:nud \(] (lexer/single-char-scanlet :open-paren nud-group-or-empty))
       (assoc-in [:nud \']
@@ -138,16 +169,24 @@
       (assoc-in [:nud \`]
                 (lexer/single-char-scanlet :syntax-quote
                   (pratt/nud-prefix :syntax-quote prefix-bp)))
+      (update :nud-pred
+              (fn [preds]
+                (into [[not-nud-pred not-nud-scanlet]] preds)))
       (assoc :led
              (into (:led meme-grammar/grammar)
-                   [{:char \+ :bp 60 :open-type :plus-op  :fn (led-infix-call "+" 60)}
-                    {:char \- :bp 60 :open-type :minus-op :fn (led-infix-call "-" 60)}
-                    {:char \* :bp 70 :open-type :star-op  :fn (led-infix-call "*" 70)}
-                    {:char \/ :bp 70 :open-type :slash-op :fn (led-infix-call "/" 70)}
-                    {:char \% :bp 70 :open-type :pct-op   :fn (led-infix-call "mod" 70)}
-                    {:char \= :bp 40 :open-type :eq-eq    :when next-is-eq?
-                     :fn (led-two-char-call "=" 40)}
-                    {:char \! :bp 40 :open-type :bang-eq  :when next-is-eq?
-                     :fn (led-two-char-call "not=" 40)}
+                   [{:char \+ :bp 60 :open-type :plus-op  :fn (led-infix-call "+" 60 0)}
+                    {:char \- :bp 60 :open-type :minus-op :fn (led-infix-call "-" 60 0)}
+                    {:char \* :bp 70 :open-type :star-op  :fn (led-infix-call "*" 70 0)}
+                    {:char \/ :bp 70 :open-type :slash-op :fn (led-infix-call "/" 70 0)}
+                    {:char \= :bp 40 :open-type :eq-op    :fn (led-infix-call "=" 40 0)}
                     {:char \< :bp 50 :open-type :lt-op    :fn (led-compare-or-eq "<" "<=" 50)}
-                    {:char \> :bp 50 :open-type :gt-op    :fn (led-compare-or-eq ">" ">=" 50)}]))))
+                    {:char \> :bp 50 :open-type :gt-op    :fn (led-compare-or-eq ">" ">=" 50)}
+                    {:char \a :bp 35 :open-type :and-op
+                     :when (word-at-cursor? "and")
+                     :fn   (led-infix-call "and" 35 2)}
+                    {:char \o :bp 30 :open-type :or-op
+                     :when (word-at-cursor? "or")
+                     :fn   (led-infix-call "or" 30 1)}
+                    {:char \n :bp 40 :open-type :not=-op
+                     :when (word-at-cursor? "not=")
+                     :fn   (led-infix-call "not=" 40 3)}]))))
