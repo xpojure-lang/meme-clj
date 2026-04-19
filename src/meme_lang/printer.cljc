@@ -10,7 +10,7 @@
    true pass-through.  See `to-doc` for the public entry point."
   (:require [clojure.string :as str]
             [meme.tools.render :as render]
-            [meme-lang.values :as values]
+            [meme.tools.clj.values :as values]
             [meme-lang.forms :as forms]
             [meme-lang.form-shape :as form-shape]))
 

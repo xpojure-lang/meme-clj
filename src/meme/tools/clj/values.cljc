@@ -1,4 +1,4 @@
-(ns meme-lang.values
+(ns meme.tools.clj.values
   "Shared value → string serialization for the printer and rewrite emitter.
    Handles atomic Clojure values (strings, numbers, chars, regex, etc.)
    that both emit paths must render identically."
