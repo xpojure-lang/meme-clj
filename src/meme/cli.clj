@@ -163,13 +163,14 @@
   (when-not file
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name] [-- args...]"))
     (cli-exit! 1))
-  (let [[lang-name l] (get-lang lang file)]
+  (let [[lang-name l] (get-lang lang file)
+        source (slurp file)]
     (registry/check-support l lang-name :run)
     (try (binding [*command-line-args* (or rest-args [])]
-           ((:run l) (slurp file) (lang-opts opts)))
+           ((:run l) source (lang-opts opts)))
          (catch Exception e
            (binding [*out* *err*]
-             (println (errors/format-error e (try (slurp file) (catch Exception _ nil)))))
+             (println (errors/format-error e source)))
            (cli-exit! 1)))))
 
 (defn repl
