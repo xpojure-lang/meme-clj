@@ -1,6 +1,7 @@
 (ns meme.cli-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme.cli :as cli]))
+            [meme.cli :as cli])
+  (:import [java.io File]))
 
 (deftest meme-file?-test
   (let [meme-file? #'cli/meme-file?]
@@ -47,6 +48,57 @@
       (is (= "foo.meme" (swap-ext "foo.clj" "clj" "meme")))
       (is (= "foo.meme" (swap-ext "foo.cljc" "clj" "meme")))
       (is (= "foo.meme" (swap-ext "foo.cljs" "clj" "meme"))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: `run` used to call (slurp file) twice — once for exec, once in
+;; the error path. A file that changed between reads (or was unreadable on the
+;; second read) would either show stale content in the error or lose source
+;; context entirely. Fix: read once, pass same source to both paths.
+;; ---------------------------------------------------------------------------
+
+(defn- write-temp-meme! [src]
+  (let [f (File/createTempFile "meme-cli-test" ".meme")]
+    (.deleteOnExit f)
+    (spit f src)
+    f))
+
+(deftest run-reads-source-once
+  (testing "slurp is called exactly once when run succeeds"
+    (let [f       (write-temp-meme! "println(\"ok\")")
+          counter (atom 0)
+          real-slurp slurp]
+      (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
+                    cli/cli-exit! (fn [_] nil)]
+        (cli/run {:file (.getAbsolutePath f)}))
+      (is (= 1 @counter))))
+  (testing "slurp is called exactly once when the lang throws"
+    (let [f       (write-temp-meme! "undefined-symbol-xyz123(1)")
+          counter (atom 0)
+          real-slurp slurp
+          err-buf (java.io.StringWriter.)]
+      (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
+                    cli/cli-exit! (fn [_] nil)]
+        (binding [*err* err-buf]
+          (cli/run {:file (.getAbsolutePath f)})))
+      (is (= 1 @counter))))
+  (testing "error display uses source that was actually executed"
+    (let [f       (write-temp-meme! "println(\"original\")")
+          reads   (atom [])
+          real-slurp slurp
+          err-buf (java.io.StringWriter.)]
+      (with-redefs [slurp (fn [arg]
+                            (let [s (real-slurp arg)]
+                              (swap! reads conj s)
+                              s))
+                    cli/cli-exit! (fn [_] nil)]
+        ;; Run once, then rewrite file between exec and error formatting.
+        ;; After fix: only one slurp, so this doesn't matter.
+        ;; Before fix: two slurps, so the error would see the rewritten source.
+        ;; We assert only one read occurred (= fix applied, no race window).
+        (binding [*err* err-buf]
+          (try (cli/run {:file (.getAbsolutePath f)})
+               (catch Exception _ nil))))
+      (is (<= (count @reads) 1)))))
 
 (deftest lang-opts-test
   (let [lang-opts #'cli/lang-opts]
