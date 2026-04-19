@@ -221,6 +221,11 @@
    so that require, load-file, and nREPL all work without runtime patching."
   [{:keys [file files out lang] :as opts}]
   (let [inputs (or files (when file [file]))
+        ;; An empty/blank --out would silently write to the filesystem
+        ;; root (str "" sep rel → "/rel"). Reject fast with a clear error.
+        _ (when (and (some? out) (str/blank? out))
+            (println "Error: --out cannot be empty")
+            (cli-exit! 1))
         out-dir (or out "target/classes")]
     (when (empty? inputs)
       (println "Usage: meme compile <src-dir|file...> [--out target/classes] [--lang name]")

@@ -327,6 +327,12 @@
           (doseq [f (reverse (file-seq d))]
             (.delete f)))))))
 
+(deftest compile-rejects-empty-out-dir
+  (let [f (tmp-meme "def(x 1)")
+        {:keys [exit out]} (bb-meme "compile" (str f) "--out" "")]
+    (is (= 1 exit) "empty --out should exit 1")
+    (is (str/includes? out "--out cannot be empty"))))
+
 (deftest compile-reports-errors
   (let [dir (io/file (System/getProperty "java.io.tmpdir")
                      (str "meme-e2e-err-" (System/nanoTime)))
