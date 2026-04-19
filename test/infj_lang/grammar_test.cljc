@@ -49,6 +49,35 @@
   (is (= '(not x) (parse-one "not x"))))
 
 ;; ---------------------------------------------------------------------------
+;; Named pipeline  `|name|>`  →  `(as-> lhs name rhs)`
+;; ---------------------------------------------------------------------------
+
+(deftest named-pipeline-basic
+  (is (= '(as-> x n (f n))     (parse-one "x |n|> f(n)")))
+  (is (= '(as-> 42 v (+ v 1))  (parse-one "42 |v|> v + 1"))))
+
+(deftest named-pipeline-chain-nests
+  (testing "chained pipes produce nested `as->` — semantically equivalent to the multi-body form"
+    (is (= '(as-> (as-> x n (f n)) n (g n))
+           (parse-one "x |n|> f(n) |n|> g(n)")))
+    (is (= '(as-> (as-> x a (f a)) b (g b))
+           (parse-one "x |a|> f(a) |b|> g(b)")))))
+
+(deftest named-pipeline-has-lowest-precedence
+  (testing "LHS of |n|> captures the whole boolean/arithmetic expression before it"
+    (is (= '(as-> (or x y) n (f n))  (parse-one "x or y |n|> f(n)")))
+    (is (= '(as-> (+ 1 2) n (* n 3)) (parse-one "1 + 2 |n|> n * 3")))))
+
+(deftest named-pipeline-name-scoped-to-rhs
+  (testing "the name in `|n|>` is the binding symbol used by `as->`"
+    (is (= '(as-> m k (get m k))  (parse-one "m |k|> get(m k)")))))
+
+(deftest pipe-non-match-falls-through-to-symbol
+  (testing "`|foo|` without a closing `|>` reads as a normal Clojure symbol"
+    (is (= '[x |foo|] (infj/infj->forms "x |foo|")))
+    (is (= '[|foo|]   (infj/infj->forms "|foo|")))))
+
+;; ---------------------------------------------------------------------------
 ;; Precedence
 ;; ---------------------------------------------------------------------------
 
@@ -186,3 +215,13 @@
        (is (= :yes (run-str "if(1 < 2 :yes :no)")))
        (is (= true (run-str "1 = 1 and 2 < 3")))
        (is (= false (run-str "not (1 = 1)"))))))
+
+#?(:clj
+   (deftest run-string-evaluates-named-pipeline
+     (let [run-str (requiring-resolve 'infj-lang.run/run-string)]
+       (testing "single-stage pipeline"
+         (is (= 11 (run-str "def(x 10) x |n|> n + 1"))))
+       (testing "chained pipeline with same name"
+         (is (= 26 (run-str "5 |n|> n * n |n|> n + 1"))))
+       (testing "chained pipeline with different names"
+         (is (= 12 (run-str "def(xs [1 2 3 4 5]) xs |v|> filter(fn([n] n > 2) v) |v|> reduce(+ v)")))))))
