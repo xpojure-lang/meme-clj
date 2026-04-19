@@ -80,7 +80,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-errors
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/errors.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/clj/errors.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -119,7 +119,7 @@
                 "src/meme_lang/printer.cljc"
                 "src/meme_lang/resolve.cljc"
                 "src/meme_lang/stages.cljc"
-                "src/meme_lang/errors.cljc"
+                "src/meme/tools/clj/errors.cljc"
                 "src/meme/registry.clj"
                 "src/meme/cli.clj"]]
     (testing (str path " roundtripped vars match original")

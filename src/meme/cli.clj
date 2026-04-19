@@ -5,7 +5,7 @@
    which triggers its self-registration in meme.registry.  The registry
    itself imports no langs; adding a new built-in means a one-line
    require here plus the lang's own register-builtin! call."
-  (:require [meme-lang.errors :as errors]
+  (:require [meme.tools.clj.errors :as errors]
             [meme.registry :as registry]
             [meme.loader :as loader]
             [meme.config :as config]

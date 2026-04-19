@@ -9,7 +9,7 @@
   (:require [meme.tools.repl :as repl]
             [meme.loader :as loader]
             [meme-lang.stages :as stages]
-            [meme-lang.errors :as errors]
+            [meme.tools.clj.errors :as errors]
             [meme-lang.run :as meme-run]
             [clojure.string :as str]
             [clojure.java.io :as io]))

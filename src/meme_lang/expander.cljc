@@ -3,7 +3,7 @@
    Called by runtime paths (run, repl) before eval. Not needed for tooling
    (tooling works with AST nodes directly)."
   (:require [clojure.string :as str]
-            [meme-lang.errors :as errors]
+            [meme.tools.clj.errors :as errors]
             [meme-lang.forms :as forms]))
 
 (declare expand-syntax-quotes)

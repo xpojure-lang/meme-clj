@@ -1,8 +1,8 @@
-(ns meme-lang.errors-test
-  "Unit tests for meme-lang.errors: format-error display and source-context extraction."
+(ns meme.tools.clj.errors-test
+  "Unit tests for meme.tools.clj.errors: format-error display and source-context extraction."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [meme-lang.errors :as errors]))
+            [meme.tools.clj.errors :as errors]))
 
 ;; ---------------------------------------------------------------------------
 ;; source-context
