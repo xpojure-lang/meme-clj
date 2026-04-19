@@ -1,7 +1,7 @@
-(ns meme.config-test
+(ns meme-lang.config-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
-            [meme.config :as config]
+            [meme-lang.config :as config]
             [meme-lang.form-shape :as form-shape]
             [meme-lang.formatter.canon :as canon]))
 

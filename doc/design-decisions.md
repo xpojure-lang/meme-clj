@@ -402,7 +402,7 @@ All four extension points compose via `assoc`/`merge`:
 - **Enable inference** — `(with-structural-fallback registry)`.
 - **Override one slot's rendering** — `{:slot-renderers {:clause my-fn}}` in style; merges over printer defaults.
 
-Project-local defaults live in `.meme-format.edn`, consumed by `meme.config` and merged into `meme format` invocations. See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint, refactor).
+Project-local defaults live in `.meme-format.edn`, consumed by `meme-lang.config` and merged into `meme format` invocations. See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint, refactor).
 
 ## Registry as pure infrastructure — inverted control for built-in langs
 

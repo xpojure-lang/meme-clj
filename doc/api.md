@@ -543,7 +543,7 @@ Namespace loader for `.meme` files. Intercepts `clojure.core/load` and `clojure.
 
 **Babashka limitation:** Babashka's SCI interpreter does not dispatch `require` through `clojure.core/load`, so `require` of `.meme` namespaces is JVM-only. `load-file` works on both platforms. For Babashka projects that need `require`, use `meme transpile` to precompile `.meme` to `.clj`.
 
-## meme.config
+## meme-lang.config
 
 Project-local formatter configuration.  Reads `.meme-format.edn` (walking up from a starting directory) and translates it into opts for `meme-lang.formatter.canon/format-form`.  Consumed by `meme format` CLI; programmatic callers can use it directly.  JVM/Babashka only.
 
@@ -552,8 +552,8 @@ See [form-shape.md](form-shape.md) for the config schema and worked examples.
 ### resolve-project-opts
 
 ```clojure
-(meme.config/resolve-project-opts)              ;; starts from CWD
-(meme.config/resolve-project-opts start-dir)    ;; starts from given dir
+(meme-lang.config/resolve-project-opts)              ;; starts from CWD
+(meme-lang.config/resolve-project-opts start-dir)    ;; starts from given dir
 ```
 
 Locate `.meme-format.edn` by walking up from `start-dir` (or CWD), read and validate it, and return the derived opts map ready to pass to `canon/format-form`.  Returns `{}` if no config is found.
