@@ -272,3 +272,37 @@
       (require 'test-meme-ns.greeter :reload)
       (is (= ns-before *ns*)
           "require must not leak *ns* changes from the .meme ns form"))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: with-load-tracking must not decrement the counter if the
+;; increment itself never succeeded. Previously both swap! calls lived inside
+;; the try, so a throw on the inc path still fired the finally's dec — leaving
+;; the counter at N-1 and breaking quiescence checks.
+;; ---------------------------------------------------------------------------
+
+(deftest with-load-tracking-counter-balance
+  (let [counter-atom @(resolve 'meme.loader/load-counter)
+        track        @(resolve 'meme.loader/with-load-tracking)]
+    (testing "counter unchanged after a successful body"
+      (let [before @counter-atom]
+        (track (fn [] :ok))
+        (is (= before @counter-atom))))
+    (testing "counter unchanged after a throwing body"
+      (let [before @counter-atom]
+        (try (track (fn [] (throw (ex-info "boom" {}))))
+             (catch Exception _ nil))
+        (is (= before @counter-atom))))
+    (testing "counter unchanged if swap! inc itself throws (no erroneous dec)"
+      (let [before @counter-atom
+            orig-swap! swap!
+            calls (volatile! 0)]
+        (with-redefs [swap! (fn
+                              ([a f]
+                               (if (and (identical? a counter-atom) (= 0 @calls))
+                                 (do (vswap! calls inc)
+                                     (throw (ex-info "inc failed" {})))
+                                 (orig-swap! a f)))
+                              ([a f & args] (apply orig-swap! a f args)))]
+          (try (track (fn [] :unreached))
+               (catch Exception _ nil)))
+        (is (= before @counter-atom))))))
