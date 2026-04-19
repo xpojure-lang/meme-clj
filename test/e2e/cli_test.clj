@@ -358,6 +358,29 @@
         (doseq [f (reverse (file-seq (io/file out-dir)))]
           (.delete f))))))
 
+(deftest build-transpiles-and-aot-compiles
+  (let [src-dir (io/file (System/getProperty "java.io.tmpdir")
+                         (str "meme-e2e-build-" (System/nanoTime)))
+        demo (io/file src-dir "demo")
+        transpile-dir (str src-dir "-tx")
+        aot-dir (str src-dir "-aot")]
+    (try
+      (.mkdirs demo)
+      (spit (io/file demo "core.meme") "ns(demo.core)\ndefn(greet [x] str(\"hello \" x))")
+      (let [{:keys [exit out]} (bb-meme "build" (str src-dir)
+                                        "--transpile-out" transpile-dir
+                                        "--out" aot-dir)]
+        (is (zero? exit) (str "build should succeed, got: " out))
+        (is (str/includes? out "Built 1 namespace"))
+        (is (.exists (io/file transpile-dir "demo" "core.clj"))
+            "intermediate .clj should exist")
+        (is (.exists (io/file aot-dir "demo" "core__init.class"))
+            "AOT bytecode should exist"))
+      (finally
+        (doseq [d [src-dir (io/file transpile-dir) (io/file aot-dir)]]
+          (doseq [f (reverse (file-seq d))]
+            (.delete f)))))))
+
 (deftest compile-reports-errors
   (let [dir (io/file (System/getProperty "java.io.tmpdir")
                      (str "meme-e2e-err-" (System/nanoTime)))

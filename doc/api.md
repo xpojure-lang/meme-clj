@@ -453,6 +453,7 @@ Unified CLI for meme. JVM/Babashka only.
 | `meme to-meme <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.meme`. Alias: `from-clj`. |
 | `meme format <file\|dir>` | Format `.meme` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
 | `meme transpile <dir\|file...>` | Transpile `.meme` to `.clj` in a separate output directory (`--out target/meme` by default). Output preserves relative paths — add the output dir to `:paths` in deps.edn for standard `require` without runtime patching. Alias: `compile`. |
+| `meme build <dir\|file...>` | Transpile then AOT-compile to JVM bytecode. Stages `.clj` in `--transpile-out target/meme`, writes `.class` files to `--out target/classes`. Spawns `clojure` with the staging dir on the classpath and runs `clojure.core/compile` per namespace. For JAR packaging, use tools.build after this. |
 | `meme inspect [--lang]` | Show lang info and supported commands |
 | `meme version` | Print version |
 
