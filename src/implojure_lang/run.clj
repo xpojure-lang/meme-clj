@@ -1,9 +1,9 @@
 (ns implojure-lang.run
-  "Implojure-specific eval pipeline. Delegates to `meme-lang.run` with implojure's
-   grammar injected via the `:grammar` opt. All other meme conventions
-   (shebang handling, BOM stripping, loader install, syntax-quote
-   resolution) apply unchanged."
-  (:require [meme-lang.run :as meme-run]
+  "Implojure's eval pipeline. Injects implojure's grammar and delegates to
+   the shared commons run (`meme.tools.clj.run`) — same pattern as
+   meme-lang.run. Implojure depends on the commons, not on meme-lang's
+   infrastructure."
+  (:require [meme.tools.clj.run :as clj-run]
             [implojure-lang.grammar :as grammar]))
 
 (defn- with-grammar [opts]
@@ -15,11 +15,11 @@
   ([s eval-fn-or-opts]
    {:pre [(string? s)]}
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})]
-     (meme-run/run-string s (with-grammar opts)))))
+     (clj-run/run-string s (with-grammar opts)))))
 
 (defn run-file
   "Read and eval an implojure file. Returns the last result."
   ([path] (run-file path {}))
   ([path eval-fn-or-opts]
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})]
-     (meme-run/run-file path (with-grammar opts)))))
+     (clj-run/run-file path (with-grammar opts)))))
