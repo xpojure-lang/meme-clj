@@ -72,7 +72,8 @@ clojure -T:build deploy
 The codebase is organized by *kind* of code, with shared infrastructure that both language implementations and the CLI depend on:
 
 - **`meme.tools.*`** — Generic, language-agnostic building blocks (parser engine, scanlet builders, render engine).
-- **`meme-lang.*`** — Meme language implementation (grammar, parselets, lexlets, stages, printer, formatter, run/repl).
+- **`meme.tools.clj.*`** — Clojure-surface commons: lexical conventions (and future shared bits) that any Clojure-flavored frontend can depend on. Sits inside the toolkit tier but carries Clojure bias explicitly in the path.
+- **`meme-lang.*`** — Meme language implementation (grammar, parselets, lexlets, stages, printer, formatter, run/repl). Meme-lang's lexlets forward to `meme.tools.clj.lex` — the language's lex layer is just Clojure's, but the `meme-lang.lexlets` ns is kept as meme-lang's lexical identity.
 - **`meme.registry`, `meme.loader`** — Shared runtime infrastructure, peer to `meme.tools.*`. Both langs and the CLI depend on them: langs push themselves into the registry at load time and rely on the loader for `require`/`load-file`; the CLI dispatches through the registry.
 - **`meme.cli`, `meme.config`** — App tier. Only consumer-facing code lives here.
 
@@ -115,11 +116,15 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme.tools.repl` (.clj) — Shared interactive eval loop. Parameterizable via `:parser`, `:prelude`. Lang implementations wire into `start` via their lang map `:repl` entry. JVM/Babashka only.
 - `meme.tools.run` (.clj) — Shared eval pipeline: source → stages → eval. Parameterizable via `:parser`, `:prelude`. Lang implementations wire into `run-string` and `run-file` via their lang map `:run` entry. JVM/Babashka only.
 
+**Clojure-surface commons** (`meme.tools.clj.*`) — inside the toolkit tier, but with Clojure-specific decisions baked in. Use only from Clojure-flavored langs (meme, implojure); don't use from langs with non-Clojure lex (e.g. calc-lang — it owns its own lexlets).
+
+- `meme.tools.clj.lex` (.cljc) — Clojure-surface lexical conventions: character predicates (`symbol-start?`, `symbol-char?`, `whitespace-char?`, `newline-char?`, `digit?`), consume helpers (`consume-keyword`, `consume-number`, `consume-char-literal`, `consume-string`, `consume-symbol`), and trivia consumers (`ws-consumer`, `newline-consumer`, `comment-consumer`, `bom-consumer`). Handles comma-as-whitespace, invisible-char rejection in identifiers, `::` auto-resolve keyword syntax, `\\uXXXX`/`\\oNNN`/named char literals. Portable.
+
 **Meme language** (`meme-lang.*`) — meme-specific implementation:
 
 - `meme-lang.api` (.cljc) — Public API and lang composition. Provides `meme->forms`, `forms->meme`, `forms->clj`, `clj->forms`, `meme->clj`, `clj->meme`, `format-meme-forms`. Also lang commands: `format-meme`, `to-clj`, `to-meme`, `lang-map`. Orchestrates the lossless CST-based pipeline. `clj->forms` and `clj->meme` are JVM only. Portable.
 - `meme-lang.grammar` (.cljc) — Meme language grammar spec: maps characters to scanlets and parselets. The complete syntactic specification of M-expression syntax as data. Portable.
-- `meme-lang.lexlets` (.cljc) — Meme lexical scanlets: character predicates, consume helpers, and trivia consumers. Provides the lexical layer; `meme-lang.grammar` references these by name. Portable.
+- `meme-lang.lexlets` (.cljc) — Meme-lang's lexical identity. All entries forward to `meme.tools.clj.lex` — M-expressions don't change the lex layer, only the parser layer. The namespace exists so meme-lang has a home for any future meme-specific lexical rule. Portable.
 - `meme-lang.parselets` (.cljc) — Meme-specific compound parselets: call adjacency detection, `#` dispatch sub-routing, tilde (`~`/`~@`), and the M-expression call rule. Portable.
 - `meme-lang.stages` (.cljc) — Composable pipeline stages: `step-parse`, `step-read`, `step-evaluate-reader-conditionals`, `step-expand-syntax-quotes`. Each is `ctx → ctx`. Also provides `run` which composes parse → read (tooling pipeline). Each stage calls `check-contract!` at entry against the public `stage-contracts` map; miscomposed pipelines throw `:meme-lang/pipeline-error` with the missing key(s) instead of NPEs. `step-read` throws `:meme-lang/deprecated-opt` if `:read-cond` is passed. Portable.
 - `meme-lang.cst-reader` (.cljc) — CST reader: walks CST nodes and produces Clojure forms. Handles value resolution, metadata, syntax-quote AST nodes, anonymous functions, namespaced maps, reader conditionals. Portable.
@@ -151,6 +156,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 | Tier | Modules | Platforms |
 |------|---------|-----------|
 | Generic tools | meme.tools.{parser, lexer, render} | JVM, Babashka, ClojureScript |
+| Clojure-surface commons | meme.tools.clj.{lex} | JVM, Babashka, ClojureScript |
 | Core translation | meme-lang.{api, grammar, lexlets, parselets, stages, cst-reader, forms, form-shape, errors, resolve, expander, printer, values, formatter.flat, formatter.canon} | JVM, Babashka, ClojureScript |
 | Runtime infra | meme.tools.{run, repl}, meme-lang.{run, repl}, meme.{registry, loader} | JVM, Babashka |
 | App | meme.{cli, config} | JVM, Babashka |
