@@ -68,19 +68,6 @@
                 (require 'test-meme-ns.broken :reload)))))
 
 ;; ---------------------------------------------------------------------------
-;; C3: Namespace denylist — core infrastructure cannot be shadowed
-;; ---------------------------------------------------------------------------
-
-(deftest denied-namespaces-not-intercepted
-  (testing "clojure.* namespaces are not intercepted by the loader"
-    ;; If the denylist works, find-lang-resource returns nil for clojure/* paths
-    (let [find-fn @(resolve 'meme.loader/find-lang-resource)]
-      (is (nil? (find-fn "/clojure/string")) "clojure/string should be denied")
-      (is (nil? (find-fn "/clojure/core")) "clojure/core should be denied")
-      (is (nil? (find-fn "/java/lang")) "java/lang should be denied")
-      (is (nil? (find-fn "/nrepl/core")) "nrepl/core should be denied"))))
-
-;; ---------------------------------------------------------------------------
 ;; C4: Cannot uninstall loader while a lang-load is in flight on any thread.
 ;; Replaces the earlier thread-local `*loading*` guard, which only protected
 ;; same-thread uninstall and was documented as "not safe concurrently." The
@@ -188,25 +175,6 @@
           (find-fn "/test_meme_ns/greeter")
           (is (zero? @calls)
               "find-lang-resource must not call requiring-resolve"))))))
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: Bug #2 — own infrastructure not in denylist
-;; meme/*, meme_lang/*, and implojure_lang/* namespaces were not denied, so
-;; the loader would try to intercept its own infrastructure (e.g. meme.registry),
-;; enabling the infinite recursion in bug #1. Defense in depth.
-;; ---------------------------------------------------------------------------
-
-(deftest own-infrastructure-not-intercepted
-  (testing "meme.*, meme_lang.*, and implojure_lang.* namespaces are denied by the denylist"
-    (let [find-fn @(resolve 'meme.loader/find-lang-resource)]
-      (is (nil? (find-fn "/meme/registry")) "meme/registry should be denied")
-      (is (nil? (find-fn "/meme/loader")) "meme/loader should be denied")
-      (is (nil? (find-fn "/meme/cli")) "meme/cli should be denied")
-      (is (nil? (find-fn "/meme_lang/api")) "meme_lang/api should be denied")
-      (is (nil? (find-fn "/meme_lang/stages")) "meme_lang/stages should be denied")
-      (is (nil? (find-fn "/meme_lang/run")) "meme_lang/run should be denied")
-      (is (nil? (find-fn "/implojure_lang/api")) "implojure_lang/api should be denied")
-      (is (nil? (find-fn "/implojure_lang/run")) "implojure_lang/run should be denied"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #3 — Babashka detection

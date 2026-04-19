@@ -34,7 +34,9 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
 
-- **Loader denylist extended** — `denied-prefixes` in `meme.loader` now covers `meme/`, `meme_lang/`, `implojure_lang/`, `cognitect/`, `clj_kondo/`, `clj-kondo/` (was: just core Clojure/Java/JS/nREPL/CIDER prefixes). Prevents the loader from intercepting its own infrastructure namespaces or the analyzer toolchain, closing a potential infinite-recursion path and keeping `.meme` resources on the classpath from shadowing core tooling.
+### Removed
+
+- **Loader namespace denylist.** `denied-prefixes` / `denied-namespace?` and the `when-not` guard in `find-lang-resource` are gone. Installing a lang is the trust decision — if a user puts a `.meme` file at `clojure/core.meme` on the classpath, the loader now honors it rather than paternalistically refusing. The infinite-recursion concern the denylist was framed against is actually handled by caching `registered-extensions` as a function value at `install!` time (so `find-lang-resource` never does `requiring-resolve` during load interception); that guard is unchanged. Removes `denied-namespaces-not-intercepted` and `own-infrastructure-not-intercepted` tests. PRD row PL13 withdrawn.
 
 ### Fixed
 
