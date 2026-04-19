@@ -286,3 +286,29 @@
     (is (thrown-with-msg? Exception #"already claimed"
                           (registry/register! :thief {:extension ".q"
                                                       :run 'meme-lang.run/run-string})))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: register! used to perform validation inside swap!. Under CAS
+;; retries, that meant conflict checks could re-run redundantly. The observable
+;; guarantee is that after a failing validation, the registry state is exactly
+;; its pre-call state (no partial write, no stray entry for the failing name).
+;; ---------------------------------------------------------------------------
+
+(deftest register-failure-leaves-registry-unchanged
+  (testing "builtin override throws and does not insert the new name"
+    (is (thrown? Exception (registry/register! :meme {:to-clj identity})))
+    ;; Meme's builtin entry is still there, unaltered — :meme's lang-map has
+    ;; :to-clj from the real api, not our identity function.
+    (is (not= identity (:to-clj (registry/resolve-lang :meme)))))
+  (testing "extension conflict throws and does not insert the new name"
+    (registry/register! :holder {:extension ".reg-scar"
+                                 :run 'meme-lang.run/run-string})
+    (is (thrown? Exception (registry/register! :intruder {:extension ".reg-scar"
+                                                          :run 'meme-lang.run/run-string})))
+    (is (not (contains? (registry/available-langs) :intruder))
+        "failing registration must not leak a partial entry"))
+  (testing "reserved .meme extension throws and does not insert the new name"
+    (is (thrown? Exception (registry/register! :sneaky {:extension ".meme"
+                                                        :run 'meme-lang.run/run-string})))
+    (is (not (contains? (registry/available-langs) :sneaky))
+        "reserved-extension rejection must not leak a partial entry")))

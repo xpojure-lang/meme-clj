@@ -175,34 +175,38 @@
    are resolved via requiring-resolve, strings and keywords follow the same
    rules as load-edn. Pre-resolved functions are passed through.
    Rejects attempts to override built-in langs.
-   All conflict checks are atomic — performed inside swap!."
+
+   Validation runs against a snapshot of the registry, then the new entry
+   is inserted with a single atomic swap!. Under concurrent registrations
+   of mutually conflicting extensions, the last writer wins for its own
+   name but both snapshots may have passed the conflict check — treat
+   register! as a startup-time action, not a contended hot path."
   [lang-name config]
-  (let [resolved (resolve-edn config)]
-    (swap! registry
-      (fn [reg]
-        (when-let [existing (get reg lang-name)]
-          (when (:builtin? (meta existing))
-            (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
-                                 " — choose a different name")
-                            {:lang lang-name}))))
-        (doseq [ext (:extensions resolved)]
-          (when (str/blank? ext)
-            (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                                 " — extension must be a non-empty string")
-                            {:lang lang-name})))
-          (when (= ext ".meme")
-            (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                                 " — extension .meme is reserved for built-in langs")
-                            {:lang lang-name :extension ext})))
-          (doseq [[existing-name existing-lang] reg]
-            (when (and (not= existing-name lang-name)
-                       (some #{ext} (:extensions existing-lang)))
-              (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                                   " — extension " ext " already claimed by "
-                                   (pr-str existing-name))
-                              {:lang lang-name :extension ext
-                               :existing existing-name})))))
-        (assoc reg lang-name resolved)))))
+  (let [resolved (resolve-edn config)
+        snapshot @registry]
+    (when-let [existing (get snapshot lang-name)]
+      (when (:builtin? (meta existing))
+        (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
+                             " — choose a different name")
+                        {:lang lang-name}))))
+    (doseq [ext (:extensions resolved)]
+      (when (str/blank? ext)
+        (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                             " — extension must be a non-empty string")
+                        {:lang lang-name})))
+      (when (= ext ".meme")
+        (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                             " — extension .meme is reserved for built-in langs")
+                        {:lang lang-name :extension ext})))
+      (doseq [[existing-name existing-lang] snapshot]
+        (when (and (not= existing-name lang-name)
+                   (some #{ext} (:extensions existing-lang)))
+          (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                               " — extension " ext " already claimed by "
+                               (pr-str existing-name))
+                          {:lang lang-name :extension ext
+                           :existing existing-name})))))
+    (swap! registry assoc lang-name resolved)))
 
 (defn resolve-by-extension
   "Given a file path, find the lang whose :extensions match.
