@@ -193,7 +193,7 @@ Tests are split across `test/meme_lang/` (language-specific) and `test/meme/` (i
 | `meme_lang/reader/data_literals_test` | Data literal passthrough: vectors, maps, sets, keywords, numbers |
 | `meme_lang/reader/dispatch_test` | Reader macros and dispatch: @, ^, ', #', #_, #(), regex, char, tagged literals, reader conditionals, namespaced maps |
 | `meme_lang/reader/errors_test` | Error cases, rejected forms (unquote outside backtick), error messages with locations, CLJS-specific errors |
-| `meme_lang/expander_test` | Syntax-quote expansion: `expand-forms` passthrough, `MemeSyntaxQuote` expansion, `MemeRaw` unwrapping |
+| `meme_lang/expander_test` | Syntax-quote expansion: `expand-forms` passthrough, `CljSyntaxQuote` expansion, `CljRaw` unwrapping |
 | `meme_lang/resolve_test` | Value resolution: numbers, strings, chars, regex, keywords, tagged literals |
 | `meme_lang/form_shape_test` | Form-shape decomposition: per-form decomposer output, structural fallback, registry extension |
 | `meme_lang/printer_test` | Printer-level seams: `:slot-renderers` override, default slot renderers, unknown-slot fallback |

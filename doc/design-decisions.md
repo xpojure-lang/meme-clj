@@ -22,9 +22,9 @@ Everything else is Clojure.
 The reader has two core stages; eval paths compose two additional stages:
 
 1. **step-parse** (`meme.tools.parser` with `meme-lang.grammar`) — unified scanlet-parselet Pratt parser. Reads directly from a source string. Scanning (character dispatch), trivia classification, and structural parsing are all defined in the grammar spec. Produces a lossless CST. Grammar is a map of characters to scanlet/parselet functions.
-2. **step-read** (`meme-lang.cst-reader`) — lowers CST to Clojure forms. No `read-string` delegation — all values resolved natively via `meme-lang.resolve`. Reader conditionals are preserved as `MemeReaderConditional` records.
-3. **step-evaluate-reader-conditionals** (`meme-lang.stages`) — materializes `#?` / `#?@` for the target platform. Runs on eval paths only; tooling sees records.
-4. **step-expand-syntax-quotes** (`meme-lang.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval.
+2. **step-read** (`meme.tools.clj.cst-reader`) — lowers CST to Clojure forms. No `read-string` delegation — all values resolved natively via `meme.tools.clj.resolve`. Reader conditionals are preserved as `CljReaderConditional` records.
+3. **step-evaluate-reader-conditionals** (`meme.tools.clj.stages`) — materializes `#?` / `#?@` for the target platform. Runs on eval paths only; tooling sees records.
+4. **step-expand-syntax-quotes** (`meme.tools.clj.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval.
 
 The core `stages/run` calls stages 1–2, returning records for tooling. `run-string` chains 1–4 before eval.
 
@@ -33,7 +33,7 @@ The grammar's lexical scanlets handle all character-level concerns (strings, cha
 are individual tokens, so `\)` inside a string is just a `:string` token,
 not a closing paren). The Pratt parser engine handles all structural concerns.
 
-`meme-lang.stages` composes the stages as `ctx → ctx` functions, threading a
+`meme.tools.clj.stages` composes the stages as `ctx → ctx` functions, threading a
 context map with `:source`, `:cst`, `:forms`.
 
 
@@ -57,8 +57,8 @@ the reader evaluates `#?` before `` ` `` is processed. Tooling paths
 (`meme->forms`, `meme->clj`, `format-meme`, `to-clj`) skip the stage and
 see the full record, making conversion lossless by default.
 
-The stage recurses into `MemeSyntaxQuote`, `MemeUnquote`, and
-`MemeUnquoteSplicing` interiors, so `` `#?(:clj x :cljs y) `` collapses
+The stage recurses into `CljSyntaxQuote`, `CljUnquote`, and
+`CljUnquoteSplicing` interiors, so `` `#?(:clj x :cljs y) `` collapses
 to `` `x `` on JVM, matching Clojure. It supports a `:platform` opt for
 cross-platform materialization (generating `.cljs` output on JVM, for
 example) and respects `:default` as a fallback — a gap the old `:eval`
@@ -70,10 +70,10 @@ the map requires an even number of children. This matches Clojure's
 `:read-cond :preserve` behavior.
 
 
-## Centralized value resolution (meme-lang.resolve)
+## Centralized value resolution (meme.tools.clj.resolve)
 
 All value resolution — numbers, strings, chars, regex, auto-resolve
-keywords, tagged literals — is centralized in `meme-lang.resolve`.
+keywords, tagged literals — is centralized in `meme.tools.clj.resolve`.
 The parser deals only with structural parsing; value interpretation is
 delegated to resolve.
 
@@ -175,7 +175,7 @@ character(s) to form the head of an M-expression:
 - `#inst "..."`, `#uuid "..."` — tagged literals.
 - `#:ns{...}` — namespaced maps.
 
-Reader conditionals parse all branches and return a `MemeReaderConditional`
+Reader conditionals parse all branches and return a `CljReaderConditional`
 record preserving every branch. The `step-evaluate-reader-conditionals`
 pipeline stage materializes the platform branch for eval paths. See
 "Reader-conditional evaluation as a pipeline stage" below for the
@@ -250,7 +250,7 @@ it has a scar tissue test.
 
 Numbers, strings, character literals, and regex patterns are tokenized as
 raw text by meme's scanner, then resolved natively by
-`meme-lang.resolve`. The goal is zero delegation to `read-string` —
+`meme.tools.clj.resolve`. The goal is zero delegation to `read-string` —
 meme parses numeric formats (hex, octal, ratios, BigDecimal), string
 escape sequences, and character names itself, guaranteeing identical
 behavior to the host platform without depending on its reader.
@@ -302,10 +302,10 @@ default stack sizes.
 
 ## Source-position tracking
 
-The parser engine records `(line, col)` on each token. Position tracking uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). This is handled internally within `meme.tools.parser`. The display line model (`str/split-lines` in `meme-lang.errors`) may diverge for CRLF sources — `format-error` bridges the gap by clamping carets.
+The parser engine records `(line, col)` on each token. Position tracking uses the **scanner line model** (only `\n` is a line break, `\r` occupies a column). This is handled internally within `meme.tools.parser`. The display line model (`str/split-lines` in `meme.tools.clj.errors`) may diverge for CRLF sources — `format-error` bridges the gap by clamping carets.
 
 
-## Centralized error infrastructure (meme-lang.errors)
+## Centralized error infrastructure (meme.tools.clj.errors)
 
 All error throw sites go through `meme-error`, which constructs `ex-info`
 with a consistent structure: `:line`, `:col` (1-indexed), optional
@@ -437,7 +437,7 @@ User langs continue to go through `register!`, which validates EDN-style config,
 
 ## Pipeline contracts — declarative requirements, not spec
 
-Each stage in `meme-lang.stages` declares its required ctx keys in a public `stage-contracts` map:
+Each stage in `meme.tools.clj.stages` declares its required ctx keys in a public `stage-contracts` map:
 
 ```clojure
 {:step-parse                {:requires #{:source} :produces #{:cst}}
@@ -540,7 +540,7 @@ Exactly four hex digits follow `\u`. Any trailing alphanumeric character on a `\
 
 ### Scanner: structural vs semantic validation
 
-The scanner layer (lexical scanlets in `meme-lang.lexlets`) is a structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. Semantic validation is split between the resolver (`meme-lang.resolve`) and the CST reader (`meme-lang.cst-reader`):
+The scanner layer (lexical scanlets in `meme-lang.lexlets`) is a structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. Semantic validation is split between the resolver (`meme.tools.clj.resolve`) and the CST reader (`meme.tools.clj.cst-reader`):
 
 - **Reserved dispatch chars** (`#<`, `#=`, `#%`): The scanner classifies `#=foo` as `:tagged-literal` (structurally, it IS `#` + symbol). Whether `=` is a reserved dispatch character is a semantic rule enforced downstream.
 - **Unterminated strings/regex**: The scanner returns the EOF position without signaling error, but the resolver (`resolve-string`, `resolve-regex`) detects the missing closing delimiter and throws with `:incomplete true` — enabling the REPL to prompt for continuation.
@@ -560,7 +560,7 @@ The infrastructure exists: the unified Pratt parser takes a grammar spec, trivia
 
 ### Generic CST reader
 
-`meme-lang.cst-reader` lowers meme's CST to Clojure forms. The pattern is general — every language that uses the Pratt parser needs CST → host-language lowering. The generic parts (tree walking, trivia extraction, discard filtering) could be extracted with language-specific value resolution and node handlers plugged in. Currently there's only one consumer (meme), so the extraction is deferred until a second language (e.g., `.mcj`) needs it.
+`meme.tools.clj.cst-reader` lowers meme's CST to Clojure forms. The pattern is general — every language that uses the Pratt parser needs CST → host-language lowering. The generic parts (tree walking, trivia extraction, discard filtering) could be extracted with language-specific value resolution and node handlers plugged in. Currently there's only one consumer (meme), so the extraction is deferred until a second language (e.g., `.mcj`) needs it.
 
 ### Completed: Data-driven scanner (unified scanlet-parselet architecture)
 
