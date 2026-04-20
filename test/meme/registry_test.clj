@@ -92,7 +92,7 @@
     (registry/check-support l lang-name cmd)))
 
 (deftest check-support-passes-for-repl
-  (testing "meme-classic supports :repl"
+  (testing "meme supports :repl"
     (is (registry/supports? (:meme all-langs) :repl))))
 
 ;; ============================================================

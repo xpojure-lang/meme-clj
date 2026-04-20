@@ -192,17 +192,21 @@
     {:cmd :format, :pred meme-file?, :output-fn nil
      :verb "formatted", :usage "Usage: meme format <file|dir> [--width N] [--style canon|flat|clj] [--stdout] [--check]"}))
 
+(defn- validate-out-dir!
+  "Reject an explicit but blank --out value. Without this, `(str \"\" sep rel)`
+   resolves to `/rel` and we silently write into the filesystem root."
+  [out]
+  (when (and (some? out) (str/blank? out))
+    (println "Error: --out cannot be empty")
+    (cli-exit! 1)))
+
 (defn transpile-meme
   "Transpile .meme files to .clj in a separate output directory.
    Preserves relative paths. Output can be added to :paths in deps.edn
    so that require, load-file, and nREPL all work without runtime patching."
-  [{:keys [file files out lang] :as opts}]
+  [{:keys [file files out lang]}]
+  (validate-out-dir! out)
   (let [inputs (or files (when file [file]))
-        ;; An empty/blank --out would silently write to the filesystem
-        ;; root (str "" sep rel → "/rel"). Reject fast with a clear error.
-        _ (when (and (some? out) (str/blank? out))
-            (println "Error: --out cannot be empty")
-            (cli-exit! 1))
         out-dir (or out "target/meme")]
     (when (empty? inputs)
       (println "Usage: meme transpile <src-dir|file...> [--out target/meme] [--lang name]")
@@ -271,12 +275,10 @@
    at compile time, or integrate with an existing build.clj), see the
    recipes in doc/language-reference.md."
   [{:keys [file files out lang]}]
+  (validate-out-dir! out)
   (let [inputs (or files (when file [file]) ["src"])
         stage-dir "target/meme"
         aot-dir (or out "target/classes")]
-    (when (and (some? out) (str/blank? out))
-      (println "Error: --out cannot be empty")
-      (cli-exit! 1))
     (println (str "[1/2] Transpiling to " stage-dir "..."))
     (transpile-meme (cond-> {:out stage-dir :lang lang}
                       (seq files) (assoc :files files)
@@ -396,10 +398,19 @@
                          (when (seq args) (cli-exit! 1)))}]
         args)
       (catch Exception e
-        (if-let [code (::exit (ex-data e))]
-          (System/exit code)
-          (let [msg (ex-message e)]
-            (if (and msg (re-find #"(?i)coerce" msg))
-              (do (binding [*out* *err*] (println (str "Error: " msg)))
-                  (System/exit 1))
-              (throw e))))))))
+        (let [data (ex-data e)]
+          (cond
+            ;; Internal exit signal from cli-exit!
+            (::exit data)
+            (System/exit (::exit data))
+
+            ;; babashka.cli argument/coerce errors — tagged with :type
+            ;; :org.babashka/cli and carry a :cause keyword (:coerce,
+            ;; :require, etc.). Structured match supersedes the earlier
+            ;; regex that pattern-matched the English "Coerce" message
+            ;; and would miss other failure modes (e.g. :require).
+            (= :org.babashka/cli (:type data))
+            (do (binding [*out* *err*] (println (str "Error: " (ex-message e))))
+                (System/exit 1))
+
+            :else (throw e)))))))

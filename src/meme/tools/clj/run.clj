@@ -61,18 +61,15 @@
       (assoc :resolve-symbol default-resolve-symbol))))
 
 (defn- clj-run-fn
-  "The Clojure-surface pipeline: strip shebang, strip BOM, parse, read,
+  "The Clojure-surface pipeline: strip BOM + shebang, parse, read,
    evaluate reader conditionals, expand syntax quotes. Caller must have
    injected `:grammar` into opts."
   [source opts]
-  (let [source (stages/strip-shebang source)
-        source (if (and (string? source) (str/starts-with? source "\uFEFF"))
-                 (subs source 1) source)]
-    (-> {:source source :opts opts}
-        stages/step-parse
-        stages/step-read
-        stages/step-evaluate-reader-conditionals
-        stages/step-expand-syntax-quotes)))
+  (-> {:source (stages/strip-source-preamble source) :opts opts}
+      stages/step-parse
+      stages/step-read
+      stages/step-evaluate-reader-conditionals
+      stages/step-expand-syntax-quotes))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

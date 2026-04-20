@@ -38,6 +38,8 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **Loader namespace denylist.** `denied-prefixes` / `denied-namespace?` and the `when-not` guard in `find-lang-resource` are gone. Installing a lang is the trust decision — if a user puts a `.meme` file at `clojure/core.meme` on the classpath, the loader now honors it rather than paternalistically refusing. The infinite-recursion concern the denylist was framed against is actually handled by caching `registered-extensions` as a function value at `install!` time (so `find-lang-resource` never does `requiring-resolve` during load interception); that guard is unchanged. Removes `denied-namespaces-not-intercepted` and `own-infrastructure-not-intercepted` tests. PRD row PL13 withdrawn.
 
+- **Legacy lang aliases** `:classic`, `:meme-classic`, `:meme-experimental` and their deprecation-warning branch in `registry/resolve-lang`. The aliases had no callers in `src/`, `test/`, `doc/`, or any consumer — just dead cruft since the pre-lang naming was retired. Users must pass `:meme` directly; the existing "Unknown lang: ..." error still lists available langs if someone hits a removed name.
+
 ### Fixed
 
 - **Duplicate-key detection across notations.** `{0xFF 1 255 2}` and `{\u0041 1 \A 2}` silently accepted two keys that resolve to the same value because `CljRaw` records don't `=` their unwrapped equivalents. The check now unwraps `CljRaw` before `frequencies`; same for sets.
@@ -47,6 +49,20 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 - **`with-load-tracking` counter imbalance.** If `swap! inc` threw, the surrounding `try/finally` still ran the `dec`, leaving the counter at N-1. Moved the `inc` outside the `try`.
 
 - **Leftover unquote errors lost source location.** When expand-sq delegated `~x` to expand-syntax-quotes with `:inside-sq`, a further `~` was re-wrapped as a `CljUnquote` record with no metadata, so `check-no-leftover-unquotes!` reported the error with empty `:line`/`:col`. Source metadata is now threaded through.
+
+- **`loader/uninstall!` dispatch-gap race.** A thread that had dispatched into `lang-load` via the var override but had not yet incremented `load-counter` was unprotected: another thread could acquire `install-lock`, observe counter=0, tear down the var overrides, and nil the captured originals — leaving the first thread to NPE on `@original-load`. Two complementary fixes: (a) `with-load-tracking` now performs the `swap! inc` under `install-lock`, making the tracked region open atomically w.r.t. uninstall's observation; (b) `uninstall!` no longer nils `original-load` / `original-load-file` / `extensions-fn`, so even a stale in-flight reference remains safe to deref (a subsequent `install!` re-captures them). Scar-tissue regression: `uninstall-blocks-on-install-lock-during-dispatch-gap` in `test/meme/loader_test.clj`.
+
+- **`cli` bad-flag error matched by regex.** The `-main` catch used `(re-find #"(?i)coerce" msg)` to detect babashka.cli failures, which would miss `:require` and future failure modes. Replaced with a structured `(= :org.babashka/cli (:type (ex-data e)))` match. Scar-tissue regression: `bad-coerce-flag-is-clean-error` in `test/e2e/cli_test.clj`.
+
+### Internal
+
+- **CLI `--out` validation deduplicated.** Extracted `validate-out-dir!` — both `transpile-meme` and `build` now share a single error path for blank `--out` values instead of two copy-pasted inline blocks. Test: `out-dir-validation` in `test/meme/cli_test.clj`.
+
+- **BOM + shebang stripping consolidated in `meme.tools.clj.stages`.** New `strip-bom` and `strip-source-preamble` helpers; `strip-source-preamble` composes BOM-strip followed by shebang-strip (BOM comes first — a UTF-8 file may legally begin with a BOM before any shebang). `clj-run-fn` now calls `strip-source-preamble` instead of re-implementing BOM-strip inline, and the tooling convenience `stages/run` tolerates leading BOMs as well. Tests: `bom-stripping` and `strip-source-preamble-composition` in `test/meme_lang/stages_test.cljc`.
+
+### Docs
+
+- **`meme.tools.parser` namespace docstring** rewritten to enumerate the parselet-author API — engine primitives (`peek-char`, `advance!`, `eof?`, `cursor`, etc.), token helpers, sub-parsing (`parse-expr`, `parse-until`, `expect-close!`), CST construction, and the full nud/led factory set. The 4.0.0 CHANGELOG entry described the engine as "exposing only `trivia-pending?` to language grammars", but grammars routinely call the broader surface; the docstring is now aligned with actual usage.
 
 ## [5.0.0] — 2026-04-19
 

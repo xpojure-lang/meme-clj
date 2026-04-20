@@ -105,9 +105,9 @@
     (is (str/includes? out "to-meme"))))
 
 (deftest inspect-lang-test
-  (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "meme-classic")]
+  (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "meme")]
     (is (zero? exit))
-    (is (str/includes? out "Lang: meme-classic"))))
+    (is (str/includes? out "Lang: meme"))))
 
 ;; ---------------------------------------------------------------------------
 ;; run
@@ -152,7 +152,7 @@
 
 (deftest to-clj-lang-test
   (let [f (tmp-meme "f(x y)")
-        {:keys [out exit]} (bb-meme "to-clj" (str f) "--stdout" "--lang" "meme-classic")]
+        {:keys [out exit]} (bb-meme "to-clj" (str f) "--stdout" "--lang" "meme")]
     (is (zero? exit))
     (is (= "(f x y)\n" out))))
 
@@ -267,9 +267,9 @@
 ;; format with --lang
 ;; ---------------------------------------------------------------------------
 
-(deftest format-lang-classic-test
+(deftest format-lang-test
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme-classic")]
+        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme")]
     (is (zero? exit))
     (is (= "defn( foo [x] +(x 1))\n" out))))
 
@@ -458,3 +458,21 @@
     (is (str/includes? out "--user-arg") "user args visible")
     (is (not (str/includes? out "run")) "CLI verb 'run' not leaked")
     (is (not (str/includes? out ".meme")) "filename not leaked")))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: bad CLI flag coercion must produce a clean error, not a stack
+;; trace. The catch in -main now matches on ex-data :type :org.babashka/cli,
+;; superseding the earlier regex on the English "Coerce" message which would
+;; have missed other babashka.cli failure modes (e.g. :require).
+;; ---------------------------------------------------------------------------
+
+(deftest bad-coerce-flag-is-clean-error
+  (let [f (tmp-meme "42")
+        {:keys [out err exit]} (bb-meme "format" (str f) "--width" "not-a-number" "--stdout")]
+    (is (pos? exit) "non-zero exit on coerce failure")
+    (is (str/includes? err "Error:")
+        (str "stderr should carry the structured Error: prefix; stderr=" err))
+    (is (not (str/includes? out "Exception"))
+        (str "no stack trace on stdout; stdout=" out))
+    (is (not (str/includes? err "at clojure."))
+        (str "no stack trace on stderr; stderr=" err))))
