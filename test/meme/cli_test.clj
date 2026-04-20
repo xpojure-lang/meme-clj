@@ -1,5 +1,6 @@
 (ns meme.cli-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [meme.cli :as cli])
   (:import [java.io File]))
 
@@ -103,9 +104,38 @@
 (deftest lang-opts-test
   (let [lang-opts #'cli/lang-opts]
     (testing "removes CLI-specific keys"
-      (is (= {} (lang-opts {:file "x" :files ["a"] :stdout true :check true :lang "meme-classic"}))))
+      (is (= {} (lang-opts {:file "x" :files ["a"] :stdout true :check true :lang "meme"}))))
     (testing "preserves non-CLI keys"
       (is (= {:width 80 :style "canon"}
              (lang-opts {:file "x" :stdout true :width 80 :style "canon"}))))
     (testing "empty map passes through"
       (is (= {} (lang-opts {}))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: `--out ""` / `--out "  "` must fail fast with a clear message.
+;; Without the guard, `(str "" sep rel)` resolves to `/rel`, so a blank --out
+;; silently writes the output tree into the filesystem root. The validation
+;; was duplicated across transpile and build; extracted into
+;; `validate-out-dir!` so both commands share the same error path.
+;; ---------------------------------------------------------------------------
+
+(deftest out-dir-validation
+  (testing "validate-out-dir! rejects blank strings"
+    (let [validate! #'cli/validate-out-dir!
+          out-buf   (java.io.StringWriter.)
+          exit-code (atom nil)]
+      (with-redefs [cli/cli-exit! (fn [code] (reset! exit-code code))]
+        (binding [*out* out-buf]
+          (validate! "")
+          (validate! "   ")))
+      (is (= 1 @exit-code) "empty or whitespace-only --out must trigger exit code 1")
+      (is (str/includes? (str out-buf) "--out cannot be empty"))))
+  (testing "validate-out-dir! accepts nil (use default) and non-blank strings"
+    (let [validate! #'cli/validate-out-dir!
+          exit-called? (atom false)]
+      (with-redefs [cli/cli-exit! (fn [_] (reset! exit-called? true))]
+        (validate! nil)
+        (validate! "target/meme")
+        (validate! "/absolute/path"))
+      (is (false? @exit-called?)
+          "nil and non-blank strings must not trigger exit"))))

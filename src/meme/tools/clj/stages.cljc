@@ -284,6 +284,13 @@
 ;; Convenience: full pipeline
 ;; ---------------------------------------------------------------------------
 
+(defn strip-bom
+  "Strip a leading UTF-8 BOM (U+FEFF) from source, if present."
+  [source]
+  (if (and (string? source) (str/starts-with? source "\uFEFF"))
+    (subs source 1)
+    source))
+
 (defn strip-shebang
   "Strip a leading #! shebang line from source."
   [source]
@@ -306,10 +313,18 @@
         ""))
     source))
 
+(defn strip-source-preamble
+  "Strip a leading UTF-8 BOM (U+FEFF) followed by an optional #! shebang
+   line. BOM comes first: a UTF-8 file may legally begin with a BOM before
+   any shebang. Callers that want only one or the other should call the
+   narrower helpers directly."
+  [source]
+  (-> source strip-bom strip-shebang))
+
 (defn run
   "Run the full pipeline: source → CST → forms."
   ([source] (run source nil))
   ([source opts]
-   (-> {:source (strip-shebang source) :opts opts}
+   (-> {:source (strip-source-preamble source) :opts opts}
        step-parse
        step-read)))

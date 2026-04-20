@@ -259,23 +259,11 @@
 ;; Resolution
 ;; ---------------------------------------------------------------------------
 
-(def ^:private legacy-names
-  "Backward-compatible aliases from the pre-lang naming."
-  {:classic :meme
-   :meme-classic :meme
-   :meme-experimental :meme})
-
 (defn resolve-lang
   "Resolve a lang by keyword name. Returns the lang map.
-   Deprecated name (:classic) is accepted but emits a warning.
    Throws on unknown name."
   [lang-name]
-  (let [n (or lang-name default-lang)
-        legacy? (contains? legacy-names n)
-        n (get legacy-names n n)
-        _ (when legacy?
-            (binding [*out* *err*]
-              (println (str "WARNING: :" (name lang-name) " is deprecated, use :" (name n)))))]
+  (let [n (or lang-name default-lang)]
     (or (get @registry n)
         (throw (ex-info (str "Unknown lang: " (pr-str n)
                              " — available: " (pr-str (vec (keys @registry))))

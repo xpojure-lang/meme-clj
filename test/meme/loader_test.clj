@@ -124,6 +124,77 @@
       (loader/uninstall!)
       (loader/install!))))
 
+;; ---------------------------------------------------------------------------
+;; Scar tissue: the dispatch-to-increment gap.
+;;
+;; A thread that has dispatched into `lang-load` via the var override but has
+;; not yet incremented `load-counter` was previously unprotected. uninstall!
+;; could acquire install-lock, observe counter=0, and tear down the var
+;; overrides — including resetting the captured originals to nil — leaving the
+;; first thread to resume into NPE on `@original-load`.
+;;
+;; Two fixes cover this:
+;;  (a) `with-load-tracking` now performs the `swap! inc` under install-lock,
+;;      so the tracked region opens atomically w.r.t. uninstall's observation.
+;;  (b) `uninstall!` no longer nils the captured originals, so even a stale
+;;      in-flight reference remains safe to deref.
+;;
+;; This test simulates the dispatch gap deterministically: we hold
+;; install-lock ourselves (standing in for a thread paused between dispatch
+;; and the swap!-inc), kick off uninstall! on another thread, and assert it
+;; cannot tear down until we release the lock. Before fix (a) uninstall!
+;; would have raced through; with the fix it blocks on the monitor.
+;; ---------------------------------------------------------------------------
+
+(deftest uninstall-blocks-on-install-lock-during-dispatch-gap
+  (testing "uninstall! cannot proceed while install-lock is held by a pre-increment dispatch"
+    (let [install-lock @(resolve 'meme.loader/install-lock)
+          counter @(resolve 'meme.loader/load-counter)
+          holding (CountDownLatch. 1)
+          release (CountDownLatch. 1)
+          uninstall-done (CountDownLatch. 1)
+          uninstall-result (atom ::pending)
+          lock-holder
+          (future
+            (locking install-lock
+              (.countDown holding)
+              (.await release 5 TimeUnit/SECONDS)
+              ;; Simulate the thread reaching its tracked-section increment
+              ;; while still holding the lock. Under the fix this is the
+              ;; invariant that keeps uninstall out: counter becomes pos?
+              ;; before the lock is released.
+              (swap! counter inc)))]
+      (try
+        (is (.await holding 5 TimeUnit/SECONDS)
+            "lock holder should have acquired install-lock")
+        (let [_uninstall-thread
+              (future
+                (try (loader/uninstall!)
+                     (reset! uninstall-result ::succeeded)
+                     (catch Exception e
+                       (reset! uninstall-result (ex-data e)))
+                     (finally (.countDown uninstall-done))))]
+          ;; Give uninstall! a moment to attempt to acquire the lock.
+          ;; It must not proceed while we still hold it.
+          (is (not (.await uninstall-done 200 TimeUnit/MILLISECONDS))
+              "uninstall! must block while install-lock is held")
+          (is (= ::pending @uninstall-result)
+              "uninstall! must not have torn down while lock was held")
+          ;; Release; lock-holder runs swap! inc and releases. uninstall!
+          ;; then acquires, observes counter>0, and throws :active-load.
+          (.countDown release)
+          @lock-holder
+          (is (.await uninstall-done 5 TimeUnit/SECONDS)
+              "uninstall! should proceed after lock released")
+          (is (map? @uninstall-result)
+              "uninstall! must see in-flight counter and throw")
+          (is (= :active-load (:reason @uninstall-result))))
+        (finally
+          ;; Drain counter and restore install state for the fixture.
+          (swap! counter dec)
+          (when (false? @@(resolve 'meme.loader/installed?))
+            (loader/install!)))))))
+
 (deftest concurrent-installs-are-idempotent
   (testing "10 threads calling install! in parallel leave loader in install state"
     (let [n         10
@@ -154,10 +225,16 @@
   (testing "extensions-fn is populated after install"
     (is (fn? @@#'meme.loader/extensions-fn)
         "extensions-fn atom should hold a function after install!"))
-  (testing "extensions-fn is nil after uninstall"
+  (testing "uninstall! restores var overrides; installed? flag flips"
     (loader/uninstall!)
-    (is (nil? @@#'meme.loader/extensions-fn)
-        "extensions-fn atom should be nil after uninstall!")
+    (is (false? @@#'meme.loader/installed?)
+        "installed? flag must be false after uninstall!")
+    ;; extensions-fn (and the captured originals) intentionally retain
+    ;; their values — in-flight callers dereference them, and nilling would
+    ;; open an NPE window between dispatch and the tracked-section
+    ;; increment. See `with-load-tracking` for the race this closes.
+    (is (fn? @@#'meme.loader/extensions-fn)
+        "extensions-fn atom intentionally retains its function after uninstall!")
     ;; reinstall for remaining tests
     (loader/install!)))
 

@@ -64,9 +64,19 @@
 
    The increment runs before the try/finally so a throw from swap! itself
    leaves the counter in its original state rather than triggering a
-   decrement that was never balanced by an increment."
+   decrement that was never balanced by an increment.
+
+   The increment is performed under install-lock — the same monitor
+   uninstall! uses to read the counter. Without it, a thread that had
+   already dispatched into lang-load (via the var override) but not yet
+   incremented could race against uninstall!: uninstall would observe
+   counter=0, tear down the var overrides, and the in-flight thread would
+   resume into a now-invalid state. Holding the lock only for the single
+   atom swap keeps uninstall!'s quiescence check honest without
+   serializing the bodies of concurrent loads."
   [body-fn]
-  (swap! load-counter inc)
+  (locking install-lock
+    (swap! load-counter inc))
   (try (body-fn)
        (finally (swap! load-counter dec))))
 
@@ -154,8 +164,14 @@
       (when-let [orig @original-load]
         (alter-var-root #'clojure.core/load (constantly orig)))
       (when-let [orig @original-load-file]
-        (alter-var-root #'clojure.core/load-file (constantly orig)))
-      (reset! original-load nil)
-      (reset! original-load-file nil)
-      (reset! extensions-fn nil)))
+        (alter-var-root #'clojure.core/load-file (constantly orig))))
+    ;; Intentionally do NOT reset original-load, original-load-file, or
+    ;; extensions-fn to nil. In-flight callers hold references to lang-load /
+    ;; lang-load-file and dereference these atoms to delegate to the original
+    ;; or look up registered extensions. Nilling them introduced an NPE
+    ;; window between dispatch and the tracked-section increment; see the
+    ;; note on `with-load-tracking`. A subsequent `install!` re-captures
+    ;; these atoms (the CAS from false→true succeeds and overwrites), so
+    ;; keeping stale references here is harmless.
+    )
   :uninstalled)

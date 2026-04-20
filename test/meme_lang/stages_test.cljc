@@ -314,3 +314,30 @@
   (testing "no shebang — normal parsing"
     (let [ctx (run-stages "+(1 2)")]
       (is (= '[(+ 1 2)] (:forms ctx))))))
+
+(deftest bom-stripping
+  (testing "leading UTF-8 BOM is stripped"
+    (let [ctx (run-stages "\uFEFF+(1 2)")]
+      (is (= '[(+ 1 2)] (:forms ctx)))))
+  (testing "BOM before shebang before content"
+    (let [ctx (run-stages "\uFEFF#!/usr/bin/env bb\n+(1 2)")]
+      (is (= '[(+ 1 2)] (:forms ctx)))))
+  (testing "BOM-only file"
+    (let [ctx (run-stages "\uFEFF")]
+      (is (= [] (:forms ctx)))))
+  (testing "internal FEFF is not stripped"
+    ;; Only a BOM in position 0 is stripped; a U+FEFF inside a string literal
+    ;; must survive through to the reader unchanged.
+    (let [ctx (run-stages "\"a\uFEFFb\"")]
+      (is (= ["a\uFEFFb"] (:forms ctx))))))
+
+(deftest strip-source-preamble-composition
+  (testing "strip-source-preamble handles BOM + shebang atomically"
+    (is (= "+(1 2)" (stages/strip-source-preamble "\uFEFF#!/usr/bin/env bb\n+(1 2)"))))
+  (testing "strip-source-preamble is a no-op for plain source"
+    (is (= "+(1 2)" (stages/strip-source-preamble "+(1 2)"))))
+  (testing "strip-bom / strip-shebang are safe to call individually"
+    (is (= "x" (stages/strip-bom "\uFEFFx")))
+    (is (= "x" (stages/strip-bom "x")))
+    (is (= "x" (stages/strip-shebang "#!foo\nx")))
+    (is (= "x" (stages/strip-shebang "x")))))
