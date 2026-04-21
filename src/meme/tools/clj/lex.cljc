@@ -29,14 +29,17 @@
                 (= c 0x2C)    ; comma
                 (= c 0x2007)  ; figure space (Zs — visually indistinguishable from space)
                 #?(:clj (and (not= c 0x0A) (not= c 0x0D)
+                             (not= c 0x2028) (not= c 0x2029)
                              (Character/isWhitespace (char c)))
                    :cljs (or (<= 0x2000 c 0x2006)
                              (<= 0x2008 c 0x200A)
-                             (= c 0x1680) (= c 0x2028) (= c 0x2029)
+                             (= c 0x1680)
                              (= c 0x205F) (= c 0x3000)))))))
 
 (defn newline-char? [ch]
-  (and ch (let [c (lexer/char-code ch)] (or (= c 0x0A) (= c 0x0D)))))
+  (and ch (let [c (lexer/char-code ch)]
+            (or (= c 0x0A) (= c 0x0D)
+                (= c 0x2028) (= c 0x2029)))))
 
 (defn- invisible-char?
   [c]

@@ -35,8 +35,19 @@
         (add-token tokens close)
         tokens))
 
-    (:quote :deref :syntax-quote :unquote :unquote-splicing :var-quote :discard :tagged)
+    (:quote :deref :syntax-quote :unquote :unquote-splicing :var-quote :tagged)
     (let [tokens (add-token tokens (:token node))]
+      (collect-tokens! tokens (:form node)))
+
+    :discard
+    ;; Discard nodes may carry extra #_ tokens and intermediate discarded forms
+    ;; when consecutive #_s appear (e.g. `#_ #_ a b`). Walk all of them to
+    ;; preserve the `source = (apply str (map :raw tokens))` invariant.
+    (let [tokens (add-token tokens (:token node))
+          tokens (reduce (fn [ts extra] (add-token ts extra))
+                         tokens
+                         (:extra-tokens node))
+          tokens (reduce collect-tokens! tokens (:discarded-forms node))]
       (collect-tokens! tokens (:form node)))
 
     :meta

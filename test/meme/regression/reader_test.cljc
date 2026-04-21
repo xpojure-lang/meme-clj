@@ -9,7 +9,8 @@
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.expander :as expander]
             [meme.tools.clj.stages :as stages]
-            [meme-lang.grammar :as grammar]))
+            [meme-lang.grammar :as grammar]
+            [meme-lang.test-util :as tu]))
 
 
 ;; ---------------------------------------------------------------------------
@@ -200,6 +201,31 @@
     (is (= [[1 4]] (lang/meme->forms "[1 #_ 2 #_ 3 4]"))))
   (testing "consecutive discards inside vector"
     (is (= [[1 4]] (lang/meme->forms "[1 #_ #_ 2 3 4]")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: consecutive #_ tokens preserve interior trivia in the CST.
+;; Bug: intermediate #_ tokens were produced via make-token! whose return value
+;; was discarded. make-token! drains trivia-acc, so any comment/whitespace
+;; between consecutive #_s was silently lost.
+;; Fix: retain intermediate #_ tokens on :extra-tokens and discarded forms on
+;; :discarded-forms of the :discard CST node.
+;; ---------------------------------------------------------------------------
+
+(deftest consecutive-discard-preserves-interior-trivia
+  (testing "tokenize preserves all raw characters through consecutive discards"
+    (let [sources ["#_ #_ a b c"
+                   "#_ #_ #_ a b c d"
+                   "#_ ;; between\n#_ a b c"
+                   "[1 #_ #_ 2 3 4]"]]
+      (doseq [src sources]
+        (is (= src (apply str (map :raw (tu/tokenize src))))
+            (str "roundtrip of " (pr-str src))))))
+  (testing "comment between #_ tokens survives in CST tokens"
+    (let [src "#_ ;; kept\n#_ a b c"
+          tokens (tu/tokenize src)
+          raws (map :raw tokens)]
+      (is (some #(re-find #";; kept" %) raws)
+          "comment should appear in collected tokens"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: nested #() must be rejected (Clojure semantics).

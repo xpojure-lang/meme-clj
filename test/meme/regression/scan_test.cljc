@@ -811,3 +811,36 @@
        (let [src (str (String. (char-array [(char 0xD83D) (char 0xDE00)])) " x")]
          (is (thrown-with-msg? Exception #"Unexpected token"
                                (lang/meme->forms src)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) must
+;; be classified as newlines, not whitespace. build-line-starts already treats
+;; them as line terminators, and whitespace-char? used to include them — the
+;; asymmetry meant they produced :whitespace trivia tokens instead of :newline,
+;; and interior comment extraction couldn't split on them.
+;; Fix: excluded from whitespace-char? and added to newline-char?.
+;; ---------------------------------------------------------------------------
+
+(deftest unicode-line-separator-is-newline
+  (let [ls (str (char 0x2028))
+        ps (str (char 0x2029))]
+    (testing "U+2028 produces a :newline trivia token, not :whitespace"
+      (let [tokens (tokenizer/tokenize (str "a" ls "b"))
+            types (map :type tokens)]
+        (is (some #{:newline} types)
+            (str "expected :newline in " (pr-str types)))
+        (is (not (contains? (set types) :whitespace)))))
+    (testing "U+2029 produces a :newline trivia token"
+      (let [tokens (tokenizer/tokenize (str "a" ps "b"))
+            types (map :type tokens)]
+        (is (some #{:newline} types))))
+    (testing "position reporting is correct across U+2028 (symbol `b` on line 2)"
+      (let [tokens (tokenizer/tokenize (str "a" ls "b"))
+            b-tok (first (filter #(and (= (:type %) :symbol) (= (:raw %) "b")) tokens))]
+        (is (= 2 (:line b-tok)))
+        (is (= 1 (:col b-tok)))))
+    (testing "U+2028 between tokens still separates symbols"
+      (is (= (quote [a b]) (lang/meme->forms (str "a" ls "b")))))
+    (testing "tokenize invariant: source = concat of :raw fields"
+      (let [src (str "a" ls "b" ps "c")]
+        (is (= src (apply str (map :raw (tokenizer/tokenize src)))))))))
