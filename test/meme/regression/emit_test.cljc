@@ -793,3 +793,38 @@
                                   :opts {:platform :clj})))]
       (is (= [:a :b] (:meme/insertion-order (meta form))))
       (is (= "#{:a :b}" (fmt-flat/format-form form))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: interior comments in maps, sets, call args, anon-fn bodies,
+;; and reader conditionals must survive to the formatter output.
+;; Bug: `read-children` in cst-reader stripped leading trivia on children,
+;; so only vectors (which used `read-children-with-ws`) preserved comments.
+;; Fix: merged the two — `read-children` now always preserves trivia on
+;; metadatable children. Non-metadatable atoms (keywords/numbers/strings as
+;; map keys) still lose their trivia; they cannot carry Clojure metadata.
+;; ---------------------------------------------------------------------------
+
+(deftest interior-comments-preserved-in-collections
+  (testing "comment inside a map (before a symbol key) survives"
+    (let [src "{;; section\n 'a 1}"
+          out (fmt-canon/format-forms (lang/meme->forms src) {:width 80})]
+      (is (re-find #";; section" out)
+          (str "expected comment in output, got: " (pr-str out)))))
+  (testing "comment inside a set (before a symbol) survives"
+    (let [src "#{;; odds\n 'a 'b}"
+          out (fmt-canon/format-forms (lang/meme->forms src) {:width 80})]
+      (is (re-find #";; odds" out)
+          (str "expected comment in output, got: " (pr-str out)))))
+  (testing "comment inside a call (before an arg) survives"
+    (let [src "f(;; head\n 'x)"
+          out (fmt-canon/format-forms (lang/meme->forms src) {:width 80})]
+      (is (re-find #";; head" out)
+          (str "expected comment in output, got: " (pr-str out))))))
+
+(deftest interior-comments-keyword-key-known-limitation
+  (testing "comment before a keyword key is dropped (keywords can't carry metadata)"
+    ;; Documented limitation — not all interior comments can survive.
+    ;; Asserting current behavior so a future fix notices when this changes.
+    (let [src "{;; section\n :a 1}"
+          out (fmt-canon/format-forms (lang/meme->forms src) {:width 80})]
+      (is (not (re-find #";; section" out))))))

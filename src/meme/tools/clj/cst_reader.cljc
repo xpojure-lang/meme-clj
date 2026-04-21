@@ -158,26 +158,20 @@
                 (conj! acc item)))
             (transient []) items)))
 
-(defn- read-children
-  "Read a vector of CST child nodes into Clojure forms, filtering discards.
-   Discard nodes already contain their target in :form — just skip them.
-   Also splices #?@ results and filters no-match sentinels."
-  [children opts]
-  (splice-and-filter
-    (into [] (comp (remove #(= :discard (:node %)))
-                   (map #(read-node % opts)))
-          children)))
-
 (defn- metadatable?
   "Can metadata be attached to this value?"
   [v]
   #?(:clj (instance? clojure.lang.IObj v)
      :cljs (satisfies? IWithMeta v)))
 
-(defn- read-children-with-ws
-  "Read children, preserving :meme/leading-trivia metadata from trivia on each form.
-   Discard nodes already contain their target — just skip them.
-   Also splices #?@ results and filters no-match sentinels."
+(defn- read-children
+  "Read a vector of CST child nodes into Clojure forms, preserving
+   :meme/leading-trivia metadata on metadatable children so interior
+   comments and whitespace survive for the printer.
+   Non-metadatable atoms (keywords, numbers, strings, booleans) cannot
+   carry metadata — their leading trivia is dropped. Discard nodes
+   already contain their target in :form — skip them. Also splices
+   #?@ results and filters no-match sentinels."
   [children opts]
   (splice-and-filter
     (into []
@@ -228,7 +222,7 @@
 
     :vector
     (let [_ (check-closed! node "vector")
-          items (read-children-with-ws (:children node) opts)
+          items (read-children (:children node) opts)
           ws (ws-before (:open node))]
       (cond-> (vec items)
         ws (vary-meta assoc :meme/leading-trivia ws)))

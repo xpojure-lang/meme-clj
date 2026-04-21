@@ -225,6 +225,15 @@ meme rules inside. No opaque regions.
   512 levels. Exceeding this produces a clear error. This prevents stack
   overflow on recursive descent.
 
+- **Interior comments before non-metadatable atoms are dropped.** Comments
+  and whitespace preceding a child form are preserved on the form's
+  metadata (`:meme/leading-trivia`) so the formatter can emit them.
+  Clojure's atom values — keywords, numbers, strings, booleans, chars —
+  cannot carry metadata, so a comment that sits immediately before such
+  an atom (e.g. a comment above a keyword map key) is lost when the form
+  is re-emitted. Comments above metadatable values (symbols, lists,
+  vectors, maps, sets) survive.
+
 
 ## Completed work (post-initial release)
 

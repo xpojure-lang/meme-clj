@@ -91,25 +91,28 @@
                 ((pratt/nud-prefix :var-quote) engine tok)))
 
           ;; #_ — discard. Consecutive #_ tokens discard N forms (Clojure semantics).
+          ;; Intermediate #_ tokens and their discarded forms are retained on the
+          ;; CST node so trivia between discards is not lost (CST losslessness).
           (= next-ch \_)
           (do (pratt/advance! engine 2)
               (let [tok (pratt/make-token! engine :discard start)]
-                ;; Count consecutive #_ tokens (including this one)
-                (loop [n 1]
+                (loop [extra-tokens []]
                   (pratt/skip-trivia! engine)
                   (if (and (not (pratt/eof? engine))
                            (= (pratt/peek-char engine) \#)
                            (let [nxt (pratt/peek-char engine 1)]
                              (and nxt (= nxt \_))))
-                    (let [discard-start (pratt/cursor engine)]
-                      (pratt/advance! engine 2)
-                      (pratt/make-token! engine :discard discard-start)
-                      (recur (inc n)))
-                    ;; Parse and discard (n-1) forms, wrap the last in :discard
-                    (do (dotimes [_ (dec n)]
-                          (pratt/parse-expr engine 0))
-                        (let [form (pratt/parse-expr engine 0)]
-                          (pratt/cst :discard {:token tok :form form})))))))
+                    (let [discard-start (pratt/cursor engine)
+                          _ (pratt/advance! engine 2)
+                          extra (pratt/make-token! engine :discard discard-start)]
+                      (recur (conj extra-tokens extra)))
+                    (let [discarded-forms (vec (repeatedly (count extra-tokens)
+                                                 #(pratt/parse-expr engine 0)))
+                          form (pratt/parse-expr engine 0)]
+                      (pratt/cst :discard {:token tok
+                                           :extra-tokens extra-tokens
+                                           :discarded-forms discarded-forms
+                                           :form form}))))))
 
           ;; #"
           (= next-ch \")
