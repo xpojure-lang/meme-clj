@@ -7,7 +7,9 @@
             [meme-lang.formatter.flat :as fmt-flat]
             [meme-lang.formatter.canon :as fmt-canon]
             [meme.tools.clj.values :as values]
-            [meme.tools.clj.forms :as forms]))
+            [meme.tools.clj.forms :as forms]
+            [meme.tools.clj.stages :as stages]
+            [meme-lang.grammar :as grammar]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
@@ -768,3 +770,26 @@
     (let [form (with-meta #{3 1 2} {:meme/insertion-order [3 1 2]})
           printed (fmt-flat/format-form form)]
       (is (= "#{3 1 2}" printed)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: #?@ splicing into a set left a stale :meme/insertion-order;
+;; printer's size-mismatch guard fired and fell back to hash order, so the
+;; printed elements were in arbitrary order instead of original source order.
+;; Fix: walk-rc rebuilds :meme/insertion-order from walked elements.
+;; ---------------------------------------------------------------------------
+
+(deftest rc-splice-into-set-preserves-source-order
+  (testing "#?@ splice in the middle of a set keeps surrounding order"
+    (let [[form] (:forms (stages/step-evaluate-reader-conditionals
+                           (assoc (stages/run "#{:a #?@(:clj [:b :c] :cljs []) :d}"
+                                              {:grammar grammar/grammar})
+                                  :opts {:platform :clj})))]
+      (is (= [:a :b :c :d] (:meme/insertion-order (meta form))))
+      (is (= "#{:a :b :c :d}" (fmt-flat/format-form form)))))
+  (testing "#?@ that contributes zero items still keeps source order"
+    (let [[form] (:forms (stages/step-evaluate-reader-conditionals
+                           (assoc (stages/run "#{:a #?@(:cljs [:x]) :b}"
+                                              {:grammar grammar/grammar})
+                                  :opts {:platform :clj})))]
+      (is (= [:a :b] (:meme/insertion-order (meta form))))
+      (is (= "#{:a :b}" (fmt-flat/format-form form))))))
