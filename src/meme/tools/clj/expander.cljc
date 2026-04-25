@@ -190,14 +190,18 @@
     ;; Set — expand to (apply hash-set (concat ...))
     ;; RT3-F3: wrap in with-meta when user metadata is present
     ;; RT7: allow ~@ in sets (Clojure allows `#{~@xs})
+    ;; Walk in :meme/insertion-order when present so the generated concat
+    ;; lists elements in source order; falls back to hash order otherwise.
     (set? form)
-    (let [items (mapv (fn [item]
-                        (cond
-                          (forms/unquote-splicing? item)
-                          (:form item)
-                          :else
-                          (list 'clojure.core/list (expand-sq item opts loc))))
-                      form)
+    (let [order  (:meme/insertion-order (meta form))
+          source (if (and order (= (count order) (count form))) order form)
+          items  (mapv (fn [item]
+                         (cond
+                           (forms/unquote-splicing? item)
+                           (:form item)
+                           :else
+                           (list 'clojure.core/list (expand-sq item opts loc))))
+                       source)
           expansion (list 'clojure.core/apply 'clojure.core/hash-set
                          (list 'clojure.core/seq (cons 'clojure.core/concat items)))]
       (maybe-with-meta expansion form opts loc))
@@ -275,8 +279,17 @@
                                            (expand-syntax-quotes v opts)]) form))
        (meta form))
 
+     ;; Walk in :meme/insertion-order when present, then rebuild order
+     ;; metadata from walked elements so the printer doesn't read stale
+     ;; entries (e.g. an unexpanded CljSyntaxQuote that has been replaced
+     ;; by (quote x) in the new set). Sibling of walk-rc's set branch.
      (set? form)
-     (with-meta (set (map #(expand-syntax-quotes % opts) form)) (meta form))
+     (let [order  (:meme/insertion-order (meta form))
+           source (if (and order (= (count order) (count form))) order form)
+           walked (vec (map #(expand-syntax-quotes % opts) source))]
+       (-> (set walked)
+           (with-meta (meta form))
+           (vary-meta assoc :meme/insertion-order (vec (distinct walked)))))
 
      :else form)))
 
