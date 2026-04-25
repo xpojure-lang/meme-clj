@@ -19,7 +19,7 @@ nesting with readable, familiar syntax:
 Everything else is unchanged from Clojure. Programs run on Babashka,
 Clojure JVM, or ClojureScript without modification. The platform
 includes a reader, printer, formatter, REPL, file runner, and CLI —
-the CLI itself is written in `.meme`.
+the CLI itself is written in `.mclj`.
 
 
 ## Goals
@@ -32,7 +32,7 @@ the CLI itself is written in `.meme`.
   destructuring, reader macros, macros, metadata — all work unchanged.
 
 - **Self-hosting.** meme code should be able to build meme itself. The CLI
-  is the first component written in `.meme`.
+  is the first component written in `.mclj`.
 
 - **Roundtrippable.** meme text → Clojure forms → meme text should produce
   equivalent output. This enables tooling: formatters, linters, editors.
@@ -115,12 +115,12 @@ the CLI itself is written in `.meme`.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| F1 | Three-layer formatter architecture: notation (`meme-lang.printer`), form-shape (`meme-lang.form-shape`), style (`canon/style` or alternative). Each independently composable via plain-data operations. | Done |
+| F1 | Three-layer formatter architecture: notation (`mclj-lang.printer`), form-shape (`mclj-lang.form-shape`), style (`canon/style` or alternative). Each independently composable via plain-data operations. | Done |
 | F2 | Public slot vocabulary: `:name`, `:doc`, `:params`, `:bindings`, `:dispatch-val`, `:dispatch-fn`, `:test`, `:expr`, `:as-name`, `:clause`, `:default`, `:arity`, `:body`. Documented in `doc/form-shape.md`. | Done |
 | F3 | Form-shape registry per lang; exposed under `:form-shape` in `lang-map`. `decompose (registry head args)` takes registry explicitly so langs are sovereign. | Done |
 | F4 | Opt-in structural fallback via `with-structural-fallback` — infers defn-like and let-like shapes for unregistered heads. | Done |
 | F5 | Style's `:slot-renderers` composes over `printer/default-slot-renderers` via plain map merge. Overrides compose independently of other style keys. | Done |
-| F6 | ~~Project-local `.meme-format.edn`~~ | Removed — feature was unused; CLI flags cover practical formatting needs |
+| F6 | ~~Project-local `.mclj-format.edn`~~ | Removed — feature was unused; CLI flags cover practical formatting needs |
 
 ### REPL
 
@@ -134,15 +134,15 @@ the CLI itself is written in `.meme`.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| C1 | `meme run <file>` — run a .meme file | Done |
+| C1 | `meme run <file>` — run a .mclj file | Done |
 | C2 | `meme repl` — start interactive REPL | Done |
-| C3a | `meme to-clj <file\|dir>` — convert .meme files to .clj | Done |
-| C3b | `meme to-meme <file\|dir>` — convert .clj/.cljc/.cljs files to .meme | Done |
-| C4 | `meme format <file\|dir>` — normalize .meme files via canonical formatter (in-place or stdout) | Done |
-| C5 | `meme transpile <dir\|file...> [--out dir]` — transpile .meme to .clj in a separate output directory for classpath use. Alias: `compile`. | Done |
+| C3a | `meme to-clj <file\|dir>` — convert .mclj files to .clj | Done |
+| C3b | `meme to-mclj <file\|dir>` — convert .clj/.cljc/.cljs files to .mclj | Done |
+| C4 | `meme format <file\|dir>` — normalize .mclj files via canonical formatter (in-place or stdout) | Done |
+| C5 | `meme transpile <dir\|file...> [--out dir]` — transpile .mclj to .clj in a separate output directory for classpath use. Alias: `compile`. | Done |
 | C8 | `meme build <dir\|file...> [--out dir]` — transpile + AOT compile to JVM bytecode. Stops at `.class` files; JAR packaging stays in user's tools.build layer. | Done |
-| C6 | `load-file` interception — `(load-file "path.meme")` runs through the meme pipeline (JVM + Babashka) | Done |
-| C7 | `require` interception — `(require 'my.ns)` finds `.meme` files on the classpath (JVM only; Babashka's SCI bypasses `clojure.core/load`) | Done |
+| C6 | `load-file` interception — `(load-file "path.mclj")` runs through the meme pipeline (JVM + Babashka) | Done |
+| C7 | `require` interception — `(require 'my.ns)` finds `.mclj` files on the classpath (JVM only; Babashka's SCI bypasses `clojure.core/load`) | Done |
 
 Note: Requirement IDs are not sequential — gaps (R2–R4, R11–R12, R14,
 P2–P4, P10) are requirements that were merged into other IDs or dropped
@@ -154,19 +154,19 @@ renumbered, so git history and this table stay cross-referenceable.
 ## Architecture
 
 ```
-.meme file ──→ unified-pratt-parser ──→ cst-reader ──→ Clojure forms
+.mclj file ──→ unified-pratt-parser ──→ cst-reader ──→ Clojure forms
                   (step-parse)          (step-read)         │
                                                             ▼
                                                       expander ──→ eval
                                                             │
-                                                       printer ──→ .meme text
-                                                     formatter ──→ .meme text
+                                                       printer ──→ .mclj text
+                                                     formatter ──→ .mclj text
 ```
 
 The codebase has four layers:
 - **`meme.tools.{parser, lexer, render}`** — Generic, language-agnostic infrastructure: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
 - **`meme.tools.clj.*`** — Clojure-surface commons shared across any Clojure-flavored frontend: lexical conventions, atom resolution, CST reader, stages, syntax-quote expander, the `Clj*` AST records, value serialization, run/repl harnesses.
-- **`meme-lang.*`** — Meme language: grammar, parselets, lexlets shim, form-shape, printer, formatters; plus thin `run`/`repl` shims that inject meme's grammar and delegate to `meme.tools.clj.{run,repl}`.
+- **`mclj-lang.*`** — Meme language: grammar, parselets, lexlets shim, form-shape, printer, formatters; plus thin `run`/`repl` shims that inject meme's grammar and delegate to `meme.tools.clj.{run,repl}`.
 - **`meme.*`** — Shared runtime infrastructure (`meme.registry`, `meme.loader`) and app tier (`meme.cli`).
 
 The pipeline has composable stages (composed by `meme.tools.clj.stages`), each a `ctx → ctx` function with a `step-` prefix:
@@ -211,8 +211,8 @@ meme rules inside. No opaque regions.
   it correctly.
 
 - **Reader conditionals — lossless by default.** The reader always returns
-  `#?`/`#?@` as `CljReaderConditional` records, so `meme->forms`,
-  `meme->clj`, and `format-meme` preserve all branches faithfully.
+  `#?`/`#?@` as `CljReaderConditional` records, so `mclj->forms`,
+  `mclj->clj`, and `format-mclj` preserve all branches faithfully.
   `run-string`/`run-file`/REPL insert `step-evaluate-reader-conditionals`
   between read and syntax-quote expansion to materialize the platform
   branch — matching native Clojure's order (reader evaluates `#?` before
@@ -227,7 +227,7 @@ meme rules inside. No opaque regions.
 
 - **Interior comments before non-metadatable atoms are dropped.** Comments
   and whitespace preceding a child form are preserved on the form's
-  metadata (`:meme/leading-trivia`) so the formatter can emit them.
+  metadata (`:mclj/leading-trivia`) so the formatter can emit them.
   Clojure's atom values — keywords, numbers, strings, booleans, chars —
   cannot carry metadata, so a comment that sits immediately before such
   an atom (e.g. a comment above a keyword map key) is lost when the form
@@ -239,11 +239,11 @@ meme rules inside. No opaque regions.
 
 - **Syntax highlighting grammars.** TextMate grammar in `vscode-meme/`,
   Tree-sitter grammar in `tree-sitter-meme/` (both in the `xpojure-lang` org).
-  Both cover `.meme` extension.
+  Both cover `.mclj` extension.
 
 - **Platform / guest language system.** Includes:
   - **Lang registration** (`meme.registry`) — `register!` a guest language
-    with `:extension`, `:run`, `:parser`, `:format`, `:to-clj`, `:to-meme`.
+    with `:extension`, `:run`, `:parser`, `:format`, `:to-clj`, `:to-mclj`.
     The CLI auto-detects guest languages from file extension; `run-file`
     does the same when a `:resolve-lang-for-path` resolver is injected.
   - **Pipeline integration** — pluggable `:parser` in
@@ -252,15 +252,15 @@ meme rules inside. No opaque regions.
 - **Three-layer formatter architecture.** The printer, form-shape, and
   style concerns are now separate namespaces with independent extension
   points, all composable via plain-data operations:
-  - `meme-lang.printer` — notation only. Dispatches on slots from the
+  - `mclj-lang.printer` — notation only. Dispatches on slots from the
     form-shape registry provided via ctx. No hardcoded form names.
-  - `meme-lang.form-shape` — language-owned registry of decomposers.
+  - `mclj-lang.form-shape` — language-owned registry of decomposers.
     Each decomposer emits `[slot-name value]` pairs. 13-slot vocabulary
     (`:name`, `:doc`, `:params`, `:bindings`, `:clause`, `:body`, etc.)
     is public and documented in `doc/form-shape.md`. `with-structural-fallback`
     enables opt-in inference for user macros matching defn-like or let-like
     shapes.
-  - `meme-lang.formatter.canon/style` — slot-keyed opinions
+  - `mclj-lang.formatter.canon/style` — slot-keyed opinions
     (`:head-line-slots`, `:force-open-space-for`, `:slot-renderers`).
     The canon style collapsed from ~60 form-keyed entries to 11 slot-keyed
     entries. Formatters accept `:style` override in opts for project-level
@@ -275,14 +275,14 @@ meme rules inside. No opaque regions.
 | PL5 | `run-string` accepts `:prelude` | Done |
 | PL6 | Pluggable parser: `:parser` option in `step-parse` for guest language parsers | Done |
 | PL8 | Stage contract: spec validation at stage boundaries | Removed — contract validation was deleted during pipeline unification to the scanlet-parselet architecture |
-| PL10 | `meme to-clj --lang` / `meme to-meme --lang` CLI selector and `meme inspect` command | Done |
-| PL11 | Namespace loader: intercept `clojure.core/load` to find `.meme` files on classpath. `install!`/`uninstall!`, auto-installed by `run-string`/`run-file`/REPL (opt out via `:install-loader? false`) | Done |
+| PL10 | `meme to-clj --lang` / `meme to-mclj --lang` CLI selector and `meme inspect` command | Done |
+| PL11 | Namespace loader: intercept `clojure.core/load` to find `.mclj` files on classpath. `install!`/`uninstall!`, auto-installed by `run-string`/`run-file`/REPL (opt out via `:install-loader? false`) | Done |
 | PL12 | Multi-extension support: `:extension`/`:extensions` normalization, both string and vector accepted | Done |
-| PL13 | Loader namespace denylist: `clojure.*`, `java.*`, `javax.*` etc. cannot be shadowed | Withdrawn — installing a lang is the trust decision; if a user puts `.meme` files at core namespace paths they did it on purpose. Recursion protection is via cached `extensions-fn`, not a denylist. |
+| PL13 | Loader namespace denylist: `clojure.*`, `java.*`, `javax.*` etc. cannot be shadowed | Withdrawn — installing a lang is the trust decision; if a user puts `.mclj` files at core namespace paths they did it on purpose. Recursion protection is via cached `extensions-fn`, not a denylist. |
 | PL14 | Registry atomicity: extension conflict check inside `swap!` callback, thread-safe | Done |
 | PL15 | Red team hardening: 11 confirmed fixes (OOM, TOCTOU, compat, metadata), 4 plausible concern fixes | Done |
-| PL16 | Registry imports no langs directly — built-ins self-register from their own api ns; CLI is the "app" that requires each lang.  Dissolves the registry ↔ meme-lang cycle and four `requiring-resolve` workarounds. | Done |
-| PL17 | Lightweight pipeline contract validation: stages declare required ctx keys via `stage-contracts` data; `check-contract!` runs at stage entry and throws `:meme/pipeline-error` with missing keys listed, instead of deep NPEs. | Done |
+| PL16 | Registry imports no langs directly — built-ins self-register from their own api ns; CLI is the "app" that requires each lang.  Dissolves the registry ↔ mclj-lang cycle and four `requiring-resolve` workarounds. | Done |
+| PL17 | Lightweight pipeline contract validation: stages declare required ctx keys via `stage-contracts` data; `check-contract!` runs at stage entry and throws `:mclj/pipeline-error` with missing keys listed, instead of deep NPEs. | Done |
 
 ## Future work
 
@@ -292,11 +292,11 @@ meme rules inside. No opaque regions.
   that advance to resynchronization points (closing delimiters or newlines).
   This is a significant architectural change and should be its own project.
 - nREPL middleware
-- **meme-lsp**: Language Server Protocol implementation for `.meme` files.
+- **meme-lsp**: Language Server Protocol implementation for `.mclj` files.
   Diagnostics, go-to-definition, symbol navigation, completions, hover,
   and formatting via the existing lossless CST pipeline. Could extend
   clojure-lsp or be a standalone server using the meme parser directly.
 - **meme-mcp**: Model Context Protocol server exposing meme's pipeline
   (parse, read, format, to-clj, to-meme) as MCP tools for AI agents.
-  Enables LLMs to read, write, and transform `.meme` code natively
+  Enables LLMs to read, write, and transform `.mclj` code natively
   without converting through Clojure first.

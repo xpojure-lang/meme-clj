@@ -1,6 +1,6 @@
 # meme Language Reference
 
-Complete syntax reference for writing `.meme` code.
+Complete syntax reference for writing `.mclj` code.
 
 
 ## The Rule
@@ -150,7 +150,7 @@ defn-(helper [x] +(x 1))
 
 ### defmacro
 
-Macros work in `.meme` files. Syntax-quote (`` ` ``) is parsed natively —
+Macros work in `.mclj` files. Syntax-quote (`` ` ``) is parsed natively —
 meme call syntax applies inside backtick. `~` (unquote) and `~@` (unquote-splicing)
 work as prefix operators.
 
@@ -369,8 +369,8 @@ All of these work exactly as in Clojure:
 - Regex: `#"pattern"`
 - Character literals: `\a`, `\newline`, `\space`
 - Tagged literals: `#inst`, `#uuid`
-- Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `meme->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
-- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`meme->forms`, `meme->clj`, `format-meme-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. Meme call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
+- Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `mclj->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
+- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`mclj->forms`, `mclj->clj`, `format-mclj-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. Meme call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
 - Namespaced maps: `#:ns{}`
 - Destructuring in all binding positions
 - Commas are whitespace
@@ -418,7 +418,7 @@ A lang registers one or more file extensions. Both `:extension` (string) and `:e
 ```clojure
 ;; EDN file — single extension
 {:extension ".ml"
- :run "path/to/prelude.meme"
+ :run "path/to/prelude.mclj"
  :format :meme}
 
 ;; Runtime — multiple extensions
@@ -430,24 +430,24 @@ The CLI auto-detects the lang from file extension: `meme run app.ml` resolves to
 
 ### Namespace loader
 
-After `install!` (called automatically by `run-string`, `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.meme` files transparently:
+After `install!` (called automatically by `run-string`, `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.mclj` files transparently:
 
 ```
-;; In the meme REPL or a running .meme file:
-require('[my-lib.core :as lib])   ; finds my_lib/core.meme on classpath (JVM only)
-load-file("examples/demo.meme")   ; loads by filesystem path (JVM + Babashka)
+;; In the meme REPL or a running .mclj file:
+require('[my-lib.core :as lib])   ; finds my_lib/core.mclj on classpath (JVM only)
+load-file("examples/demo.mclj")   ; loads by filesystem path (JVM + Babashka)
 ```
 
 Files with registered lang extensions take precedence over `.clj` when both exist. The loader does not reserve any namespace prefix — keeping your lang files under your own namespace is your responsibility.
 
-**Babashka limitation:** `require` of `.meme` namespaces is JVM-only (Babashka's SCI bypasses `clojure.core/load`). `load-file` works on both platforms.
+**Babashka limitation:** `require` of `.mclj` namespaces is JVM-only (Babashka's SCI bypasses `clojure.core/load`). `load-file` works on both platforms.
 
 ### Precompilation
 
-For environments where runtime loading isn't available (Babashka `require`, nREPL, CI), transpile `.meme` to `.clj`:
+For environments where runtime loading isn't available (Babashka `require`, nREPL, CI), transpile `.mclj` to `.clj`:
 
 ```bash
-bb meme transpile src/                       # default: target/meme
+bb meme transpile src/                       # default: target/mclj
 bb meme transpile src/ --out target/classes  # or override
 ```
 
@@ -458,7 +458,7 @@ bb meme transpile src/ --out target/classes  # or override
 One-shot:
 
 ```bash
-bb meme build src/                         # default: transpile-staged in target/meme,
+bb meme build src/                         # default: transpile-staged in target/mclj,
                                            #          bytecode in target/classes
 bb meme build src/ --out out/classes       # custom output
 ```
@@ -477,7 +477,7 @@ For more control (different staging layout, no intermediate `.clj`, integration 
   ;; Shell out to meme transpile, then AOT the result.
   (b/process {:command-args ["bb" "meme" "transpile" "src"]})
   (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
-                  :src-dirs  ["target/meme"]
+                  :src-dirs  ["target/mclj"]
                   :class-dir "target/classes"}))
 ```
 
@@ -493,7 +493,7 @@ For more control (different staging layout, no intermediate `.clj`, integration 
   (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
                   :src-dirs  ["src"]
                   :class-dir "target/classes"
-                  :ns-compile '[my.ns]}))  ; list .meme namespaces explicitly
+                  :ns-compile '[my.ns]}))  ; list .mclj namespaces explicitly
 ```
 
 Both produce identical bytecode. The first leaves a readable `.clj` staging dir (useful for debugging); the second skips it and requires meme on the build classpath. Pick whichever fits your pipeline.
