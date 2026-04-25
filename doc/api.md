@@ -146,7 +146,7 @@ Convert a Clojure source string to meme source string. JVM/Babashka only. Equiva
 meme-lang.api/lang-map
 ```
 
-The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:to-meme`, `:run`, `:repl`. Meme registers itself under `:meme` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly. Siblings like `implojure-lang.api/lang-map` follow the same shape.
+The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:run`, `:repl`. `:to-meme` (CLI alias `from-clj`) is optional — only present on langs that own a syntax printer. Meme registers itself under `:meme` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly.
 
 ## meme-lang.form-shape
 
