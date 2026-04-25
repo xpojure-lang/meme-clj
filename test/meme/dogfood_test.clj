@@ -87,6 +87,46 @@
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
 
+(deftest dogfood-per-form-parser
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/parser.cljc")]
+    (is (= total (count succeeded))
+        (str "all forms roundtrip; failures: "
+             (str/join ", " (map :name failed))))
+    (is (zero? (count failed)))
+    (is (zero? (count read-errors)) "no read errors in own source")))
+
+(deftest dogfood-per-form-render
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/render.cljc")]
+    (is (= total (count succeeded))
+        (str "all forms roundtrip; failures: "
+             (str/join ", " (map :name failed))))
+    (is (zero? (count failed)))
+    (is (zero? (count read-errors)) "no read errors in own source")))
+
+(deftest dogfood-per-form-grammar
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/grammar.cljc")]
+    (is (= total (count succeeded))
+        (str "all forms roundtrip; failures: "
+             (str/join ", " (map :name failed))))
+    (is (zero? (count failed)))
+    (is (zero? (count read-errors)) "no read errors in own source")))
+
+(deftest dogfood-per-form-form-shape
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/form_shape.cljc")]
+    (is (= total (count succeeded))
+        (str "all forms roundtrip; failures: "
+             (str/join ", " (map :name failed))))
+    (is (zero? (count failed)))
+    (is (zero? (count read-errors)) "no read errors in own source")))
+
+(deftest dogfood-per-form-formatter-canon
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/formatter/canon.cljc")]
+    (is (= total (count succeeded))
+        (str "all forms roundtrip; failures: "
+             (str/join ", " (map :name failed))))
+    (is (zero? (count failed)))
+    (is (zero? (count read-errors)) "no read errors in own source")))
+
 ;; ---------------------------------------------------------------------------
 ;; clj-kondo semantic equivalence: roundtripped code defines the same API.
 ;; ---------------------------------------------------------------------------
@@ -121,7 +161,12 @@
                 "src/meme/tools/clj/stages.cljc"
                 "src/meme/tools/clj/errors.cljc"
                 "src/meme/registry.clj"
-                "src/meme/cli.clj"]]
+                "src/meme/cli.clj"
+                "src/meme/tools/parser.cljc"
+                "src/meme/tools/render.cljc"
+                "src/mclj_lang/grammar.cljc"
+                "src/mclj_lang/form_shape.cljc"
+                "src/mclj_lang/formatter/canon.cljc"]]
     (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)
             tmp (roundtrip-to-tmp path)

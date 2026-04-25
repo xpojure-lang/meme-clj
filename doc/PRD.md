@@ -1,4 +1,4 @@
-# meme clojure — Product Requirements Document
+# mclj — Product Requirements Document
 
 ## Problem
 

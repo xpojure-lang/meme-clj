@@ -78,10 +78,18 @@
 
 ;; NOTE: resolve-symbol creates invisible runtime dependencies via requiring-resolve.
 (defn- resolve-symbol
-  "Resolve a qualified symbol to a var's value via requiring-resolve."
+  "Resolve a qualified symbol to a var's value via requiring-resolve.
+   Throws a clear error when the symbol cannot be resolved or when the
+   resolved value is not invocable (e.g. the user pointed at a config var
+   instead of a fn)."
   [sym]
   (if-let [v (requiring-resolve sym)]
-    @v
+    (let [val @v]
+      (if (ifn? val)
+        val
+        (throw (ex-info (str "Symbol " sym " resolved to a non-invocable value of type "
+                             (some-> val class .getName) " — expected a function.")
+                        {:symbol sym :resolved-type (some-> val class .getName)}))))
     (throw (ex-info (str "Cannot resolve symbol: " sym) {:symbol sym}))))
 
 (defn- resolve-value
@@ -228,12 +236,6 @@
   "List all registered user language names (excludes built-ins)."
   []
   (keep (fn [[n l]] (when-not (:builtin? (meta l)) n)) @registry))
-
-(defn ^:no-doc clear-user-langs!
-  "Clear all registered user languages, preserving built-ins. Test-only
-   helper — not part of the public API."
-  []
-  (swap! registry (fn [m] (into {} (filter (fn [[_ v]] (:builtin? (meta v)))) m))))
 
 (defn available-langs
   "Return a set of all available lang names (built-in + user-registered)."
