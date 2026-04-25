@@ -301,6 +301,62 @@
       (is (= ns-before *ns*) "*ns* should be restored after load-file"))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: lang-load called the original Clojure load once per non-lang
+;; path inside a doseq. Clojure's load batches *loaded-libs* updates across
+;; paths in a single call; per-path delegation defeated that tracking.
+;; Fix: collect consecutive non-lang paths and flush them in one call,
+;; preserving order around interleaved lang paths.
+;; ---------------------------------------------------------------------------
+
+(deftest lang-load-batches-non-lang-paths
+  (let [lang-load (resolve 'meme.loader/lang-load)
+        original-load-atom @(resolve 'meme.loader/original-load)]
+    (testing "all-non-lang paths delegate to original-load in a single call"
+      (let [calls (atom [])
+            stub  (fn [& paths] (swap! calls conj (vec paths)))
+            saved @original-load-atom]
+        (try
+          (reset! original-load-atom stub)
+          (with-redefs [meme.loader/find-lang-resource (constantly nil)]
+            (lang-load "/some/clj/a" "/some/clj/b" "/some/clj/c"))
+          (is (= [["/some/clj/a" "/some/clj/b" "/some/clj/c"]] @calls)
+              "all three paths should be delegated in one batched call")
+          (finally (reset! original-load-atom saved)))))
+    (testing "lang and non-lang paths are flushed in source order"
+      ;; "/test_meme_ns/greeter" exists as a .meme classpath resource.
+      ;; Mix it with non-lang paths and assert original-load batching boundaries.
+      (let [calls (atom [])
+            lang-runs (atom [])
+            stub-load (fn [& paths] (swap! calls conj (vec paths)))
+            stub-run-fn (fn [_src _opts] (swap! lang-runs conj :ran))
+            saved @original-load-atom]
+        (try
+          (reset! original-load-atom stub-load)
+          (with-redefs [meme.loader/find-lang-resource
+                        (fn [path]
+                          (when (= path "/test_meme_ns/greeter")
+                            ;; Return a stub resource + run-fn so we don't
+                            ;; actually slurp from the classpath.
+                            [(java.io.StringReader. "") stub-run-fn]))
+                        ;; slurp accepts a Reader, so the stub Reader works.
+                        ]
+            (lang-load "/a" "/b" "/test_meme_ns/greeter" "/c"))
+          (is (= [["/a" "/b"] ["/c"]] @calls)
+              "non-lang paths before and after the lang file should be batched separately, in order")
+          (is (= 1 (count @lang-runs)) "lang file should be loaded once")
+          (finally (reset! original-load-atom saved)))))
+    (testing "a single non-lang path still delegates correctly"
+      (let [calls (atom [])
+            stub  (fn [& paths] (swap! calls conj (vec paths)))
+            saved @original-load-atom]
+        (try
+          (reset! original-load-atom stub)
+          (with-redefs [meme.loader/find-lang-resource (constantly nil)]
+            (lang-load "/single/path"))
+          (is (= [["/single/path"]] @calls))
+          (finally (reset! original-load-atom saved)))))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: a .meme file with an `ns` form must produce a fully-interned
 ;; namespace (find-ns returns it), its vars carry correct :ns metadata, and
 ;; the caller's *ns* is unchanged after require. The code review flagged

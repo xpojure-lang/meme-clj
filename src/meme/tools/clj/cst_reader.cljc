@@ -354,14 +354,16 @@
               (errors/meme-error "Namespaced map must contain even number of forms"
                                  (node-loc node)))
           pairs (partition 2 items)
+          qualify-key (fn [k]
+                        (if (and (keyword? k) (nil? (namespace k))
+                                 (not (str/blank? qual-ns)))
+                          (keyword qual-ns (name k))
+                          k))
+          qualified-ks (mapv (comp qualify-key first) pairs)
+          _ (when-let [dup (first-duplicate qualified-ks)]
+              (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
           resolved (into (array-map)
-                         (map (fn [[k v]]
-                                [(if (and (keyword? k) (nil? (namespace k))
-                                          (not (str/blank? qual-ns)))
-                                   (keyword qual-ns (name k))
-                                   k)
-                                 v])
-                              pairs))]
+                         (map (fn [k [_ v]] [k v]) qualified-ks pairs))]
       (with-meta resolved {:meme/namespace-prefix ns-str}))
 
     :reader-cond
