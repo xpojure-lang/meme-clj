@@ -506,24 +506,30 @@
       (is (= "#(+(%1 %2))" back)))))
 
 ;; ---------------------------------------------------------------------------
-;; RT2-M15: restore-bare-percent didn't recurse into maps/sets.
-;; #(#{%}) roundtripped as #(#{%1}), losing the bare % notation.
-;; Fix: added map? and set? cases to restore-bare-percent.
+;; Bare % inside a #() body is uniformly normalized to %1 on roundtrip, in
+;; agreement with bare-percent-notation-normalized and roundtrip-anon-fn-
+;; sugar-preserved.
+;;
+;; Historical note: this test previously asserted that #(#{%}) round-tripped
+;; verbatim while maps and syntax-quote bodies degraded to %1. That asymmetry
+;; was accidental — walk-anon-fn-body's set branch rebuilt the set with stale
+;; :meme/insertion-order metadata still pointing at the source `%`, which the
+;; printer then emitted instead of the normalized `%1`. Once the walker began
+;; refreshing set order via walk-meme-set, the set case aligned with the
+;; map/syntax-quote behavior.
 ;; ---------------------------------------------------------------------------
 
-;; restore-bare-percent doesn't recurse into maps or syntax-quote bodies,
-;; so bare % is normalized to %1 in these positions.
-(deftest bare-percent-in-maps-and-sets
+(deftest bare-percent-in-nested-containers-normalized
   (testing "#({:a %}) normalizes bare % to %1"
     (let [src "#({:a %})"
           forms (lang/meme->forms src)
           back (lang/forms->meme forms)]
       (is (= "#({:a %1})" back))))
-  (testing "#(#{%}) preserves bare % notation"
+  (testing "#(#{%}) normalizes bare % to %1"
     (let [src "#(#{%})"
           forms (lang/meme->forms src)
           back (lang/forms->meme forms)]
-      (is (= "#(#{%})" back))))
+      (is (= "#(#{%1})" back))))
   (testing "#(`~%) normalizes bare % to %1"
     (let [src "#(`~%)"
           forms (lang/meme->forms src)

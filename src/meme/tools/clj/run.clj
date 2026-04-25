@@ -111,8 +111,7 @@
    (let [opts (if (map? eval-fn-or-opts) eval-fn-or-opts {:eval eval-fn-or-opts})
          stages-impl (:stages opts)
          reader-opts (default-reader-opts opts)
-         generic-opts {:run-fn (or (:run-fn stages-impl)
-                                   (fn [src _opts] (clj-run-fn src opts)))
+         generic-opts {:run-fn (or (:run-fn stages-impl) clj-run-fn)
                        :expand-forms (or (:expand-forms stages-impl) stages/expand-syntax-quotes)
                        :reader-opts reader-opts
                        :eval (:eval opts)

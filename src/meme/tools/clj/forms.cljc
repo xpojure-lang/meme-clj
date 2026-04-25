@@ -273,7 +273,7 @@
     (map? form) (with-meta
                   (into {} (map (fn [[k v]] [(walk-anon-fn-body f k) (walk-anon-fn-body f v)]) form))
                   (meta form))
-    (set? form) (with-meta (set (map #(walk-anon-fn-body f %) form)) (meta form))
+    (set? form) (walk-meme-set form #(walk-anon-fn-body f %))
     ;; Tagged literals (JVM only)
     #?@(:clj [(tagged-literal? form)
               (tagged-literal (.-tag form) (walk-anon-fn-body f (.-form form)))])
