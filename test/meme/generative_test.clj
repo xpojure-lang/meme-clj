@@ -30,7 +30,7 @@
                         (symbol "nil") (symbol "true") (symbol "false")})
 
 ;; Keywords the printer strips from metadata (compiler/reader-added keys)
-(def reserved-meta-keywords #{:meme/leading-trivia :line :column :file})
+(def reserved-meta-keywords #{:mclj/leading-trivia :line :column :file})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))
@@ -374,13 +374,13 @@
       false)))
 
 (defn meta-roundtrip-ok?
-  "Check roundtrip preserving metadata (ignoring :meme/leading-trivia added by reader)."
+  "Check roundtrip preserving metadata (ignoring :mclj/leading-trivia added by reader)."
   [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
           read-back (first (lang/mclj->forms printed))]
       (and (= form read-back)
-           (= (meta form) (dissoc (meta read-back) :meme/leading-trivia :meme/meta-chain))))
+           (= (meta form) (dissoc (meta read-back) :mclj/leading-trivia :mclj/meta-chain))))
     (catch Exception e
       (println "Meta roundtrip failed for form:" (pr-str form))
       (println "Error:" (.getMessage e))
@@ -906,15 +906,15 @@
       (catch Exception _ false))))
 
 ;; ===========================================================================
-;; Property: set walker invariants for :meme/insertion-order
+;; Property: set walker invariants for :mclj/insertion-order
 ;;
 ;; Lesson from bugs #2/#3 (and the earlier 5f7d0fb walk-rc fix): any walker
-;; that rebuilds a set must keep :meme/insertion-order consistent with the
+;; that rebuilds a set must keep :mclj/insertion-order consistent with the
 ;; new contents. Without this invariant, the printer's "use order vector
 ;; when count matches" path renders stale entries (e.g. an unexpanded
 ;; CljSyntaxQuote that the walker has actually replaced with (quote x)).
 ;;
-;; Invariant: for any set produced by expand-forms, if :meme/insertion-order
+;; Invariant: for any set produced by expand-forms, if :mclj/insertion-order
 ;; is present its count equals the set size AND every entry is `=` to a
 ;; member of the set. Holds whether or not the source was syntax-quoted —
 ;; the outer walker is what bug #2 exercised.
@@ -952,7 +952,7 @@
       (let [walked (expander/expand-forms (lang/mclj->forms src))
             sets   (mapcat find-sets walked)]
         (every? (fn [s]
-                  (let [order (:meme/insertion-order (meta s))]
+                  (let [order (:mclj/insertion-order (meta s))]
                     (or (nil? order)
                         (and (= (count order) (count s))
                              (every? #(contains? s %) order)))))

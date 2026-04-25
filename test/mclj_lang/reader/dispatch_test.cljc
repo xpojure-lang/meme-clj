@@ -181,7 +181,7 @@
        (let [result (first (lang/mclj->forms "#::{:a 1}"))]
          (is (map? result))
          (is (= 1 (:a result)) "keys should stay unqualified (defer to eval)")
-         (is (= "::" (:meme/namespace-prefix (meta result))) "metadata signals bare auto-resolve")))
+         (is (= "::" (:mclj/namespace-prefix (meta result))) "metadata signals bare auto-resolve")))
      (testing "#::{:a 1} roundtrips through printer"
        (let [forms (lang/mclj->forms "#::{:a 1}")
              printed (fmt-flat/format-forms forms)

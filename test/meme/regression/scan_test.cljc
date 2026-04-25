@@ -481,7 +481,7 @@
        (let [result (first (lang/mclj->forms "#::{:a 1}"))]
          (is (map? result))
          (is (= 1 (:a result)))
-         (is (= "::" (:meme/namespace-prefix (meta result))))))))
+         (is (= "::" (:mclj/namespace-prefix (meta result))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L10: ##foo was silently accepted and produced confusing error.
