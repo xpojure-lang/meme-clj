@@ -19,20 +19,14 @@ Everything else is Clojure.
 ;; examples/stars.mclj — bb meme run examples/stars.mclj
 require('[cheshire.core :as json])
 
-defn(stars
-  [owner repo]
-  let(
-    [
-      url
-      str("https://api.github.com/repos/" owner "/" repo)
-      resp
-      slurp(url)
-      data
-      json/parse-string(resp true)
-      count
-      :stargazers_count(data)
-    ]
-    println(str(owner "/" repo ": " count " ⭐"))))
+defn( stars [owner repo]
+  let( [url   str("https://api.github.com/repos/" owner "/" repo)
+     resp  slurp(url)
+     data  json/parse-string(resp true)
+     count :stargazers_count(data)]
+    println(str(owner "/" repo ": " count " ⭐"))
+  )
+)
 
 stars("xpojure-lang" "meme-clj")
 ```

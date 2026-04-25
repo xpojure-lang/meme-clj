@@ -2,7 +2,7 @@
  :tasks {meme {:doc "meme CLI: run, repl, to-clj, to-mclj, format, inspect, version"
               :task (do (require '[meme.cli])
                         (apply (resolve 'meme.cli/-main) *command-line-args*))}
-         test-meme {:doc "Run all .meme tests (eval + fixture)"
+         test-meme {:doc "Run all .mclj tests (eval + fixture)"
                    :task (do (require '[meme.test-runner])
                              (let [fails ((resolve 'meme.test-runner/run-all-meme-tests))]
                                (System/exit (if (zero? fails) 0 1))))}
