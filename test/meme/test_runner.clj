@@ -56,7 +56,7 @@
    Returns a map of {:meme->forms fn, :meme->clj fn, :clj->meme fn}, or nil
    if the lang has no meme-compatible API."
   [lang-kw]
-  (when (= lang-kw :meme)
+  (when (= lang-kw :mclj)
     (let [ns-sym 'mclj-lang.api]
       (require ns-sym)
       {:meme->forms (ns-resolve (find-ns ns-sym) 'meme->forms)

@@ -165,7 +165,7 @@
 ;; Self-register as a built-in when this ns is loaded on JVM/Babashka.
 ;; The registry imports no langs; langs register themselves — this keeps
 ;; the registry pure infrastructure and avoids the old circular dep.
-#?(:clj (registry/register-builtin! :meme lang-map))
+#?(:clj (registry/register-builtin! :mclj lang-map))
 
 ;; Install meme's string handler for :run — a string value is a prelude
 ;; .meme path that runs before user source. Keeps this meme convention

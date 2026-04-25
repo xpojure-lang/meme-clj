@@ -98,16 +98,16 @@
 (deftest inspect-test
   (let [{:keys [out exit]} (bb-meme "inspect")]
     (is (zero? exit))
-    (is (str/includes? out "Lang: meme"))
+    (is (str/includes? out "Lang: mclj"))
     (is (str/includes? out "run"))
     (is (str/includes? out "format"))
     (is (str/includes? out "to-clj"))
     (is (str/includes? out "to-meme"))))
 
 (deftest inspect-lang-test
-  (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "meme")]
+  (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "mclj")]
     (is (zero? exit))
-    (is (str/includes? out "Lang: meme"))))
+    (is (str/includes? out "Lang: mclj"))))
 
 ;; ---------------------------------------------------------------------------
 ;; run
@@ -152,7 +152,7 @@
 
 (deftest to-clj-lang-test
   (let [f (tmp-meme "f(x y)")
-        {:keys [out exit]} (bb-meme "to-clj" (str f) "--stdout" "--lang" "meme")]
+        {:keys [out exit]} (bb-meme "to-clj" (str f) "--stdout" "--lang" "mclj")]
     (is (zero? exit))
     (is (= "(f x y)\n" out))))
 
@@ -269,7 +269,7 @@
 
 (deftest format-lang-test
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "meme")]
+        {:keys [out exit]} (bb-meme "format" (str f) "--stdout" "--lang" "mclj")]
     (is (zero? exit))
     (is (= "defn( foo [x] +(x 1))\n" out))))
 
