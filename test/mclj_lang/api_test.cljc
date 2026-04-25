@@ -9,21 +9,21 @@
 ;; Text-to-form track
 ;; ---------------------------------------------------------------------------
 
-(deftest meme->forms-test
+(deftest mclj->forms-test
   (testing "single form"
-    (is (= '[(+ 1 2)] (lang/meme->forms "+(1 2)"))))
+    (is (= '[(+ 1 2)] (lang/mclj->forms "+(1 2)"))))
   (testing "multiple forms"
     (is (= '[(def x 42) (println x)]
-           (lang/meme->forms "def(x 42)\nprintln(x)"))))
+           (lang/mclj->forms "def(x 42)\nprintln(x)"))))
   (testing "empty string"
-    (is (= [] (lang/meme->forms "")))))
+    (is (= [] (lang/mclj->forms "")))))
 
-(deftest forms->meme-test
+(deftest forms->mclj-test
   (testing "single form"
-    (is (= "+(1 2)" (lang/forms->meme ['(+ 1 2)]))))
+    (is (= "+(1 2)" (lang/forms->mclj ['(+ 1 2)]))))
   (testing "multiple forms separated by blank line"
     (is (= "def(x 42)\n\nprintln(x)"
-           (lang/forms->meme ['(def x 42) '(println x)])))))
+           (lang/forms->mclj ['(def x 42) '(println x)])))))
 
 ;; ---------------------------------------------------------------------------
 ;; Form-to-text track
@@ -49,17 +49,17 @@
 ;; Text-to-text track
 ;; ---------------------------------------------------------------------------
 
-(deftest meme->clj-test
+(deftest mclj->clj-test
   (testing "basic conversion"
-    (is (= "(+ 1 2)" (lang/meme->clj "+(1 2)"))))
+    (is (= "(+ 1 2)" (lang/mclj->clj "+(1 2)"))))
   (testing "multiple forms"
     (is (= "(def x 42)\n\n(println x)"
-           (lang/meme->clj "def(x 42)\nprintln(x)")))))
+           (lang/mclj->clj "def(x 42)\nprintln(x)")))))
 
 #?(:clj
-   (deftest clj->meme-test
+   (deftest clj->mclj-test
      (testing "basic conversion"
-       (is (= "+(1 2)" (lang/clj->meme "(+ 1 2)"))))))
+       (is (= "+(1 2)" (lang/clj->mclj "(+ 1 2)"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Eval tests
@@ -108,11 +108,11 @@
 #?(:clj
    (deftest run-string-prelude
      (testing "prelude with syntax-quote expands and evals correctly"
-       (let [prelude-forms (lang/meme->forms "`map")
+       (let [prelude-forms (lang/mclj->forms "`map")
              result (run/run-string "42" {:prelude prelude-forms})]
          (is (= 42 result))))
      (testing "prelude with hex literal expands correctly"
-       (let [prelude-forms (lang/meme->forms "def(hex-val 0xFF)")
+       (let [prelude-forms (lang/mclj->forms "def(hex-val 0xFF)")
              result (run/run-string "hex-val" {:prelude prelude-forms})]
          (is (= 255 result))))))
 
@@ -137,11 +137,11 @@
 ;; Format
 ;; ---------------------------------------------------------------------------
 
-(deftest format-meme-test
+(deftest format-mclj-test
   (testing "basic formatting"
-    (is (= "+(1 2)" (lang/format-meme "+(1 2)" {}))))
+    (is (= "+(1 2)" (lang/format-mclj "+(1 2)" {}))))
   (testing "empty source returns source"
-    (is (= "" (lang/format-meme "" {})))))
+    (is (= "" (lang/format-mclj "" {})))))
 
 ;; ---------------------------------------------------------------------------
 ;; C5: clj->forms deep nesting guard

@@ -8,9 +8,9 @@
   "Parse meme string, get forms. Then print forms back to meme and re-parse.
    The re-parsed forms should equal the original forms."
   [meme-src]
-  (let [forms1 (lang/meme->forms meme-src)
+  (let [forms1 (lang/mclj->forms meme-src)
         meme-text (fmt-flat/format-forms forms1)
-        forms2 (lang/meme->forms meme-text)]
+        forms2 (lang/mclj->forms meme-text)]
     [forms1 forms2 meme-text]))
 
 ;; ---------------------------------------------------------------------------
@@ -203,17 +203,17 @@
 
 (deftest roundtrip-named-chars
   (testing "\\newline roundtrips"
-    (is (= [\newline] (lang/meme->forms (fmt-flat/format-forms [\newline])))))
+    (is (= [\newline] (lang/mclj->forms (fmt-flat/format-forms [\newline])))))
   (testing "\\space roundtrips"
-    (is (= [\space] (lang/meme->forms (fmt-flat/format-forms [\space])))))
+    (is (= [\space] (lang/mclj->forms (fmt-flat/format-forms [\space])))))
   (testing "\\tab roundtrips"
-    (is (= [\tab] (lang/meme->forms (fmt-flat/format-forms [\tab])))))
+    (is (= [\tab] (lang/mclj->forms (fmt-flat/format-forms [\tab])))))
   (testing "\\return roundtrips"
-    (is (= [\return] (lang/meme->forms (fmt-flat/format-forms [\return])))))
+    (is (= [\return] (lang/mclj->forms (fmt-flat/format-forms [\return])))))
   (testing "\\backspace roundtrips"
-    (is (= [\backspace] (lang/meme->forms (fmt-flat/format-forms [\backspace])))))
+    (is (= [\backspace] (lang/mclj->forms (fmt-flat/format-forms [\backspace])))))
   (testing "\\formfeed roundtrips"
-    (is (= [\formfeed] (lang/meme->forms (fmt-flat/format-forms [\formfeed]))))))
+    (is (= [\formfeed] (lang/mclj->forms (fmt-flat/format-forms [\formfeed]))))))
 
 (deftest roundtrip-regex
   ;; Regex patterns don't support equality, so compare by pattern string
@@ -542,11 +542,11 @@
   (testing "Emoji (surrogate pair) as symbol — rejected as invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"invalid"
-                          (lang/meme->forms "\uD83C\uDF89"))))
+                          (lang/mclj->forms "\uD83C\uDF89"))))
   (testing "Emoji (surrogate pair) as call head — rejected as invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"invalid"
-                          (lang/meme->forms "\uD83C\uDF89(x)")))))
+                          (lang/mclj->forms "\uD83C\uDF89(x)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; case, fn multi-arity
@@ -695,9 +695,9 @@
   "Roundtrip reader-conditional-bearing source: parse, print, re-parse.
    Reader conditionals are preserved as records by default."
   [meme-src]
-  (let [forms1 (lang/meme->forms meme-src)
+  (let [forms1 (lang/mclj->forms meme-src)
         meme-text (fmt-flat/format-forms forms1)
-        forms2 (lang/meme->forms meme-text)]
+        forms2 (lang/mclj->forms meme-text)]
     [forms1 forms2 meme-text]))
 
 (deftest roundtrip-reader-conditional-preserve
@@ -734,8 +734,8 @@
   "Parse meme string, print back, and verify the printed text matches the input.
    Tests syntactic transparency — the lens should not alter the user's notation."
   [meme-src]
-  (let [forms (lang/meme->forms meme-src)
-        printed (lang/forms->meme forms)]
+  (let [forms (lang/mclj->forms meme-src)
+        printed (lang/forms->mclj forms)]
     printed))
 
 (deftest roundtrip-quote-sugar-preserved
@@ -835,17 +835,17 @@
 
 (deftest roundtrip-sugar-in-clj-output
   (testing "meme 'x → clj 'x"
-    (is (= "'foo" (lang/meme->clj "'foo"))))
+    (is (= "'foo" (lang/mclj->clj "'foo"))))
   (testing "meme quote(x) → clj (quote x)"
-    (is (= "(quote foo)" (lang/meme->clj "quote(foo)"))))
+    (is (= "(quote foo)" (lang/mclj->clj "quote(foo)"))))
   (testing "meme @x → clj @x"
-    (is (= "@foo" (lang/meme->clj "@foo"))))
+    (is (= "@foo" (lang/mclj->clj "@foo"))))
   (testing "meme clojure.core/deref(x) → clj (clojure.core/deref x)"
-    (is (= "(clojure.core/deref foo)" (lang/meme->clj "clojure.core/deref(foo)"))))
+    (is (= "(clojure.core/deref foo)" (lang/mclj->clj "clojure.core/deref(foo)"))))
   (testing "meme #'x → clj #'x"
-    (is (= "#'foo" (lang/meme->clj "#'foo"))))
+    (is (= "#'foo" (lang/mclj->clj "#'foo"))))
   (testing "meme var(x) → clj (var x)"
-    (is (= "(var foo)" (lang/meme->clj "var(foo)")))))
+    (is (= "(var foo)" (lang/mclj->clj "var(foo)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; fn without sugar: structural divergence (documented, not a bug)

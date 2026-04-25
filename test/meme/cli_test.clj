@@ -4,22 +4,22 @@
             [meme.cli :as cli])
   (:import [java.io File]))
 
-(deftest meme-file?-test
-  (let [meme-file? #'cli/meme-file?]
+(deftest mclj-file?-test
+  (let [mclj-file? #'cli/mclj-file?]
     (testing "returns true for .meme files"
-      (is (true? (meme-file? "foo.meme")))
-      (is (true? (meme-file? "path/to/bar.meme")))
-      (is (true? (meme-file? "/absolute/path.meme"))))
+      (is (true? (mclj-file? "foo.meme")))
+      (is (true? (mclj-file? "path/to/bar.meme")))
+      (is (true? (mclj-file? "/absolute/path.meme"))))
     (testing "returns true for registered meme extensions"
-      (is (true? (meme-file? "foo.memec")))
-      (is (true? (meme-file? "foo.memej")))
-      (is (true? (meme-file? "foo.memejs"))))
+      (is (true? (mclj-file? "foo.memec")))
+      (is (true? (mclj-file? "foo.memej")))
+      (is (true? (mclj-file? "foo.memejs"))))
     (testing "returns false for non-.meme files"
-      (is (false? (meme-file? "foo.clj")))
-      (is (false? (meme-file? "foo.cljc")))
-      (is (false? (meme-file? "foo.txt")))
-      (is (false? (meme-file? "foo.memes")))
-      (is (false? (meme-file? "meme"))))))
+      (is (false? (mclj-file? "foo.clj")))
+      (is (false? (mclj-file? "foo.cljc")))
+      (is (false? (mclj-file? "foo.txt")))
+      (is (false? (mclj-file? "foo.memes")))
+      (is (false? (mclj-file? "meme"))))))
 
 (deftest clj-file?-test
   (let [clj-file? #'cli/clj-file?]
@@ -102,7 +102,7 @@
       (is (<= (count @reads) 1)))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: process-files and transpile-meme re-slurped the file in their
+;; Scar tissue: process-files and transpile-mclj re-slurped the file in their
 ;; error handlers, even though src was already loaded inside the try.
 ;; The redundant read is wasteful and gives an inconsistent error context if
 ;; the file changes between reads.
@@ -144,7 +144,7 @@
       (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
                     cli/cli-exit! (fn [_] nil)]
         (binding [*out* out-buf]
-          (cli/transpile-meme {:file (.getAbsolutePath f) :out out-dir})))
+          (cli/transpile-mclj {:file (.getAbsolutePath f) :out out-dir})))
       (is (= 1 @counter))))
   (testing "transpile error path reads source exactly once"
     (let [f       (write-temp-meme! "(broken")
@@ -158,7 +158,7 @@
       (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
                     cli/cli-exit! (fn [_] nil)]
         (binding [*err* err-buf]
-          (cli/transpile-meme {:file (.getAbsolutePath f) :out out-dir})))
+          (cli/transpile-mclj {:file (.getAbsolutePath f) :out out-dir})))
       (is (= 1 @counter)))))
 
 (deftest lang-opts-test

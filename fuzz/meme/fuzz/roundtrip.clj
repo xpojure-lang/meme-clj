@@ -74,10 +74,10 @@
   [^FuzzedDataProvider data]
   (let [s (.consumeRemainingAsString data)]
     (try
-      (let [forms (api/meme->forms s)]
+      (let [forms (api/mclj->forms s)]
         (when (seq forms)
-          (let [printed (api/forms->meme forms)
-                reparsed (api/meme->forms printed)]
+          (let [printed (api/forms->mclj forms)
+                reparsed (api/mclj->forms printed)]
             (when-not (forms-equal? forms reparsed)
               (throw (AssertionError.
                        (str "Roundtrip mismatch!\n"
@@ -107,10 +107,10 @@
   [^FuzzedDataProvider data]
   (let [s (.consumeRemainingAsString data)]
     (try
-      (let [forms (api/meme->forms s)]
+      (let [forms (api/mclj->forms s)]
         (when (seq forms)
-          (let [formatted (api/format-meme-forms forms)
-                reparsed (api/meme->forms formatted)]
+          (let [formatted (api/format-mclj-forms forms)
+                reparsed (api/mclj->forms formatted)]
             (when-not (forms-equal? forms reparsed)
               (throw (AssertionError.
                        (str "Format roundtrip mismatch!\n"
@@ -140,11 +140,11 @@
   [^FuzzedDataProvider data]
   (let [s (.consumeRemainingAsString data)]
     (try
-      (let [forms (api/meme->forms s)]
+      (let [forms (api/mclj->forms s)]
         (when (seq forms)
-          (let [fmt1 (api/format-meme-forms forms)
-                reparsed (api/meme->forms fmt1)
-                fmt2 (api/format-meme-forms reparsed)]
+          (let [fmt1 (api/format-mclj-forms forms)
+                reparsed (api/mclj->forms fmt1)
+                fmt2 (api/format-mclj-forms reparsed)]
             (when (not= fmt1 fmt2)
               (throw (AssertionError.
                        (str "Format not idempotent!\n"
@@ -187,7 +187,7 @@
   [^FuzzedDataProvider data]
   (let [s (.consumeRemainingAsString data)]
     (try
-      (let [forms (api/meme->forms s)]
+      (let [forms (api/mclj->forms s)]
         (when (seq forms)
           (let [clj-text (api/forms->clj forms)
                 ;; LHS: what forms->clj actually emitted (forms after expand).

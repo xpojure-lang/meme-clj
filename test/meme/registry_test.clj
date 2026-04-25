@@ -39,10 +39,10 @@
     (testing (str lang-name " has :to-clj")
       (is (fn? (:to-clj l))))))
 
-(deftest all-langs-have-to-meme
+(deftest all-langs-have-to-mclj
   (doseq [[lang-name l] all-langs]
-    (testing (str lang-name " has :to-meme")
-      (is (fn? (:to-meme l))))))
+    (testing (str lang-name " has :to-mclj")
+      (is (fn? (:to-mclj l))))))
 
 (deftest all-langs-have-format
   (doseq [[lang-name l] all-langs]
@@ -76,11 +76,11 @@
     (testing (str lang-name " :to-clj")
       (is (= "(f x y)" ((:to-clj l) "f(x y)"))))))
 
-(deftest all-langs-to-meme
+(deftest all-langs-to-mclj
   (doseq [[lang-name l] all-langs
-          :when (:to-meme l)]
-    (testing (str lang-name " :to-meme")
-      (is (= "f(x y)" ((:to-meme l) "(f x y)"))))))
+          :when (:to-mclj l)]
+    (testing (str lang-name " :to-mclj")
+      (is (= "f(x y)" ((:to-mclj l) "(f x y)"))))))
 
 ;; ============================================================
 ;; check-support

@@ -127,7 +127,7 @@
 (defn roundtrip-ok? [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
-          read-back (lang/meme->forms printed)]
+          read-back (lang/mclj->forms printed)]
       (= [form] read-back))
     (catch #?(:clj Exception :cljs :default) _
       false)))
@@ -151,7 +151,7 @@
                              (gen/let [h (gen/fmap str gen-simple-symbol)]
                                (str h "([)"))])]
     (try
-      (lang/meme->forms meme-str)
+      (lang/mclj->forms meme-str)
       false
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (let [data (ex-data e)]
@@ -167,7 +167,7 @@
                             [(gen/return "f(x")
                              (gen/return "[1 2")])]
     (try
-      (lang/meme->forms meme-str)
+      (lang/mclj->forms meme-str)
       false
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (:incomplete (ex-data e)))
@@ -177,6 +177,6 @@
 (defspec prop-cljs-canon-formatter-idempotent 100
   (prop/for-all [form gen-form]
     (let [fmt1 (fmt-canon/format-forms [form] {:width 80})
-          reparsed (lang/meme->forms fmt1)
+          reparsed (lang/mclj->forms fmt1)
           fmt2 (fmt-canon/format-forms reparsed {:width 80})]
       (= fmt1 fmt2))))

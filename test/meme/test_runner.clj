@@ -53,15 +53,15 @@
 
 (defn- resolve-lang-fns
   "Resolve the API functions for a built-in lang by requiring its namespace.
-   Returns a map of {:meme->forms fn, :meme->clj fn, :clj->meme fn}, or nil
+   Returns a map of {:mclj->forms fn, :mclj->clj fn, :clj->mclj fn}, or nil
    if the lang has no meme-compatible API."
   [lang-kw]
   (when (= lang-kw :mclj)
     (let [ns-sym 'mclj-lang.api]
       (require ns-sym)
-      {:meme->forms (ns-resolve (find-ns ns-sym) 'meme->forms)
-       :meme->clj   (ns-resolve (find-ns ns-sym) 'meme->clj)
-       :clj->meme   (ns-resolve (find-ns ns-sym) 'clj->meme)})))
+      {:mclj->forms (ns-resolve (find-ns ns-sym) 'mclj->forms)
+       :mclj->clj   (ns-resolve (find-ns ns-sym) 'mclj->clj)
+       :clj->mclj   (ns-resolve (find-ns ns-sym) 'clj->mclj)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Eval-based tests (test/examples/tests/*.meme — self-asserting)
@@ -111,8 +111,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- run-parse-fixtures-for-lang
-  "Run fixture tests using the given lang's meme->forms."
-  [dir meme->forms-fn]
+  "Run fixture tests using the given lang's mclj->forms."
+  [dir mclj->forms-fn]
   (let [file-obj (io/file dir)
         files (sort (or (.listFiles file-obj) []))
         meme-files (filter #(.endsWith (.getName %) ".meme") files)]
@@ -131,7 +131,7 @@
                            (let [meme-src (slurp (str f))]
                              (try
                                (let [edn-src (slurp (str edn-file))
-                                     actual (meme->forms-fn meme-src)
+                                     actual (mclj->forms-fn meme-src)
                                      expected (edn/read-string {:readers edn-readers} edn-src)
                                      diff (diff-forms expected actual)]
                                  (if diff
@@ -157,7 +157,7 @@
 
 (defn- run-emit-fixtures-for-lang
   "Run emit/conversion fixture tests using the given lang's conversion fns."
-  [dir meme->clj-fn clj->meme-fn]
+  [dir mclj->clj-fn clj->mclj-fn]
   (let [file-obj (io/file dir)
         files (sort (or (.listFiles file-obj) []))
         meme-files (filter #(and (.endsWith (.getName %) ".meme")
@@ -188,7 +188,7 @@
           (try
             (let [meme-src (str/trim-newline (slurp (str f)))
                   expected (str/trim-newline (slurp (str clj-file)))
-                  actual (meme->clj-fn meme-src)]
+                  actual (mclj->clj-fn meme-src)]
               (if (= expected actual)
                 (println "OK")
                 (do (println "FAIL")
@@ -200,7 +200,7 @@
               (println (str "    " (.getMessage e)))
               (swap! fails inc))))))
     ;; --- clj→meme direction ---
-    (when clj->meme-fn
+    (when clj->mclj-fn
       (doseq [f clj-files]
         (let [base (.getName f)
               meme-file (io/file dir (str base ".meme"))]
@@ -212,7 +212,7 @@
             (try
               (let [clj-src (str/trim-newline (slurp (str f)))
                     expected (str/trim-newline (slurp (str meme-file)))
-                    actual (clj->meme-fn clj-src)]
+                    actual (clj->mclj-fn clj-src)]
                 (if (= expected actual)
                   (println "OK")
                   (do (println "FAIL")
@@ -223,7 +223,7 @@
                 (println "ERROR")
                 (println (str "    " (.getMessage e)))
                 (swap! fails inc)))))))
-    (let [total (+ (count meme-files) (if clj->meme-fn (count clj-files) 0))
+    (let [total (+ (count meme-files) (if clj->mclj-fn (count clj-files) 0))
           failed @fails
           passed (- total failed)]
       (println (str "  emit: " passed "/" total " passed"
@@ -252,15 +252,15 @@
           (println))
 
         ;; Parse fixtures
-        (when (:meme->forms fns)
+        (when (:mclj->forms fns)
           (println (str "  Parse fixtures (test/examples/fixtures-parse):"))
-          (swap! total-fails + (run-parse-fixtures-for-lang "test/examples/fixtures-parse" (:meme->forms fns)))
+          (swap! total-fails + (run-parse-fixtures-for-lang "test/examples/fixtures-parse" (:mclj->forms fns)))
           (println))
 
         ;; Emit fixtures
-        (when (:meme->clj fns)
+        (when (:mclj->clj fns)
           (println (str "  Emit fixtures (test/examples/fixtures-emit):"))
-          (swap! total-fails + (run-emit-fixtures-for-lang "test/examples/fixtures-emit" (:meme->clj fns) (:clj->meme fns)))
+          (swap! total-fails + (run-emit-fixtures-for-lang "test/examples/fixtures-emit" (:mclj->clj fns) (:clj->mclj fns)))
           (println))))
 
     @total-fails))

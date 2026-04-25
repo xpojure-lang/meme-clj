@@ -11,14 +11,14 @@
 ;; Access private fns via var.
 (def ^:private input-state mclj-lang.repl/input-state)
 (def ^:private read-input* @#'meme.tools.repl/read-input)
-(defn- stages-with-meme-grammar
+(defn- stages-with-mclj-grammar
   "Wrapper that passes meme's grammar to the commons stages pipeline."
   [s opts]
   (stages/run s (assoc (or opts {}) :grammar grammar/grammar)))
 (defn- read-input
   "Wrapper that injects meme stages/run as the run-fn."
   [prompt read-line-fn reader-opts]
-  (read-input* prompt read-line-fn reader-opts stages-with-meme-grammar))
+  (read-input* prompt read-line-fn reader-opts stages-with-mclj-grammar))
 
 (deftest input-state-complete
   (testing "simple balanced call"
@@ -81,14 +81,14 @@
 (deftest incomplete-errors-carry-ex-data-key
   (testing "EOF errors have :incomplete true in ex-data"
     (doseq [input ["+(1 2" "[1 2 3" "{:a 1"]]
-      (let [e (try (lang/meme->forms input)
+      (let [e (try (lang/mclj->forms input)
                    nil
                    (catch Exception e e))]
         (is (some? e) (str "expected error for: " input))
         (is (true? (:incomplete (ex-data e)))
             (str "expected :incomplete in ex-data for: " input)))))
   (testing ") alone produces error"
-    (let [e (try (lang/meme->forms ")")
+    (let [e (try (lang/mclj->forms ")")
                  nil
                  (catch Exception e e))]
       (is (some? e) "expected error for: )")
