@@ -25,12 +25,12 @@
 #?(:clj
    (deftest ratio-literals
      (testing "1/2 — ratio literal works"
-       (is (= 1/2 (first (lang/meme->forms "1/2")))))
+       (is (= 1/2 (first (lang/mclj->forms "1/2")))))
      (testing "3/4 — ratio literal works"
-       (is (= 3/4 (first (lang/meme->forms "3/4")))))
+       (is (= 3/4 (first (lang/mclj->forms "3/4")))))
      (testing "large ratio components exceeding Long.MAX_VALUE"
-       (is (= (/ 99999999999999999999N 3) (first (lang/meme->forms "99999999999999999999/3"))))
-       (is (= (/ 1 99999999999999999999N) (first (lang/meme->forms "1/99999999999999999999")))))))
+       (is (= (/ 99999999999999999999N 3) (first (lang/mclj->forms "99999999999999999999/3"))))
+       (is (= (/ 1 99999999999999999999N) (first (lang/mclj->forms "1/99999999999999999999")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #_ discard at end of stream or before closing delimiters.
@@ -47,7 +47,7 @@
 #?(:clj
    (deftest percent-params-in-tagged-literals
      (testing "#(#mytag %) finds percent param"
-       (let [form (first (lang/meme->forms "#(#mytag %)"))]
+       (let [form (first (lang/mclj->forms "#(#mytag %)"))]
          (is (= 'fn (first form)))
          (is (= '[%1] (second form)))))))
 
@@ -65,11 +65,11 @@
   (testing "duplicate map keys throw"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"[Dd]uplicate key"
-                          (lang/meme->forms "{:a 1 :a 2}"))))
+                          (lang/mclj->forms "{:a 1 :a 2}"))))
   (testing "duplicate set elements throw"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"[Dd]uplicate key"
-                          (lang/meme->forms "#{1 2 1}")))))
+                          (lang/mclj->forms "#{1 2 1}")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: BOM (U+FEFF) at start of source is stripped as trivia.
@@ -108,13 +108,13 @@
 (deftest double-shebang-handled
   (testing "file with two shebang lines — second line ignored as shebang"
     (let [src "#!/usr/bin/env bb\n#!/not-a-shebang\nprintln(42)"
-          forms (lang/meme->forms src)]
+          forms (lang/mclj->forms src)]
       ;; strip-shebang removes line 1, parser sees line 2's #! at pos 0 as
       ;; a :shebang atom (filtered out), then println(42) as a call.
       (is (= 1 (count forms)) "shebang atom should be filtered, only call remains")
       (is (list? (first forms)) "the remaining form should be a call")))
   (testing "single shebang followed by code works"
-    (is (= '[x] (lang/meme->forms "#!/usr/bin/env bb\nx")))))
+    (is (= '[x] (lang/mclj->forms "#!/usr/bin/env bb\nx")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: deeply nested input must produce a clean error, not SOE.
@@ -127,22 +127,22 @@
           input (str (apply str (repeat depth "f(")) "x" (apply str (repeat depth ")")))]
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"depth"
-                            (lang/meme->forms input)))))
+                            (lang/mclj->forms input)))))
   (testing "vector nesting beyond max-parse-depth errors cleanly"
     (let [depth (+ forms/max-parse-depth 10)
           input (str (apply str (repeat depth "[")) "x" (apply str (repeat depth "]")))]
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"depth"
-                            (lang/meme->forms input)))))
+                            (lang/mclj->forms input)))))
   (testing "moderate nesting (100 levels) still works"
     (let [input (str (apply str (repeat 100 "f(")) "x" (apply str (repeat 100 ")")))]
-      (is (some? (lang/meme->forms input)))))
+      (is (some? (lang/mclj->forms input)))))
   (testing "prefix chain beyond max-parse-depth errors cleanly"
     (let [depth (+ forms/max-parse-depth 10)
           input (str (apply str (repeat depth "'")) "x")]
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"depth"
-                            (lang/meme->forms input))))))
+                            (lang/mclj->forms input))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: CST reader's depth guard must cap at max-parse-depth, not
@@ -194,13 +194,13 @@
 
 (deftest consecutive-discard-semantics
   (testing "#_ #_ a b c discards a and b, keeps c"
-    (is (= '[c] (lang/meme->forms "#_ #_ a b c"))))
+    (is (= '[c] (lang/mclj->forms "#_ #_ a b c"))))
   (testing "#_ #_ #_ a b c d discards a, b, c, keeps d"
-    (is (= '[d] (lang/meme->forms "#_ #_ #_ a b c d"))))
+    (is (= '[d] (lang/mclj->forms "#_ #_ #_ a b c d"))))
   (testing "non-consecutive discards in vector"
-    (is (= [[1 4]] (lang/meme->forms "[1 #_ 2 #_ 3 4]"))))
+    (is (= [[1 4]] (lang/mclj->forms "[1 #_ 2 #_ 3 4]"))))
   (testing "consecutive discards inside vector"
-    (is (= [[1 4]] (lang/meme->forms "[1 #_ #_ 2 3 4]")))))
+    (is (= [[1 4]] (lang/mclj->forms "[1 #_ #_ 2 3 4]")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: consecutive #_ tokens preserve interior trivia in the CST.
@@ -237,10 +237,10 @@
   (testing "nested #() produces error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Nested"
-                          (lang/meme->forms "#(#(+(% %2)))"))))
+                          (lang/mclj->forms "#(#(+(% %2)))"))))
   (testing "after nested #() error, subsequent #() works"
-    (is (thrown? #?(:clj Exception :cljs js/Error) (lang/meme->forms "#(#(+ %))")))
-    (is (some? (lang/meme->forms "#(+(% 1))")))))
+    (is (thrown? #?(:clj Exception :cljs js/Error) (lang/mclj->forms "#(#(+ %))")))
+    (is (some? (lang/mclj->forms "#(+(% 1))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: unquote (~) outside syntax-quote must error at expansion time.
@@ -250,17 +250,17 @@
 
 (deftest bare-unquote-rejected-at-expansion
   (testing "~x outside syntax-quote errors during expansion"
-    (let [forms (lang/meme->forms "~x")]
+    (let [forms (lang/mclj->forms "~x")]
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"[Uu]nquote"
                             (expander/expand-forms forms)))))
   (testing "~@x outside syntax-quote errors during expansion"
-    (let [forms (lang/meme->forms "~@x")]
+    (let [forms (lang/mclj->forms "~@x")]
       (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                             #"[Uu]nquote"
                             (expander/expand-forms forms)))))
   (testing "~x inside syntax-quote still works"
-    (let [forms (lang/meme->forms "`map(~f xs)")]
+    (let [forms (lang/mclj->forms "`map(~f xs)")]
       (is (some? (expander/expand-forms forms))))))
 
 ;; ---------------------------------------------------------------------------
@@ -271,7 +271,7 @@
 (deftest bare-parens-error
   (testing "non-empty bare parens produce error"
     (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/meme->forms "(x y)")))))
+                 (lang/mclj->forms "(x y)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: keyword-as-head, set-as-head, map-as-head.
@@ -286,7 +286,7 @@
   (testing "^:foo 42 — metadata on number errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"[Mm]etadata"
-                          (lang/meme->forms "^:foo 42")))))
+                          (lang/mclj->forms "^:foo 42")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #_ handling inside #() anonymous functions.
@@ -302,7 +302,7 @@
   (testing "%0 inside #() is rejected as invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"[Ii]nvalid % parameter"
-                          (lang/meme->forms "#(inc(%0))")))))
+                          (lang/mclj->forms "#(inc(%0))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bare % and numbered %N mixed in #() forms.
@@ -331,14 +331,14 @@
 
 (deftest unquote-splicing-error-has-location
   (testing "~@ in map inside syntax-quote — now accepted (matches Clojure)"
-    (let [forms (lang/meme->forms "`{~@xs 1}")]
+    (let [forms (lang/mclj->forms "`{~@xs 1}")]
       (is (forms/syntax-quote? (first forms)) "read produces AST node")
       (let [expanded (expander/expand-forms forms)]
         (is (= 1 (count expanded)) "expands to one form")
         (is (list? (first expanded)) "expands to a list (apply hash-map ...)"))))
   (testing "~@ error points at ~@ token, not the backtick"
     ;; `~@xs — backtick at col 1, ~@ at col 2. Top-level ~@ (not in collection) errors.
-    (let [forms (lang/meme->forms "`~@xs")]
+    (let [forms (lang/mclj->forms "`~@xs")]
       (try (expander/expand-forms forms)
            (is false "should have thrown")
            (catch #?(:clj Exception :cljs :default) e
@@ -358,20 +358,20 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest reader-conditional-preserves-as-record
-  (testing "meme->forms returns a ReaderConditional with all branches"
-    (let [rc (first (lang/meme->forms "#?(:clj 1 :cljs 2)"))]
+  (testing "mclj->forms returns a ReaderConditional with all branches"
+    (let [rc (first (lang/mclj->forms "#?(:clj 1 :cljs 2)"))]
       (is (forms/clj-reader-conditional? rc))
       (is (= '(:clj 1 :cljs 2) (forms/rc-form rc)))))
-  (testing "meme->forms + eval-rc step yields the platform branch"
+  (testing "mclj->forms + eval-rc step yields the platform branch"
     (let [ctx    (-> {:source "#?(:clj 1 :cljs 2)" :opts {:grammar grammar/grammar}}
                      stages/step-parse
                      stages/step-read
                      stages/step-evaluate-reader-conditionals)]
       (is (= [#?(:clj 1 :cljs 2)] (:forms ctx)))))
   (testing "record roundtrips through printer"
-    (let [rc (first (lang/meme->forms "#?(:clj inc(1) :cljs dec(2))"))
+    (let [rc (first (lang/mclj->forms "#?(:clj inc(1) :cljs dec(2))"))
           printed (fmt-flat/format-form rc)
-          rc2 (first (lang/meme->forms printed))]
+          rc2 (first (lang/mclj->forms printed))]
       (is (= rc rc2)))))
 
 ;; ---------------------------------------------------------------------------
@@ -425,17 +425,17 @@
 #?(:clj
    (deftest meme-raw-in-syntax-quote-expands-correctly
      (testing "hex number inside syntax-quote expands to its value, not a map"
-       (let [forms (lang/meme->forms "`[0xFF]")
+       (let [forms (lang/mclj->forms "`[0xFF]")
              expanded (expander/expand-forms forms)]
       ;; The expanded form should contain the number 255, not {:value 255 :raw "0xFF"}
          (is (not (some #(and (map? %) (contains? % :value)) (flatten (map seq expanded))))
              "CljRaw must not leak as a map into expanded forms")))
      (testing "scientific notation inside syntax-quote"
-       (let [forms (lang/meme->forms "`1e2")
+       (let [forms (lang/mclj->forms "`1e2")
              expanded (expander/expand-forms forms)]
          (is (= [100.0] expanded))))
      (testing "char literal inside syntax-quote"
-       (let [forms (lang/meme->forms "`\\a")
+       (let [forms (lang/mclj->forms "`\\a")
              expanded (expander/expand-forms forms)]
          (is (= [\a] expanded))))))
 
@@ -453,19 +453,19 @@
 #?(:clj
    (deftest nested-syntax-quote
      (testing "nested backtick does not crash or produce map output"
-       (let [forms (lang/meme->forms "``x")
+       (let [forms (lang/mclj->forms "``x")
              expanded (expander/expand-forms forms)]
          (is (seq? (first expanded)) "nested syntax-quote should expand to a seq form")))
      (testing "nested backtick produces double-quoting, not direct expansion"
     ;; Bug: expand-sq returned the inner expansion directly instead of
     ;; quoting it. ``x produced (quote x) instead of code that generates
     ;; (quote x). Fix: re-expand the inner result through expand-sq.
-       (let [expanded (first (expander/expand-forms (lang/meme->forms "``x")))]
+       (let [expanded (first (expander/expand-forms (lang/mclj->forms "``x")))]
       ;; eval of ``x should yield (quote x), not just x
          (is (= '(quote x) (eval expanded))
              "eval of nested syntax-quote should produce the inner expansion as data")))
      (testing "x# in outer and inner backtick produce different gensyms"
-       (let [expanded (first (expander/expand-forms (lang/meme->forms "`list(x# `list(x#))")))
+       (let [expanded (first (expander/expand-forms (lang/mclj->forms "`list(x# `list(x#))")))
              s (pr-str expanded)
              gensyms (re-seq #"\w+__auto__" s)
              distinct-gs (set gensyms)]
@@ -486,7 +486,7 @@
 #?(:clj
    (deftest meme-raw-in-anon-fn-survives-normalization
      (testing "hex literal inside #() preserves its value through expansion"
-       (let [forms (lang/meme->forms "#(+(% 0xFF))")
+       (let [forms (lang/mclj->forms "#(+(% 0xFF))")
              expanded (expander/expand-forms forms)
              f (first expanded)]
          (is (seq? f) "should be (fn [%1] ...)")
@@ -547,7 +547,7 @@
                           (eval-rc-forms #?(:clj "#?(:clj)"
                                             :cljs "#?(:cljs)")))))
   (testing "incomplete input is marked :incomplete"
-    (let [e (try (lang/meme->forms #?(:clj "#?(:clj"
+    (let [e (try (lang/mclj->forms #?(:clj "#?(:clj"
                                       :cljs "#?(:cljs"))
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
@@ -569,52 +569,52 @@
 #?(:clj
    (deftest numeric-promotion
      (testing "hex at Long.MAX_VALUE stays Long"
-       (let [r (first (lang/meme->forms "0x7FFFFFFFFFFFFFFF"))]
+       (let [r (first (lang/mclj->forms "0x7FFFFFFFFFFFFFFF"))]
          (is (forms/raw? r))
          (is (= Long/MAX_VALUE (:value r)))))
      (testing "hex above Long.MAX_VALUE promotes to BigInt"
-       (let [r (first (lang/meme->forms "0x8000000000000000"))]
+       (let [r (first (lang/mclj->forms "0x8000000000000000"))]
          (is (forms/raw? r))
          (is (= 9223372036854775808N (:value r)))))
      (testing "hex 0xFFFFFFFFFFFFFFFF promotes to BigInt"
-       (let [r (first (lang/meme->forms "0xFFFFFFFFFFFFFFFF"))]
+       (let [r (first (lang/mclj->forms "0xFFFFFFFFFFFFFFFF"))]
          (is (forms/raw? r))
          (is (= 18446744073709551615N (:value r)))))
      (testing "negative hex at Long.MIN_VALUE stays Long"
-       (let [r (first (lang/meme->forms "-0x8000000000000000"))]
+       (let [r (first (lang/mclj->forms "-0x8000000000000000"))]
          (is (forms/raw? r))
          (is (= Long/MIN_VALUE (:value r)))))
      (testing "large octal promotes to BigInt"
-       (let [r (first (lang/meme->forms "01777777777777777777777"))]
+       (let [r (first (lang/mclj->forms "01777777777777777777777"))]
          (is (forms/raw? r))
          (is (= 18446744073709551615N (:value r)))))
      (testing "large radix promotes to BigInt"
-       (let [r (first (lang/meme->forms "36rZZZZZZZZZZZZZ"))]
+       (let [r (first (lang/mclj->forms "36rZZZZZZZZZZZZZ"))]
          (is (forms/raw? r))
          (is (= 170581728179578208255N (:value r)))))
      (testing "integer beyond Long.MAX_VALUE auto-promotes to BigInt"
-       (let [forms (lang/meme->forms "9999999999999999999")]
+       (let [forms (lang/mclj->forms "9999999999999999999")]
          (is (= 1 (count forms)))
          (is (= 9999999999999999999N (first forms)))
          (is (instance? clojure.lang.BigInt (first forms)))))
      (testing "negative integer beyond Long range auto-promotes"
-       (let [forms (lang/meme->forms "-9999999999999999999")]
+       (let [forms (lang/mclj->forms "-9999999999999999999")]
          (is (= -9999999999999999999N (first forms)))))
      (testing "Long.MAX_VALUE stays Long"
-       (let [forms (lang/meme->forms "9223372036854775807")]
+       (let [forms (lang/mclj->forms "9223372036854775807")]
          (is (instance? Long (first forms)))))
      (testing "Long.MAX_VALUE + 1 promotes to BigInt"
-       (let [forms (lang/meme->forms "9223372036854775808")]
+       (let [forms (lang/mclj->forms "9223372036854775808")]
          (is (instance? clojure.lang.BigInt (first forms)))
          (is (= 9223372036854775808N (first forms)))))
      (testing "+42N — positive-signed BigInt"
-       (is (= 42N (first (lang/meme->forms "+42N")))))
+       (is (= 42N (first (lang/mclj->forms "+42N")))))
      (testing "-42N — negative-signed BigInt (was already correct)"
-       (is (= -42N (first (lang/meme->forms "-42N")))))
+       (is (= -42N (first (lang/mclj->forms "-42N")))))
      (testing "+3/4 — positive-signed ratio"
-       (is (= 3/4 (first (lang/meme->forms "+3/4")))))
+       (is (= 3/4 (first (lang/mclj->forms "+3/4")))))
      (testing "-3/4 — negative-signed ratio (was already correct)"
-       (is (= -3/4 (first (lang/meme->forms "-3/4")))))))
+       (is (= -3/4 (first (lang/mclj->forms "-3/4")))))))
 
 ;; nil/true/false call syntax covered by fixtures/core_rules and
 ;; reader_cond_literal_call_head test below.
@@ -630,7 +630,7 @@
      ;; (reader-cond produces a value, not a token), the call chain
      ;; may not attach. Let's verify the actual behavior.
      (testing "#?(:clj false)(x) — reader cond value as call head"
-       (let [forms (lang/meme->forms "#?(:clj false)(x)")]
+       (let [forms (lang/mclj->forms "#?(:clj false)(x)")]
          ;; Accept either (false x) or false followed by (x) error/separate
          (is (some? forms))))))
 
@@ -657,12 +657,12 @@
   (testing "#'foo(bar) — var-quote on call rejected"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"(?i)requires a symbol"
-                          (lang/meme->forms "#'foo(bar)"))))
+                          (lang/mclj->forms "#'foo(bar)"))))
   (testing "#'foo — var-quote on symbol works"
-    (is (= '[(var foo)] (lang/meme->forms "#'foo"))))
+    (is (= '[(var foo)] (lang/mclj->forms "#'foo"))))
   #?(:clj
      (testing "#'^:foo bar — metadata on var-quote target preserved"
-       (let [form (first (lang/meme->forms "#'^:foo bar"))]
+       (let [form (first (lang/mclj->forms "#'^:foo bar"))]
          (is (= 'var (first form)))
          (is (= 'bar (second form)))
          (is (:foo (meta (second form))))))))
@@ -676,8 +676,8 @@
   (testing "after error in #(), subsequent #() should work"
     ;; Parse an invalid #() form (triggers error), then parse a valid one
     ;; If depth wasn't decremented, the second would fail with "Nested #()"
-    (is (thrown? #?(:clj Exception :cljs js/Error) (lang/meme->forms "#(")))
-    (is (some? (lang/meme->forms "#(+(% 1))")))))
+    (is (thrown? #?(:clj Exception :cljs js/Error) (lang/mclj->forms "#(")))
+    (is (some? (lang/mclj->forms "#(+(% 1))")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Design decision: #?@ splice in prefix operators passes through as vector.
@@ -690,7 +690,7 @@
 
 (deftest empty-reader-conditional-produces-no-form-after-eval
   (testing "empty #?() preserves as an empty-branch record at read time"
-    (let [rc (first (lang/meme->forms "#?()"))]
+    (let [rc (first (lang/mclj->forms "#?()"))]
       (is (forms/clj-reader-conditional? rc))
       (is (empty? (forms/rc-form rc)))))
   (testing "eval-rc drops an empty #?() from :forms"
@@ -704,7 +704,7 @@
 ;; ---------------------------------------------------------------------------
 (deftest splice-in-set
   (testing "#?@ inside set literal — record preserved at read time"
-    (is (some? (lang/meme->forms "#{#?@(:clj [1 2])}"))))
+    (is (some? (lang/mclj->forms "#{#?@(:clj [1 2])}"))))
   (testing "eval-rc splices the values into the set"
     (is (= [#{1 2}]
            (eval-rc-forms #?(:clj  "#{#?@(:clj [1 2])}"
@@ -723,7 +723,7 @@
 (deftest repl-expand-context-valid
   (testing "context like REPL builds works with step-expand-syntax-quotes"
     (let [ctx {:source "" :cst []
-               :forms (vec (lang/meme->forms "def(x 42)")) :opts {}}]
+               :forms (vec (lang/mclj->forms "def(x 42)")) :opts {}}]
       (is (some? (stages/step-expand-syntax-quotes ctx))))))
 
 ;; ---------------------------------------------------------------------------
@@ -734,17 +734,17 @@
 #?(:clj
    (deftest octal-string-escapes
      (testing "\\0 is null byte"
-       (let [forms (lang/meme->forms "\"\\0\"")]
+       (let [forms (lang/mclj->forms "\"\\0\"")]
          (is (= 1 (count (str (:value (first forms))))))
          (is (= 0 (int (first (str (:value (first forms)))))))))
      (testing "\\101 is 'A' (octal 101 = 65)"
-       (let [forms (lang/meme->forms "\"\\101\"")]
+       (let [forms (lang/mclj->forms "\"\\101\"")]
          (is (= "A" (:value (first forms))))))
      (testing "\\377 is max octal (255)"
-       (let [forms (lang/meme->forms "\"\\377\"")]
+       (let [forms (lang/mclj->forms "\"\\377\"")]
          (is (= 1 (count (str (:value (first forms))))))))
      (testing "\\7 single octal digit"
-       (let [forms (lang/meme->forms "\"\\7\"")]
+       (let [forms (lang/mclj->forms "\"\\7\"")]
          (is (= 1 (count (str (:value (first forms))))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -759,19 +759,19 @@
 #?(:clj
    (deftest ratio-integer-produces-long
      (testing "6/3 produces Long 2, not BigInt 2N"
-       (let [forms (lang/meme->forms "6/3")]
+       (let [forms (lang/mclj->forms "6/3")]
          (is (= 2 (first forms)))
          (is (instance? Long (first forms)))))
      (testing "0/1 produces Long 0"
-       (let [forms (lang/meme->forms "0/1")]
+       (let [forms (lang/mclj->forms "0/1")]
          (is (= 0 (first forms)))
          (is (instance? Long (first forms)))))
      (testing "100/10 produces Long 10"
-       (let [forms (lang/meme->forms "100/10")]
+       (let [forms (lang/mclj->forms "100/10")]
          (is (= 10 (first forms)))
          (is (instance? Long (first forms)))))
      (testing "non-integer ratio stays Ratio"
-       (let [forms (lang/meme->forms "1/3")]
+       (let [forms (lang/mclj->forms "1/3")]
          (is (ratio? (first forms)))))))
 
 ;; Scar tissue: ~@ (unquote-splicing) in map values inside syntax-quote was
@@ -807,23 +807,23 @@
 #?(:clj
    (deftest octal-bigint-value
      (testing "octal BigInt has correct value"
-       (is (= 511N (first (lang/meme->forms "0777N"))))
-       (is (= 8N (first (lang/meme->forms "010N"))))
-       (is (= 255N (first (lang/meme->forms "0377N")))))
+       (is (= 511N (first (lang/mclj->forms "0777N"))))
+       (is (= 8N (first (lang/mclj->forms "010N"))))
+       (is (= 255N (first (lang/mclj->forms "0377N")))))
      (testing "hex BigInt has correct value"
-       (is (= 255N (first (lang/meme->forms "0xFFN"))))
-       (is (= 51966N (first (lang/meme->forms "0xCAFEN")))))
+       (is (= 255N (first (lang/mclj->forms "0xFFN"))))
+       (is (= 51966N (first (lang/mclj->forms "0xCAFEN")))))
      (testing "radix with trailing N/M — N/M are digits in the radix, not suffixes"
        ;; RT6-F1: 2r1010N → N is not valid in base 2, so this errors (matches Clojure)
-       (is (thrown-with-msg? Exception #"Invalid number" (lang/meme->forms "2r1010N")))
+       (is (thrown-with-msg? Exception #"Invalid number" (lang/mclj->forms "2r1010N")))
        ;; 8r77N → N is not valid in base 8, errors (matches Clojure)
-       (is (thrown-with-msg? Exception #"Invalid number" (lang/meme->forms "8r77N")))
+       (is (thrown-with-msg? Exception #"Invalid number" (lang/mclj->forms "8r77N")))
        ;; 36rZZN → N IS valid in base 36 (=23), produces 46643
-       (is (= 46643 (:value (first (lang/meme->forms "36rZZN"))))))
+       (is (= 46643 (:value (first (lang/mclj->forms "36rZZN"))))))
      (testing "plain decimal BigInt unchanged"
-       (is (= 777N (first (lang/meme->forms "777N"))))
-       (is (= 42N (first (lang/meme->forms "42N"))))
-       (is (= 0N (first (lang/meme->forms "0N")))))))
+       (is (= 777N (first (lang/mclj->forms "777N"))))
+       (is (= 42N (first (lang/mclj->forms "42N"))))
+       (is (= 0N (first (lang/mclj->forms "0N")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: expander wraps reader-conditional form in vector, not list (P1)
@@ -854,15 +854,15 @@
 #?(:clj
    (deftest radix-with-n-m-digits
      (testing "36rZZN — N is digit 23 in base 36, not BigInt suffix"
-       (let [form (first (lang/meme->forms "36rZZN"))]
+       (let [form (first (lang/mclj->forms "36rZZN"))]
          (is (= 46643 (:value form)))))
      (testing "36rABCM — M is digit 22 in base 36, not BigDecimal suffix"
-       (let [form (first (lang/meme->forms "36rABCM"))]
+       (let [form (first (lang/mclj->forms "36rABCM"))]
          (is (= 481270 (:value form)))))
      (testing "8r77N — N not valid in base 8, should error"
-       (is (thrown-with-msg? Exception #"Invalid number" (lang/meme->forms "8r77N"))))
+       (is (thrown-with-msg? Exception #"Invalid number" (lang/mclj->forms "8r77N"))))
      (testing "16rFFN — N not valid in base 16, should error"
-       (is (thrown-with-msg? Exception #"Invalid number" (lang/meme->forms "16rFFN"))))))
+       (is (thrown-with-msg? Exception #"Invalid number" (lang/mclj->forms "16rFFN"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: shebang stripping in non-eval paths.
@@ -881,11 +881,11 @@
 #?(:clj
    (deftest removed-nonstandard-char-names
      (testing "\\delete is not a valid char name"
-       (is (thrown? Exception (lang/meme->forms "\\delete"))))
+       (is (thrown? Exception (lang/mclj->forms "\\delete"))))
      (testing "\\null is not a valid char name"
-       (is (thrown? Exception (lang/meme->forms "\\null"))))
+       (is (thrown? Exception (lang/mclj->forms "\\null"))))
      (testing "\\nul is not a valid char name"
-       (is (thrown? Exception (lang/meme->forms "\\nul"))))))
+       (is (thrown? Exception (lang/mclj->forms "\\nul"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: reader conditional with odd-count forms must error,
@@ -893,24 +893,24 @@
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: meme->clj used to silently drop off-platform branches of
+;; Scar tissue: mclj->clj used to silently drop off-platform branches of
 ;; reader conditionals because the reader's :eval mode materialized the
 ;; current platform's value at read time. After the "eval-rc as pipeline
 ;; stage" refactor, the reader always preserves #? as CljReaderConditional
-;; records, so meme->clj (a text-to-text tooling function, not eval) emits
+;; records, so mclj->clj (a text-to-text tooling function, not eval) emits
 ;; both branches faithfully.
 ;; ---------------------------------------------------------------------------
 
 #?(:clj
-   (deftest meme->clj-reader-conditional-lossless
-     (testing "meme->clj preserves both branches of #?"
+   (deftest mclj->clj-reader-conditional-lossless
+     (testing "mclj->clj preserves both branches of #?"
        (is (= "#?(:cljs dom/create :clj nil)"
-              (lang/meme->clj "#?(:cljs dom/create :clj nil)"))))
-     (testing "meme->clj preserves a non-current-platform #? entirely"
+              (lang/mclj->clj "#?(:cljs dom/create :clj nil)"))))
+     (testing "mclj->clj preserves a non-current-platform #? entirely"
        (is (= "#?(:cljs only-cljs)"
-              (lang/meme->clj "#?(:cljs only-cljs)"))))
-     (testing "to-clj (CLI adapter) agrees with meme->clj"
-       (is (= (lang/meme->clj "#?(:clj 1 :cljs 2)")
+              (lang/mclj->clj "#?(:cljs only-cljs)"))))
+     (testing "to-clj (CLI adapter) agrees with mclj->clj"
+       (is (= (lang/mclj->clj "#?(:clj 1 :cljs 2)")
               (lang/to-clj "#?(:clj 1 :cljs 2)"))))))
 
 ;; ---------------------------------------------------------------------------
@@ -919,8 +919,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest read-cond-opt-throws
-  (testing "meme->forms with :read-cond throws :meme/deprecated-opt"
-    (try (lang/meme->forms "x" {:read-cond :preserve})
+  (testing "mclj->forms with :read-cond throws :meme/deprecated-opt"
+    (try (lang/mclj->forms "x" {:read-cond :preserve})
          (is false "should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
            (is (= :meme/deprecated-opt (:type (ex-data e))))
@@ -939,7 +939,7 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"even number of forms"
                           (eval-rc-forms "#?(:clj)"))))
   (testing "#?(:clj 1 :cljs 2) — even count is fine"
-    (is (some? (lang/meme->forms "#?(:clj 1 :cljs 2)")))))
+    (is (some? (lang/mclj->forms "#?(:clj 1 :cljs 2)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: empty namespace or name in namespaced keywords must error.
@@ -949,10 +949,10 @@
 (deftest empty-keyword-namespace-components
   (testing ":/foo — empty namespace"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid token"
-                          (lang/meme->forms ":/foo"))))
+                          (lang/mclj->forms ":/foo"))))
   (testing ":ns/ — empty name"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Invalid token"
-                          (lang/meme->forms ":ns/")))))
+                          (lang/mclj->forms ":ns/")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: double-unquote `~~x` inside syntax-quote.
@@ -967,7 +967,7 @@
 (deftest double-unquote-inside-syntax-quote-rejected
   (testing "parse still preserves the nested unquote structure"
     ;; Parsing is structurally permissive; the error fires in the expander.
-    (let [[form] (lang/meme->forms "`~~x")]
+    (let [[form] (lang/mclj->forms "`~~x")]
       (is (forms/syntax-quote? form))
       (is (forms/unquote? (:form form)))
       (is (forms/unquote? (:form (:form form))))))
@@ -975,20 +975,20 @@
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"no matching enclosing syntax-quote"
                           (stages/expand-syntax-quotes
-                            (lang/meme->forms "`~~x") nil))))
+                            (lang/mclj->forms "`~~x") nil))))
   (testing "expander errors on `~~@[1 2]"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"no matching enclosing syntax-quote"
                           (stages/expand-syntax-quotes
-                            (lang/meme->forms "`~~@[1 2]") nil))))
+                            (lang/mclj->forms "`~~@[1 2]") nil))))
   (testing "``~~x still expands to x (two unquotes balanced by two syntax-quotes)"
     (is (= ['x]
            (stages/expand-syntax-quotes
-             (lang/meme->forms "``~~x") nil))))
+             (lang/mclj->forms "``~~x") nil))))
   (testing "single `~x still works as a control"
     (is (= [42]
            (stages/expand-syntax-quotes
-             (lang/meme->forms "`~42") nil)))))
+             (lang/mclj->forms "`~42") nil)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: when `~~x / `~~@x errors via check-no-leftover-unquotes!, the
@@ -1000,7 +1000,7 @@
 (deftest leftover-unquote-error-has-source-location
   (testing "`~~x error carries :line/:col from the source"
     (let [e (try (stages/expand-syntax-quotes
-                   (lang/meme->forms "\n\n  `~~x") nil)
+                   (lang/mclj->forms "\n\n  `~~x") nil)
                  nil
                  (catch #?(:clj Exception :cljs js/Error) ex ex))]
       (is (some? e))
@@ -1009,7 +1009,7 @@
         (is (pos-int? col)))))
   (testing "`~~@x error carries :line/:col from the source"
     (let [e (try (stages/expand-syntax-quotes
-                   (lang/meme->forms "\n  `~~@[1 2]") nil)
+                   (lang/mclj->forms "\n  `~~@[1 2]") nil)
                  nil
                  (catch #?(:clj Exception :cljs js/Error) ex ex))]
       (is (some? e))
@@ -1028,27 +1028,27 @@
   (testing "{\\u0041 1 \\A 2} — unicode-escape and char literal of same char"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Duplicate key"
-                          (lang/meme->forms "{\\u0041 1 \\A 2}")))))
+                          (lang/mclj->forms "{\\u0041 1 \\A 2}")))))
 
 #?(:clj
    (deftest duplicate-map-key-hex-vs-decimal
      (testing "{0xFF 1 255 2} — hex and decimal of same value are duplicates (JVM only — hex not supported on CLJS)"
        (is (thrown-with-msg? Exception #"Duplicate key"
-                             (lang/meme->forms "{0xFF 1 255 2}"))))
+                             (lang/mclj->forms "{0xFF 1 255 2}"))))
      (testing "{0xFF 1 0xFF 2} — two identical hex literals (control; already errored)"
        (is (thrown-with-msg? Exception #"Duplicate key"
-                             (lang/meme->forms "{0xFF 1 0xFF 2}"))))
+                             (lang/mclj->forms "{0xFF 1 0xFF 2}"))))
      (testing "{0xFF 1 0x10 2} — different hex values parse fine"
-       (let [[m] (lang/meme->forms "{0xFF 1 0x10 2}")]
+       (let [[m] (lang/mclj->forms "{0xFF 1 0x10 2}")]
          (is (= 2 (count m)))))))
 
 #?(:clj
    (deftest duplicate-set-key-across-notations
      (testing "#{0xFF 255} — hex and decimal of same value are duplicates (JVM only)"
        (is (thrown-with-msg? Exception #"Duplicate key"
-                             (lang/meme->forms "#{0xFF 255}"))))
+                             (lang/mclj->forms "#{0xFF 255}"))))
      (testing "#{0xFF 0x10} — different hex values parse fine"
-       (let [[s] (lang/meme->forms "#{0xFF 0x10}")]
+       (let [[s] (lang/mclj->forms "#{0xFF 0x10}")]
          (is (= 2 (count s)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -1063,15 +1063,15 @@
   (testing "#:ns{:a 1 :a 2} — duplicate bare keys after qualification"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Duplicate key: :ns/a"
-                          (lang/meme->forms "#:ns{:a 1 :a 2}"))))
+                          (lang/mclj->forms "#:ns{:a 1 :a 2}"))))
   (testing "#:ns{:a/b 1 :a/b 2} — duplicates already qualified, must still error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Duplicate key: :a/b"
-                          (lang/meme->forms "#:ns{:a/b 1 :a/b 2}"))))
+                          (lang/mclj->forms "#:ns{:a/b 1 :a/b 2}"))))
   (testing "#::{:a 1 :a 2} — bare auto-resolve, qual-ns blank, dups on bare keyword"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Duplicate key: :a"
-                          (lang/meme->forms "#::{:a 1 :a 2}"))))
+                          (lang/mclj->forms "#::{:a 1 :a 2}"))))
   (testing "#:ns{:a 1 :b 2} — distinct keys still parse cleanly"
-    (let [[m] (lang/meme->forms "#:ns{:a 1 :b 2}")]
+    (let [[m] (lang/mclj->forms "#:ns{:a 1 :b 2}")]
       (is (= {:ns/a 1 :ns/b 2} m)))))

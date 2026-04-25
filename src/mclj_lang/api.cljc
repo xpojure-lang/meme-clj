@@ -15,7 +15,7 @@
             #?(:clj [mclj-lang.repl :as repl])
             #?(:clj [meme.registry :as registry])))
 
-(defn- with-meme-grammar
+(defn- with-mclj-grammar
   "Inject meme's grammar as :grammar in opts if the caller didn't supply one."
   [opts]
   (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar)))
@@ -24,7 +24,7 @@
 ;; Lang API — delegates to composable stages
 ;; ---------------------------------------------------------------------------
 
-(defn meme->forms
+(defn mclj->forms
   "Read meme source string. Returns a vector of Clojure forms.
    step-parse → step-read
 
@@ -39,24 +39,24 @@
      :resolve-keyword  — fn to resolve auto-resolve keywords (::kw)
      :resolve-symbol   — fn to resolve symbols in syntax-quote expansion
      :grammar          — custom Pratt grammar spec (advanced)"
-  ([s] (meme->forms s nil))
+  ([s] (mclj->forms s nil))
   ([s opts]
    {:pre [(string? s)]}
-   (:forms (stages/run s (with-meme-grammar opts)))))
+   (:forms (stages/run s (with-mclj-grammar opts)))))
 
-(defn forms->meme
+(defn forms->mclj
   "Print Clojure forms as meme source string (single-line per form).
    Takes a SEQUENCE of forms (vector or seq), not a single form."
   [forms]
   {:pre [(sequential? forms)]}
   (fmt-flat/format-forms forms))
 
-(defn format-meme-forms
+(defn format-mclj-forms
   "Format Clojure forms as canonical meme source string (multi-line, indented).
 
    opts keys:
      :width  — target line width (int, default 80)"
-  ([forms] (format-meme-forms forms nil))
+  ([forms] (format-mclj-forms forms nil))
   ([forms opts]
    {:pre [(sequential? forms)]}
    (fmt-canon/format-forms forms opts)))
@@ -66,18 +66,18 @@
   [forms]
   (fmt-flat/format-clj (expander/expand-forms forms)))
 
-(defn meme->clj
+(defn mclj->clj
   "Convert meme source to Clojure source string (lossless by default).
 
    Reader conditionals are preserved as `#?(...)` in the output rather than
    being evaluated at the current platform — faithful for `.cljc` conversion.
    For the eval-time value, use `run-string` instead.
 
-   opts: same as `meme->forms` (`:resolve-keyword`, `:resolve-symbol`)."
-  ([meme-src] (meme->clj meme-src nil))
+   opts: same as `mclj->forms` (`:resolve-keyword`, `:resolve-symbol`)."
+  ([meme-src] (mclj->clj meme-src nil))
   ([meme-src opts]
    {:pre [(string? meme-src)]}
-   (forms->clj (meme->forms meme-src opts))))
+   (forms->clj (mclj->forms meme-src opts))))
 
 #?(:clj
    (do
@@ -114,20 +114,20 @@
            (run! #(check-depth % 0) result)
            result)))))
 #?(:clj
-   (defn clj->meme
+   (defn clj->mclj
      "Convert Clojure source to meme. JVM only."
      [clj-src]
      {:pre [(string? clj-src)]}
-     (forms->meme (clj->forms clj-src))))
+     (forms->mclj (clj->forms clj-src))))
 
 ;; ---------------------------------------------------------------------------
 ;; Lang commands (for CLI dispatch)
 ;; ---------------------------------------------------------------------------
 
-(defn format-meme
+(defn format-mclj
   "Format meme source text. Reads source, formats via canonical formatter."
   [source opts]
-  (let [forms (meme->forms source opts)]
+  (let [forms (mclj->forms source opts)]
     (if (empty? forms)
       source
       (case (:style opts)
@@ -137,16 +137,16 @@
 
 (defn ^:no-doc to-clj
   "CLI-dispatch adapter: meme source → Clojure text. Library callers should
-   use `meme->clj` directly — it has the same lossless behavior."
-  ([source] (meme->clj source))
-  ([source opts] (meme->clj source opts)))
+   use `mclj->clj` directly — it has the same lossless behavior."
+  ([source] (mclj->clj source))
+  ([source opts] (mclj->clj source opts)))
 
 #?(:clj
-   (defn ^:no-doc to-meme
+   (defn ^:no-doc to-mclj
      "CLI-dispatch adapter: Clojure source → meme. JVM only.
-      Library callers should use `clj->meme` directly."
-     ([source] (clj->meme source))
-     ([source _opts] (to-meme source))))
+      Library callers should use `clj->mclj` directly."
+     ([source] (clj->mclj source))
+     ([source _opts] (to-mclj source))))
 
 (def lang-map
   "Command map for the meme lang.
@@ -155,10 +155,10 @@
    special forms."
   {:extension ".meme"
    :extensions [".memec" ".memej" ".memejs"]
-   :format     format-meme
+   :format     format-mclj
    :to-clj     to-clj
    :form-shape form-shape/registry
-   #?@(:clj [:to-meme to-meme
+   #?@(:clj [:to-mclj to-mclj
               :run     (fn [source opts] (run/run-string source opts))
               :repl    (fn [opts] (repl/start opts))])})
 

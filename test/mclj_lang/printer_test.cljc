@@ -12,7 +12,7 @@
   ([form width] (render-at form width nil))
   ([form width style]
    (render/layout
-    (printer/to-doc form :meme style form-shape/registry)
+    (printer/to-doc form :mclj style form-shape/registry)
     width)))
 
 (defn- render-clj
@@ -75,15 +75,15 @@
     (let [custom-registry (assoc form-shape/registry
                                  'my-form (fn [args]
                                             [[:custom-slot (first args)]]))
-          doc (printer/to-doc '(my-form 42) :meme nil custom-registry)]
+          doc (printer/to-doc '(my-form 42) :mclj nil custom-registry)]
       (is (= "my-form(42)" (render/layout doc ##Inf))))))
 
 ;; ---------------------------------------------------------------------------
-;; :meme vs :clj mode dispatch — the two notations
+;; :mclj vs :clj mode dispatch — the two notations
 ;; ---------------------------------------------------------------------------
 
 (deftest mode-dispatch-call-notation
-  (testing ":meme mode emits head-adjacent call syntax"
+  (testing ":mclj mode emits head-adjacent call syntax"
     (is (= "f(x y)" (render-at '(f x y) ##Inf))))
   (testing ":clj mode emits S-expression call syntax"
     (is (= "(f x y)" (render-clj '(f x y) ##Inf))))

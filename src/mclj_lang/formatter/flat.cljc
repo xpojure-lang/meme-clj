@@ -13,7 +13,7 @@
 (defn format-form
   "Format a single Clojure form as flat meme text (single-line, no style)."
   [form]
-  (render/layout (printer/to-doc form :meme nil form-shape/registry) ##Inf))
+  (render/layout (printer/to-doc form :mclj nil form-shape/registry) ##Inf))
 
 (defn format-forms
   "Format Clojure forms as flat meme text, separated by blank lines.

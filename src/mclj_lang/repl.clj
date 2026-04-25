@@ -8,14 +8,14 @@
             [meme.tools.clj.stages :as stages]
             [mclj-lang.grammar :as grammar]))
 
-(defn- with-meme-grammar [opts]
+(defn- with-mclj-grammar [opts]
   (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar)))
 
 (defn input-state
   "Returns :complete, :incomplete, or :invalid for the given input string."
   ([s] (input-state s nil))
-  ([s opts] (clj-repl/input-state s (with-meme-grammar opts)
-              (fn [s o] (stages/run s (with-meme-grammar o)))))
+  ([s opts] (clj-repl/input-state s (with-mclj-grammar opts)
+              (fn [s o] (stages/run s (with-mclj-grammar o)))))
   ([s opts run-fn]
    (clj-repl/input-state s opts run-fn)))
 
@@ -34,4 +34,4 @@
                         `meme.loader`."
   ([] (start {}))
   ([opts]
-   (clj-repl/start (assoc (with-meme-grammar opts) :banner (meme-banner)))))
+   (clj-repl/start (assoc (with-mclj-grammar opts) :banner (meme-banner)))))

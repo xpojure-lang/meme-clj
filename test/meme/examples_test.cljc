@@ -34,7 +34,7 @@ defn(summarize [accounts]
     processed))")
 
 (deftest full-readme-example-parses
-  (let [forms (lang/meme->forms full-example)]
+  (let [forms (lang/mclj->forms full-example)]
     ;; Should produce 3 top-level forms: ns, defn, defn
     (is (= 3 (count forms)))
 

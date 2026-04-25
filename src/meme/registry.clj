@@ -7,7 +7,7 @@
      :repl     (fn [opts] → nil)            — interactive loop
      :format   (fn [source opts] → text)    — format a file
      :to-clj   (fn [source] → clj-text)     — convert meme→clj
-     :to-meme  (fn [source] → meme-text)    — convert clj→meme
+     :to-mclj  (fn [source] → meme-text)    — convert clj→meme
 
    Plus optional metadata:
      :extension   \".ext\"           — file extension (string or vector)

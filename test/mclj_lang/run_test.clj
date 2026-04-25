@@ -127,11 +127,11 @@
 
 (deftest run-string-prelude-expands-syntax-quotes
   (testing "prelude with syntax-quote expands and evals correctly"
-    (let [prelude-forms (lang/meme->forms "`map")
+    (let [prelude-forms (lang/mclj->forms "`map")
           result (run/run-string "42" {:prelude prelude-forms})]
       (is (= 42 result))))
   (testing "prelude with CljRaw values (hex literals) expands correctly"
-    (let [prelude-forms (lang/meme->forms "def(hex-val 0xFF)")
+    (let [prelude-forms (lang/mclj->forms "def(hex-val 0xFF)")
           result (run/run-string "hex-val" {:prelude prelude-forms})]
       (is (= 255 result)))))
 

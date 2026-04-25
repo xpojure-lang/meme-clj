@@ -47,11 +47,11 @@
 
 (defn try-roundtrip-form
   "Try to roundtrip a single form. Returns {:ok form} or {:error msg}.
-   meme->forms preserves ReaderConditional records by default."
+   mclj->forms preserves ReaderConditional records by default."
   [form]
   (try
     (let [meme-text (fmt-flat/format-form form)
-          forms2 (lang/meme->forms meme-text)]
+          forms2 (lang/mclj->forms meme-text)]
       {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
     (catch Exception e
       {:error (.getMessage e)})))

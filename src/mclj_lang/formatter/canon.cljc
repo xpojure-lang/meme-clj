@@ -52,7 +52,7 @@
          width      (or (:width opts) default-width)
          form-shape (:form-shape opts form-shape/registry)
          effective  (:style opts style)]
-     (render/layout (printer/to-doc form :meme effective form-shape) width))))
+     (render/layout (printer/to-doc form :mclj effective form-shape) width))))
 
 (defn format-forms
   "Format a sequence of Clojure forms as canonical meme text,

@@ -164,7 +164,7 @@
            ["fn"          '(fn [x y] (+ x y))]]]
     (testing (str label " format roundtrip")
       (let [pp (fmt-canon/format-form form {:width 40})
-            re-parsed (lang/meme->forms pp)]
+            re-parsed (lang/mclj->forms pp)]
         (is (= [form] re-parsed)
             (str label " failed:\n" pp))))))
 
@@ -175,7 +175,7 @@
                                  (if (even? item) (* item 2) item))]
                     (reduce + 0 result)))
           pp (fmt-canon/format-form form {:width 40})
-          re-parsed (lang/meme->forms pp)]
+          re-parsed (lang/mclj->forms pp)]
       (is (= [form] re-parsed))
       (is (re-find #"\n" pp) "should be multi-line at this width"))))
 
@@ -183,7 +183,7 @@
   (testing "format-forms output re-parses to same forms"
     (let [forms ['(ns my.app) '(def x 42) '(defn f [x] (+ x 1))]
           pp (fmt-canon/format-forms forms {:width 40})
-          re-parsed (lang/meme->forms pp)]
+          re-parsed (lang/mclj->forms pp)]
       (is (= forms re-parsed)))))
 
 ;; ---------------------------------------------------------------------------
@@ -196,31 +196,31 @@
 (deftest comment-roundtrip-before-form
   (testing "form after comment parses correctly"
     (let [src "; header comment\ndef(x 42)"
-          forms (lang/meme->forms src)]
+          forms (lang/mclj->forms src)]
       (is (= '[(def x 42)] forms)))))
 
 (deftest comment-roundtrip-between-forms
   (testing "forms around comment parse correctly"
     (let [src "def(x 1)\n; middle comment\ndef(y 2)"
-          forms (lang/meme->forms src)]
+          forms (lang/mclj->forms src)]
       (is (= '[(def x 1) (def y 2)] forms)))))
 
 (deftest comment-roundtrip-end-of-line
   (testing "end-of-line comment attached to next form survives"
     (let [src "def(x 1) ; note\ndef(y 2)"
-          formatted (fmt-canon/format-forms (lang/meme->forms src) {:width 80})]
+          formatted (fmt-canon/format-forms (lang/mclj->forms src) {:width 80})]
       (is (re-find #"; note" formatted)))))
 
 (deftest comment-roundtrip-trailing
   (testing "trailing comment after all forms survives"
     (let [src "def(x 1)\n; end of file"
-          formatted (fmt-canon/format-forms (lang/meme->forms src) {:width 80})]
+          formatted (fmt-canon/format-forms (lang/mclj->forms src) {:width 80})]
       (is (re-find #"; end of file" formatted)))))
 
 (deftest comment-roundtrip-mid-expression-break
   (testing "comment inside a form appears when format forces multi-line"
     (let [src "defn(foo\n  ; body comment\n  [x]\n  +(x 1))"
-          forms (lang/meme->forms src)
+          forms (lang/mclj->forms src)
           formatted (fmt-canon/format-form (first forms) {:width 15})]
       (is (re-find #"; body comment" formatted))
       (is (re-find #"defn\( foo" formatted)))))
@@ -228,7 +228,7 @@
 (deftest comment-roundtrip-mid-expression-wide
   (testing "comment inside a form preserved even at wide width"
     (let [src "defn(foo\n  ; body comment\n  [x]\n  +(x 1))"
-          forms (lang/meme->forms src)
+          forms (lang/mclj->forms src)
           formatted (fmt-canon/format-form (first forms) {:width 80})]
       (is (re-find #"; body comment" formatted))
       (is (re-find #"defn\( foo" formatted)))))
@@ -236,9 +236,9 @@
 (deftest comment-roundtrip-forms-roundtrip
   (testing "formatted output with comments re-parses to same forms"
     (let [src "; top\ndef(x 42)\n; mid\ndefn(f [x] +(x 1))\n; end"
-          forms (lang/meme->forms src)
+          forms (lang/mclj->forms src)
           formatted (fmt-canon/format-forms forms {:width 80})
-          re-read (lang/meme->forms formatted)]
+          re-read (lang/mclj->forms formatted)]
       (is (= (pr-str forms) (pr-str re-read))))))
 
 ;; ---------------------------------------------------------------------------
@@ -251,7 +251,7 @@
 #?(:clj
    (deftest comment-preservation-fixture
      (let [src (slurp "test/examples/comments_fixture.meme")
-           forms (lang/meme->forms src)
+           forms (lang/mclj->forms src)
            formatted (fmt-canon/format-forms forms {:width 80})
            expected-comments
            ["; Clojure code in comment: (defn foo [x] (+ x 1))"
@@ -272,10 +272,10 @@
            (is (re-find (re-pattern (java.util.regex.Pattern/quote comment)) formatted)
                (str "missing comment: " comment))))
        (testing "forms survive roundtrip through commented source"
-         (let [re-read (lang/meme->forms formatted)]
+         (let [re-read (lang/mclj->forms formatted)]
            (is (= (pr-str forms) (pr-str re-read)))))
        (testing "formatting is idempotent with comments"
-         (let [re-read (lang/meme->forms formatted)
+         (let [re-read (lang/mclj->forms formatted)
                re-formatted (fmt-canon/format-forms re-read {:width 80})]
            (is (= formatted re-formatted)))))))
 
@@ -291,7 +291,7 @@
                   '[1 2 3]
                   '{:a 1 :b 2}]]
       (let [fmt1 (fmt-canon/format-form form {:width 80})
-            reparsed (first (lang/meme->forms fmt1))
+            reparsed (first (lang/mclj->forms fmt1))
             fmt2 (fmt-canon/format-form reparsed {:width 80})]
         (is (= fmt1 fmt2) (str "not idempotent: " (pr-str form)))))))
 
@@ -301,7 +301,7 @@
                   '(let [x 1 y 2 z 3] (+ x y z))
                   '(cond (> x 0) "pos" (< x 0) "neg" :else "zero")]]
       (let [fmt1 (fmt-canon/format-form form {:width 30})
-            reparsed (first (lang/meme->forms fmt1))
+            reparsed (first (lang/mclj->forms fmt1))
             fmt2 (fmt-canon/format-form reparsed {:width 30})]
         (is (= fmt1 fmt2) (str "not idempotent: " (pr-str form)))))))
 
@@ -312,7 +312,7 @@
                                  (if (even? item) (* item 2) item))]
                     (reduce + 0 result)))
           fmt1 (fmt-canon/format-form form {:width 40})
-          reparsed (first (lang/meme->forms fmt1))
+          reparsed (first (lang/mclj->forms fmt1))
           fmt2 (fmt-canon/format-form reparsed {:width 40})]
       (is (= fmt1 fmt2)))))
 

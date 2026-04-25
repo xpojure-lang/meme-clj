@@ -4,7 +4,7 @@
 require('[mclj-lang.api :as m])
 
 ;; Helper: roundtrip meme source through read→print
-defn(rt [src] m/forms->meme(m/meme->forms(src)))
+defn(rt [src] m/forms->mclj(m/mclj->forms(src)))
 
 ;; ---------------------------------------------------------------
 ;; Quote: 'x sugar vs quote(x) call — both must roundtrip exactly
@@ -37,7 +37,7 @@ assert(=(rt("var(foo)") "var(foo)"))
 ;; Clojure output also preserves syntax choices
 ;; ---------------------------------------------------------------
 
-defn(rt-clj [src] m/meme->clj(src))
+defn(rt-clj [src] m/mclj->clj(src))
 
 assert(=(rt-clj("'foo") "'foo"))
 assert(=(rt-clj("quote(foo)") "(quote foo)"))

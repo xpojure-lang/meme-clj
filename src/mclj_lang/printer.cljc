@@ -371,7 +371,7 @@
 
 (defn- to-doc-form
   "Convert a Clojure form to a Doc tree. Handles metadata wrapping.
-   ctx is {:mode :meme|:clj, :style style-map-or-nil}."
+   ctx is {:mode :mclj|:clj, :style style-map-or-nil}."
   [form ctx]
   (let [mode (:mode ctx)]
     (cond
@@ -540,7 +540,7 @@
    Comments are always emitted — the hardline in comment-doc forces the
    enclosing group to break, so comments are never silently dropped.
 
-   mode        :meme (default) or :clj.
+   mode        :mclj (default) or :clj.
    style       layout policy map (nil = pass-through, no opinions).
                Keyed by semantic slot names, not form names.
    form-shape  registry map (head-symbol → decomposer fn).  When nil,
@@ -549,7 +549,7 @@
                pass it in.
 
    Formatters own style — see canon and flat formatter modules."
-  ([form] (to-doc form :meme))
+  ([form] (to-doc form :mclj))
   ([form mode] (to-doc form mode nil))
   ([form mode style] (to-doc form mode style nil))
   ([form mode style form-shape]

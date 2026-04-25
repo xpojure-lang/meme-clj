@@ -32,7 +32,7 @@
         (tokenizer/tokenize s)))
 
 (defn- forms-for [s]
-  (lang/meme->forms s))
+  (lang/mclj->forms s))
 
 ;; ---------------------------------------------------------------------------
 ;; Token snapshots — exact type/value/line/col for representative inputs
@@ -382,7 +382,7 @@
        (is (tagged-literal? form)))))
 
 (deftest form-snapshot-reader-conditional
-  (testing "meme->forms preserves the record; eval-rc yields platform value"
+  (testing "mclj->forms preserves the record; eval-rc yields platform value"
     (is (forms/clj-reader-conditional? (first (forms-for "#?(:clj 1 :cljs 2)"))))
     (is (= #?(:clj 1 :cljs 2) (first (eval-rc-forms "#?(:clj 1 :cljs 2)"))))))
 

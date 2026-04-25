@@ -101,13 +101,13 @@
 
 (defn- roundtrip-to-tmp
   "Roundtrip a .cljc through meme and write result to a temp .clj file.
-   meme->forms preserves ReaderConditional records by default.
+   mclj->forms preserves ReaderConditional records by default.
    Returns the temp file path."
   [path]
   (let [read-results (tu/read-clj-forms path)
         forms (mapv :form (filterv :form read-results))
         meme-text (fmt-flat/format-forms forms)
-        roundtripped (lang/meme->forms meme-text)
+        roundtripped (lang/mclj->forms meme-text)
         tmp (java.io.File/createTempFile "dogfood" ".clj")]
     (spit tmp (str/join "\n\n" (map pr-str roundtripped)))
     tmp))
@@ -155,9 +155,9 @@
    Compares structurally (ignoring metadata) since flat printing loses whitespace metadata."
   [path]
   (let [src (slurp path)
-        forms1 (lang/meme->forms src)
+        forms1 (lang/mclj->forms src)
         printed (fmt-flat/format-forms forms1)
-        forms2 (lang/meme->forms printed)
+        forms2 (lang/mclj->forms printed)
         pairs (map vector forms1 forms2)
         succeeded (filterv (fn [[a b]] (= (normalize-for-compare a) (normalize-for-compare b))) pairs)
         failed (filterv (fn [[a b]] (not= (normalize-for-compare a) (normalize-for-compare b))) pairs)]

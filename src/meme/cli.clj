@@ -42,7 +42,7 @@
               (if (pred path) [path] [])))
           inputs))
 
-(defn- meme-file? [path] (some? (registry/resolve-by-extension path)))
+(defn- mclj-file? [path] (some? (registry/resolve-by-extension path)))
 (defn- clj-file? [path] (boolean (re-find #"\.clj[cdsx]?$" path)))
 (defn- swap-ext [path from to]
   (if (= from "meme")
@@ -174,22 +174,22 @@
   "Convert meme files to Clojure and print to stdout or write to .clj files."
   [opts]
   (file-command opts
-    {:cmd :to-clj, :pred meme-file?, :output-fn #(swap-ext % "meme" "clj")
+    {:cmd :to-clj, :pred mclj-file?, :output-fn #(swap-ext % "meme" "clj")
      :verb "converted", :usage "Usage: meme to-clj <file|dir> [--lang name] [--stdout]"}))
 
-(defn to-meme
+(defn to-mclj
   "Convert Clojure files to meme and print to stdout or write to .meme files."
   [opts]
   (file-command opts
-    {:cmd :to-meme, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
-     :verb "converted", :usage "Usage: meme to-meme <file|dir> [--lang name] [--stdout]"}))
+    {:cmd :to-mclj, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
+     :verb "converted", :usage "Usage: meme to-mclj <file|dir> [--lang name] [--stdout]"}))
 
 (defn format-files
   "Format meme source files in canonical style. Pass --width, --style,
    --stdout, --check as needed."
   [opts]
   (file-command opts
-    {:cmd :format, :pred meme-file?, :output-fn nil
+    {:cmd :format, :pred mclj-file?, :output-fn nil
      :verb "formatted", :usage "Usage: meme format <file|dir> [--width N] [--style canon|flat|clj] [--stdout] [--check]"}))
 
 (defn- validate-out-dir!
@@ -200,7 +200,7 @@
     (println "Error: --out cannot be empty")
     (cli-exit! 1)))
 
-(defn transpile-meme
+(defn transpile-mclj
   "Transpile .meme files to .clj in a separate output directory.
    Preserves relative paths. Output can be added to :paths in deps.edn
    so that require, load-file, and nREPL all work without runtime patching."
@@ -214,7 +214,7 @@
     (let [[lang-name l] (get-lang lang nil)
           _ (registry/check-support l lang-name :to-clj)
           to-clj-fn (:to-clj l)
-          expanded (expand-inputs inputs meme-file?)
+          expanded (expand-inputs inputs mclj-file?)
           ;; Find the common root of all inputs to compute relative paths
           roots (mapv (fn [input]
                         (let [f (io/file input)]
@@ -282,7 +282,7 @@
         stage-dir "target/meme"
         aot-dir (or out "target/classes")]
     (println (str "[1/2] Transpiling to " stage-dir "..."))
-    (transpile-meme (cond-> {:out stage-dir :lang lang}
+    (transpile-mclj (cond-> {:out stage-dir :lang lang}
                       (seq files) (assoc :files files)
                       (and file (not files)) (assoc :file file)
                       (not (or file files)) (assoc :files inputs)))
@@ -343,7 +343,7 @@
     (when (has? :run)     (println "  meme run <file> [--lang name]"))
     (when (has? :repl)    (println "  meme repl [--lang name]"))
     (when (has? :to-clj)  (println "  meme to-clj   <file|dir> [--lang name] [--stdout]  (alias: from-meme)"))
-    (when (has? :to-meme) (println "  meme to-meme  <file|dir> [--lang name] [--stdout]  (alias: from-clj)"))
+    (when (has? :to-mclj) (println "  meme to-mclj  <file|dir> [--lang name] [--stdout]  (alias: from-clj)"))
     (when (has? :format)  (println "  meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"))
     (when (has? :to-clj)  (println "  meme transpile <src-dir|file...> [--out target/meme] [--lang name]  (alias: compile)"))
     (when (has? :to-clj)  (println "  meme build     <src-dir|file...> [--out target/classes] [--lang name]"))
@@ -378,15 +378,15 @@
          {:cmds ["repl"]    :fn (comp repl :opts) :spec {:lang {:coerce :string}}}
          (assoc file-spec :cmds ["to-clj"]    :fn (file-cmd to-clj))
          (assoc file-spec :cmds ["from-meme"] :fn (file-cmd to-clj))
-         (assoc file-spec :cmds ["to-meme"]   :fn (file-cmd to-meme))
-         (assoc file-spec :cmds ["from-clj"]  :fn (file-cmd to-meme))
+         (assoc file-spec :cmds ["to-mclj"]   :fn (file-cmd to-mclj))
+         (assoc file-spec :cmds ["from-clj"]  :fn (file-cmd to-mclj))
          {:cmds ["format"]  :fn (file-cmd format-files)
           :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
                                      :lang {:coerce :string} :style {:coerce :string}
                                      :width {:coerce :long}}}
-         {:cmds ["transpile"] :fn (file-cmd transpile-meme)
+         {:cmds ["transpile"] :fn (file-cmd transpile-mclj)
           :args->opts [:file] :spec {:out {:coerce :string} :lang {:coerce :string}}}
-         {:cmds ["compile"]   :fn (file-cmd transpile-meme)
+         {:cmds ["compile"]   :fn (file-cmd transpile-mclj)
           :args->opts [:file] :spec {:out {:coerce :string} :lang {:coerce :string}}}
          {:cmds ["build"]     :fn (file-cmd build)
           :args->opts [:file] :spec {:out {:coerce :string} :lang {:coerce :string}}}

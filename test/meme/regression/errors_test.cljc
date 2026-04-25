@@ -40,7 +40,7 @@
 #?(:clj
    (deftest read-string-errors-include-location
      (testing "malformed number includes location"
-       (let [e (try (lang/meme->forms "1/")
+       (let [e (try (lang/mclj->forms "1/")
                     nil
                     (catch Exception e e))]
          (is (some? e))
@@ -48,7 +48,7 @@
          (is (= 1 (:col (ex-data e))))
          (is (re-find #"Invalid number" (ex-message e)))))
      (testing "malformed regex includes location"
-       (let [e (try (lang/meme->forms "#\"[unclosed\"")
+       (let [e (try (lang/mclj->forms "#\"[unclosed\"")
                     nil
                     (catch Exception e e))]
          (is (some? e))
@@ -61,7 +61,7 @@
 
 (deftest namespaced-map-errors-include-location
   (testing "malformed namespaced map has :line/:col in ex-data"
-    (let [ex (try (lang/meme->forms "#:ns{:a}")
+    (let [ex (try (lang/mclj->forms "#:ns{:a}")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (:line (ex-data ex)))
@@ -84,11 +84,11 @@
 #?(:clj
    (deftest read-eval-blocked-in-opaque-forms
      (testing "#=() blocked in syntax-quote"
-       (is (thrown? Exception (lang/meme->forms "`(#=(+ 1 2))"))))
+       (is (thrown? Exception (lang/mclj->forms "`(#=(+ 1 2))"))))
      (testing "#=() blocked in namespaced map"
-       (is (thrown? Exception (lang/meme->forms "#:ns{:k #=(+ 1 2)}"))))
+       (is (thrown? Exception (lang/mclj->forms "#:ns{:k #=(+ 1 2)}"))))
      (testing "#=() blocked in reader conditional"
-       (is (thrown? Exception (lang/meme->forms "#?(:clj #=(+ 1 2))"))))))
+       (is (thrown? Exception (lang/mclj->forms "#?(:clj #=(+ 1 2))"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; S1: clj->forms executed #=() at read time — no *read-eval* binding.
@@ -140,7 +140,7 @@
    (deftest tagged-literal-cljs-error
      (testing "#uuid on CLJS throws meme error, not ReferenceError"
        (is (thrown-with-msg? js/Error #"not supported in ClojureScript"
-                             (lang/meme->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))))))
+                             (lang/mclj->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))))))
 
 ;; ---------------------------------------------------------------------------
 ;; CLJS-only: unsupported number formats must error, not silently truncate.
@@ -149,17 +149,17 @@
 #?(:cljs
    (deftest cljs-unsupported-number-formats
      (testing "BigInt N suffix"
-       (is (thrown-with-msg? js/Error #"BigInt" (lang/meme->forms "42N"))))
+       (is (thrown-with-msg? js/Error #"BigInt" (lang/mclj->forms "42N"))))
      (testing "BigDecimal M suffix"
-       (is (thrown-with-msg? js/Error #"BigDecimal" (lang/meme->forms "42M"))))
+       (is (thrown-with-msg? js/Error #"BigDecimal" (lang/mclj->forms "42M"))))
      (testing "Ratio"
-       (is (thrown-with-msg? js/Error #"Ratio" (lang/meme->forms "1/2"))))
+       (is (thrown-with-msg? js/Error #"Ratio" (lang/mclj->forms "1/2"))))
      (testing "Hex"
-       (is (thrown-with-msg? js/Error #"Hex" (lang/meme->forms "0xFF"))))
+       (is (thrown-with-msg? js/Error #"Hex" (lang/mclj->forms "0xFF"))))
      (testing "Radix"
-       (is (thrown-with-msg? js/Error #"Radix" (lang/meme->forms "2r1010"))))
+       (is (thrown-with-msg? js/Error #"Radix" (lang/mclj->forms "2r1010"))))
      (testing "Octal"
-       (is (thrown-with-msg? js/Error #"Octal" (lang/meme->forms "010"))))))
+       (is (thrown-with-msg? js/Error #"Octal" (lang/mclj->forms "010"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: error message quality improvements
@@ -170,7 +170,7 @@
 
 (deftest unclosed-reader-conditional-has-context
   (testing "unclosed #?( is :incomplete"
-    (let [e (try (lang/meme->forms "#?(:clj 1")
+    (let [e (try (lang/mclj->forms "#?(:clj 1")
                  nil
                  (catch #?(:clj Exception :cljs js/Error) e e))]
       (is (:incomplete (ex-data e)))
@@ -181,19 +181,19 @@
 ;; wrapping [CljUnquote{nil}] which is valid at parse time.
 (deftest unquote-discard-in-syntax-quote
   (testing "`[~#_ x] — #_ consumes x, ~ unquotes nil"
-    (is (some? (lang/meme->forms "`[~#_ x]")))))
+    (is (some? (lang/mclj->forms "`[~#_ x]")))))
 
 ;; NOTE: The experimental pipeline wraps multiple #() body forms in (do ...)
 ;; rather than rejecting. This matches Clojure's behavior where #(a b) =
 ;; (fn [] (do a b)), but it differs from the classic pipeline which rejected.
 (deftest anon-fn-multi-body-wraps-in-do
   (testing "#() with two expressions wraps in do"
-    (is (= '[(fn [] (do 1 2))] (lang/meme->forms "#(1 2)")))))
+    (is (= '[(fn [] (do 1 2))] (lang/mclj->forms "#(1 2)")))))
 
 #?(:clj
    (deftest unicode-escape-in-string-reports-count
      (testing "truncated \\u in string includes digit count"
-       (let [e (try (lang/meme->forms "\"\\u41\"")
+       (let [e (try (lang/mclj->forms "\"\\u41\"")
                     nil
                     (catch Exception e e))]
          (is (re-find #"got 2" (ex-message e))
@@ -206,9 +206,9 @@
 
 (deftest surrogate-unicode-escape-accepted
   (testing "\\uD800 (surrogate) is accepted to match Clojure"
-    (is (some? (lang/meme->forms "\"\\uD800\""))))
+    (is (some? (lang/mclj->forms "\"\\uD800\""))))
   (testing "\\uDFFF (surrogate) is accepted to match Clojure"
-    (is (some? (lang/meme->forms "\"\\uDFFF\""))))
+    (is (some? (lang/mclj->forms "\"\\uDFFF\""))))
   (testing "valid unicode escapes still work"
-    (is (some? (lang/meme->forms "\"\\u0041\"")))
-    (is (some? (lang/meme->forms "\"\\uFFFF\"")))))
+    (is (some? (lang/mclj->forms "\"\\u0041\"")))
+    (is (some? (lang/mclj->forms "\"\\uFFFF\"")))))

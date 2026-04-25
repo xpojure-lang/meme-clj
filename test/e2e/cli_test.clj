@@ -81,7 +81,7 @@
     (is (str/includes? out "meme run"))
     (is (str/includes? out "meme repl"))
     (is (str/includes? out "meme to-clj"))
-    (is (str/includes? out "meme to-meme"))
+    (is (str/includes? out "meme to-mclj"))
     (is (str/includes? out "meme format"))
     (is (str/includes? out "meme inspect"))
     (is (str/includes? out "meme version"))))
@@ -102,7 +102,7 @@
     (is (str/includes? out "run"))
     (is (str/includes? out "format"))
     (is (str/includes? out "to-clj"))
-    (is (str/includes? out "to-meme"))))
+    (is (str/includes? out "to-mclj"))))
 
 (deftest inspect-lang-test
   (let [{:keys [out exit]} (bb-meme "inspect" "--lang" "mclj")]
@@ -163,39 +163,39 @@
     (is (= "(defn foo [x] (+ x 1))\n" out))))
 
 ;; ---------------------------------------------------------------------------
-;; to-meme
+;; to-mclj
 ;; ---------------------------------------------------------------------------
 
-(deftest to-meme-stdout-test
+(deftest to-mclj-stdout-test
   (let [f (tmp-clj "(defn foo [x] (+ x 1))")
-        {:keys [out exit]} (bb-meme "to-meme" (str f) "--stdout")]
+        {:keys [out exit]} (bb-meme "to-mclj" (str f) "--stdout")]
     (is (zero? exit))
     (is (= "defn(foo [x] +(x 1))\n" out))))
 
-(deftest from-clj-is-alias-of-to-meme
+(deftest from-clj-is-alias-of-to-mclj
   (let [f (tmp-clj "(defn foo [x] (+ x 1))")
         {:keys [out exit]} (bb-meme "from-clj" (str f) "--stdout")]
     (is (zero? exit))
     (is (= "defn(foo [x] +(x 1))\n" out))))
 
-(deftest to-meme-file-test
+(deftest to-mclj-file-test
   (let [f (tmp-clj "(defn foo [x] (+ x 1))")
         meme-path (str/replace (str f) #"\.clj$" ".meme")
         meme-file (io/file meme-path)]
     (try
-      (let [{:keys [exit]} (bb-meme "to-meme" (str f))]
+      (let [{:keys [exit]} (bb-meme "to-mclj" (str f))]
         (is (zero? exit))
         (is (.exists meme-file))
         (is (= "defn(foo [x] +(x 1))\n" (slurp meme-file))))
       (finally (.delete meme-file)))))
 
-(deftest to-meme-cljc-file-test
+(deftest to-mclj-cljc-file-test
   (let [f (tmp-ext "cljc" "(defn foo [x] (+ x 1))")
         meme-path (str/replace (str f) #"\.cljc$" ".meme")
         meme-file (io/file meme-path)
         original-content (slurp f)]
     (try
-      (let [{:keys [exit]} (bb-meme "to-meme" (str f))]
+      (let [{:keys [exit]} (bb-meme "to-mclj" (str f))]
         (is (zero? exit))
         (is (.exists meme-file) ".meme output file should be created")
         (is (= "defn(foo [x] +(x 1))\n" (slurp meme-file)))
@@ -203,13 +203,13 @@
         (is (= original-content (slurp f)) ".cljc source must not be overwritten"))
       (finally (.delete meme-file)))))
 
-(deftest to-meme-cljs-file-test
+(deftest to-mclj-cljs-file-test
   (let [f (tmp-ext "cljs" "(defn foo [x] (+ x 1))")
         meme-path (str/replace (str f) #"\.cljs$" ".meme")
         meme-file (io/file meme-path)
         original-content (slurp f)]
     (try
-      (let [{:keys [exit]} (bb-meme "to-meme" (str f))]
+      (let [{:keys [exit]} (bb-meme "to-mclj" (str f))]
         (is (zero? exit))
         (is (.exists meme-file) ".meme output file should be created")
         (is (= "defn(foo [x] +(x 1))\n" (slurp meme-file)))

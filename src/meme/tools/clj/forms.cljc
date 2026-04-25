@@ -54,7 +54,7 @@
 ;; JVM has clojure.lang.ReaderConditional (created by reader-conditional,
 ;; tested by reader-conditional?). CLJS has no equivalent, so we provide
 ;; a defrecord polyfill and portable constructor/predicate/accessors.
-;; On JVM we use the native type so forms from meme->forms and clj->forms
+;; On JVM we use the native type so forms from mclj->forms and clj->forms
 ;; are the same type — critical for roundtrip equality.
 ;; ---------------------------------------------------------------------------
 
