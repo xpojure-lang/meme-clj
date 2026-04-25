@@ -16,7 +16,7 @@ while preserving Clojure's semantics exactly.
 Everything else is Clojure.
 
 ```clojure
-;; examples/stars.meme — bb meme run examples/stars.meme
+;; examples/stars.mclj — bb meme run examples/stars.mclj
 require('[cheshire.core :as json])
 
 defn(stars
@@ -55,11 +55,11 @@ cd meme-clj
 
 ## Getting Started
 
-Run a `.meme` file:
+Run a `.mclj` file:
 
 ```bash
-$ bb meme run hello.meme                                # Babashka
-$ clojure -X:meme run :file '"hello.meme"'              # Clojure JVM
+$ bb meme run hello.mclj                                # Babashka
+$ clojure -X:meme run :file '"hello.mclj"'              # Clojure JVM
 Hello, world!
 ```
 
@@ -76,15 +76,15 @@ user=> map(inc [1 2 3])
 Convert between meme and Clojure:
 
 ```bash
-$ bb meme to-clj hello.meme                             # .meme → Clojure
+$ bb meme to-clj hello.mclj                             # .mclj → Clojure
 $ bb meme to-meme hello.clj                             # .clj → meme
-$ bb meme to-clj hello.meme --stdout                    # print to stdout
+$ bb meme to-clj hello.mclj --stdout                    # print to stdout
 ```
 
-Format `.meme` files (normalize syntax via canonical formatter):
+Format `.mclj` files (normalize syntax via canonical formatter):
 
 ```bash
-$ bb meme format hello.meme                             # in-place
+$ bb meme format hello.mclj                             # in-place
 $ bb meme format src/                                   # directory, recursive
 ```
 
@@ -102,26 +102,26 @@ unless(empty?(xs)
 
 ## Namespace Loading
 
-`.meme` files participate in Clojure's normal namespace machinery — no build plugin, no AOT step, no annotations:
+`.mclj` files participate in Clojure's normal namespace machinery — no build plugin, no AOT step, no annotations:
 
 ```clojure
-;; src/myapp/core.meme exists on the classpath
+;; src/myapp/core.mclj exists on the classpath
 require('[myapp.core :as core])
 core/greet("world")
 ```
 
-The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JVM + Babashka), so any `.meme` file under a registered extension is found and run on first reference. When both `myapp/core.meme` and `myapp/core.clj` exist, `.meme` wins.
+The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JVM + Babashka), so any `.mclj` file under a registered extension is found and run on first reference. When both `myapp/core.mclj` and `myapp/core.clj` exist, `.mclj` wins.
 
-**Auto-installed.** `meme-lang.run/run-string`, `run-file`, and the REPL install the loader before evaluating user code — programmatic embeddings get `.meme` `require` for free, not just the CLI. Hosts that own their own `clojure.core/load` interception opt out with `:install-loader? false`.
+**Auto-installed.** `mclj-lang.run/run-string`, `run-file`, and the REPL install the loader before evaluating user code — programmatic embeddings get `.mclj` `require` for free, not just the CLI. Hosts that own their own `clojure.core/load` interception opt out with `:install-loader? false`.
 
 **Lang-independent.** The loader is registry-driven: it dispatches on extension to whatever lang is registered. Sibling langs registered with `:extensions` and `:run` get the same `require`/`load-file` support without writing any loader code.
 
-**Shadowing.** A `.meme` file wins over `.clj` at the same classpath path. The loader does not protect core namespaces — if you put `clojure/core.meme` on your classpath, it will be loaded. Keep your lang files under your own namespace.
+**Shadowing.** A `.mclj` file wins over `.clj` at the same classpath path. The loader does not protect core namespaces — if you put `clojure/core.mclj` on your classpath, it will be loaded. Keep your lang files under your own namespace.
 
-**Babashka limitation.** Babashka's SCI does not dispatch `require` through `clojure.core/load`, so on Babashka `require` of `.meme` namespaces is not supported. `load-file` works on both platforms. For Babashka projects that need `require`, precompile to `.clj`:
+**Babashka limitation.** Babashka's SCI does not dispatch `require` through `clojure.core/load`, so on Babashka `require` of `.mclj` namespaces is not supported. `load-file` works on both platforms. For Babashka projects that need `require`, precompile to `.clj`:
 
 ```bash
-$ bb meme transpile src/                                # output to target/meme/
+$ bb meme transpile src/                                # output to target/mclj/
 $ bb meme transpile src/ --out out/                     # custom output directory
 ```
 
@@ -140,11 +140,11 @@ Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sit
 
 Grouped by who the doc is for:
 
-**Writing `.meme` code**
+**Writing `.mclj` code**
 - [Language Reference](doc/language-reference.md) — complete syntax guide
 
 **Embedding meme in a Clojure project**
-- [API Reference](doc/api.md) — public functions (`meme->forms`, `forms->meme`, `format-meme-forms`, run/repl helpers, registry)
+- [API Reference](doc/api.md) — public functions (`mclj->forms`, `forms->mclj`, `format-mclj-forms`, run/repl helpers, registry)
 
 **Extending the formatter or building a sibling lang**
 - [Form-Shape Vocabulary](doc/form-shape.md) — slot names, decomposers, and the three-layer formatter model

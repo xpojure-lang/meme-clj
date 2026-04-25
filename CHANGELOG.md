@@ -6,7 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-lang rename, pipe operator, correctness pack.
+Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-lang rename, pipe operator, correctness pack, **meme-lang → mclj-lang rename**.
+
+### Breaking Changes (mclj-lang rename)
+
+- **Namespace `meme-lang.*` → `mclj-lang.*`.** All 8 `src/mclj_lang/*` files and 15+ `test/mclj_lang/*` files. Toolkit (`meme.tools.*`, `meme.cli`, `meme.registry`, `meme.loader`) is unchanged.
+
+- **Lang registry key `:meme` → `:mclj`.** `meme.registry/default-lang` is now `:mclj`. CLI invocations using `--lang meme` must use `--lang mclj`. EDN lang files passing `:format :meme` must use `:format :mclj`.
+
+- **Public API renames (no aliases):**
+  - `meme->forms` → `mclj->forms`
+  - `forms->meme` → `forms->mclj`
+  - `meme->clj` → `mclj->clj`
+  - `clj->meme` → `clj->mclj`
+  - `format-meme` → `format-mclj`
+  - `format-meme-forms` → `format-mclj-forms`
+
+- **Lang-map key `:to-meme` → `:to-mclj`.** CLI subcommand `meme to-meme` → `meme to-mclj`. The `from-clj` alias still works.
+
+- **Printer mode keyword `:meme` → `:mclj`** (paired with `:clj`). Affects `mclj-lang.printer/to-doc` callers passing the mode explicitly.
+
+- **Metadata vocabulary `:meme/*` → `:mclj/*`.** All 9 keys: `:mclj/leading-trivia`, `:mclj/sugar`, `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`, `:mclj/bare-percent`, `:mclj/pipeline-error`, `:mclj/deprecated-opt`, `:mclj/missing-grammar`. External code walking emitted forms or catching `:mclj/pipeline-error` ex-infos must update.
+
+- **Build staging directory `target/meme` → `target/mclj`.** Affects `meme transpile` (default `--out`) and `meme build` (fixed staging path).
+
+### Deprecated
+
+- **File extensions `.meme`, `.memec`, `.memej`, `.memejs` are deprecated.** `.mclj`, `.mcljc`, `.mcljj`, `.mcljs` are the new primary extensions. Deprecated extensions are still recognized for one release; loading a file with a deprecated extension emits a one-time `*err*` warning per process. Removal planned in the next major.
 
 ### Removed
 
