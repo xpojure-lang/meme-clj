@@ -1,10 +1,10 @@
-(ns meme-lang.printer-test
+(ns mclj-lang.printer-test
   "Printer-level tests — exercising seams like style's :slot-renderers
    override.  Output-level behavior lives in formatter/flat_test and
    formatter/canon_test; these tests target specific printer contracts."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.printer :as printer]
-            [meme-lang.form-shape :as form-shape]
+            [mclj-lang.printer :as printer]
+            [mclj-lang.form-shape :as form-shape]
             [meme.tools.render :as render]))
 
 (defn- render-at

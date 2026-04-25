@@ -1,11 +1,11 @@
-(ns meme-lang.reader.dispatch-test
+(ns mclj-lang.reader.dispatch-test
   "Parser tests for reader macros and dispatch forms:
    @deref, ^meta, 'quote, #'var, #_discard, #(), regex, char,
    tagged literals, reader conditionals, namespaced maps."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
+            [mclj-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.formatter.flat :as fmt-flat]))
+            [mclj-lang.formatter.flat :as fmt-flat]))
 
 ;; ---------------------------------------------------------------------------
 ;; Prefix reader macros: @, ^, ', #'

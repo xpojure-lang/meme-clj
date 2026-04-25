@@ -423,9 +423,9 @@
 ;; JVM require of .meme namespace (loader auto-install via language tier)
 ;;
 ;; Demonstrates that the loader is a core DX utility installed by
-;; meme-lang.run automatically — the CLI does no manual install, yet
+;; mclj-lang.run automatically — the CLI does no manual install, yet
 ;; require of a .meme file on the classpath resolves through the meme
-;; pipeline. If meme-lang.run/run-string ever stops auto-installing the
+;; pipeline. If mclj-lang.run/run-string ever stops auto-installing the
 ;; loader, this test fails.
 ;; ---------------------------------------------------------------------------
 

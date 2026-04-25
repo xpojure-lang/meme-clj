@@ -2,12 +2,12 @@
   "Scar tissue: tokenizer regression tests.
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
-            [meme-lang.formatter.flat :as fmt-flat]
+            [mclj-lang.api :as lang]
+            [mclj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.stages :as stages]
-            [meme-lang.grammar :as grammar]
-            [meme-lang.test-util :as tokenizer]))
+            [mclj-lang.grammar :as grammar]
+            [mclj-lang.test-util :as tokenizer]))
 
 (defn- semantic-tokens
   "Filter tokenizer output to only semantic tokens (remove whitespace, newlines, comments).

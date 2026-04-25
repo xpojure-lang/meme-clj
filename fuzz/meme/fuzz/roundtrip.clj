@@ -13,7 +13,7 @@
            bb fuzz format
            bb fuzz idempotent
            bb fuzz forms-to-clj"
-  (:require [meme-lang.api :as api]
+  (:require [mclj-lang.api :as api]
             [meme.tools.clj.expander :as expander]
             [meme.tools.clj.forms :as forms])
   (:import [com.code_intelligence.jazzer.api FuzzedDataProvider]))

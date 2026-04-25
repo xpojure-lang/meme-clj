@@ -1,7 +1,7 @@
-(ns meme-lang.reader.interop-test
+(ns mclj-lang.reader.interop-test
   "Parser tests for Java interop syntax."
   (:require [clojure.test :refer [deftest is]]
-            [meme-lang.api :as lang]))
+            [mclj-lang.api :as lang]))
 
 (deftest parse-method-call
   (let [result (first (lang/meme->forms ".toUpperCase(\"hello\")"))]

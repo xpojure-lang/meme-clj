@@ -1,12 +1,12 @@
-(ns meme-lang.repl
+(ns mclj-lang.repl
   "Meme's REPL entry point. Injects meme's grammar and banner and
-   delegates to `meme.tools.clj.repl`. Exists so meme-lang has a home
+   delegates to `meme.tools.clj.repl`. Exists so mclj-lang has a home
    for any meme-specific REPL concern that emerges later."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [meme.tools.clj.repl :as clj-repl]
             [meme.tools.clj.stages :as stages]
-            [meme-lang.grammar :as grammar]))
+            [mclj-lang.grammar :as grammar]))
 
 (defn- with-meme-grammar [opts]
   (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar)))

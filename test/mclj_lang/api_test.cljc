@@ -1,9 +1,9 @@
-(ns meme-lang.api-test
-  "Tests for the meme-lang.api language API."
+(ns mclj-lang.api-test
+  "Tests for the mclj-lang.api language API."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
-            #?(:clj [meme-lang.repl :as repl])
-            #?(:clj [meme-lang.run :as run])))
+            [mclj-lang.api :as lang]
+            #?(:clj [mclj-lang.repl :as repl])
+            #?(:clj [mclj-lang.run :as run])))
 
 ;; ---------------------------------------------------------------------------
 ;; Text-to-form track

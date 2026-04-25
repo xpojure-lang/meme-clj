@@ -1,7 +1,7 @@
-(ns meme-lang.formatter.canon-test
+(ns mclj-lang.formatter.canon-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.formatter.canon :as fmt-canon]
-            [meme-lang.api :as lang]))
+            [mclj-lang.formatter.canon :as fmt-canon]
+            [mclj-lang.api :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Flat output — forms that fit within width

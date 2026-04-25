@@ -4,8 +4,8 @@
    - Per-form roundtrip with precise failure accounting
    - clj-kondo var-definition comparison for semantic equivalence"
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
-            [meme-lang.formatter.flat :as fmt-flat]
+            [mclj-lang.api :as lang]
+            [mclj-lang.formatter.flat :as fmt-flat]
             [meme.test-util :as tu]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -19,19 +19,19 @@
   ;; lang-map uses #?@(:clj [...]) inside a map literal which Clojure's reader
   ;; cannot read with :read-cond :preserve (always the meme default now) —
   ;; tolerate 1 read error for that form.
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/api.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/api.cljc")]
     (is (= (- total (count read-errors)) (count succeeded)) "readable forms roundtrip")
     (is (zero? (count failed)))
     (is (<= (count read-errors) 1) "at most 1 read error (lang-map #?@ splice)")))
 
 (deftest dogfood-per-form-run
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/run.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/run.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-repl
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/repl.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/repl.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
@@ -56,7 +56,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-printer
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme_lang/printer.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/printer.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -113,10 +113,10 @@
     tmp))
 
 (deftest dogfood-semantic-equivalence
-  (doseq [path ["src/meme_lang/api.cljc" "src/meme_lang/run.clj"
-                "src/meme_lang/repl.clj" "test/meme/test_runner.clj"
+  (doseq [path ["src/mclj_lang/api.cljc" "src/mclj_lang/run.clj"
+                "src/mclj_lang/repl.clj" "test/meme/test_runner.clj"
                 "src/meme/tools/clj/cst_reader.cljc"
-                "src/meme_lang/printer.cljc"
+                "src/mclj_lang/printer.cljc"
                 "src/meme/tools/clj/resolve.cljc"
                 "src/meme/tools/clj/stages.cljc"
                 "src/meme/tools/clj/errors.cljc"

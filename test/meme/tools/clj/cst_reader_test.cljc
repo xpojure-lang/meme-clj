@@ -3,14 +3,14 @@
 
    These tests drive the CST reader directly via meme.tools.parser/parse →
    cst-reader/read-forms, bypassing the higher-level stages pipeline and the
-   meme-lang.api wrappers. Integration-level behavior is covered elsewhere
+   mclj-lang.api wrappers. Integration-level behavior is covered elsewhere
    (stages_test, reader/*_test) — here we assert that read-forms produces the
    right Clojure values, preserves the right metadata, and raises errors with
    position info for malformed input."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.tools.clj.cst-reader :as cst-reader]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.grammar :as grammar]
+            [mclj-lang.grammar :as grammar]
             [meme.tools.parser :as pratt]))
 
 ;; ---------------------------------------------------------------------------

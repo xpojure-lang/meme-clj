@@ -4,8 +4,8 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.registry :as registry]
             ;; Explicit require triggers :meme self-registration.
-            [meme-lang.api]
-            [meme-lang.run :as run]))
+            [mclj-lang.api]
+            [mclj-lang.run :as run]))
 
 (def all-langs
   (into {} (map (fn [n] [n (registry/resolve-lang n)])
@@ -150,7 +150,7 @@
 (deftest register-and-resolve-by-extension
   (testing "register a user lang and resolve from extension"
     (registry/register! :test-lang {:extension ".tstl"
-                           :run 'meme-lang.run/run-string})
+                           :run 'mclj-lang.run/run-string})
     (let [[name _lang] (registry/resolve-by-extension "app.tstl")]
       (is (= :test-lang name)))
     (let [[meme-name _] (registry/resolve-by-extension "app.meme")]
@@ -175,7 +175,7 @@
   (testing "register! accepts pre-resolved functions"
     (registry/register! :mini {:extension ".mini"
                            :run (fn [source opts]
-                                  (let [run-string @(resolve 'meme-lang.run/run-string)]
+                                  (let [run-string @(resolve 'mclj-lang.run/run-string)]
                                     (run-string "defn(greet [n] str(\"Hi \" n))" opts)
                                     (run-string source opts)))})
     (let [f (tmp-file "test-mini" ".mini")]
@@ -237,7 +237,7 @@
 (deftest multi-extension-registration
   (testing ":extensions vector — both extensions resolve"
     (registry/register! :multi {:extensions [".aa" ".bb"]
-                                :run 'meme-lang.run/run-string})
+                                :run 'mclj-lang.run/run-string})
     (let [[n _] (registry/resolve-by-extension "app.aa")]
       (is (= :multi n)))
     (let [[n _] (registry/resolve-by-extension "app.bb")]
@@ -253,7 +253,7 @@
   (testing "mixed :extension + :extensions merged"
     (registry/register! :mixed {:extension ".xx"
                                 :extensions [".yy" ".zz"]
-                                :run 'meme-lang.run/run-string})
+                                :run 'mclj-lang.run/run-string})
     (is (= [".xx" ".yy" ".zz"] (:extensions (registry/resolve-lang :mixed))))
     (is (some? (registry/resolve-by-extension "app.xx")))
     (is (some? (registry/resolve-by-extension "app.zz")))))
@@ -284,7 +284,7 @@
                            (try
                              (registry/register! (keyword (str "conc" i))
                                                  {:extension ".conflict-test"
-                                                  :run 'meme-lang.run/run-string})
+                                                  :run 'mclj-lang.run/run-string})
                              (swap! results conj [:ok i])
                              (catch Exception _
                                (swap! results conj [:error i])))))))
@@ -297,10 +297,10 @@
 (deftest multi-extension-conflict-detection
   (testing "conflict when new extension overlaps existing extensions vector"
     (registry/register! :owner {:extensions [".p" ".q"]
-                                :run 'meme-lang.run/run-string})
+                                :run 'mclj-lang.run/run-string})
     (is (thrown-with-msg? Exception #"already claimed"
                           (registry/register! :thief {:extension ".q"
-                                                      :run 'meme-lang.run/run-string})))))
+                                                      :run 'mclj-lang.run/run-string})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: register! used to perform validation inside swap!. Under CAS
@@ -317,13 +317,13 @@
     (is (not= identity (:to-clj (registry/resolve-lang :meme)))))
   (testing "extension conflict throws and does not insert the new name"
     (registry/register! :holder {:extension ".reg-scar"
-                                 :run 'meme-lang.run/run-string})
+                                 :run 'mclj-lang.run/run-string})
     (is (thrown? Exception (registry/register! :intruder {:extension ".reg-scar"
-                                                          :run 'meme-lang.run/run-string})))
+                                                          :run 'mclj-lang.run/run-string})))
     (is (not (contains? (registry/available-langs) :intruder))
         "failing registration must not leak a partial entry"))
   (testing "reserved .meme extension throws and does not insert the new name"
     (is (thrown? Exception (registry/register! :sneaky {:extension ".meme"
-                                                        :run 'meme-lang.run/run-string})))
+                                                        :run 'mclj-lang.run/run-string})))
     (is (not (contains? (registry/available-langs) :sneaky))
         "reserved-extension rejection must not leak a partial entry")))

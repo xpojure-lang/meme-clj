@@ -1,8 +1,8 @@
-(ns meme-lang.run-test
-  "Tests for the meme-lang.run module."
+(ns mclj-lang.run-test
+  "Tests for the mclj-lang.run module."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
-            [meme-lang.run :as run]))
+            [mclj-lang.api :as lang]
+            [mclj-lang.run :as run]))
 
 ;; ---------------------------------------------------------------------------
 ;; run-string
@@ -157,7 +157,7 @@
       (is (re-find #"__auto__$" (name result))))))
 
 ;; Test moved to meme.registry-test — lang dispatch is no longer a
-;; meme-lang.run concern (see run-file's :resolve-lang-for-path opt).
+;; mclj-lang.run concern (see run-file's :resolve-lang-for-path opt).
 
 (deftest bom-stripping
   (testing "BOM prefix is stripped before parsing"

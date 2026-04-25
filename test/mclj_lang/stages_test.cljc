@@ -1,11 +1,11 @@
-(ns meme-lang.stages-test
+(ns mclj-lang.stages-test
   "Integration tests for meme's composition of commons pipeline stages:
    step-parse (with meme grammar) → step-read → step-evaluate-reader-conditionals
    → step-expand-syntax-quotes, plus expand-forms."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.tools.clj.stages :as stages]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.grammar :as grammar]))
+            [mclj-lang.grammar :as grammar]))
 
 (defn- run-stages
   "Run the tooling pipeline with meme's grammar explicitly injected."

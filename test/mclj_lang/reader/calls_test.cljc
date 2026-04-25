@@ -1,10 +1,10 @@
-(ns meme-lang.reader.calls-test
+(ns mclj-lang.reader.calls-test
   "Parser tests for Clojure forms as calls.
    Everything is a call in meme — no special-form parsers.
    This file tests that all standard Clojure constructs parse correctly
    via the uniform f(args...) call syntax."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]))
+            [mclj-lang.api :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; do, def, defn, defn-, defmacro

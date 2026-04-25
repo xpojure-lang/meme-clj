@@ -1,4 +1,4 @@
-(ns meme-lang.printer
+(ns mclj-lang.printer
   "Meme printer: Clojure forms → Doc trees.
    Builds Wadler-Lindig Doc trees from Clojure forms, handling meme syntax
    (call notation, sugar, metadata, comments) and Clojure output mode.
@@ -12,7 +12,7 @@
             [meme.tools.render :as render]
             [meme.tools.clj.values :as values]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.form-shape :as form-shape]))
+            [mclj-lang.form-shape :as form-shape]))
 
 ;; ---------------------------------------------------------------------------
 ;; Comment extraction from :meme/leading-trivia metadata
@@ -63,7 +63,7 @@
 ;; Style — layout policy owned by formatters, threaded through ctx
 ;; ---------------------------------------------------------------------------
 ;; The printer is notation; the formatter is layout.  Style maps opine on
-;; semantic slot names (emitted by `meme-lang.form-shape/decompose`), not
+;; semantic slot names (emitted by `mclj-lang.form-shape/decompose`), not
 ;; on form names — so `defn`, `defn-`, `defmacro`, and any user macro that
 ;; decomposes to the same slots all get identical layout for free.
 ;;
@@ -232,7 +232,7 @@
 
 (def default-slot-renderers
   "Default per-slot structural renderers, keyed by slot name (see
-   `meme-lang.form-shape` for the vocabulary).  Each renderer is
+   `mclj-lang.form-shape` for the vocabulary).  Each renderer is
    `(fn [value ctx] → Doc)`.  Styles extend or override this map via
    their `:slot-renderers` key; the printer merges overrides over these
    defaults, so a style that overrides only one slot keeps the rest."

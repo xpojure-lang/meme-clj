@@ -8,7 +8,7 @@
    This namespace stays deliberately opinion-free: factories + cross-platform
    primitives only. Lexical conventions (identifier shapes, number grammars,
    string delimiters, whitespace and comment syntax) belong in the lang that
-   wants them — see e.g. `meme-lang.lexlets` for Clojure-flavored
+   wants them — see e.g. `mclj-lang.lexlets` for Clojure-flavored
    conventions."
   (:require [meme.tools.parser :as parser]))
 

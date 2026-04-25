@@ -1,4 +1,4 @@
-(ns meme-lang.api
+(ns mclj-lang.api
   "Meme lang composition: lossless pipeline with Pratt parser.
 
    Pipeline: scanner → trivia-attacher → pratt-parser → cst-reader
@@ -6,13 +6,13 @@
    to Clojure forms."
   (:require [meme.tools.clj.stages :as stages]
             [meme.tools.clj.forms :as forms]
-            [meme-lang.grammar :as grammar]
-            [meme-lang.form-shape :as form-shape]
-            [meme-lang.formatter.flat :as fmt-flat]
-            [meme-lang.formatter.canon :as fmt-canon]
+            [mclj-lang.grammar :as grammar]
+            [mclj-lang.form-shape :as form-shape]
+            [mclj-lang.formatter.flat :as fmt-flat]
+            [mclj-lang.formatter.canon :as fmt-canon]
             [meme.tools.clj.expander :as expander]
-            #?(:clj [meme-lang.run :as run])
-            #?(:clj [meme-lang.repl :as repl])
+            #?(:clj [mclj-lang.run :as run])
+            #?(:clj [mclj-lang.repl :as repl])
             #?(:clj [meme.registry :as registry])))
 
 (defn- with-meme-grammar

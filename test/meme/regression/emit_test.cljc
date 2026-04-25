@@ -3,13 +3,13 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [meme-lang.api :as lang]
-            [meme-lang.formatter.flat :as fmt-flat]
-            [meme-lang.formatter.canon :as fmt-canon]
+            [mclj-lang.api :as lang]
+            [mclj-lang.formatter.flat :as fmt-flat]
+            [mclj-lang.formatter.canon :as fmt-canon]
             [meme.tools.clj.values :as values]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.stages :as stages]
-            [meme-lang.grammar :as grammar]))
+            [mclj-lang.grammar :as grammar]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
