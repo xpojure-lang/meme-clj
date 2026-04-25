@@ -91,6 +91,19 @@
   (testing "non-existent file throws"
     (is (thrown? Exception (run/run-file "/tmp/nonexistent-meme-file-12345.meme")))))
 
+(deftest run-file-syntax-quote-resolves-symbols
+  ;; Scar tissue: run-file's :run-fn closure ignored its reader-opts
+  ;; argument and re-bound clj-run-fn to the raw caller opts, so
+  ;; default-resolve-symbol never reached the expander. `map in a file
+  ;; expanded to 'map instead of 'clojure.core/map.
+  (testing "`map in a file resolves to clojure.core/map (matches run-string)"
+    (let [tmp (java.io.File/createTempFile "meme-resolve-test" ".meme")]
+      (try
+        (spit tmp "`map")
+        (is (= 'clojure.core/map (run/run-file (str tmp))))
+        (finally
+          (.delete tmp))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Shebang support
 ;; ---------------------------------------------------------------------------

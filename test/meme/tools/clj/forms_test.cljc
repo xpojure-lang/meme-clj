@@ -209,3 +209,29 @@
   (testing "nested (fn ...) body is not walked — %1 inside fn is untouched"
     (is (= '(+ % (fn [x] %1))
            (forms/restore-bare-percent '(+ %1 (fn [x] %1)))))))
+
+;; ============================================================
+;; walk-anon-fn-body — set source-order invariant
+;; ============================================================
+
+(deftest walk-anon-fn-body-refreshes-set-insertion-order
+  ;; Scar tissue: walk-anon-fn-body's set branch rebuilt sets via
+  ;; (set (map walker form)) and re-attached the input meta, so when
+  ;; the walker transformed any element (e.g. % → %1) the surviving
+  ;; :meme/insertion-order vector still referenced the pre-walk element
+  ;; and lost agreement with the set's actual contents. Fix routes the
+  ;; rebuild through walk-meme-set, the same helper the other walkers
+  ;; (walk-rc, expand-syntax-quotes) already use.
+  (testing "elements transformed by the walker stay in sync with insertion-order meta"
+    (let [s (with-meta #{(symbol "%") :a :b}
+                       {:meme/insertion-order [:a (symbol "%") :b]})
+          out (forms/walk-anon-fn-body
+                (fn [f] (if (and (symbol? f) (= "%" (name f))) (symbol "%1") f))
+                s)
+          order (:meme/insertion-order (meta out))]
+      (is (contains? out '%1))
+      (is (not (contains? out '%)))
+      (is (= (count order) (count out))
+          ":meme/insertion-order must have the same count as the set")
+      (is (every? #(contains? out %) order)
+          "every entry in :meme/insertion-order must be a member of the set"))))
