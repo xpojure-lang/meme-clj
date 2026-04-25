@@ -72,7 +72,7 @@ clojure -T:build deploy
 The codebase is organized by *kind* of code, with shared infrastructure that both language implementations and the CLI depend on:
 
 - **`meme.tools.*`** — Generic, language-agnostic building blocks (parser engine, scanlet builders, render engine).
-- **`meme.tools.clj.*`** — Clojure-surface commons shared by any Clojure-flavored frontend (meme, implojure, future siblings): lexical conventions, CST reader, stages framework, error infrastructure, atom resolution, syntax-quote expander, the `Clj*` AST records, value serialization, eval pipeline, and REPL harness. Sits inside the toolkit tier but carries Clojure bias explicitly in the path.
+- **`meme.tools.clj.*`** — Clojure-surface commons shared across any Clojure-flavored frontend: lexical conventions, CST reader, stages framework, error infrastructure, atom resolution, syntax-quote expander, the `Clj*` AST records, value serialization, eval pipeline, and REPL harness. Sits inside the toolkit tier but carries Clojure bias explicitly in the path.
 - **`meme-lang.*`** — Meme language implementation. The *syntactic* surface lives here (grammar, parselets, printer, form-shape, formatters). Infrastructure files like `meme-lang.lexlets`, `meme-lang.run`, `meme-lang.repl` are thin shims that inject meme's grammar/banner and delegate to `meme.tools.clj.*`.
 - **`meme.registry`, `meme.loader`** — Shared runtime infrastructure, peer to `meme.tools.*`. Both langs and the CLI depend on them: langs push themselves into the registry at load time and rely on the loader for `require`/`load-file`; the CLI dispatches through the registry.
 - **`meme.cli`** — App tier. Only consumer-facing code lives here.
@@ -116,7 +116,7 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme.tools.repl` (.clj) — Shared interactive eval loop. Parameterizable via `:parser`, `:prelude`. Lang implementations wire into `start` via their lang map `:repl` entry. JVM/Babashka only.
 - `meme.tools.run` (.clj) — Shared eval pipeline: source → stages → eval. Parameterizable via `:parser`, `:prelude`. Lang implementations wire into `run-string` and `run-file` via their lang map `:run` entry. JVM/Babashka only.
 
-**Clojure-surface commons** (`meme.tools.clj.*`) — inside the toolkit tier, but with Clojure-specific decisions baked in. Use only from Clojure-flavored langs (meme, implojure); langs with non-Clojure lexical conventions should bring their own lexlets.
+**Clojure-surface commons** (`meme.tools.clj.*`) — inside the toolkit tier, but with Clojure-specific decisions baked in. Intended for Clojure-flavored langs; langs with non-Clojure lexical conventions should bring their own lexlets.
 
 - `meme.tools.clj.lex` (.cljc) — Clojure-surface lexical conventions: character predicates (`symbol-start?`, `symbol-char?`, `whitespace-char?`, `newline-char?`, `digit?`), consume helpers (`consume-keyword`, `consume-number`, `consume-char-literal`, `consume-string`, `consume-symbol`), and trivia consumers (`ws-consumer`, `newline-consumer`, `comment-consumer`, `bom-consumer`). Handles comma-as-whitespace, invisible-char rejection in identifiers, `::` auto-resolve keyword syntax, `\uXXXX`/`\oNNN`/named char literals. Portable.
 - `meme.tools.clj.errors` (.cljc) — Error infrastructure: `meme-error` (throw with consistent `:line`/`:col` ex-data), `format-error` (display with source context and caret), `source-context`. Uses the **display line model** (`str/split-lines` — splits on `\n` and `\r\n`). `format-error` bridges scanner positions to display: clamps carets when scanner col exceeds display line length (CRLF). Portable.
@@ -225,7 +225,6 @@ Tests are split across `test/meme_lang/` (language-specific) and `test/meme/` (i
 | `meme/tools/lexer_test` | Scanlet builders (wrappers that turn consume-fns into scanlet nodes). |
 | `meme/tools/run_test` | Generic run pipeline (grammar-agnostic): source → stages → eval, error paths, custom eval-fn halt semantics. |
 | `meme/tools/clj/cst_reader_test` | CST → Clojure forms: node types (atom/call/list/vector/map/set/meta/anon-fn/namespaced-map/reader-cond/tagged), metadata propagation. |
-| `implojure_lang/grammar_test` | Implojure grammar: operator precedence, associativity, `|name|>` named pipeline, `mod` word op, meme interop, word-boundary guards. |
 
 ## Development tools
 

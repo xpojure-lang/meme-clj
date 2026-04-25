@@ -136,10 +136,6 @@ Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
 Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sitter-meme)
 
-## Sibling language: implojure
-
-A second frontend, `implojure-lang`, ships in the same jar under extensions `.implj`/`.impljc`/`.impljs`. Same host (Clojure/CLJS), different surface: infix `+`, `*`, `mod` as word operators, a named-pipeline form `|name|>`, and otherwise Clojure semantics. Registered alongside meme in the CLI; uses the same `meme.tools.clj.*` infrastructure. Useful as the worked example of how to build a second Clojure-flavored frontend on top of meme's toolkit.
-
 ## Documentation
 
 Grouped by who the doc is for:

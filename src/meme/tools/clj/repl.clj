@@ -3,9 +3,9 @@
    resolution, and syntax-quote resolution into the generic REPL
    infrastructure.
 
-   Grammar-agnostic — callers pass `:grammar` in opts. Each lang (meme,
-   implojure, etc.) provides a thin wrapper that injects its grammar and
-   banner text, then delegates here.
+   Grammar-agnostic — callers pass `:grammar` in opts. Each lang provides
+   a thin wrapper that injects its grammar and banner text, then delegates
+   here.
 
    Installs `meme.loader` by default so `require`/`load-file` of
    user-source files work from the REPL. Pass `:install-loader? false`

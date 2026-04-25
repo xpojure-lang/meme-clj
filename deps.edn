@@ -11,7 +11,7 @@
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test
          :exec-args {:dirs ["test"]
-                     :patterns ["meme\\..*-test" "meme-lang\\..*-test" "implojure-lang\\..*-test"]}}
+                     :patterns ["meme\\..*-test" "meme-lang\\..*-test"]}}
   :meme {:replace-paths ["src"]
          :replace-deps {}
          :ns-default meme.cli}
@@ -20,7 +20,7 @@
                            olical/cljs-test-runner {:mvn/version "3.8.1"}
                            org.clojure/test.check {:mvn/version "1.1.1"}}
               :main-opts ["-m" "cljs-test-runner.main"
-                          "-d" "test/meme" "-d" "test/meme_lang" "-d" "test/implojure_lang"
+                          "-d" "test/meme" "-d" "test/meme_lang"
                           "-r" ".*-test$"
                           "-x" "node"]}
   :e2e {:extra-paths ["test"]

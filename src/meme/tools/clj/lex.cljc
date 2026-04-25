@@ -1,7 +1,6 @@
 (ns meme.tools.clj.lex
   "Clojure-surface lexical conventions — character predicates, consume
-   helpers, and trivia consumers shared by any Clojure-flavored frontend
-   (meme, implojure, future siblings).
+   helpers, and trivia consumers shared across any Clojure-flavored frontend.
 
    These encode Clojure-specific decisions that aren't part of the
    generic parser toolkit (`meme.tools.lexer`): comma-as-whitespace,

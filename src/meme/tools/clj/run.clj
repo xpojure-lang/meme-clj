@@ -3,8 +3,7 @@
    resolution, and BOM/shebang stripping into the generic run infrastructure.
 
    Grammar-agnostic — callers must pass `:grammar` in opts. Each language
-   (meme, implojure, future Clojure-flavored siblings) provides its own
-   thin wrapper that injects its grammar and delegates here.
+   provides a thin wrapper that injects its grammar and delegates here.
 
    Installs `meme.loader` by default so that `require` and `load-file`
    of `.meme` namespaces work from within the evaluated code. Callers
