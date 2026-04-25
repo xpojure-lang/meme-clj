@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-lang rename, pipe operator, correctness pack.
 
+### Removed
+
+- **`implojure-lang` removed.** The sibling Clojure-flavored frontend and its grammar test suite are gone (`src/implojure_lang/`, `test/implojure_lang/`, the `[implojure-lang.api]` require in `meme.cli`, related test patterns in `deps.edn`). The Clojure-surface commons (`meme.tools.clj.*`) remain shared-by-design — the abstraction is still right and pre-pays for the next sibling — but the only registered built-in lang is now meme.
+
 ### Breaking Changes
 
 - **AST record names: `Meme*` → `Clj*`.** `MemeSyntaxQuote`, `MemeUnquote`, `MemeUnquoteSplicing`, `MemeRaw`, `MemeAutoKeyword`, `MemeReaderConditional` → `CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional`. Content is Clojure-semantic; names follow suit. Predicate `meme-reader-conditional?` → `clj-reader-conditional?`.

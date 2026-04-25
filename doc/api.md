@@ -1,6 +1,6 @@
 # meme API Reference
 
-Namespaces are organized in four tiers: `meme.tools.{parser,lexer,render}` (generic tools), `meme.tools.clj.*` (Clojure-surface commons shared across Clojure-flavored frontends), `meme-lang.*` (meme language), and `meme.*` (shared runtime infra — `meme.registry`, `meme.loader` — plus the `meme.cli` app). A sibling lang `implojure-lang.*` mirrors the `meme-lang` shape with its own grammar.
+Namespaces are organized in four tiers: `meme.tools.{parser,lexer,render}` (generic tools), `meme.tools.clj.*` (Clojure-surface commons shared across Clojure-flavored frontends), `meme-lang.*` (meme language), and `meme.*` (shared runtime infra — `meme.registry`, `meme.loader` — plus the `meme.cli` app).
 
 ## meme-lang.api
 
@@ -689,7 +689,7 @@ A sibling lang with different string conventions would install its own handler (
 (meme.registry/resolve-by-extension path)
 ```
 
-Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Meme ships with `.meme`, `.memec`, `.memej`, `.memejs`; implojure ships with `.implj`, `.impljc`, `.impljs`.
+Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Meme ships with `.meme`, `.memec`, `.memej`, `.memejs`.
 
 ### registered-langs
 
@@ -697,7 +697,7 @@ Given a file path, find the lang whose `:extensions` (plural, normalized) includ
 (meme.registry/registered-langs)
 ```
 
-List all registered **user** lang names (keywords). Excludes built-ins (meme-lang, implojure-lang).
+List all registered **user** lang names (keywords). Excludes built-ins (meme-lang).
 
 ### available-langs
 

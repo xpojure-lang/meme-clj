@@ -1,6 +1,6 @@
 # meme Language Reference
 
-Complete syntax reference for writing `.meme` code. For the sibling Clojure-flavored frontend `implojure-lang` (file extensions `.implj`/`.impljc`/`.impljs`, infix-heavy syntax with `|name|>` pipes), see its own grammar — meme and implojure share the `meme.tools.clj.*` infrastructure but are distinct languages with different surface rules.
+Complete syntax reference for writing `.meme` code.
 
 
 ## The Rule

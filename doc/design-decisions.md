@@ -261,9 +261,9 @@ behavior to the host platform without depending on its reader.
 The codebase is split into four platform tiers:
 
 - **Generic tools** (`meme.tools.{parser, lexer, render}`) — portable `.cljc`, runs on JVM, Babashka, and ClojureScript. Language-agnostic library surface: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
-- **Clojure-surface commons** (`meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values}`) — portable `.cljc`. Shared across any Clojure-flavored frontend (meme-lang, implojure-lang, future siblings): lexical conventions, Clojure atom resolution, CST reader, stages, the `Clj*` AST records.
+- **Clojure-surface commons** (`meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values}`) — portable `.cljc`. Shared across any Clojure-flavored frontend: lexical conventions, Clojure atom resolution, CST reader, stages, the `Clj*` AST records.
 - **Core translation** (`meme-lang.{api, grammar, lexlets, parselets, form-shape, printer, formatter.flat, formatter.canon}`) — portable `.cljc`. Meme's syntactic identity: grammar spec, scanlet/parselet glue, semantic decomposition, Doc-tree builder, formatters. Pure functions with no eval or I/O dependency.
-- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `meme-lang.{repl, run}`, `implojure-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
+- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `meme-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
 - **Test infrastructure** (test-runner, dogfood-test, vendor-roundtrip-test) — `.clj`, JVM only.
   These use `java.io`, `PushbackReader`, `System/exit`.
 
@@ -410,7 +410,7 @@ See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint
 
 The registry (`meme.registry`) owns generic infrastructure: a keyword-to-lang-map index, extension dispatch, user-lang registration via EDN, safety guards.  It does *not* own the list of built-in langs.
 
-Earlier the registry imported each built-in's `api` namespace directly (`meme-lang.api`, and at that time a second peer lang, `implojure-lang.api`) and called `register-builtin!` on each.  That had two costs:
+Earlier the registry imported each built-in's `api` namespace directly (`meme-lang.api`) and called `register-builtin!` on each.  That had two costs:
 
 1. A circular dependency.  The registry imported `meme-lang.api`; `meme-lang.api` transitively used `meme-lang.run`; `meme-lang.run` needed the registry back to dispatch by file extension.  The cycle was worked around with `requiring-resolve` calls in `meme-lang.run`, `meme-lang.repl`, `meme.cli`, and `meme.loader` — four invisible runtime dependencies that didn't show up in the static `:require` graph.
 
@@ -460,9 +460,9 @@ A heavier spec-based validation (PL8 in `PRD.md`) was tried and removed during a
 
 Between the lang-agnostic `meme.tools.{parser, lexer, render}` and the meme-specific `meme-lang.*`, a middle tier `meme.tools.clj.*` carries Clojure-flavored concerns: symbol/keyword lexical conventions, numeric atom resolution, the `Clj*` AST records, CST-to-Clojure-forms lowering, the stages framework, the syntax-quote expander, value serialization, and the run/repl harnesses.
 
-The commons were extracted from `meme-lang.*` once a second Clojure-flavored frontend (`implojure-lang`) proved that none of these concerns are meme-specific. They describe what any frontend targeting Clojure-the-host needs to handle — surface syntax aside. Keeping them under `meme-lang` made the namespace a misnomer: `meme-lang.cst-reader` read CST nodes but emitted plain Clojure, not anything meme-shaped; `meme-lang.resolve` resolved *Clojure* atom text, not meme constructs.
+The commons were extracted from `meme-lang.*` once a second Clojure-flavored frontend proved that none of these concerns are meme-specific. They describe what any frontend targeting Clojure-the-host needs to handle — surface syntax aside. Keeping them under `meme-lang` made the namespace a misnomer: `meme-lang.cst-reader` read CST nodes but emitted plain Clojure, not anything meme-shaped; `meme-lang.resolve` resolved *Clojure* atom text, not meme constructs.
 
-The sibling-lang test is the rubric: if meme and implojure both need the function and neither needs to specialize it, it belongs in `meme.tools.clj.*`. Grammar, parselets, form-shape, and the printer stay in `meme-lang.*` because those are where the two diverge.
+The rubric is the sibling-lang test: if any Clojure-flavored frontend would need the function and would not need to specialize it, it belongs in `meme.tools.clj.*`. Grammar, parselets, form-shape, and the printer stay in `meme-lang.*` because that is where surface syntax diverges between langs.
 
 The toolkit stays accessible to guest frontends that want the same commons without inheriting meme's surface: a `.mcj` lang (McCarthy's original brackets) or a user's own Clojure frontend requires only a grammar and a handful of parselets.
 
@@ -470,7 +470,7 @@ The toolkit stays accessible to guest frontends that want the same commons witho
 
 The records the CST reader emits (`CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional`) wrap Clojure-semantic values — not meme-surface ones. They record *what the form means at the Clojure host level*, whether the caller wrote it in meme or any other frontend.
 
-Earlier these were named `Meme*` (`MemeSyntaxQuote`, etc.). That name was misleading: a `MemeUnquote` inside a .implj file is not meme-specific, it's a Clojure unquote. The sibling-lang extraction made the naming drift obvious — `implojure-lang` had no business importing a `Meme*` record to represent its own unquotes.
+Earlier these were named `Meme*` (`MemeSyntaxQuote`, etc.). That name was misleading: an unquote inside a guest frontend's source file is not meme-specific, it's a Clojure unquote. A guest Clojure-flavored frontend would have no business importing a `Meme*` record to represent its own unquotes.
 
 Predicates follow: `meme-reader-conditional?` → `clj-reader-conditional?`. The predicate answers "is this a Clojure reader conditional as represented in our AST?", nothing about meme.
 
@@ -482,13 +482,13 @@ These keys are emitted by the generic toolkit (`meme.tools.clj.cst-reader`, prin
 
 There's a brief history here (see CHANGELOG): bare `:meme/*` → namespaced `:meme-lang/*` in 3.0.0 to carve out `:meme/` for generic tooling; then back to `:meme/*` post-5.0.0 once the keys were recognised as toolkit-emitted rather than lang-emitted. The direction of travel was driven each time by the same question — *who emits this?* — and the second move corrected the first.
 
-## `implojure-lang` is a peer lang, not a meme mode
+## Sibling langs are peers, not modes
 
-`implojure-lang` ships alongside `meme-lang` as a separate registered frontend. Both languages share the Clojure-surface commons (`meme.tools.clj.*`) and the generic tools (`meme.tools.{parser,lexer,render}`), but each owns its own grammar, parselets, form-shape registry, and printer.
+A new Clojure-flavored frontend ships as a separate registered lang, not as a `--lang` flag on meme. Each peer owns its own grammar, parselets, form-shape registry, and printer; all share the Clojure-surface commons (`meme.tools.clj.*`) and the generic tools (`meme.tools.{parser,lexer,render}`).
 
-A mode flag (`meme format --lang implojure`) would have been cheaper in files — but wrong in design. The languages have different scanners (implojure has infix word operators like `mod`, `and`, `not`), different parselets (the `|name|>` named-pipe form has no meme equivalent), different form-shape registries (implojure decomposes `let*`-via-pipe differently), and different printers. A mode flag would have been a euphemism for two languages in one file.
+A mode flag would have been cheaper in files — but wrong in design. Sibling syntaxes differ in scanners (e.g. infix word operators), parselets (forms with no meme equivalent), form-shape registries (different special-form decompositions), and printers. A mode flag would be a euphemism for multiple languages in one file.
 
-The peer structure makes the Clojure-surface commons load-bearing: anything shared between the two has to live there and be reusable. If only one lang used it, it wasn't a commons candidate. Keeping the langs symmetrical (`meme-lang.api`/`run`/`repl` ↔ `implojure-lang.api`/`run`/`repl`) codifies the contract: a new Clojure-flavored frontend is a grammar + a parselets file + a form-shape registry + a printer, plus a 20-line shim trio.
+The peer structure makes the Clojure-surface commons load-bearing: anything that two Clojure-flavored frontends would share has to live there and be reusable. The shape `meme-lang.api`/`run`/`repl` codifies the contract for new frontends: grammar + parselets + form-shape registry + printer, plus a thin shim trio that injects the grammar/banner.
 
 ## CAS retry for `register!` atomicity
 

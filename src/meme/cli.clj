@@ -9,7 +9,6 @@
             [meme.registry :as registry]
             ;; Built-in lang registrations fire on ns-load:
             [meme-lang.api]
-            [implojure-lang.api]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]))

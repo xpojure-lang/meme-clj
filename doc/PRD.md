@@ -165,9 +165,9 @@ renumbered, so git history and this table stay cross-referenceable.
 
 The codebase has four layers:
 - **`meme.tools.{parser, lexer, render}`** — Generic, language-agnostic infrastructure: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
-- **`meme.tools.clj.*`** — Clojure-surface commons shared by any Clojure-flavored frontend (meme, implojure, future siblings): lexical conventions, atom resolution, CST reader, stages, syntax-quote expander, the `Clj*` AST records, value serialization, run/repl harnesses.
+- **`meme.tools.clj.*`** — Clojure-surface commons shared across any Clojure-flavored frontend: lexical conventions, atom resolution, CST reader, stages, syntax-quote expander, the `Clj*` AST records, value serialization, run/repl harnesses.
 - **`meme-lang.*`** — Meme language: grammar, parselets, lexlets shim, form-shape, printer, formatters; plus thin `run`/`repl` shims that inject meme's grammar and delegate to `meme.tools.clj.{run,repl}`.
-- **`meme.*`** — Shared runtime infrastructure (`meme.registry`, `meme.loader`) and app tier (`meme.cli`). Sibling `implojure-lang.*` mirrors the meme-lang shape for its own grammar.
+- **`meme.*`** — Shared runtime infrastructure (`meme.registry`, `meme.loader`) and app tier (`meme.cli`).
 
 The pipeline has composable stages (composed by `meme.tools.clj.stages`), each a `ctx → ctx` function with a `step-` prefix:
 1. **strip-shebang** — remove `#!` line from `:source` (for executable scripts).
