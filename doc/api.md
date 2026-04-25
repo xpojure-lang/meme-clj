@@ -31,7 +31,7 @@ Options:
 - `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time. When absent on JVM/Babashka, `::` keywords are deferred to eval time via `(read-string "::foo")`. Required on CLJS (errors without it, since `cljs.reader` cannot resolve `::` in the correct namespace).
 - `:resolve-symbol` — function that resolves symbols during syntax-quote expansion (e.g., `foo` → `my.ns/foo`). On JVM/Babashka, `run-string`/`run-file`/`start` inject a default that matches Clojure's `SyntaxQuoteReader` (inlined in `mclj-lang.run`). When calling `mclj->forms` directly, symbols in syntax-quote are left unqualified unless this option is provided. On CLJS, no default is available.
 
-Reader conditionals (`#?`, `#?@`) are always returned as `ReaderConditional` records. To materialize the platform branch, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:mclj/deprecated-opt`.
+Reader conditionals (`#?`, `#?@`) are always returned as `CljReaderConditional` records. To materialize the platform branch, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:mclj/deprecated-opt`.
 
 ```clojure
 (mclj->forms "+(1 2 3)")
