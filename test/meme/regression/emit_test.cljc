@@ -795,6 +795,49 @@
       (is (= "#{:a :b}" (fmt-flat/format-form form))))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: outer expand-syntax-quotes walker rebuilt sets without
+;; refreshing :meme/insertion-order. After walking, set contents and the
+;; stale order vector diverged, and the printer iterated the order vector,
+;; so a syntax-quote inside a set printed as the unexpanded `\`x` instead
+;; of the expanded (quote x). Sibling of 5f7d0fb (which fixed walk-rc).
+;; Fix: walk in :meme/insertion-order when present, then rebuild it from
+;; walked elements so it stays consistent with the new set's contents.
+;; ---------------------------------------------------------------------------
+
+(deftest sq-inside-set-expands-on-forms->clj
+  (testing "syntax-quote inside set expands like syntax-quote inside vector"
+    (is (= "(quote x)" (lang/forms->clj (lang/meme->forms "`x"))))
+    (is (= "[(quote x) 2]" (lang/forms->clj (lang/meme->forms "[`x 2]"))))
+    (is (= "#{(quote x) 2}" (lang/forms->clj (lang/meme->forms "#{`x 2}")))))
+  #?(:clj
+     (testing "CljRaw inside a set unwraps to its value, matching every other container"
+       ;; forms->clj is value semantics: raw notation is unwrapped in vectors,
+       ;; lists, and maps. Sets must follow the same rule — the printer used to
+       ;; appear to preserve 0xFF only because the stale order vector smuggled
+       ;; the CljRaw wrapper past the walker. CLJS rejects hex literals.
+       (is (= "#{255 2 3}" (lang/forms->clj (lang/meme->forms "#{0xFF 2 3}"))))
+       (is (= "[255 2 3]"  (lang/forms->clj (lang/meme->forms "[0xFF 2 3]")))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: inner expand-sq iterated syntax-quoted sets in hash order,
+;; producing (apply hash-set (concat ...)) with elements in non-source order.
+;; Runtime semantics fine (sets are unordered), but transpile output and
+;; reproducible builds want source order.
+;; Fix: walk source in :meme/insertion-order when present.
+;; ---------------------------------------------------------------------------
+
+(deftest sq-of-set-emits-source-order
+  (testing "`#{a b c d} expands with concat args in source order"
+    (let [out (lang/forms->clj (lang/meme->forms "`#{a b c d}"))]
+      (is (re-find #"\(quote a\).*\(quote b\).*\(quote c\).*\(quote d\)" out))))
+  (testing "`#{:foo :bar :baz} preserves source keyword order"
+    (let [out (lang/forms->clj (lang/meme->forms "`#{:foo :bar :baz}"))]
+      (is (re-find #":foo.*:bar.*:baz" out))))
+  (testing "~@ splice in source position survives the order pass"
+    (let [out (lang/forms->clj (lang/meme->forms "`#{:a ~@xs :b}"))]
+      (is (re-find #":a.*xs.*:b" out)))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: interior comments in maps, sets, call args, anon-fn bodies,
 ;; and reader conditionals must survive to the formatter output.
 ;; Bug: `read-children` in cst-reader stripped leading trivia on children,
