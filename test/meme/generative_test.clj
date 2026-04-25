@@ -16,7 +16,8 @@
             [clojure.test.check.properties :as prop]
             [meme-lang.api :as lang]
             [meme-lang.formatter.canon :as fmt-canon]
-            [meme-lang.formatter.flat :as fmt-flat]))
+            [meme-lang.formatter.flat :as fmt-flat]
+            [meme.tools.clj.expander :as expander]))
 
 ;; ===========================================================================
 ;; Leaf generators
@@ -903,3 +904,126 @@
     (try
       (some? (lang/meme->forms text))
       (catch Exception _ false))))
+
+;; ===========================================================================
+;; Property: set walker invariants for :meme/insertion-order
+;;
+;; Lesson from bugs #2/#3 (and the earlier 5f7d0fb walk-rc fix): any walker
+;; that rebuilds a set must keep :meme/insertion-order consistent with the
+;; new contents. Without this invariant, the printer's "use order vector
+;; when count matches" path renders stale entries (e.g. an unexpanded
+;; CljSyntaxQuote that the walker has actually replaced with (quote x)).
+;;
+;; Invariant: for any set produced by expand-forms, if :meme/insertion-order
+;; is present its count equals the set size AND every entry is `=` to a
+;; member of the set. Holds whether or not the source was syntax-quoted —
+;; the outer walker is what bug #2 exercised.
+;; ===========================================================================
+
+(def gen-meme-set-element-text
+  "A meme element suitable for use inside a set literal."
+  (gen/one-of
+   [(gen/fmap str gen-simple-symbol)
+    (gen/fmap str gen-keyword)
+    (gen/fmap str (gen/large-integer* {:min -1000 :max 1000}))
+    (gen/fmap (fn [s] (str "`" (name s))) gen-simple-symbol)]))
+
+(def gen-meme-set-text
+  "Source text of a set literal with 0–6 distinct elements; optionally
+   syntax-quoted to also exercise the inner expand-sq path."
+  (gen/let [n        (gen/choose 0 6)
+            elements (gen/vector-distinct gen-meme-set-element-text
+                                          {:num-elements n :max-tries 50})
+            quoted?  gen/boolean]
+    (str (when quoted? "`") "#{" (str/join " " elements) "}")))
+
+(defn- find-sets
+  "Walk a form tree, return every set encountered (depth-first)."
+  [form]
+  (cond
+    (set? form)  (cons form (mapcat find-sets form))
+    (map? form)  (mapcat (fn [[k v]] (concat (find-sets k) (find-sets v))) form)
+    (coll? form) (mapcat find-sets form)
+    :else        nil))
+
+(defspec prop-expanded-set-meta-consistent 300
+  (prop/for-all [src gen-meme-set-text]
+    (try
+      (let [walked (expander/expand-forms (lang/meme->forms src))
+            sets   (mapcat find-sets walked)]
+        (every? (fn [s]
+                  (let [order (:meme/insertion-order (meta s))]
+                    (or (nil? order)
+                        (and (= (count order) (count s))
+                             (every? #(contains? s %) order)))))
+                sets))
+      ;; Any parse error is uninteresting — only invariant violations fail.
+      (catch clojure.lang.ExceptionInfo _ true))))
+
+;; ===========================================================================
+;; Property: forms->clj eval-equivalent to direct meme eval
+;;
+;; The user contract for `bb meme to-clj` is that the emitted Clojure must
+;; evaluate to the same value as the original meme source. Bug #2 broke this
+;; for syntax-quotes inside sets — `forms->clj` of #{`x 2} returned the
+;; un-expanded #{`x 2}, which a Clojure reader sees differently. This
+;; property exercises the contract directly over a focused generator.
+;;
+;; Restricted to literals (and syntax-quotes of literals) so that
+;; symbol-namespace-resolution differences between meme and Clojure don't
+;; produce spurious failures: `42, `[1 2], `#{:a :b} all eval the same on
+;; both paths regardless of resolver behavior. The bug class is independent
+;; of which leaf type is in the container.
+;; ===========================================================================
+
+(def gen-meme-eval-leaf-text
+  "Self-evaluating leaf as meme source text — no symbols (ns-free)."
+  (gen/one-of
+   [(gen/fmap str (gen/large-integer* {:min -1000 :max 1000}))
+    (gen/fmap str gen-keyword)
+    (gen/fmap pr-str gen-string)
+    (gen/return "true") (gen/return "false") (gen/return "nil")]))
+
+(def gen-meme-eval-text
+  "Meme source whose value is determined by literals only, exercising
+   syntax-quotes both wrapping a container and embedded inside containers.
+   The container-with-sq-leaf shape is bug #2's exact fingerprint: the
+   syntax-quote must expand under forms->clj just like it does outside the
+   container. Each shape is evaluable on both the meme and the
+   forms->clj+read-string paths and yields the same value."
+  (gen/let [n     (gen/choose 1 4)
+            elts  (gen/vector-distinct gen-meme-eval-leaf-text
+                                       {:num-elements n :max-tries 50})
+            sym   gen-simple-symbol
+            shape (gen/elements [:bare :vector :set :map
+                                 :sq-bare :sq-vector :sq-set
+                                 :vector-with-sq :set-with-sq])]
+    (case shape
+      :bare      (first elts)
+      :vector    (str "[" (str/join " " elts) "]")
+      :set       (str "#{" (str/join " " elts) "}")
+      :map       (str "{"
+                      (str/join " " (interleave (map #(str ":k" %) (range n))
+                                                elts))
+                      "}")
+      :sq-bare   (str "`" (first elts))
+      :sq-vector (str "`[" (str/join " " elts) "]")
+      :sq-set    (str "`#{" (str/join " " elts) "}")
+      ;; Bug #2 shape: SQ-of-symbol embedded inside an unquoted container.
+      ;; meme-eval gives a (quote sym) inside the container; the forms->clj
+      ;; output must also have (quote sym) — not a stale `sym — so that
+      ;; Clojure reads it as a plain quote (no syntax-quote ns resolution).
+      :vector-with-sq (str "[`" sym " " (str/join " " elts) "]")
+      :set-with-sq    (str "#{`" sym " " (str/join " " elts) "}"))))
+
+(defn- eval-via-meme [src]
+  (eval (first (expander/expand-forms (lang/meme->forms src)))))
+
+(defn- eval-via-clj [src]
+  (eval (read-string (lang/forms->clj (lang/meme->forms src)))))
+
+(defspec prop-forms->clj-eval-equivalent 200
+  (prop/for-all [src gen-meme-eval-text]
+    (try
+      (= (eval-via-meme src) (eval-via-clj src))
+      (catch clojure.lang.ExceptionInfo _ true))))

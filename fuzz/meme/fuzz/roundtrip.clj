@@ -2,16 +2,20 @@
   "Jazzer fuzz targets for meme roundtrip testing.
 
    Targets:
-   - RoundtripTarget: parse → print → re-parse equivalence + no raw JVM exceptions
-   - FormatTarget: parse → format → re-parse equivalence
-   - IdempotentTarget: format(format(x)) == format(x)
+   - RoundtripTarget:   parse → print → re-parse equivalence + no raw JVM exceptions
+   - FormatTarget:      parse → format → re-parse equivalence
+   - IdempotentTarget:  format(format(x)) == format(x)
+   - FormsToCljTarget:  parse → forms->clj → tools.reader → re-parse equivalence
+                        (catches expand-forms / forms->clj divergences, e.g. bug #2)
 
    Build:  clojure -T:build fuzzer-jar
    Run:    bb fuzz roundtrip          (default)
            bb fuzz format
-           bb fuzz idempotent"
+           bb fuzz idempotent
+           bb fuzz forms-to-clj"
   (:require [meme-lang.api :as api]
-            [meme-lang.forms :as forms])
+            [meme.tools.clj.expander :as expander]
+            [meme.tools.clj.forms :as forms])
   (:import [com.code_intelligence.jazzer.api FuzzedDataProvider]))
 
 ;; ---------------------------------------------------------------------------
@@ -19,12 +23,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- strip-internal-meta
-  "Remove meme-internal metadata keys so structural equality works."
+  "Remove meme-internal metadata keys so structural equality works.
+   Delegates to forms/strip-internal-meta so the key set stays in sync
+   as the pipeline evolves."
   [form]
   (if (instance? clojure.lang.IObj form)
-    (let [m (meta form)
-          cleaned (dissoc m :line :column :file :ws :meme/sugar :meme/ns
-                          :meme/meta-chain :meme/order)]
+    (let [cleaned (forms/strip-internal-meta (meta form))]
       (if (empty? cleaned)
         (with-meta form nil)
         (with-meta form cleaned)))
@@ -32,7 +36,7 @@
 
 (defn- deep-strip [form]
   (cond
-    ;; Unwrap MemeRaw to bare value — notation changes (e.g., bare control
+    ;; Unwrap CljRaw to bare value — notation changes (e.g., bare control
     ;; char → \uHHHH) are acceptable as long as the semantic value is preserved.
     (forms/raw? form) (deep-strip (:value form))
     (forms/deferred-auto-keyword? form) (:raw form)
@@ -147,6 +151,57 @@
                             "  input: " (pr-str s) "\n"
                             "  fmt1:  " (pr-str fmt1) "\n"
                             "  fmt2:  " (pr-str fmt2))))))))
+      (catch clojure.lang.ExceptionInfo _ nil)
+      (catch AssertionError e (throw e))
+      (catch StackOverflowError _ nil)
+      (catch Exception e
+        (throw (AssertionError.
+                 (str "Unexpected exception on input " (pr-str s) "\n"
+                      "  type: " (.getName (class e)) "\n"
+                      "  msg:  " (.getMessage e))))))))
+
+;; ---------------------------------------------------------------------------
+;; Target 4: forms->clj differential — parse meme → forms->clj → re-read as
+;; Clojure → re-parse equivalence. Mirrors RoundtripTarget but on the
+;; meme→clj boundary that bug #2 (syntax-quote inside set staying un-expanded)
+;; lived in. Coverage-guided exploration of the seam between expand-forms
+;; output and what Clojure's reader sees.
+;; ---------------------------------------------------------------------------
+
+(gen-class
+  :name meme.fuzz.roundtrip.FormsToCljTarget
+  :prefix "f2c-"
+  :methods [^:static [fuzzerTestOneInput [com.code_intelligence.jazzer.api.FuzzedDataProvider] void]])
+
+(defn- read-clj-all
+  "Read every top-level form from a Clojure source string."
+  [src]
+  (let [rdr (java.io.PushbackReader. (java.io.StringReader. src))
+        eof (Object.)]
+    (binding [*read-eval* false]
+      (loop [acc []]
+        (let [form (read {:read-cond :preserve :eof eof} rdr)]
+          (if (identical? form eof) acc (recur (conj acc form))))))))
+
+(defn f2c-fuzzerTestOneInput
+  [^FuzzedDataProvider data]
+  (let [s (.consumeRemainingAsString data)]
+    (try
+      (let [forms (api/meme->forms s)]
+        (when (seq forms)
+          (let [clj-text (api/forms->clj forms)
+                ;; LHS: what forms->clj actually emitted (forms after expand).
+                ;; RHS: what Clojure's reader makes of that text. Should match.
+                expanded (vec (expander/expand-forms forms))
+                reparsed (vec (read-clj-all clj-text))]
+            (when-not (forms-equal? expanded reparsed)
+              (throw (AssertionError.
+                       (str "forms->clj differential mismatch!\n"
+                            "  input:    " (pr-str s) "\n"
+                            "  forms:    " (pr-str forms) "\n"
+                            "  clj-text: " (pr-str clj-text) "\n"
+                            "  expanded: " (pr-str expanded) "\n"
+                            "  reparsed: " (pr-str reparsed))))))))
       (catch clojure.lang.ExceptionInfo _ nil)
       (catch AssertionError e (throw e))
       (catch StackOverflowError _ nil)
