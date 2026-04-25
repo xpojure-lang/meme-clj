@@ -162,6 +162,50 @@
   (apply dissoc m internal-meta-keys))
 
 ;; ---------------------------------------------------------------------------
+;; Set-with-source-order helpers
+;;
+;; Sets carry source order in :meme/insertion-order metadata so the printer
+;; can reproduce the user's written order. Walkers that touch a set must
+;; iterate in source order AND refresh the metadata from the walked elements,
+;; otherwise the order vector and the set's contents diverge silently — the
+;; printer's count-match guard then either renders stale entries (e.g. an
+;; unexpanded form that the walker actually replaced) or falls back to hash
+;; order. Three independent walkers had this exact bug; the helpers below
+;; consolidate the pattern so future walkers can't reinvent the foot-gun.
+;; ---------------------------------------------------------------------------
+
+(defn meme-set-source-seq
+  "Return the elements of set `s` in source order: the :meme/insertion-order
+   vector when present and consistent with the set, otherwise the set's own
+   iteration order. Use this anywhere you need to walk a set that came from
+   the meme reader and care about the user's written ordering."
+  [s]
+  (let [order (:meme/insertion-order (meta s))]
+    (if (and order (= (count order) (count s))) order s)))
+
+(defn with-refreshed-set-order
+  "Attach a fresh :meme/insertion-order to set `s` derived from the
+   `walked-elements` collection (the elements just inserted). Use this when
+   the set you're returning has different contents from the one you started
+   with — e.g. expand-syntax-quotes replacing a CljSyntaxQuote with its
+   expanded form. Distinct-dedups the order vector to match set semantics."
+  [s walked-elements]
+  (vary-meta s assoc :meme/insertion-order (vec (distinct walked-elements))))
+
+(defn walk-meme-set
+  "Walk a meme set element-by-element via `f` (one-in, one-out), preserving
+   source order on input and refreshing :meme/insertion-order on output so
+   it stays consistent with the new contents. The right helper for a walker
+   that transforms each element to exactly one element. For multi-out walkers
+   (e.g. #?@ splice), use meme-set-source-seq + with-refreshed-set-order
+   directly with mapcat."
+  [s f]
+  (let [walked (mapv f (meme-set-source-seq s))]
+    (-> (set walked)
+        (with-meta (meta s))
+        (with-refreshed-set-order walked))))
+
+;; ---------------------------------------------------------------------------
 ;; Shared % parameter utilities
 ;;
 ;; Both the reader (#() → fn) and printer (fn → #()) need to identify

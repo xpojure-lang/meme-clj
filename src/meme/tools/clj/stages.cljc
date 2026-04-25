@@ -223,15 +223,13 @@
       [(with-meta (apply array-map walked) (meta form))])
 
     (set? form)
-    ;; Walk in :meme/insertion-order when present so a #?@ splice preserves
-    ;; original source order; rebuild the order metadata from walked elements
-    ;; so the printer doesn't fall back to hash order.
-    (let [order (:meme/insertion-order (meta form))
-          source (if (and order (= (count order) (count form))) order form)
-          walked (vec (mapcat #(walk-rc % platform) source))]
+    ;; Multi-out walker (#?@ splice may produce 0-N elements per source
+    ;; element), so use the lower-level helpers rather than walk-meme-set.
+    (let [walked (vec (mapcat #(walk-rc % platform)
+                              (forms/meme-set-source-seq form)))]
       [(-> (set walked)
            (with-meta (meta form))
-           (vary-meta assoc :meme/insertion-order (vec (distinct walked))))])
+           (forms/with-refreshed-set-order walked))])
 
     #?@(:clj [(tagged-literal? form)
               [(tagged-literal (.-tag ^clojure.lang.TaggedLiteral form)
