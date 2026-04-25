@@ -1,4 +1,4 @@
-(ns meme-lang.form-shape
+(ns mclj-lang.form-shape
   "Form-shape decomposition: semantic structure of Clojure special forms.
 
    Decomposes a call's args into a vector of [slot-name value] pairs that
@@ -251,8 +251,8 @@
    rejects the shape.
 
    The registry is passed in explicitly so that each lang supplies its
-   own form-shape vocabulary (see `meme-lang.form-shape/registry` for
-   the meme-lang built-in).  When `registry` is nil — e.g. a bare call
+   own form-shape vocabulary (see `mclj-lang.form-shape/registry` for
+   the mclj-lang built-in).  When `registry` is nil — e.g. a bare call
    to `printer/to-doc` without a lang in play — every head is treated
    as having no shape.
 

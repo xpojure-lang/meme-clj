@@ -1,4 +1,4 @@
-(ns meme-lang.grammar
+(ns mclj-lang.grammar
   "Meme language grammar spec.
 
    Maps characters to scanlets — the complete syntactic specification
@@ -7,8 +7,8 @@
    provides generic factories."
   (:require [meme.tools.parser :as pratt]
             [meme.tools.lexer :as lexer]
-            [meme-lang.lexlets :as lex]
-            [meme-lang.parselets :as mp]
+            [mclj-lang.lexlets :as lex]
+            [mclj-lang.parselets :as mp]
             [meme.tools.clj.forms :as forms]))
 
 (def grammar

@@ -1,7 +1,7 @@
-(ns meme-lang.test-util
-  "Shared .cljc test utilities for meme-lang tests."
+(ns mclj-lang.test-util
+  "Shared .cljc test utilities for mclj-lang tests."
   (:require [meme.tools.parser :as pratt]
-            [meme-lang.grammar :as grammar]))
+            [mclj-lang.grammar :as grammar]))
 
 ;; ---------------------------------------------------------------------------
 ;; CST → flat token extraction (for scanner-level tests)

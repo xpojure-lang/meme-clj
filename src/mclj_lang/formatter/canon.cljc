@@ -1,13 +1,13 @@
-(ns meme-lang.formatter.canon
+(ns mclj-lang.formatter.canon
   "Canonical formatter: width-aware meme output.
    Composes printer (form → Doc) with render (layout @ target width).
    Used by `meme format` CLI command.
 
    Owns the canonical style — layout policy for how calls are structured.
-   Uses `meme-lang.form-shape/registry` as the default form-shape vocabulary;
+   Uses `mclj-lang.form-shape/registry` as the default form-shape vocabulary;
    callers can override via the `:form-shape` opts key."
-  (:require [meme-lang.printer :as printer]
-            [meme-lang.form-shape :as form-shape]
+  (:require [mclj-lang.printer :as printer]
+            [mclj-lang.form-shape :as form-shape]
             [meme.tools.render :as render]))
 
 (def ^:private default-width 80)
@@ -15,7 +15,7 @@
 (def style
   "Canonical formatting style — opinions over semantic slot names.
 
-   The vocabulary of slot names is contracted with `meme-lang.form-shape`.
+   The vocabulary of slot names is contracted with `mclj-lang.form-shape`.
    Style talks about categories (is this slot a signature part? a body
    part?), not about particular forms (`defn`, `let`, ...) — so any form
    that decomposes to the same slots inherits this layout for free.
@@ -39,7 +39,7 @@
 
    opts: {:width 80 :form-shape reg :style s} or bare integer width.
      :width       target line width (default 80)
-     :form-shape  registry (default meme-lang.form-shape/registry).  Pass
+     :form-shape  registry (default mclj-lang.form-shape/registry).  Pass
                   a custom registry to teach canon about user macros or
                   pass (with-structural-fallback ...) to infer shapes for
                   unregistered heads.  Pass nil to disable decomposition.

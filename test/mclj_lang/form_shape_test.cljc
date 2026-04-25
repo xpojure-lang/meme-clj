@@ -1,6 +1,6 @@
-(ns meme-lang.form-shape-test
+(ns mclj-lang.form-shape-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.form-shape :as fs]))
+            [mclj-lang.form-shape :as fs]))
 
 ;; ---------------------------------------------------------------------------
 ;; Unknown heads — plain calls

@@ -5,13 +5,13 @@
    missing platform coverage. See commit history for details."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.loader :as loader]
-            ;; Required so meme-lang registers itself with the registry.
+            ;; Required so mclj-lang registers itself with the registry.
             ;; Without this, the loader installs but finds no `.meme` extension,
             ;; so require/load-file of `.meme` files falls through to Clojure's
             ;; original load and fails. This made the tests implicitly depend
             ;; on test-ordering (passing only if some earlier test happened
-            ;; to have loaded meme-lang.api first).
-            [meme-lang.api])
+            ;; to have loaded mclj-lang.api first).
+            [mclj-lang.api])
   (:import (java.util.concurrent CountDownLatch TimeUnit)))
 
 (use-fixtures :each

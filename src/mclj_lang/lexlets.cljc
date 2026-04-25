@@ -1,9 +1,9 @@
-(ns meme-lang.lexlets
+(ns mclj-lang.lexlets
   "Meme-lang's lexical layer. Meme inherits its lexical conventions
    wholesale from Clojure — M-expressions change syntax at the parser
    level (the `f(x)` call rule), not at the lexer level — so every
    entry here forwards to the shared `meme.tools.clj.lex` commons.
-   This namespace exists to give meme-lang a home for any future
+   This namespace exists to give mclj-lang a home for any future
    meme-specific lexical rule."
   (:require [meme.tools.clj.lex :as clj-lex]))
 

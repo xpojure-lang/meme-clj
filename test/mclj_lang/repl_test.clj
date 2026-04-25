@@ -1,15 +1,15 @@
-(ns meme-lang.repl-test
-  "Tests for meme-lang.repl input-state logic and read-input multi-line accumulation.
+(ns mclj-lang.repl-test
+  "Tests for mclj-lang.repl input-state logic and read-input multi-line accumulation.
    input-state determines when the REPL has received complete, incomplete, or invalid input."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
-            [meme-lang.repl]
-            [meme-lang.grammar :as grammar]
+            [mclj-lang.api :as lang]
+            [mclj-lang.repl]
+            [mclj-lang.grammar :as grammar]
             [meme.tools.clj.stages :as stages]
             [meme.tools.repl]))
 
 ;; Access private fns via var.
-(def ^:private input-state meme-lang.repl/input-state)
+(def ^:private input-state mclj-lang.repl/input-state)
 (def ^:private read-input* @#'meme.tools.repl/read-input)
 (defn- stages-with-meme-grammar
   "Wrapper that passes meme's grammar to the commons stages pipeline."

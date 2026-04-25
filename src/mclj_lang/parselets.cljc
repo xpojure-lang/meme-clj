@@ -1,11 +1,11 @@
-(ns meme-lang.parselets
+(ns mclj-lang.parselets
   "Meme-specific parselets for the Pratt parser.
 
    Contains the compound parselets that handle meme's unique constructs:
    call adjacency detection, dispatch (#) sub-routing, tilde (~/@),
    and the M-expression call rule."
   (:require [meme.tools.parser :as pratt]
-            [meme-lang.lexlets :as lex]))
+            [mclj-lang.lexlets :as lex]))
 
 ;; ---------------------------------------------------------------------------
 ;; Predicates

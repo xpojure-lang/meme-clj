@@ -14,7 +14,7 @@
      :extensions  [\".ext\" \".e\"]  — file extensions (string or vector)
      :form-shape  registry           — lang-owned decomposer map consumed by
                                        the printer/formatter (see
-                                       `meme-lang.form-shape`)
+                                       `mclj-lang.form-shape`)
    Both extension forms are accepted and normalized to :extensions [...].
 
    Every key is optional. A lang supports exactly the commands it has keys for.

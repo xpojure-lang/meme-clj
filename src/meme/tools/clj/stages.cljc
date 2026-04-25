@@ -113,7 +113,7 @@
                   "always preserves reader conditionals as CljReaderConditional "
                   "records. To evaluate them for a platform, compose "
                   "meme.tools.clj.stages/step-evaluate-reader-conditionals after "
-                  "step-read, or use meme-lang.run/run-string / run-file.")
+                  "step-read, or use mclj-lang.run/run-string / run-file.")
              {:type    :meme/deprecated-opt
               :opt     :read-cond
               :value   (get-in ctx [:opts :read-cond])

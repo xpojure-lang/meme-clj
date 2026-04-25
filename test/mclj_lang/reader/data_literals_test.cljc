@@ -1,7 +1,7 @@
-(ns meme-lang.reader.data-literals-test
+(ns mclj-lang.reader.data-literals-test
   "Parser tests for data literal passthrough (vectors, maps, sets, keywords, numbers)."
   (:require [clojure.test :refer [deftest is]]
-            [meme-lang.api :as lang]
+            [mclj-lang.api :as lang]
             [meme.tools.clj.forms :as forms]))
 
 (deftest parse-vector-literal

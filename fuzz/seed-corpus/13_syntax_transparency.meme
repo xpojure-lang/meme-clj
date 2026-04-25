@@ -1,7 +1,7 @@
 ; Syntax transparency — meme is a syntactic lens, not a normalizer.
 ; The read→print pipeline must preserve the user's syntax choices.
 
-require('[meme-lang.api :as m])
+require('[mclj-lang.api :as m])
 
 ;; Helper: roundtrip meme source through read→print
 defn(rt [src] m/forms->meme(m/meme->forms(src)))

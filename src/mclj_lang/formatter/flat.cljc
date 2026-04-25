@@ -1,4 +1,4 @@
-(ns meme-lang.formatter.flat
+(ns mclj-lang.formatter.flat
   "Flat formatter: single-line meme output — true pass-through.
    Composes printer (form → Doc) with render (layout @ infinite width).
    No style opinions: no definition-form spacing, no head-line splitting.
@@ -6,8 +6,8 @@
    Form-shape decomposition still runs so semantic slots like :bindings
    and :clause render correctly (binding vectors, case/cond pairs); flat
    layout at infinite width produces the same result regardless."
-  (:require [meme-lang.printer :as printer]
-            [meme-lang.form-shape :as form-shape]
+  (:require [mclj-lang.printer :as printer]
+            [mclj-lang.form-shape :as form-shape]
             [meme.tools.render :as render]))
 
 (defn format-form

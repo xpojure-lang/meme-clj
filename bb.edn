@@ -41,7 +41,7 @@
                        (apply shell "java" "-cp" "target/fuzzer.jar"
                               "com.code_intelligence.jazzer.Jazzer"
                               (str "--target_class=" class)
-                              "--instrumentation_includes=meme_lang.**:meme.tools.**:meme.fuzz.**"
+                              "--instrumentation_includes=mclj_lang.**:meme.tools.**:meme.fuzz.**"
                               "--disabled_hooks=com.code_intelligence.jazzer.sanitizers.RegexInjection"
                               (str "-dict=fuzz/meme.dict")
                               (str "-fork=" (max 1 (- (.availableProcessors (Runtime/getRuntime)) 2)))

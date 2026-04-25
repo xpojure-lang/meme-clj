@@ -4,7 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [meme.tools.clj.errors]
-            [meme-lang.api :as lang]))
+            [mclj-lang.api :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; B5/B6: source-context nil/empty guards.

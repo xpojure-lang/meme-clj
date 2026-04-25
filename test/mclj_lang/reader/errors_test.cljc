@@ -1,8 +1,8 @@
-(ns meme-lang.reader.errors-test
+(ns mclj-lang.reader.errors-test
   "Parser tests for error handling: error cases, rejected forms,
    error messages with source locations."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]))
+            [mclj-lang.api :as lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Parse errors

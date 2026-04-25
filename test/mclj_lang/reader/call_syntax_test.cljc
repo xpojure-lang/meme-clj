@@ -1,4 +1,4 @@
-(ns meme-lang.reader.call-syntax-test
+(ns mclj-lang.reader.call-syntax-test
   "Systematic tests for M-expression call syntax: head outside parens.
    Organized as a matrix across three dimensions:
      1. Head type: symbol, keyword, vector, set, map
@@ -6,7 +6,7 @@
      3. Arity: 0, 1, 2, 3+
    Plus: bare paren rejection, quote exception, nesting, and real-world patterns."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]))
+            [mclj-lang.api :as lang]))
 
 ;; ===========================================================================
 ;; Dimension 1 × 3: Head type × Arity

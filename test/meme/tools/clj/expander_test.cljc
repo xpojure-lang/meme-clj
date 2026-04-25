@@ -2,7 +2,7 @@
   "Unit tests for meme.tools.clj.expander: syntax-quote expansion and
    CljRaw unwrapping."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
+            [mclj-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.expander :as expander]))
 
@@ -307,8 +307,8 @@
      (testing "nested syntax-quote with resolver matches Clojure behavior"
        ;; RT2-H2: ``x with resolver must produce same eval result as Clojure's ``x.
        ;; Without resolver, symbols are unqualified — this is a documented deviation.
-       (require 'meme-lang.run)
-       (let [resolver (resolve 'meme-lang.run/default-resolve-symbol)
+       (require 'mclj-lang.run)
+       (let [resolver (resolve 'mclj-lang.run/default-resolve-symbol)
              expanded (first (expander/expand-forms
                                (lang/meme->forms "``x")
                                {:resolve-symbol resolver}))

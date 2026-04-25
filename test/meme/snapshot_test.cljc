@@ -3,11 +3,11 @@
    for a broad set of inputs. Regression net for tokenizer and reader
    output — if any of these break, something changed observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
+            [mclj-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.stages :as stages]
-            [meme-lang.grammar :as grammar]
-            [meme-lang.test-util :as tokenizer]))
+            [mclj-lang.grammar :as grammar]
+            [mclj-lang.test-util :as tokenizer]))
 
 (defn- eval-rc-forms
   "Read src and run step-evaluate-reader-conditionals; return :forms."

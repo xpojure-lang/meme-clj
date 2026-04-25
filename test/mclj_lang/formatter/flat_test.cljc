@@ -1,6 +1,6 @@
-(ns meme-lang.formatter.flat-test
+(ns mclj-lang.formatter.flat-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.formatter.flat :as fmt-flat]))
+            [mclj-lang.formatter.flat :as fmt-flat]))
 
 ;; ---------------------------------------------------------------------------
 ;; Call printing — everything is f(args...)

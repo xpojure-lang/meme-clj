@@ -1,7 +1,7 @@
 (ns meme.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
-            [meme-lang.api :as lang]
-            [meme-lang.formatter.flat :as fmt-flat]
+            [mclj-lang.api :as lang]
+            [mclj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]))
 
 (defn- roundtrip-forms

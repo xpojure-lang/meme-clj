@@ -1,9 +1,9 @@
-(ns meme-lang.run
+(ns mclj-lang.run
   "Meme's eval pipeline entry point. Injects meme's grammar and delegates
-   to `meme.tools.clj.run`. Exists so meme-lang has a natural home for
+   to `meme.tools.clj.run`. Exists so mclj-lang has a natural home for
    any meme-specific eval-time concern that emerges later."
   (:require [meme.tools.clj.run :as clj-run]
-            [meme-lang.grammar :as grammar]))
+            [mclj-lang.grammar :as grammar]))
 
 (def default-resolve-symbol clj-run/default-resolve-symbol)
 

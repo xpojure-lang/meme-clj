@@ -3,14 +3,14 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
 
-            [meme-lang.api :as lang]
+            [mclj-lang.api :as lang]
             [meme.tools.clj.cst-reader :as cst-reader]
-            [meme-lang.formatter.flat :as fmt-flat]
+            [mclj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.expander :as expander]
             [meme.tools.clj.stages :as stages]
-            [meme-lang.grammar :as grammar]
-            [meme-lang.test-util :as tu]))
+            [mclj-lang.grammar :as grammar]
+            [mclj-lang.test-util :as tu]))
 
 
 ;; ---------------------------------------------------------------------------
