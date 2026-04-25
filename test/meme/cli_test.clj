@@ -101,6 +101,66 @@
                (catch Exception _ nil))))
       (is (<= (count @reads) 1)))))
 
+;; ---------------------------------------------------------------------------
+;; Scar tissue: process-files and transpile-meme re-slurped the file in their
+;; error handlers, even though src was already loaded inside the try.
+;; The redundant read is wasteful and gives an inconsistent error context if
+;; the file changes between reads.
+;; Fix: hoist src above the inner try; reuse it in catch.
+;; ---------------------------------------------------------------------------
+
+(deftest format-reads-source-once
+  (testing "successful format reads source exactly once"
+    (let [f       (write-temp-meme! "println(\"ok\")")
+          counter (atom 0)
+          real-slurp slurp
+          out-buf (java.io.StringWriter.)]
+      (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
+                    cli/cli-exit! (fn [_] nil)]
+        (binding [*out* out-buf]
+          (cli/format-files {:file (.getAbsolutePath f) :stdout true})))
+      (is (= 1 @counter))))
+  (testing "format error path reads source exactly once"
+    (let [f       (write-temp-meme! "(broken")
+          counter (atom 0)
+          real-slurp slurp
+          err-buf (java.io.StringWriter.)]
+      (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
+                    cli/cli-exit! (fn [_] nil)]
+        (binding [*err* err-buf]
+          (cli/format-files {:file (.getAbsolutePath f) :stdout true})))
+      (is (= 1 @counter)))))
+
+(deftest transpile-reads-source-once
+  (testing "successful transpile reads source exactly once"
+    (let [f       (write-temp-meme! "println(\"ok\")")
+          out-dir (.getAbsolutePath
+                    (doto (File/createTempFile "meme-cli-transpile" "")
+                      (.delete)
+                      (.mkdirs)))
+          counter (atom 0)
+          real-slurp slurp
+          out-buf (java.io.StringWriter.)]
+      (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
+                    cli/cli-exit! (fn [_] nil)]
+        (binding [*out* out-buf]
+          (cli/transpile-meme {:file (.getAbsolutePath f) :out out-dir})))
+      (is (= 1 @counter))))
+  (testing "transpile error path reads source exactly once"
+    (let [f       (write-temp-meme! "(broken")
+          out-dir (.getAbsolutePath
+                    (doto (File/createTempFile "meme-cli-transpile-err" "")
+                      (.delete)
+                      (.mkdirs)))
+          counter (atom 0)
+          real-slurp slurp
+          err-buf (java.io.StringWriter.)]
+      (with-redefs [slurp (fn [arg] (swap! counter inc) (real-slurp arg))
+                    cli/cli-exit! (fn [_] nil)]
+        (binding [*err* err-buf]
+          (cli/transpile-meme {:file (.getAbsolutePath f) :out out-dir})))
+      (is (= 1 @counter)))))
+
 (deftest lang-opts-test
   (let [lang-opts #'cli/lang-opts]
     (testing "removes CLI-specific keys"

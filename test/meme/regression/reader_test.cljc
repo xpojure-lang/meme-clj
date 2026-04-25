@@ -1050,3 +1050,28 @@
      (testing "#{0xFF 0x10} — different hex values parse fine"
        (let [[s] (lang/meme->forms "#{0xFF 0x10}")]
          (is (= 2 (count s)))))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: namespaced maps silently dropped duplicate keys.
+;; Bug: #:ns{:a 1 :a 2} returned #:ns{:a 2} via array-map last-write-wins,
+;; while Clojure throws "Duplicate key: :ns/a". The :map branch had a
+;; first-duplicate guard; the :namespaced-map branch did not.
+;; Fix: qualify keys, then run first-duplicate before building the map.
+;; ---------------------------------------------------------------------------
+
+(deftest namespaced-map-duplicate-keys
+  (testing "#:ns{:a 1 :a 2} — duplicate bare keys after qualification"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate key: :ns/a"
+                          (lang/meme->forms "#:ns{:a 1 :a 2}"))))
+  (testing "#:ns{:a/b 1 :a/b 2} — duplicates already qualified, must still error"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate key: :a/b"
+                          (lang/meme->forms "#:ns{:a/b 1 :a/b 2}"))))
+  (testing "#::{:a 1 :a 2} — bare auto-resolve, qual-ns blank, dups on bare keyword"
+    (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
+                          #"Duplicate key: :a"
+                          (lang/meme->forms "#::{:a 1 :a 2}"))))
+  (testing "#:ns{:a 1 :b 2} — distinct keys still parse cleanly"
+    (let [[m] (lang/meme->forms "#:ns{:a 1 :b 2}")]
+      (is (= {:ns/a 1 :ns/b 2} m)))))

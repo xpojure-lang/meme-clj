@@ -66,9 +66,10 @@
       (cli-exit! 1))
     (let [process-one
           (fn [path]
-            (try
-              (let [src (slurp path)]
+            (let [src (try (slurp path) (catch Exception _ nil))]
+              (try
                 (cond
+                  (nil? src) (throw (ex-info (str "Cannot read file: " path) {}))
                   stdout (do (println (transform src)) :ok)
                   check  (let [formatted (str (transform src) "\n")]
                            (if (= src formatted) :ok
@@ -77,11 +78,11 @@
                                result (transform src)]
                            (spit out (str result "\n"))
                            (println (if (= path out) (str verb " " path) (str path " → " out)))
-                           :ok)))
-              (catch Exception e
-                (binding [*out* *err*]
-                  (println (errors/format-error e (try (slurp path) (catch Exception _ nil)))))
-                :fail)))
+                           :ok))
+                (catch Exception e
+                  (binding [*out* *err*]
+                    (println (errors/format-error e src)))
+                  :fail))))
           results (doall (map process-one expanded))
           total   (count results)
           failed  (count (filter #{:fail} results))]
@@ -227,25 +228,27 @@
       (let [sep java.io.File/separator
             process-one
             (fn [path]
-              (try
-                (let [abs (.getCanonicalPath (io/file path))
-                      ;; Find the matching root to strip. Use the platform
-                      ;; File separator — getCanonicalPath returns `\` on
-                      ;; Windows and `/` elsewhere; a hardcoded `/` would
-                      ;; never match on Windows and collapse every file to
-                      ;; its basename in the flat `out-dir` fallback.
-                      root (some #(when (str/starts-with? abs (str % sep)) %) roots)
-                      rel (if root (subs abs (inc (count root))) (.getName (io/file path)))
-                      out-path (str out-dir sep (swap-ext rel "meme" "clj"))
-                      out-file (io/file out-path)]
-                  (.mkdirs (.getParentFile out-file))
-                  (spit out-file (str (to-clj-fn (slurp path)) "\n"))
-                  (println (str path " → " out-path))
-                  :ok)
-                (catch Exception e
-                  (binding [*out* *err*]
-                    (println (errors/format-error e (try (slurp path) (catch Exception _ nil)))))
-                  :fail)))
+              (let [src (try (slurp path) (catch Exception _ nil))]
+                (try
+                  (when (nil? src) (throw (ex-info (str "Cannot read file: " path) {})))
+                  (let [abs (.getCanonicalPath (io/file path))
+                        ;; Find the matching root to strip. Use the platform
+                        ;; File separator — getCanonicalPath returns `\` on
+                        ;; Windows and `/` elsewhere; a hardcoded `/` would
+                        ;; never match on Windows and collapse every file to
+                        ;; its basename in the flat `out-dir` fallback.
+                        root (some #(when (str/starts-with? abs (str % sep)) %) roots)
+                        rel (if root (subs abs (inc (count root))) (.getName (io/file path)))
+                        out-path (str out-dir sep (swap-ext rel "meme" "clj"))
+                        out-file (io/file out-path)]
+                    (.mkdirs (.getParentFile out-file))
+                    (spit out-file (str (to-clj-fn src) "\n"))
+                    (println (str path " → " out-path))
+                    :ok)
+                  (catch Exception e
+                    (binding [*out* *err*]
+                      (println (errors/format-error e src)))
+                    :fail))))
             results (doall (map process-one expanded))
             total (count results)
             failed (count (filter #{:fail} results))]

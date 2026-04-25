@@ -83,16 +83,27 @@
 (defn- lang-load
   "Replacement for clojure.core/load that checks registered lang extensions.
    Wraps run-fn in a binding to save/restore *ns*, matching the behavior of
-   Clojure's Compiler.load() which pushes thread bindings for *ns*."
+   Clojure's Compiler.load() which pushes thread bindings for *ns*.
+
+   Batches consecutive non-lang paths into a single original-load call to
+   preserve Clojure's batched *loaded-libs* semantics — calling original-load
+   per-path defeats its duplicate-load tracking across the batch."
   [& paths]
   (with-load-tracking
     (fn []
-      (doseq [path paths]
-        (if-let [[resource run-fn] (find-lang-resource path)]
-          (binding [*ns* *ns*]
-            (run-fn (slurp resource) {}))
-          ;; No lang file found — delegate to original Clojure load
-          (apply @original-load [path]))))))
+      (let [flush! (fn [pending]
+                     (when (seq pending) (apply @original-load pending)))]
+        (loop [remaining paths
+               pending  []]
+          (if (empty? remaining)
+            (flush! pending)
+            (let [path (first remaining)]
+              (if-let [[resource run-fn] (find-lang-resource path)]
+                (do (flush! pending)
+                    (binding [*ns* *ns*]
+                      (run-fn (slurp resource) {}))
+                    (recur (rest remaining) []))
+                (recur (rest remaining) (conj pending path))))))))))
 
 (defn- lang-load-file
   "Replacement for clojure.core/load-file that handles .meme files.
