@@ -70,7 +70,7 @@
   (swap! registry assoc lang-name
          (vary-meta (normalize-extensions lang-map) assoc :builtin? true)))
 
-(def default-lang "The default lang used when none is specified." :meme)
+(def default-lang "The default lang used when none is specified." :mclj)
 
 ;; ---------------------------------------------------------------------------
 ;; EDN value resolution (for user-defined langs)

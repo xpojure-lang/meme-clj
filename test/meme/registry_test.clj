@@ -3,13 +3,13 @@
    lang registration."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.registry :as registry]
-            ;; Explicit require triggers :meme self-registration.
+            ;; Explicit require triggers :mclj self-registration.
             [mclj-lang.api]
             [mclj-lang.run :as run]))
 
 (def all-langs
   (into {} (map (fn [n] [n (registry/resolve-lang n)])
-                [:meme])))
+                [:mclj])))
 
 (defn- tmp-file
   "Create a uniquely-named temp file with the given extension. Auto-deleted on JVM exit."
@@ -93,7 +93,7 @@
 
 (deftest check-support-passes-for-repl
   (testing "meme supports :repl"
-    (is (registry/supports? (:meme all-langs) :repl))))
+    (is (registry/supports? (:mclj all-langs) :repl))))
 
 ;; ============================================================
 ;; All langs agree on basic to-clj output
@@ -118,19 +118,19 @@
       (spit core-path "; empty prelude")
       (spit edn-path (str "{:extension \".myl\"\n"
                           " :run \"" core-path "\"\n"
-                          " :format :meme}"))
+                          " :format :mclj}"))
       (let [l (registry/load-edn edn-path)]
         (is (fn? (:run l)))
         (is (= [".myl"] (:extensions l)))))))
 
 (deftest load-edn-format-delegates
-  (testing ":format :meme in EDN resolves to built-in format"
+  (testing ":format :mclj in EDN resolves to built-in format"
     (let [core-path (tmp-file "test-edn-core" ".meme")
           edn-path  (tmp-file "test-edn-lang" ".edn")]
       (spit core-path "; empty prelude")
       (spit edn-path (str "{:extension \".myl\"\n"
                           " :run \"" core-path "\"\n"
-                          " :format :meme}"))
+                          " :format :mclj}"))
       (let [l (registry/load-edn edn-path)]
         (is (= "def( x 42)" ((:format l) "def( x 42)" {})))))))
 
@@ -154,7 +154,7 @@
     (let [[name _lang] (registry/resolve-by-extension "app.tstl")]
       (is (= :test-lang name)))
     (let [[meme-name _] (registry/resolve-by-extension "app.meme")]
-      (is (= :meme meme-name) "built-in meme resolves by extension"))
+      (is (= :mclj meme-name) "built-in mclj resolves by extension"))
     (is (nil? (registry/resolve-by-extension "app.clj"))))
   (testing "registered-langs returns names"
     (is (contains? (set (registry/registered-langs)) :test-lang)))
@@ -213,9 +213,9 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest register-builtin-override-rejected
-  (testing ":meme override is rejected"
+  (testing ":mclj override is rejected"
     (is (thrown-with-msg? Exception #"(?i)cannot override"
-                          (registry/register! :meme {:to-clj identity}))))
+                          (registry/register! :mclj {:to-clj identity}))))
   (testing "custom name still works"
     (registry/register! :my-custom-lang {:to-clj identity})
     (registry/clear-user-langs!)))
@@ -259,14 +259,14 @@
     (is (some? (registry/resolve-by-extension "app.zz")))))
 
 (deftest builtin-meme-extensions-resolve
-  (testing ".meme resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.meme")))))
-  (testing ".memec resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.memec")))))
-  (testing ".memej resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.memej")))))
-  (testing ".memejs resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.memejs")))))
+  (testing ".meme resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.meme")))))
+  (testing ".memec resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.memec")))))
+  (testing ".memej resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.memej")))))
+  (testing ".memejs resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.memejs")))))
   (testing "unknown extension returns nil"
     (is (nil? (registry/resolve-by-extension "app.txt")))))
 
@@ -311,10 +311,10 @@
 
 (deftest register-failure-leaves-registry-unchanged
   (testing "builtin override throws and does not insert the new name"
-    (is (thrown? Exception (registry/register! :meme {:to-clj identity})))
-    ;; Meme's builtin entry is still there, unaltered — :meme's lang-map has
+    (is (thrown? Exception (registry/register! :mclj {:to-clj identity})))
+    ;; Mclj's builtin entry is still there, unaltered — :mclj's lang-map has
     ;; :to-clj from the real api, not our identity function.
-    (is (not= identity (:to-clj (registry/resolve-lang :meme)))))
+    (is (not= identity (:to-clj (registry/resolve-lang :mclj)))))
   (testing "extension conflict throws and does not insert the new name"
     (registry/register! :holder {:extension ".reg-scar"
                                  :run 'mclj-lang.run/run-string})
