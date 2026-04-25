@@ -242,15 +242,15 @@
       (is (= (pr-str forms) (pr-str re-read))))))
 
 ;; ---------------------------------------------------------------------------
-;; Comment preservation fixture: comments.meme
-;; Covers: Clojure code in comments, meme code in comments, mixed, multiple
+;; Comment preservation fixture: comments.mclj
+;; Covers: Clojure code in comments, mclj code in comments, mixed, multiple
 ;; semicolons (;, ;;, ;;;), commented-out code, multi-line comment blocks,
 ;; mid-expression comments, trailing comment after all forms.
 ;; ---------------------------------------------------------------------------
 
 #?(:clj
    (deftest comment-preservation-fixture
-     (let [src (slurp "test/examples/comments_fixture.meme")
+     (let [src (slurp "test/examples/comments_fixture.mclj")
            forms (lang/mclj->forms src)
            formatted (fmt-canon/format-forms forms {:width 80})
            expected-comments

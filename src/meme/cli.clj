@@ -45,13 +45,14 @@
 (defn- mclj-file? [path] (some? (registry/resolve-by-extension path)))
 (defn- clj-file? [path] (boolean (re-find #"\.clj[cdsx]?$" path)))
 (defn- swap-ext [path from to]
-  (if (= from "meme")
-    ;; meme→clj: strip any registered meme extension, append target
+  (if (= from "mclj")
+    ;; mclj→clj: strip any registered mclj extension (incl. deprecated .meme),
+    ;; append target.
     (if-let [[_ lang] (registry/resolve-by-extension path)]
       (let [ext (first (filter #(str/ends-with? path %) (:extensions lang)))]
         (str (subs path 0 (- (count path) (count ext))) "." to))
-      (str/replace path #"\.meme$" (str "." to)))
-    ;; clj→meme: .clj[cdsx]? regex works for Clojure extensions
+      (str/replace path #"\.(mclj|meme)$" (str "." to)))
+    ;; clj→mclj: .clj[cdsx]? regex works for Clojure extensions
     (str/replace path (re-pattern (str "\\." from "[cdsx]?$")) (str "." to))))
 
 ;; ---------------------------------------------------------------------------
@@ -174,14 +175,14 @@
   "Convert meme files to Clojure and print to stdout or write to .clj files."
   [opts]
   (file-command opts
-    {:cmd :to-clj, :pred mclj-file?, :output-fn #(swap-ext % "meme" "clj")
+    {:cmd :to-clj, :pred mclj-file?, :output-fn #(swap-ext % "mclj" "clj")
      :verb "converted", :usage "Usage: meme to-clj <file|dir> [--lang name] [--stdout]"}))
 
 (defn to-mclj
-  "Convert Clojure files to meme and print to stdout or write to .meme files."
+  "Convert Clojure files to mclj and print to stdout or write to .mclj files."
   [opts]
   (file-command opts
-    {:cmd :to-mclj, :pred clj-file?, :output-fn #(swap-ext % "clj" "meme")
+    {:cmd :to-mclj, :pred clj-file?, :output-fn #(swap-ext % "clj" "mclj")
      :verb "converted", :usage "Usage: meme to-mclj <file|dir> [--lang name] [--stdout]"}))
 
 (defn format-files
@@ -201,15 +202,15 @@
     (cli-exit! 1)))
 
 (defn transpile-mclj
-  "Transpile .meme files to .clj in a separate output directory.
+  "Transpile .mclj files to .clj in a separate output directory.
    Preserves relative paths. Output can be added to :paths in deps.edn
    so that require, load-file, and nREPL all work without runtime patching."
   [{:keys [file files out lang]}]
   (validate-out-dir! out)
   (let [inputs (or files (when file [file]))
-        out-dir (or out "target/meme")]
+        out-dir (or out "target/mclj")]
     (when (empty? inputs)
-      (println "Usage: meme transpile <src-dir|file...> [--out target/meme] [--lang name]")
+      (println "Usage: meme transpile <src-dir|file...> [--out target/mclj] [--lang name]")
       (cli-exit! 1))
     (let [[lang-name l] (get-lang lang nil)
           _ (registry/check-support l lang-name :to-clj)
@@ -222,7 +223,7 @@
                               (.getCanonicalPath (.getParentFile f)))))
                       inputs)]
       (when (empty? expanded)
-        (println "No .meme files found.")
+        (println "No .mclj files found.")
         (cli-exit! 1))
       (let [sep java.io.File/separator
             process-one
@@ -238,7 +239,7 @@
                         ;; its basename in the flat `out-dir` fallback.
                         root (some #(when (str/starts-with? abs (str % sep)) %) roots)
                         rel (if root (subs abs (inc (count root))) (.getName (io/file path)))
-                        out-path (str out-dir sep (swap-ext rel "meme" "clj"))
+                        out-path (str out-dir sep (swap-ext rel "mclj" "clj"))
                         out-file (io/file out-path)]
                     (.mkdirs (.getParentFile out-file))
                     (spit out-file (str (to-clj-fn src) "\n"))
@@ -265,9 +266,9 @@
         (second form)))))
 
 (defn build
-  "AOT-compile .meme sources to JVM bytecode.
+  "AOT-compile .mclj sources to JVM bytecode.
 
-   Pipeline: transpile to a staging dir (fixed at `target/meme`), then
+   Pipeline: transpile to a staging dir (fixed at `target/mclj`), then
    spawn `clojure` with that dir on the classpath and run
    `clojure.core/compile` on each discovered namespace. Output is
    `.class` files in `--out` (default `target/classes`).
@@ -279,7 +280,7 @@
   [{:keys [file files out lang]}]
   (validate-out-dir! out)
   (let [inputs (or files (when file [file]) ["src"])
-        stage-dir "target/meme"
+        stage-dir "target/mclj"
         aot-dir (or out "target/classes")]
     (println (str "[1/2] Transpiling to " stage-dir "..."))
     (transpile-mclj (cond-> {:out stage-dir :lang lang}
@@ -345,7 +346,7 @@
     (when (has? :to-clj)  (println "  meme to-clj   <file|dir> [--lang name] [--stdout]  (alias: from-meme)"))
     (when (has? :to-mclj) (println "  meme to-mclj  <file|dir> [--lang name] [--stdout]  (alias: from-clj)"))
     (when (has? :format)  (println "  meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"))
-    (when (has? :to-clj)  (println "  meme transpile <src-dir|file...> [--out target/meme] [--lang name]  (alias: compile)"))
+    (when (has? :to-clj)  (println "  meme transpile <src-dir|file...> [--out target/mclj] [--lang name]  (alias: compile)"))
     (when (has? :to-clj)  (println "  meme build     <src-dir|file...> [--out target/classes] [--lang name]"))
     (println "  meme inspect [--lang name]")
     (println "  meme version")

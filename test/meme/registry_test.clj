@@ -113,7 +113,7 @@
 
 (deftest load-edn-lang
   (testing "EDN lang file loads and :run resolves to a fn"
-    (let [core-path (tmp-file "test-edn-core" ".meme")
+    (let [core-path (tmp-file "test-edn-core" ".mclj")
           edn-path  (tmp-file "test-edn-lang" ".edn")]
       (spit core-path "; empty prelude")
       (spit edn-path (str "{:extension \".myl\"\n"
@@ -125,7 +125,7 @@
 
 (deftest load-edn-format-delegates
   (testing ":format :mclj in EDN resolves to built-in format"
-    (let [core-path (tmp-file "test-edn-core" ".meme")
+    (let [core-path (tmp-file "test-edn-core" ".mclj")
           edn-path  (tmp-file "test-edn-lang" ".edn")]
       (spit core-path "; empty prelude")
       (spit edn-path (str "{:extension \".myl\"\n"
@@ -135,8 +135,8 @@
         (is (= "def( x 42)" ((:format l) "def( x 42)" {})))))))
 
 (deftest load-edn-run-evals-core-then-user
-  (testing "EDN :run evals core.meme before user source"
-    (let [core-path (tmp-file "test-edn-core" ".meme")
+  (testing "EDN :run evals core.mclj before user source"
+    (let [core-path (tmp-file "test-edn-core" ".mclj")
           edn-path (tmp-file "test-edn-lang" ".edn")]
       (spit core-path "defn(double [x] *(2 x))")
       (spit edn-path (str "{:run \"" core-path "\"}"))
@@ -163,7 +163,7 @@
 
 (deftest register-with-prelude-file
   (testing "registered lang auto-loads prelude from extension via run-file"
-    (let [core-path (tmp-file "test-prelude-core" ".meme")]
+    (let [core-path (tmp-file "test-prelude-core" ".mclj")]
       (spit core-path "defn(double [x] *(2 x))")
       (registry/register! :myl {:extension ".myl"
                                 :run core-path})
@@ -184,11 +184,11 @@
 
 (deftest run-with-explicit-lang
   (testing ":lang opt overrides extension detection"
-    (let [core-path (tmp-file "test-explicit-core" ".meme")]
+    (let [core-path (tmp-file "test-explicit-core" ".mclj")]
       (spit core-path "; empty prelude")
       (registry/register! :myl {:extension ".myl" :run core-path})
-      ;; Run a .meme file AS :myl (explicit lang, mismatched extension)
-      (let [f (tmp-file "test-explicit" ".meme")]
+      ;; Run a .mclj file AS :myl (explicit lang, mismatched extension)
+      (let [f (tmp-file "test-explicit" ".mclj")]
         (spit f "+(21 21)")
         (is (= 42 (run/run-file f {:lang :myl
                                    :resolve-lang-for-path registry-resolver})))))))
@@ -197,7 +197,7 @@
   (testing ":lang with an unregistered name throws"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Unknown lang"
-                          (run/run-file "/tmp/test.meme"
+                          (run/run-file "/tmp/test.mclj"
                             {:lang :nonexistent
                              :resolve-lang-for-path registry-resolver})))))
 
@@ -258,14 +258,19 @@
     (is (some? (registry/resolve-by-extension "app.xx")))
     (is (some? (registry/resolve-by-extension "app.zz")))))
 
-(deftest builtin-meme-extensions-resolve
-  (testing ".meme resolves to :mclj"
-    (is (= :mclj (first (registry/resolve-by-extension "app.meme")))))
-  (testing ".memec resolves to :mclj"
-    (is (= :mclj (first (registry/resolve-by-extension "app.memec")))))
-  (testing ".memej resolves to :mclj"
-    (is (= :mclj (first (registry/resolve-by-extension "app.memej")))))
-  (testing ".memejs resolves to :mclj"
+(deftest builtin-mclj-extensions-resolve
+  (testing ".mclj resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.mclj")))))
+  (testing ".mcljc resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.mcljc")))))
+  (testing ".mcljj resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.mcljj")))))
+  (testing ".mcljs resolves to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.mcljs")))))
+  (testing "back-compat: deprecated .meme/.memec/.memej/.memejs still resolve to :mclj"
+    (is (= :mclj (first (registry/resolve-by-extension "app.meme"))))
+    (is (= :mclj (first (registry/resolve-by-extension "app.memec"))))
+    (is (= :mclj (first (registry/resolve-by-extension "app.memej"))))
     (is (= :mclj (first (registry/resolve-by-extension "app.memejs")))))
   (testing "unknown extension returns nil"
     (is (nil? (registry/resolve-by-extension "app.txt")))))
@@ -322,8 +327,10 @@
                                                           :run 'mclj-lang.run/run-string})))
     (is (not (contains? (registry/available-langs) :intruder))
         "failing registration must not leak a partial entry"))
-  (testing "reserved .meme extension throws and does not insert the new name"
-    (is (thrown? Exception (registry/register! :sneaky {:extension ".meme"
+  (testing "reserved .mclj extension throws and does not insert the new name"
+    (is (thrown? Exception (registry/register! :sneaky {:extension ".mclj"
                                                         :run 'mclj-lang.run/run-string})))
+    (is (thrown? Exception (registry/register! :sneakier {:extension ".meme"
+                                                          :run 'mclj-lang.run/run-string})))
     (is (not (contains? (registry/available-langs) :sneaky))
         "reserved-extension rejection must not leak a partial entry")))

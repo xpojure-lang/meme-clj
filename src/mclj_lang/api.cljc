@@ -149,12 +149,17 @@
      ([source _opts] (to-mclj source))))
 
 (def lang-map
-  "Command map for the meme lang.
+  "Command map for the mclj lang.
    :form-shape is the lang-owned semantic vocabulary — tools (formatter,
    future LSP/lint) consume it to know how this lang decomposes its
    special forms."
-  {:extension ".meme"
-   :extensions [".memec" ".memej" ".memejs"]
+  ;; .mclj is the primary extension. .meme / .memec / .memej / .memejs are
+  ;; soft-deprecated for one release: still recognized so existing files load,
+  ;; but emit a one-time warning per process. Removal is planned in the next
+  ;; major. See `meme.tools.clj.run` for the warning hook.
+  {:extension ".mclj"
+   :extensions [".mcljc" ".mcljj" ".mcljs"
+                ".meme" ".memec" ".memej" ".memejs"]
    :format     format-mclj
    :to-clj     to-clj
    :form-shape form-shape/registry
@@ -167,9 +172,9 @@
 ;; the registry pure infrastructure and avoids the old circular dep.
 #?(:clj (registry/register-builtin! :mclj lang-map))
 
-;; Install meme's string handler for :run — a string value is a prelude
-;; .meme path that runs before user source. Keeps this meme convention
-;; inside the meme namespace rather than hardcoded in the registry.
+;; Install mclj's string handler for :run — a string value is a prelude
+;; .mclj path that runs before user source. Keeps this mclj convention
+;; inside the lang's own namespace rather than hardcoded in the registry.
 #?(:clj
    (registry/register-string-handler! :run
      (fn [prelude-path]

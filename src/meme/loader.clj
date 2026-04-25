@@ -22,6 +22,30 @@
 (defonce ^:private installed? (atom false))
 (defonce ^:private extensions-fn (atom nil))
 
+;; ---------------------------------------------------------------------------
+;; Deprecated-extension warning (one-time per process)
+;; ---------------------------------------------------------------------------
+;; .meme / .memec / .memej / .memejs are still recognized for one release but
+;; emit a single warning on first use. Removal is planned in the next major.
+
+(def ^:private deprecated-extensions
+  #{".meme" ".memec" ".memej" ".memejs"})
+
+(defonce ^:private deprecation-warned?
+  (atom false))
+
+(defn warn-deprecated-extension!
+  "Emit a one-time deprecation warning to *err* if path uses a deprecated
+   extension. Idempotent across the process."
+  [path]
+  (when (and path (string? path))
+    (when (some #(str/ends-with? path %) deprecated-extensions)
+      (when (compare-and-set! deprecation-warned? false true)
+        (binding [*out* *err*]
+          (println (str "warning: file extension is deprecated; rename to .mclj. "
+                        "Recognition will be removed in the next major release. "
+                        "(first seen: " path ")")))))))
+
 ;; Number of lang-load / lang-load-file invocations currently executing on
 ;; any thread. Incremented on entry, decremented in finally. uninstall!
 ;; observes this under the install-lock monitor to decide whether the loader
@@ -100,13 +124,14 @@
             (let [path (first remaining)]
               (if-let [[resource run-fn] (find-lang-resource path)]
                 (do (flush! pending)
+                    (warn-deprecated-extension! (str resource))
                     (binding [*ns* *ns*]
                       (run-fn (slurp resource) {}))
                     (recur (rest remaining) []))
                 (recur (rest remaining) (conj pending path))))))))))
 
 (defn- lang-load-file
-  "Replacement for clojure.core/load-file that handles .meme files.
+  "Replacement for clojure.core/load-file that handles .mclj files.
    Delegates to the lang's :run function for registered extensions,
    falls back to original load-file for everything else.
    Wraps run-fn in a binding to save/restore *ns*, matching Compiler/loadFile."
@@ -118,8 +143,9 @@
                              (when (str/ends-with? path ext) run-fn))
                            (ext-fn)))]
         (if run-fn
-          (binding [*ns* *ns*]
-            (run-fn (slurp path) {}))
+          (do (warn-deprecated-extension! path)
+              (binding [*ns* *ns*]
+                (run-fn (slurp path) {})))
           (@original-load-file path))))))
 
 ;; ---------------------------------------------------------------------------
