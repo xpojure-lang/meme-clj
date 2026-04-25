@@ -6,9 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-lang rename, pipe operator, correctness pack, **meme-lang → mclj-lang rename**.
+Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.clj.*`), correctness pack, **meme-lang → mclj-lang rename** (file extension, namespace, registry key, public API, metadata vocabulary, AST record names).
 
-### Breaking Changes (mclj-lang rename)
+### Breaking Changes
 
 - **Namespace `meme-lang.*` → `mclj-lang.*`.** All 8 `src/mclj_lang/*` files and 15+ `test/mclj_lang/*` files. Toolkit (`meme.tools.*`, `meme.cli`, `meme.registry`, `meme.loader`) is unchanged.
 
@@ -26,7 +26,11 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **Printer mode keyword `:meme` → `:mclj`** (paired with `:clj`). Affects `mclj-lang.printer/to-doc` callers passing the mode explicitly.
 
-- **Metadata vocabulary `:meme/*` → `:mclj/*`.** All 9 keys: `:mclj/leading-trivia`, `:mclj/sugar`, `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`, `:mclj/bare-percent`, `:mclj/pipeline-error`, `:mclj/deprecated-opt`, `:mclj/missing-grammar`. External code walking emitted forms or catching `:mclj/pipeline-error` ex-infos must update.
+- **Metadata + ex-info vocabulary `:meme-lang/*` → `:mclj/*`.** All 9 keys: `:mclj/leading-trivia`, `:mclj/sugar`, `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`, `:mclj/bare-percent`, `:mclj/pipeline-error`, `:mclj/deprecated-opt`, `:mclj/missing-grammar`. External code walking emitted forms or catching `:mclj/pipeline-error` ex-infos must update. (Mid-cycle dev builds carried these briefly as `:meme/*` after the toolkit-vs-lang split landed; the final shape is `:mclj/*`.)
+
+- **AST record names: `Meme*` → `Clj*`.** `MemeSyntaxQuote`, `MemeUnquote`, `MemeUnquoteSplicing`, `MemeRaw`, `MemeAutoKeyword`, `MemeReaderConditional` → `CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional`. Content is Clojure-semantic; names follow suit. Predicate `meme-reader-conditional?` → `clj-reader-conditional?`.
+
+- **Namespace moves: `meme-lang.*` → `meme.tools.clj.*`** for the Clojure-surface commons shared by every Clojure-flavored frontend. Moved: `stages`, `cst-reader`, `resolve`, `expander`, `forms`, `errors`, `values`, plus `lex` (extracted from `meme-lang.lexlets`), `run`, `repl`. `meme-lang.{stages,cst-reader,...}` no longer exist as namespaces; import from `meme.tools.clj.*`. `meme-lang.run`, `meme-lang.repl`, `meme-lang.lexlets` remain as thin shims that inject meme's grammar/banner and delegate.
 
 - **Build staging directory `target/meme` → `target/mclj`.** Affects `meme transpile` (default `--out`) and `meme build` (fixed staging path).
 
@@ -38,37 +42,17 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **`implojure-lang` removed.** The sibling Clojure-flavored frontend and its grammar test suite are gone (`src/implojure_lang/`, `test/implojure_lang/`, the `[implojure-lang.api]` require in `meme.cli`, related test patterns in `deps.edn`). The Clojure-surface commons (`meme.tools.clj.*`) remain shared-by-design — the abstraction is still right and pre-pays for the next sibling — but the only registered built-in lang is now meme.
 
-### Breaking Changes
-
-- **AST record names: `Meme*` → `Clj*`.** `MemeSyntaxQuote`, `MemeUnquote`, `MemeUnquoteSplicing`, `MemeRaw`, `MemeAutoKeyword`, `MemeReaderConditional` → `CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljRaw`, `CljAutoKeyword`, `CljReaderConditional`. Content is Clojure-semantic; names follow suit. Predicate `meme-reader-conditional?` → `clj-reader-conditional?`.
-
-- **Namespace moves: `meme-lang.*` → `meme.tools.clj.*`** for the Clojure-surface commons shared by every Clojure-flavored frontend (meme, implojure). Moved: `stages`, `cst-reader`, `resolve`, `expander`, `forms`, `errors`, `values`, plus `lex` (extracted from `meme-lang.lexlets`), `run`, `repl`. `meme-lang.{stages,cst-reader,...}` no longer exist as namespaces; import from `meme.tools.clj.*`. `meme-lang.run`, `meme-lang.repl`, `meme-lang.lexlets` remain as thin shims that inject meme's grammar/banner and delegate.
-
-- **Metadata + ex-info keys: `:meme-lang/*` → `:meme/*`** for toolkit-emitted vocabulary. Affects `:meme/leading-trivia`, `:meme/sugar`, `:meme/insertion-order`, `:meme/namespace-prefix`, `:meme/meta-chain`, `:meme/bare-percent`, `:meme/pipeline-error`, `:meme/deprecated-opt`, `:meme/missing-grammar`. The keys are emitted by `meme.tools.clj.*` (platform toolkit) and were mis-namespaced after the lang. External code walking meme-emitted forms or catching pipeline ex-infos must update.
-
-- **Sibling lang rename: `infj-lang` → `implojure-lang`.** File extensions `.infj` → `.implj`, plus `.impljc`/`.impljs` for cljc/cljs variants.
-
 - **`.meme-format.edn` / `meme.config` removed.** The project-local formatter config feature (added as requirement F6) was never adopted — no `.meme-format.edn` file ever existed in this repo or any consumer. The 196-line reader plus 19 validation tests were dead weight. `meme format` now takes CLI flags only (`--width`, `--style`, `--stdout`, `--check`); if project-local config is ever wanted for real, a ~40-line reader can be rebuilt when the need materializes.
 
-- **calc-lang demo and `examples/languages/` directory removed.** The multi-lang platform claim is now carried by meme + implojure + the user-registerable lang mechanism. The demo added maintenance surface without further demonstrating anything.
-
-### Added
-
-- **`|name|>` named pipe operator** in implojure-lang — lowers to `as->`-style chains that desugar to a flat `let`. Supports destructure patterns in the slot position.
-
-- **`mod` word operator** at binding power 70 in implojure-lang.
-
-### Changed
-
-- **implojure-lang operator set** — dropped `%`/`==`/`!=`; added `=`, `not=`, `and`, `or`, `not` as word operators.
-
-- **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
-
-### Removed
+- **calc-lang demo and `examples/languages/` directory removed.** The multi-lang platform claim is now carried by meme + the user-registerable lang mechanism. The demo added maintenance surface without further demonstrating anything.
 
 - **Loader namespace denylist.** `denied-prefixes` / `denied-namespace?` and the `when-not` guard in `find-lang-resource` are gone. Installing a lang is the trust decision — if a user puts a `.meme` file at `clojure/core.meme` on the classpath, the loader now honors it rather than paternalistically refusing. The infinite-recursion concern the denylist was framed against is actually handled by caching `registered-extensions` as a function value at `install!` time (so `find-lang-resource` never does `requiring-resolve` during load interception); that guard is unchanged. Removes `denied-namespaces-not-intercepted` and `own-infrastructure-not-intercepted` tests. PRD row PL13 withdrawn.
 
 - **Legacy lang aliases** `:classic`, `:meme-classic`, `:meme-experimental` and their deprecation-warning branch in `registry/resolve-lang`. The aliases had no callers in `src/`, `test/`, `doc/`, or any consumer — just dead cruft since the pre-lang naming was retired. Users must pass `:meme` directly; the existing "Unknown lang: ..." error still lists available langs if someone hits a removed name.
+
+### Changed
+
+- **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
 
 ### Fixed
 
