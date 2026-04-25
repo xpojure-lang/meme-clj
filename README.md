@@ -59,7 +59,7 @@ Run a `.mclj` file:
 
 ```bash
 $ bb meme run hello.mclj                                # Babashka
-$ clojure -X:meme run :file '"hello.mclj"'              # Clojure JVM
+$ clojure -T:meme run :file '"hello.mclj"'              # Clojure JVM
 Hello, world!
 ```
 
@@ -77,7 +77,7 @@ Convert between meme and Clojure:
 
 ```bash
 $ bb meme to-clj hello.mclj                             # .mclj → Clojure
-$ bb meme to-meme hello.clj                             # .clj → meme
+$ bb meme to-mclj hello.clj                             # .clj → mclj
 $ bb meme to-clj hello.mclj --stdout                    # print to stdout
 ```
 

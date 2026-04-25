@@ -100,7 +100,7 @@ The printer/formatter split follows a three-layer model. Each layer owns one con
 All four extension axes compose via `assoc`/`merge` on plain maps: swap a style, extend a registry, opt into structural fallback (`with-structural-fallback`), override one slot's rendering. No printer changes required for any of them.
 
 - The reader is a **pure function** from meme text to Clojure forms. No runtime dependency. No `read-string` delegation — everything is parsed natively.
-- A printer (`mclj-lang.printer`) converts Clojure forms back to meme syntax (also pure). Supports `:meme` and `:clj` output modes.
+- A printer (`mclj-lang.printer`) converts Clojure forms back to meme syntax (also pure). Supports `:mclj` and `:clj` output modes.
 - **Syntactic transparency:** meme is a syntactic lens — the stages must preserve the user's syntax choices. When two notations produce the same Clojure form (e.g., `'x` sugar vs `quote(x)` call), the reader tags the form with `:mclj/sugar` metadata so the printer can reconstruct the original notation. See `doc/design-decisions.md` for the full principle. Any new syntax feature with multiple representations MUST preserve the distinction via metadata.
 - File extension: `.mclj`
 - `()` is the empty list. Every `(content)` requires a head: `head(content)`. Any value can be a head — `nil(1 2)` → `(nil 1 2)`, `true(:a)` → `(true :a)`.
