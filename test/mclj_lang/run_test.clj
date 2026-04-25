@@ -79,8 +79,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest run-file-basic
-  (testing "runs a .meme file and returns last result"
-    (let [tmp (java.io.File/createTempFile "meme-test" ".meme")]
+  (testing "runs a .mclj file and returns last result"
+    (let [tmp (java.io.File/createTempFile "mclj-test" ".mclj")]
       (try
         (spit tmp "def(x 42)\nx")
         (is (= 42 (run/run-file (str tmp))))
@@ -89,7 +89,7 @@
 
 (deftest run-file-not-found
   (testing "non-existent file throws"
-    (is (thrown? Exception (run/run-file "/tmp/nonexistent-meme-file-12345.meme")))))
+    (is (thrown? Exception (run/run-file "/tmp/nonexistent-mclj-file-12345.mclj")))))
 
 (deftest run-file-syntax-quote-resolves-symbols
   ;; Scar tissue: run-file's :run-fn closure ignored its reader-opts
@@ -97,7 +97,7 @@
   ;; default-resolve-symbol never reached the expander. `map in a file
   ;; expanded to 'map instead of 'clojure.core/map.
   (testing "`map in a file resolves to clojure.core/map (matches run-string)"
-    (let [tmp (java.io.File/createTempFile "meme-resolve-test" ".meme")]
+    (let [tmp (java.io.File/createTempFile "mclj-resolve-test" ".mclj")]
       (try
         (spit tmp "`map")
         (is (= 'clojure.core/map (run/run-file (str tmp))))

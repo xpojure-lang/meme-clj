@@ -22,7 +22,7 @@
    Built-in langs are self-describing: each defines a lang-map in its own namespace.
    User langs can be registered via register! with EDN-style config maps.
 
-   String values in a lang-map (e.g. `:run \"prelude.meme\"` in EDN) are
+   String values in a lang-map (e.g. `:run \"prelude.mclj\"` in EDN) are
    resolved through handlers installed via `register-string-handler!`. This
    keeps the registry lang-agnostic — langs install their own conventions
    rather than the registry hardcoding meme's."
@@ -183,9 +183,9 @@
       (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
                            " — extension must be a non-empty string")
                       {:lang lang-name})))
-    (when (= ext ".meme")
+    (when (#{".mclj" ".meme"} ext)
       (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                           " — extension .meme is reserved for built-in langs")
+                           " — extension " ext " is reserved for built-in langs")
                       {:lang lang-name :extension ext})))
     (doseq [[existing-name existing-lang] snapshot]
       (when (and (not= existing-name lang-name)

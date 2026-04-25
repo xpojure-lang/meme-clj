@@ -38,9 +38,9 @@
     {:out out :err err :exit exit}))
 
 (defn- tmp-meme
-  "Write content to a temp .meme file, return the File."
+  "Write content to a temp .mclj file, return the File."
   [content]
-  (let [f (File/createTempFile "meme-e2e-" ".meme")]
+  (let [f (File/createTempFile "mclj-e2e-" ".mclj")]
     (.deleteOnExit f)
     (spit f content)
     f))
@@ -48,7 +48,7 @@
 (defn- tmp-clj
   "Write content to a temp .clj file, return the File."
   [content]
-  (let [f (File/createTempFile "meme-e2e-" ".clj")]
+  (let [f (File/createTempFile "mclj-e2e-" ".clj")]
     (.deleteOnExit f)
     (spit f content)
     f))
@@ -56,7 +56,7 @@
 (defn- tmp-ext
   "Write content to a temp file with the given extension, return the File."
   [ext content]
-  (let [f (File/createTempFile "meme-e2e-" (str "." ext))]
+  (let [f (File/createTempFile "mclj-e2e-" (str "." ext))]
     (.deleteOnExit f)
     (spit f content)
     f))
@@ -141,7 +141,7 @@
 
 (deftest to-clj-file-test
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        clj-path (str/replace (str f) #"\.meme$" ".clj")
+        clj-path (str/replace (str f) #"\.mclj$" ".clj")
         clj-file (io/file clj-path)]
     (try
       (let [{:keys [exit]} (bb-meme "to-clj" (str f))]
@@ -180,7 +180,7 @@
 
 (deftest to-mclj-file-test
   (let [f (tmp-clj "(defn foo [x] (+ x 1))")
-        meme-path (str/replace (str f) #"\.clj$" ".meme")
+        meme-path (str/replace (str f) #"\.clj$" ".mclj")
         meme-file (io/file meme-path)]
     (try
       (let [{:keys [exit]} (bb-meme "to-mclj" (str f))]
@@ -191,13 +191,13 @@
 
 (deftest to-mclj-cljc-file-test
   (let [f (tmp-ext "cljc" "(defn foo [x] (+ x 1))")
-        meme-path (str/replace (str f) #"\.cljc$" ".meme")
+        meme-path (str/replace (str f) #"\.cljc$" ".mclj")
         meme-file (io/file meme-path)
         original-content (slurp f)]
     (try
       (let [{:keys [exit]} (bb-meme "to-mclj" (str f))]
         (is (zero? exit))
-        (is (.exists meme-file) ".meme output file should be created")
+        (is (.exists meme-file) ".mclj output file should be created")
         (is (= "defn(foo [x] +(x 1))\n" (slurp meme-file)))
         ;; Critical: original .cljc must NOT be overwritten
         (is (= original-content (slurp f)) ".cljc source must not be overwritten"))
@@ -205,13 +205,13 @@
 
 (deftest to-mclj-cljs-file-test
   (let [f (tmp-ext "cljs" "(defn foo [x] (+ x 1))")
-        meme-path (str/replace (str f) #"\.cljs$" ".meme")
+        meme-path (str/replace (str f) #"\.cljs$" ".mclj")
         meme-file (io/file meme-path)
         original-content (slurp f)]
     (try
       (let [{:keys [exit]} (bb-meme "to-mclj" (str f))]
         (is (zero? exit))
-        (is (.exists meme-file) ".meme output file should be created")
+        (is (.exists meme-file) ".mclj output file should be created")
         (is (= "defn(foo [x] +(x 1))\n" (slurp meme-file)))
         (is (= original-content (slurp f)) ".cljs source must not be overwritten"))
       (finally (.delete meme-file)))))
@@ -274,7 +274,7 @@
     (is (= "defn( foo [x] +(x 1))\n" out))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: Bug #3 — Babashka warns about .meme require limitation
+;; Scar tissue: Bug #3 — Babashka warns about .mclj require limitation
 ;; Babashka's SCI require bypasses clojure.core/load, so the loader
 ;; cannot intercept. The loader now prints a warning instead of silently
 ;; doing nothing.
@@ -289,8 +289,8 @@
         "Babashka loader should be silent (SCI bypasses clojure.core/load)")))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: Bug #4 — bb meme run with nested .meme require
-;; The CLI run command now installs the loader. On Babashka, nested .meme
+;; Scar tissue: Bug #4 — bb meme run with nested .mclj require
+;; The CLI run command now installs the loader. On Babashka, nested .mclj
 ;; require is not supported (SCI limitation), but the file itself runs fine.
 ;; ---------------------------------------------------------------------------
 
@@ -307,13 +307,13 @@
 
 (deftest compile-to-custom-dir
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        out-dir (str (System/getProperty "java.io.tmpdir") "/meme-e2e-compile-" (System/nanoTime))]
+        out-dir (str (System/getProperty "java.io.tmpdir") "/mclj-e2e-compile-" (System/nanoTime))]
     (try
       (let [{:keys [out exit]} (bb-meme "compile" (str f) "--out" out-dir)]
         (is (zero? exit))
         (is (str/includes? out "transpiled to"))
         ;; Check output file exists and has correct content
-        (let [clj-name (str/replace (.getName f) #"\.meme$" ".clj")
+        (let [clj-name (str/replace (.getName f) #"\.mclj$" ".clj")
               clj-file (io/file out-dir clj-name)]
           (is (.exists clj-file) "compiled .clj should exist")
           (is (= "(defn foo [x] (+ x 1))\n" (slurp clj-file)))))
@@ -323,12 +323,12 @@
 
 (deftest compile-preserves-relative-paths
   (let [dir (io/file (System/getProperty "java.io.tmpdir")
-                     (str "meme-e2e-src-" (System/nanoTime)))
+                     (str "mclj-e2e-src-" (System/nanoTime)))
         sub (io/file dir "my_ns")
         out-dir (str dir "-out")]
     (try
       (.mkdirs sub)
-      (spit (io/file sub "core.meme") "ns(my-ns.core)\ndef(x 42)\n")
+      (spit (io/file sub "core.mclj") "ns(my-ns.core)\ndef(x 42)\n")
       (let [{:keys [exit]} (bb-meme "compile" (str dir) "--out" out-dir)]
         (is (zero? exit))
         (let [compiled (io/file out-dir "my_ns" "core.clj")]
@@ -347,12 +347,12 @@
 
 (deftest transpile-is-canonical-name-for-compile
   (let [f (tmp-meme "defn(foo [x] +(x 1))")
-        out-dir (str (System/getProperty "java.io.tmpdir") "/meme-e2e-tx-" (System/nanoTime))]
+        out-dir (str (System/getProperty "java.io.tmpdir") "/mclj-e2e-tx-" (System/nanoTime))]
     (try
       (let [{:keys [out exit]} (bb-meme "transpile" (str f) "--out" out-dir)]
         (is (zero? exit))
         (is (str/includes? out "transpiled to"))
-        (let [clj-name (str/replace (.getName f) #"\.meme$" ".clj")]
+        (let [clj-name (str/replace (.getName f) #"\.mclj$" ".clj")]
           (is (.exists (io/file out-dir clj-name)))))
       (finally
         (doseq [f (reverse (file-seq (io/file out-dir)))]
@@ -360,12 +360,12 @@
 
 (deftest build-produces-jvm-bytecode
   (let [src-dir (io/file (System/getProperty "java.io.tmpdir")
-                         (str "meme-e2e-build-" (System/nanoTime)))
+                         (str "mclj-e2e-build-" (System/nanoTime)))
         demo (io/file src-dir "demo")
         aot-dir (str src-dir "-aot")]
     (try
       (.mkdirs demo)
-      (spit (io/file demo "core.meme") "ns(demo.core)\ndefn(greet [x] str(\"hello \" x))")
+      (spit (io/file demo "core.mclj") "ns(demo.core)\ndefn(greet [x] str(\"hello \" x))")
       ;; Run from the user project dir so relative `target/meme` staging
       ;; doesn't collide with the meme-clj project's own target/.
       (let [pb (ProcessBuilder. ^java.util.List
@@ -391,12 +391,12 @@
 
 (deftest compile-reports-errors
   (let [dir (io/file (System/getProperty "java.io.tmpdir")
-                     (str "meme-e2e-err-" (System/nanoTime)))
+                     (str "mclj-e2e-err-" (System/nanoTime)))
         out-dir (str dir "-out")]
     (try
       (.mkdirs dir)
-      (spit (io/file dir "good.meme") "def(x 1)")
-      (spit (io/file dir "bad.meme") "def(x")
+      (spit (io/file dir "good.mclj") "def(x 1)")
+      (spit (io/file dir "bad.mclj") "def(x")
       (let [{:keys [exit err out]} (bb-meme "compile" (str dir) "--out" out-dir)]
         (is (= 1 exit) "should exit 1 on compile error")
         (is (str/includes? (str out err) "failed"))
@@ -408,7 +408,7 @@
             (.delete f)))))))
 
 ;; ---------------------------------------------------------------------------
-;; load-file of .meme via bb meme run
+;; load-file of .mclj via bb meme run
 ;; ---------------------------------------------------------------------------
 
 (deftest run-load-file-meme
@@ -417,33 +417,33 @@
         {:keys [out exit]} (bb-meme "run" (str main))]
     (is (zero? exit))
     (is (= "hi bb\n" out)
-        "load-file of .meme should work from within bb meme run")))
+        "load-file of .mclj should work from within bb meme run")))
 
 ;; ---------------------------------------------------------------------------
-;; JVM require of .meme namespace (loader auto-install via language tier)
+;; JVM require of .mclj namespace (loader auto-install via language tier)
 ;;
 ;; Demonstrates that the loader is a core DX utility installed by
 ;; mclj-lang.run automatically — the CLI does no manual install, yet
-;; require of a .meme file on the classpath resolves through the meme
+;; require of a .mclj file on the classpath resolves through the meme
 ;; pipeline. If mclj-lang.run/run-string ever stops auto-installing the
 ;; loader, this test fails.
 ;; ---------------------------------------------------------------------------
 
 (deftest run-jvm-require-meme-namespace
   (let [dir (io/file (System/getProperty "java.io.tmpdir")
-                     (str "meme-e2e-req-" (System/nanoTime)))
+                     (str "mclj-e2e-req-" (System/nanoTime)))
         lib-dir (io/file dir "mylib")]
     (try
       (.mkdirs lib-dir)
-      (spit (io/file lib-dir "core.meme")
+      (spit (io/file lib-dir "core.mclj")
             "ns(mylib.core)\ndefn(greet [x] str(\"hi \" x))\n")
-      (let [main (io/file dir "main.meme")]
+      (let [main (io/file dir "main.mclj")]
         (spit main "require('[mylib.core])\nprintln(mylib.core/greet(\"jvm\"))\n")
         (let [{:keys [out err exit]}
               (jvm-meme-run [(.getAbsolutePath dir)] (.getAbsolutePath main))]
           (is (zero? exit) (str "exit=" exit "\nstdout=" out "\nstderr=" err))
           (is (str/includes? out "hi jvm")
-              "require of .meme namespace from classpath should resolve through the loader")))
+              "require of .mclj namespace from classpath should resolve through the loader")))
       (finally
         (doseq [f (reverse (file-seq dir))] (.delete f))))))
 
@@ -457,7 +457,7 @@
     (is (zero? exit))
     (is (str/includes? out "--user-arg") "user args visible")
     (is (not (str/includes? out "run")) "CLI verb 'run' not leaked")
-    (is (not (str/includes? out ".meme")) "filename not leaked")))
+    (is (not (str/includes? out ".mclj")) "filename not leaked")))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: bad CLI flag coercion must produce a clean error, not a stack

@@ -6,20 +6,25 @@
 
 (deftest mclj-file?-test
   (let [mclj-file? #'cli/mclj-file?]
-    (testing "returns true for .meme files"
+    (testing "returns true for .mclj files"
+      (is (true? (mclj-file? "foo.mclj")))
+      (is (true? (mclj-file? "path/to/bar.mclj")))
+      (is (true? (mclj-file? "/absolute/path.mclj"))))
+    (testing "returns true for registered mclj extensions"
+      (is (true? (mclj-file? "foo.mcljc")))
+      (is (true? (mclj-file? "foo.mcljj")))
+      (is (true? (mclj-file? "foo.mcljs"))))
+    (testing "back-compat: deprecated .meme extensions still recognized"
       (is (true? (mclj-file? "foo.meme")))
-      (is (true? (mclj-file? "path/to/bar.meme")))
-      (is (true? (mclj-file? "/absolute/path.meme"))))
-    (testing "returns true for registered meme extensions"
       (is (true? (mclj-file? "foo.memec")))
       (is (true? (mclj-file? "foo.memej")))
       (is (true? (mclj-file? "foo.memejs"))))
-    (testing "returns false for non-.meme files"
+    (testing "returns false for non-mclj files"
       (is (false? (mclj-file? "foo.clj")))
       (is (false? (mclj-file? "foo.cljc")))
       (is (false? (mclj-file? "foo.txt")))
       (is (false? (mclj-file? "foo.memes")))
-      (is (false? (mclj-file? "meme"))))))
+      (is (false? (mclj-file? "mclj"))))))
 
 (deftest clj-file?-test
   (let [clj-file? #'cli/clj-file?]
@@ -31,24 +36,30 @@
       (is (true? (clj-file? "path/to/bar.clj"))))
     (testing "returns false for non-Clojure files"
       (is (false? (clj-file? "foo.txt")))
+      (is (false? (clj-file? "foo.mclj")))
       (is (false? (clj-file? "foo.meme")))
       (is (false? (clj-file? "foo.cljfoo")))
       (is (false? (clj-file? "clj"))))))
 
 (deftest swap-ext-test
   (let [swap-ext #'cli/swap-ext]
-    (testing "swaps .meme to .clj"
-      (is (= "foo.clj" (swap-ext "foo.meme" "meme" "clj")))
-      (is (= "path/to/bar.clj" (swap-ext "path/to/bar.meme" "meme" "clj"))))
-    (testing "swaps registered meme extensions to .clj"
-      (is (= "foo.clj" (swap-ext "foo.memec" "meme" "clj")))
-      (is (= "foo.clj" (swap-ext "foo.memej" "meme" "clj")))
-      (is (= "foo.clj" (swap-ext "foo.memejs" "meme" "clj")))
-      (is (= "path/to/bar.clj" (swap-ext "path/to/bar.memec" "meme" "clj"))))
-    (testing "swaps .clj variants to .meme"
-      (is (= "foo.meme" (swap-ext "foo.clj" "clj" "meme")))
-      (is (= "foo.meme" (swap-ext "foo.cljc" "clj" "meme")))
-      (is (= "foo.meme" (swap-ext "foo.cljs" "clj" "meme"))))))
+    (testing "swaps .mclj to .clj"
+      (is (= "foo.clj" (swap-ext "foo.mclj" "mclj" "clj")))
+      (is (= "path/to/bar.clj" (swap-ext "path/to/bar.mclj" "mclj" "clj"))))
+    (testing "swaps registered mclj extensions to .clj"
+      (is (= "foo.clj" (swap-ext "foo.mcljc" "mclj" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.mcljj" "mclj" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.mcljs" "mclj" "clj")))
+      (is (= "path/to/bar.clj" (swap-ext "path/to/bar.mcljc" "mclj" "clj"))))
+    (testing "back-compat: deprecated .meme extensions still swap to .clj"
+      (is (= "foo.clj" (swap-ext "foo.meme" "mclj" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.memec" "mclj" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.memej" "mclj" "clj")))
+      (is (= "foo.clj" (swap-ext "foo.memejs" "mclj" "clj"))))
+    (testing "swaps .clj variants to .mclj"
+      (is (= "foo.mclj" (swap-ext "foo.clj" "clj" "mclj")))
+      (is (= "foo.mclj" (swap-ext "foo.cljc" "clj" "mclj")))
+      (is (= "foo.mclj" (swap-ext "foo.cljs" "clj" "mclj"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: `run` used to call (slurp file) twice — once for exec, once in
@@ -58,7 +69,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- write-temp-meme! [src]
-  (let [f (File/createTempFile "meme-cli-test" ".meme")]
+  (let [f (File/createTempFile "mclj-cli-test" ".mclj")]
     (.deleteOnExit f)
     (spit f src)
     f))
@@ -135,7 +146,7 @@
   (testing "successful transpile reads source exactly once"
     (let [f       (write-temp-meme! "println(\"ok\")")
           out-dir (.getAbsolutePath
-                    (doto (File/createTempFile "meme-cli-transpile" "")
+                    (doto (File/createTempFile "mclj-cli-transpile" "")
                       (.delete)
                       (.mkdirs)))
           counter (atom 0)
@@ -149,7 +160,7 @@
   (testing "transpile error path reads source exactly once"
     (let [f       (write-temp-meme! "(broken")
           out-dir (.getAbsolutePath
-                    (doto (File/createTempFile "meme-cli-transpile-err" "")
+                    (doto (File/createTempFile "mclj-cli-transpile-err" "")
                       (.delete)
                       (.mkdirs)))
           counter (atom 0)
@@ -164,7 +175,7 @@
 (deftest lang-opts-test
   (let [lang-opts #'cli/lang-opts]
     (testing "removes CLI-specific keys"
-      (is (= {} (lang-opts {:file "x" :files ["a"] :stdout true :check true :lang "meme"}))))
+      (is (= {} (lang-opts {:file "x" :files ["a"] :stdout true :check true :lang "mclj"}))))
     (testing "preserves non-CLI keys"
       (is (= {:width 80 :style "canon"}
              (lang-opts {:file "x" :stdout true :width 80 :style "canon"}))))
@@ -195,7 +206,7 @@
           exit-called? (atom false)]
       (with-redefs [cli/cli-exit! (fn [_] (reset! exit-called? true))]
         (validate! nil)
-        (validate! "target/meme")
+        (validate! "target/mclj")
         (validate! "/absolute/path"))
       (is (false? @exit-called?)
           "nil and non-blank strings must not trigger exit"))))

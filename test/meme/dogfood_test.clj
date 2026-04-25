@@ -133,8 +133,8 @@
             (str "vars lost in roundtrip: " (set/difference expected roundtripped)))))))
 
 ;; ---------------------------------------------------------------------------
-;; Self-hosting: roundtrip .meme files through meme→forms→meme→forms.
-;; The CLI is written in .meme — this verifies meme can read its own syntax.
+;; Self-hosting: roundtrip .mclj files through mclj→forms→mclj→forms.
+;; The CLI is written in .mclj — this verifies mclj can read its own syntax.
 ;; ---------------------------------------------------------------------------
 
 (defn- normalize-for-compare
@@ -151,7 +151,7 @@
     :else form))
 
 (defn- roundtrip-meme-file
-  "Roundtrip a .meme file: parse → print → re-parse. Returns {:total :succeeded :failed}.
+  "Roundtrip a .mclj file: parse → print → re-parse. Returns {:total :succeeded :failed}.
    Compares structurally (ignoring metadata) since flat printing loses whitespace metadata."
   [path]
   (let [src (slurp path)
@@ -167,7 +167,7 @@
 
 
 (deftest self-hosting-example-meme-files
-  (doseq [path ["examples/stars.meme"]]
+  (doseq [path ["examples/stars.mclj"]]
     (testing (str path " roundtrips")
       (let [{:keys [total succeeded failed]} (roundtrip-meme-file path)]
         (is (pos? total) (str path " should have forms"))

@@ -1,9 +1,9 @@
 (ns meme.emit-fixtures-test
-  "Emit fixture tests: verify meme→clj and clj→meme conversion output
+  "Emit fixture tests: verify mclj→clj and clj→mclj conversion output
    matches expected fixture files in test/examples/fixtures-emit/.
    Runs against every built-in lang pipeline.
-   Every .meme file must have both .meme.clj and .meme.cljs counterparts.
-   Every .clj source file must have a .clj.meme counterpart.
+   Every .mclj file must have both .mclj.clj and .mclj.cljs counterparts.
+   Every .clj source file must have a .clj.mclj counterpart.
    Missing files are test errors, not skips."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
@@ -22,7 +22,7 @@
 
 (deftest emit-fixture-meme-to-clj
   (let [dir (io/file emit-dir)
-        meme-files (sort (filter #(and (.endsWith (.getName %) ".meme")
+        meme-files (sort (filter #(and (.endsWith (.getName %) ".mclj")
                                        (not (str/includes? (.getName %) ".clj.")))
                                  (.listFiles dir)))
         builtins (sort-by key (registry/builtin-langs))]
@@ -45,7 +45,7 @@
 (deftest emit-fixture-clj-to-mclj
   (let [dir (io/file emit-dir)
         clj-files (sort (filter #(and (.endsWith (.getName %) ".clj")
-                                      (not (str/includes? (.getName %) ".meme.")))
+                                      (not (str/includes? (.getName %) ".mclj.")))
                                 (.listFiles dir)))
         builtins (sort-by key (registry/builtin-langs))]
     (doseq [[lang-name _] builtins]
@@ -53,10 +53,10 @@
         (when clj->mclj
           (doseq [clj-file clj-files]
             (let [base (.getName clj-file)
-                  meme-file (io/file emit-dir (str base ".meme"))]
-              (testing (str (name lang-name) ": " base " → .meme")
-                (is (.exists meme-file) (str "Missing required: " base ".meme"))
+                  meme-file (io/file emit-dir (str base ".mclj"))]
+              (testing (str (name lang-name) ": " base " → .mclj")
+                (is (.exists meme-file) (str "Missing required: " base ".mclj"))
                 (when (.exists meme-file)
                   (is (= (str/trim-newline (slurp meme-file))
                          (clj->mclj (str/trim-newline (slurp clj-file))))
-                      (str base " clj→meme mismatch")))))))))))
+                      (str base " clj→mclj mismatch")))))))))))

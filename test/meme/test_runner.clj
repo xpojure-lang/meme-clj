@@ -1,5 +1,5 @@
 (ns meme.test-runner
-  "Run .meme tests: eval-based and fixture-based.
+  "Run .mclj tests: eval-based and fixture-based.
    All test sections run against every built-in lang pipeline."
   (:require [meme.tools.clj.forms :as forms]
             [meme.tools.clj.errors :as errors]
@@ -64,11 +64,11 @@
        :clj->mclj   (ns-resolve (find-ns ns-sym) 'clj->mclj)})))
 
 ;; ---------------------------------------------------------------------------
-;; Eval-based tests (test/examples/tests/*.meme — self-asserting)
+;; Eval-based tests (test/examples/tests/*.mclj — self-asserting)
 ;; ---------------------------------------------------------------------------
 
 (defn- lang-extension
-  "Return the primary file extension for a lang-map (e.g. \".meme\")."
+  "Return the primary file extension for a lang-map (e.g. \".mclj\")."
   [lang-map]
   (or (:extension lang-map)
       (first (:extensions lang-map))))
@@ -107,7 +107,7 @@
           failed))))))
 
 ;; ---------------------------------------------------------------------------
-;; Parse fixture tests (test/examples/fixtures-parse/*.meme + *.edn)
+;; Parse fixture tests (test/examples/fixtures-parse/*.mclj + *.edn)
 ;; ---------------------------------------------------------------------------
 
 (defn- run-parse-fixtures-for-lang
@@ -115,13 +115,13 @@
   [dir mclj->forms-fn]
   (let [file-obj (io/file dir)
         files (sort (or (.listFiles file-obj) []))
-        meme-files (filter #(.endsWith (.getName %) ".meme") files)]
+        meme-files (filter #(.endsWith (.getName %) ".mclj") files)]
     (if (empty? meme-files)
-      (do (println (str "  ERROR: no .meme files found in " dir))
+      (do (println (str "  ERROR: no .mclj files found in " dir))
           1)
       (let [results (doall
                      (for [f meme-files]
-                       (let [base (str/replace (.getName f) #"\.meme$" "")
+                       (let [base (str/replace (.getName f) #"\.mclj$" "")
                              edn-file (io/file dir (str base ".edn"))]
                          (print (str "  " (.getName f) " ... "))
                          (flush)
@@ -160,11 +160,11 @@
   [dir mclj->clj-fn clj->mclj-fn]
   (let [file-obj (io/file dir)
         files (sort (or (.listFiles file-obj) []))
-        meme-files (filter #(and (.endsWith (.getName %) ".meme")
+        meme-files (filter #(and (.endsWith (.getName %) ".mclj")
                                  (not (str/includes? (.getName %) ".clj.")))
                            files)
         clj-files (filter #(and (.endsWith (.getName %) ".clj")
-                                (not (str/includes? (.getName %) ".meme.")))
+                                (not (str/includes? (.getName %) ".mclj.")))
                           files)
         fails (atom 0)]
     (when (and (empty? meme-files) (empty? clj-files))
@@ -203,8 +203,8 @@
     (when clj->mclj-fn
       (doseq [f clj-files]
         (let [base (.getName f)
-              meme-file (io/file dir (str base ".meme"))]
-          (print (str "  " base " → .meme ... "))
+              meme-file (io/file dir (str base ".mclj"))]
+          (print (str "  " base " → .mclj ... "))
           (flush)
           (if-not (.exists meme-file)
             (do (println "MISSING") (println (str "    Required: " (.getName meme-file)))
