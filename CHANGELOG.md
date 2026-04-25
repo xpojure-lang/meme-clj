@@ -84,15 +84,31 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction, implojure-la
 
 - **`cli` bad-flag error matched by regex.** The `-main` catch used `(re-find #"(?i)coerce" msg)` to detect babashka.cli failures, which would miss `:require` and future failure modes. Replaced with a structured `(= :org.babashka/cli (:type (ex-data e)))` match. Scar-tissue regression: `bad-coerce-flag-is-clean-error` in `test/e2e/cli_test.clj`.
 
+- **`columnar-pairs-doc` empty-input crash.** `src/mclj_lang/printer.cljc:166` called `(apply max key-widths)` with no guard. All 3 current callers happen to pre-empty-check, but the function itself was a trap for any future caller. Now falls back to 0 when `key-widths` is empty.
+
+- **`registry/resolve-symbol` non-invocable result.** When a user EDN symbol resolved to a non-fn value (e.g. a config var or nil-bound var), the value flowed through `resolve-value` and either trapped at the `:else` branch with `"got nil"` or sneaked past as `ifn?` (maps/vectors are `ifn?`) and failed cryptically at call time. Now rejects at the symbol-resolution site with `"resolved to a non-invocable value of type X"`.
+
 ### Internal
 
 - **CLI `--out` validation deduplicated.** Extracted `validate-out-dir!` — both `transpile-meme` and `build` now share a single error path for blank `--out` values instead of two copy-pasted inline blocks. Test: `out-dir-validation` in `test/meme/cli_test.clj`.
 
 - **BOM + shebang stripping consolidated in `meme.tools.clj.stages`.** New `strip-bom` and `strip-source-preamble` helpers; `strip-source-preamble` composes BOM-strip followed by shebang-strip (BOM comes first — a UTF-8 file may legally begin with a BOM before any shebang). `clj-run-fn` now calls `strip-source-preamble` instead of re-implementing BOM-strip inline, and the tooling convenience `stages/run` tolerates leading BOMs as well. Tests: `bom-stripping` and `strip-source-preamble-composition` in `test/meme_lang/stages_test.cljc`.
 
+- **`clear-user-langs!` moved out of production code.** Was a `^:no-doc` test-only helper in `src/meme/registry.clj`; production `src/` now carries no test-only API surface. Moved to `test/meme/test_registry.clj` (reaches into the private registry atom via `@#'meme.registry/registry`). Test fixtures and the dedicated `clear-user-langs-works` test in `registry_test.clj` updated to use `test-registry/clear-user-langs!`.
+
+- **Tombstoned scar comments inlined as real assertions.** `test/meme/regression/reader_test.cljc` had three scar headers (auto-resolve keyword deferred, leading-zero octal rejection, leading-BOM acceptance) with bare `;; Covered by X` comments and no `deftest` body — meaning the named scar would silently lose coverage if the "covering" test in another file was renamed or moved. Added local asserts (`auto-resolve-keyword-deferred`, `leading-zero-octal-with-8-or-9-rejected`, `leading-bom-stripped-as-trivia`) so the regression net is locally guaranteed.
+
+- **Dogfood roundtrip expanded.** `test/meme/dogfood_test.clj` now includes `meme.tools.parser`, `meme.tools.render`, `mclj-lang.grammar`, `mclj-lang.form_shape`, and `mclj-lang.formatter.canon` in both per-form roundtrip and clj-kondo semantic-equivalence — the largest source files were previously only exercised via vendor libs.
+
+- **Direct unit test for `meme.tools.clj.lex`.** New `test/meme/tools/clj/lex_test.cljc`. The lex layer was previously tested only indirectly via grammar/parser; this adds targeted asserts for `consume-char-literal` (`\\uXXXX` malformed-then-consume-trailing semantics, `\\oNNN`, named chars, single-char literals), `consume-symbol` (invisible-char rejection: ZWSP, BOM, variation selectors), `consume-keyword` (`::auto-resolve`, namespaced), `consume-number` (hex, ratio, exponent), `consume-string` (escaped quote, unterminated-to-EOF), and the `whitespace-char?` / `symbol-start?` predicates.
+
+- **CLAUDE.md carve-out wording.** The "kinds + infrastructure" rule said the `meme.tools.clj.{run,repl} → meme.loader` carve-out was "one `install!` call each"; in fact `meme.tools.clj.run` also calls `loader/warn-deprecated-extension!` for soft-deprecated `.meme*` extensions. Wording updated to acknowledge both call sites.
+
 ### Docs
 
 - **`meme.tools.parser` namespace docstring** rewritten to enumerate the parselet-author API — engine primitives (`peek-char`, `advance!`, `eof?`, `cursor`, etc.), token helpers, sub-parsing (`parse-expr`, `parse-until`, `expect-close!`), CST construction, and the full nud/led factory set. The 4.0.0 CHANGELOG entry described the engine as "exposing only `trivia-pending?` to language grammars", but grammars routinely call the broader surface; the docstring is now aligned with actual usage.
+
+- **Stale references swept from prose docs.** `doc/PRD.md` title `"meme clojure"` → `"mclj"`; `doc/design-decisions.md` `read-meme-string` → `mclj->forms` (function had been renamed; the old name no longer existed anywhere in the codebase); `doc/api.md` now documents `mclj-lang.api/format-mclj` (source-to-source convenience used by `meme format` CLI) and `meme.tools.clj.stages/strip-bom`, both previously public but undocumented.
 
 ## [5.0.0] — 2026-04-19
 
