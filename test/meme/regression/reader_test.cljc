@@ -919,11 +919,11 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest read-cond-opt-throws
-  (testing "mclj->forms with :read-cond throws :meme/deprecated-opt"
+  (testing "mclj->forms with :read-cond throws :mclj/deprecated-opt"
     (try (lang/mclj->forms "x" {:read-cond :preserve})
          (is false "should have thrown")
          (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
-           (is (= :meme/deprecated-opt (:type (ex-data e))))
+           (is (= :mclj/deprecated-opt (:type (ex-data e))))
            (is (= :read-cond (:opt (ex-data e))))
            (is (re-find #"no longer supported" (ex-message e))))))
   (testing "step-read directly also guards"

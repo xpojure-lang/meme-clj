@@ -151,17 +151,17 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-fn-shorthand
-  (testing "sugar: #() when :meme/sugar tagged"
+  (testing "sugar: #() when :mclj/sugar tagged"
     (is (= "#(inc(%1))"
-           (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:meme/sugar true})))))
+           (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:mclj/sugar true})))))
   (testing "call form when not tagged"
     (is (= "fn([%1] inc(%1))"
            (fmt-flat/format-form '(fn [%1] (inc %1)))))))
 
 (deftest print-fn-shorthand-zero-params
-  (testing "sugar: #() when :meme/sugar tagged"
+  (testing "sugar: #() when :mclj/sugar tagged"
     (is (= "#(rand())"
-           (fmt-flat/format-form (with-meta '(fn [] (rand)) {:meme/sugar true})))))
+           (fmt-flat/format-form (with-meta '(fn [] (rand)) {:mclj/sugar true})))))
   (testing "call form when not tagged"
     (is (= "fn([] rand())"
            (fmt-flat/format-form '(fn [] (rand)))))))
@@ -187,20 +187,20 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-deref
-  (testing "sugar: @x when :meme/sugar tagged"
-    (is (= "@state" (fmt-flat/format-form (with-meta '(clojure.core/deref state) {:meme/sugar true})))))
+  (testing "sugar: @x when :mclj/sugar tagged"
+    (is (= "@state" (fmt-flat/format-form (with-meta '(clojure.core/deref state) {:mclj/sugar true})))))
   (testing "call form when not tagged"
     (is (= "clojure.core/deref(state)" (fmt-flat/format-form '(clojure.core/deref state))))))
 
 (deftest print-var-quote
-  (testing "sugar: #'x when :meme/sugar tagged"
-    (is (= "#'foo" (fmt-flat/format-form (with-meta '(var foo) {:meme/sugar true})))))
+  (testing "sugar: #'x when :mclj/sugar tagged"
+    (is (= "#'foo" (fmt-flat/format-form (with-meta '(var foo) {:mclj/sugar true})))))
   (testing "call form when not tagged"
     (is (= "var(foo)" (fmt-flat/format-form '(var foo))))))
 
 (deftest print-quote
-  (testing "sugar: 'x when :meme/sugar tagged"
-    (is (= "'foo" (fmt-flat/format-form (with-meta '(quote foo) {:meme/sugar true})))))
+  (testing "sugar: 'x when :mclj/sugar tagged"
+    (is (= "'foo" (fmt-flat/format-form (with-meta '(quote foo) {:mclj/sugar true})))))
   (testing "call form when not tagged"
     (is (= "quote(foo)" (fmt-flat/format-form '(quote foo))))))
 
@@ -316,10 +316,10 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-anon-fn-shorthand
-  (testing "#() sugar when :meme/sugar tagged"
-    (is (= "#(inc(%1))" (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:meme/sugar true})))))
+  (testing "#() sugar when :mclj/sugar tagged"
+    (is (= "#(inc(%1))" (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:mclj/sugar true})))))
   (testing "#() zero params when tagged"
-    (is (= "#(rand())" (fmt-flat/format-form (with-meta '(fn [] (rand)) {:meme/sugar true})))))
+    (is (= "#(rand())" (fmt-flat/format-form (with-meta '(fn [] (rand)) {:mclj/sugar true})))))
   (testing "fn() when not tagged"
     (is (= "fn([%1] inc(%1))" (fmt-flat/format-form '(fn [%1] (inc %1))))))
   (testing "%& rest param falls through to fn form"

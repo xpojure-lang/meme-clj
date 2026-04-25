@@ -68,7 +68,7 @@
   (when-not (false? (:install-loader? opts)) (loader/install!))
   (let [grammar (or (:grammar opts)
                     (throw (ex-info "meme.tools.clj.repl/start requires :grammar"
-                                    {:type :meme/missing-grammar})))
+                                    {:type :mclj/missing-grammar})))
         stages-impl (:stages opts)
         base-run (or (:run-fn stages-impl) repl-pipeline)
         ;; Inject :grammar into every opts the REPL hands to the run-fn.
