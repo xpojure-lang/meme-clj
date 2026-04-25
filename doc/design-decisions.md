@@ -426,7 +426,7 @@ Both problems have the same fix: invert the control.
 (ns meme.cli
   (:require [meme.registry :as registry]
             [meme.loader :as loader]
-            [mclj-lang.api]      ;; side-effect: registers :meme
+            [mclj-lang.api]      ;; side-effect: registers :mclj
             ;; additional built-ins added the same way
             ...))
 ```
@@ -500,7 +500,7 @@ EDN resolution (`resolve-edn`, which reads the classpath for the lang's grammar)
 
 ## Lang backend
 
-meme uses a single implementation of the meme↔Clojure translation, registered as `:meme` in the lang registry.
+meme uses a single implementation of the meme↔Clojure translation, registered as `:mclj` in the lang registry.
 
 The pipeline combines a unified scanlet-parselet Pratt parser (`meme.tools.parser` with `mclj-lang.grammar`) and a Wadler-Lindig document printer (`mclj-lang.printer`). It preserves all metadata, sugar flags (`:mclj/sugar`), whitespace annotations, and comment positions through roundtrips.
 

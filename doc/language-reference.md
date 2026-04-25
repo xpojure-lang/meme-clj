@@ -418,8 +418,7 @@ A lang registers one or more file extensions. Both `:extension` (string) and `:e
 ```clojure
 ;; EDN file — single extension
 {:extension ".ml"
- :run "path/to/prelude.mclj"
- :format :meme}
+ :run "path/to/prelude.mclj"}
 
 ;; Runtime — multiple extensions
 (registry/register! :my-lang {:extensions [".ml" ".mlx"]

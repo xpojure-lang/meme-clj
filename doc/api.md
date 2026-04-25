@@ -146,7 +146,7 @@ Convert a Clojure source string to meme source string. JVM/Babashka only. Equiva
 mclj-lang.api/lang-map
 ```
 
-The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:run`, `:repl`. `:to-mclj` (CLI alias `from-clj`) is optional — only present on langs that own a syntax printer. Meme registers itself under `:meme` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly.
+The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:run`, `:repl`. `:to-mclj` (CLI alias `from-clj`) is optional — only present on langs that own a syntax printer. Meme registers itself under `:mclj` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly.
 
 ## mclj-lang.form-shape
 
@@ -201,7 +201,7 @@ Low-level Doc tree builder. Most callers should use `formatter.flat` or `formatt
 
 Convert a Clojure form to a Wadler-Lindig Doc tree. The Doc tree is passed to `meme.tools.render/layout` for final string output.
 
-- `mode` — `:meme` (call notation, default) or `:clj` (standard Clojure with reader sugar).
+- `mode` — `:mclj` (call notation, default) or `:clj` (standard Clojure with reader sugar).
 - `style` — layout policy map (nil = pass-through). Keyed by semantic slot names from `mclj-lang.form-shape` (`:name`, `:params`, `:bindings`, etc.), not by form names. See `mclj-lang.formatter.canon/style` for the canonical policy.
 - `form-shape` — registry map `{head-symbol → decomposer-fn}`. When nil, no special-form decomposition runs and every call renders as a plain body sequence. Callers normally pass `mclj-lang.form-shape/registry`; the lang's `lang-map` exposes its registry under `:form-shape`.
 
@@ -481,7 +481,7 @@ Unified CLI for meme. JVM/Babashka only.
 | `meme inspect [--lang]` | Show lang info and supported commands |
 | `meme version` | Print version |
 
-All file commands accept directories (processed recursively) and multiple paths. `to-clj`, `to-mclj`, and `format` accept `--stdout` to print to stdout instead of writing files. Use `--lang` to select a lang backend (default: meme).
+All file commands accept directories (processed recursively) and multiple paths. `to-clj`, `to-mclj`, and `format` accept `--stdout` to print to stdout instead of writing files. Use `--lang` to select a lang backend (default: mclj).
 
 Entry point: `-main` dispatches via `babashka.cli`. For Clojure JVM, use `-T:meme` (e.g., `clojure -T:meme run :file '"hello.mclj"'`).
 
@@ -648,8 +648,7 @@ Both `:extension` (string) and `:extensions` (vector) are accepted. Both are nor
 ```clojure
 ;; Single extension — prelude file path
 (registry/register! :my-lang {:extension ".ml"
-                              :run "path/to/prelude.mclj"
-                              :format :meme})
+                              :run "path/to/prelude.mclj"})
 
 ;; Multiple extensions — pre-resolved run fn
 (registry/register! :my-lang {:extensions [".ml" ".mlx"]

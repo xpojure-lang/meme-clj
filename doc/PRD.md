@@ -297,6 +297,6 @@ meme rules inside. No opaque regions.
   and formatting via the existing lossless CST pipeline. Could extend
   clojure-lsp or be a standalone server using the meme parser directly.
 - **meme-mcp**: Model Context Protocol server exposing meme's pipeline
-  (parse, read, format, to-clj, to-meme) as MCP tools for AI agents.
+  (parse, read, format, to-clj, to-mclj) as MCP tools for AI agents.
   Enables LLMs to read, write, and transform `.mclj` code natively
   without converting through Clojure first.
