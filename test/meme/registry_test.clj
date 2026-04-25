@@ -3,6 +3,7 @@
    lang registration."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.registry :as registry]
+            [meme.test-registry :as test-registry]
             ;; Explicit require triggers :mclj self-registration.
             [mclj-lang.api]
             [mclj-lang.run :as run]))
@@ -18,7 +19,7 @@
     (.deleteOnExit f)
     (str f)))
 
-(use-fixtures :each (fn [f] (registry/clear-user-langs!) (f) (registry/clear-user-langs!)))
+(use-fixtures :each (fn [f] (test-registry/clear-user-langs!) (f) (test-registry/clear-user-langs!)))
 
 (defn- registry-resolver
   "Test-side glue matching what the CLI wires: :lang opt wins, extension falls
@@ -205,7 +206,7 @@
   (testing "clear-user-langs! empties user registry"
     (registry/register! :test {:extension ".tst"})
     (is (seq (registry/registered-langs)))
-    (registry/clear-user-langs!)
+    (test-registry/clear-user-langs!)
     (is (empty? (registry/registered-langs)))))
 
 ;; ---------------------------------------------------------------------------
@@ -218,7 +219,7 @@
                           (registry/register! :mclj {:to-clj identity}))))
   (testing "custom name still works"
     (registry/register! :my-custom-lang {:to-clj identity})
-    (registry/clear-user-langs!)))
+    (test-registry/clear-user-langs!)))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-H5: EDN :run path with .. traversal should be rejected.

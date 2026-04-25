@@ -15,8 +15,15 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: auto-resolve keywords are deferred (CljAutoKeyword records).
-;; Covered by resolve_test and roundtrip_test.
+;; Deeper coverage in resolve_test and roundtrip_test; this assert exists so
+;; a regression here can never go silently uncovered if those move.
 ;; ---------------------------------------------------------------------------
+
+(deftest auto-resolve-keyword-deferred
+  (testing "::foo is read as a deferred CljAutoKeyword (not resolved at read time)"
+    (let [form (first (lang/mclj->forms "::foo"))]
+      (is (forms/deferred-auto-keyword? form))
+      (is (= "::foo" (forms/deferred-auto-keyword-raw form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: ratio literals.
@@ -53,8 +60,17 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: leading-zero integers with digits 8/9 must error.
-;; Covered by scan_test.cljc invalid-octal-digits test.
+;; Deeper coverage in scan_test.cljc; this assert exists so the
+;; reader-level rejection can never go silently uncovered.
 ;; ---------------------------------------------------------------------------
+
+(deftest leading-zero-octal-with-8-or-9-rejected
+  (testing "08 — digit 8 in octal literal must error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (lang/mclj->forms "08"))))
+  (testing "09 — digit 9 in octal literal must error"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+                 (lang/mclj->forms "09")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: duplicate set elements and map keys are rejected at read time.
@@ -73,8 +89,13 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: BOM (U+FEFF) at start of source is stripped as trivia.
-;; Covered by grammar's bom-consumer and run.clj's string-level strip.
+;; Deeper coverage in stages_test/api_test/run_test; this assert exists so
+;; the reader-level acceptance of leading-BOM source is locally guaranteed.
 ;; ---------------------------------------------------------------------------
+
+(deftest leading-bom-stripped-as-trivia
+  (testing "BOM at start parses cleanly"
+    (is (= '[(def x 1)] (lang/mclj->forms "﻿def(x 1)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: CRLF shebang left stray \n, causing off-by-one line numbers.

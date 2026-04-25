@@ -105,6 +105,18 @@ Options:
 ;=> "defn(greet [name]\n  println(str(\"Hello \" name)))"
 ```
 
+#### format-mclj
+
+```clojure
+(mclj-lang.api/format-mclj meme-src)
+(mclj-lang.api/format-mclj meme-src opts)
+```
+
+Source-to-source convenience: parses a meme source string and re-emits it via `format-mclj-forms` at the requested width. Equivalent to `(format-mclj-forms (mclj->forms meme-src) opts)`. Used by the `meme format` CLI command. All platforms.
+
+Options:
+- `:width` — target line width (default: 80)
+
 ### Text-to-text track
 
 #### mclj->clj
@@ -446,6 +458,14 @@ Plain-forms convenience wrapper around `step-expand-syntax-quotes` that doesn't 
 ```
 
 Remove a leading `#!` line from a source string. Invoked by runtime paths before `step-parse` so executable scripts (`#!/usr/bin/env bb meme run`) parse cleanly. Handles both `\n` and `\r\n` line endings. Returns the source unchanged if it does not start with `#!`.
+
+### strip-bom
+
+```clojure
+(meme.tools.clj.stages/strip-bom source)
+```
+
+Remove a single leading UTF-8 BOM (`﻿`) from a source string. Invoked by runtime paths before `step-parse` so files saved with a BOM by Windows editors parse cleanly. Returns the source unchanged when no BOM is present. For most callers, prefer `strip-source-preamble`, which composes BOM and shebang stripping in the right order.
 
 ### run
 

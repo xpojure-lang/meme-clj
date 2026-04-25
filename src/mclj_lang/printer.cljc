@@ -163,7 +163,7 @@
   [pairs ctx]
   (let [key-docs (mapv #(to-doc-inner (first %) ctx) pairs)
         key-widths (mapv doc-flat-width key-docs)
-        max-key-w (apply max key-widths)]
+        max-key-w (if (seq key-widths) (apply max key-widths) 0)]
     (mapv (fn [pair key-doc key-w]
             (if (= 2 (count pair))
               (let [pad-n (- max-key-w key-w)

@@ -239,7 +239,7 @@ it has a scar tissue test.
 - **With `:resolve-keyword` option** (REPL, file runner): resolved at
   read time to `:actual.ns/foo`, matching Clojure's semantics. The
   caller provides the resolver function.
-- **Without option on JVM/Babashka** (tooling, bare `read-meme-string`):
+- **Without option on JVM/Babashka** (tooling, bare `mclj->forms`):
   deferred to eval time. The printer detects the deferred form and
   emits `::foo` for roundtripping.
 - **Without option on CLJS**: errors, since deferred resolution would
