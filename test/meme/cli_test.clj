@@ -218,7 +218,7 @@
 
 (deftest help-prints-commands-and-langs
   (let [out (with-out-str (cli/help nil))]
-    (is (str/includes? out "meme — M-expressions for Clojure"))
+    (is (str/includes? out "meme-clj — syntax-experimentation toolkit (m1clj is the first language)"))
     (is (str/includes? out "Commands:"))
     (is (str/includes? out "meme run"))
     (is (str/includes? out "meme repl"))
