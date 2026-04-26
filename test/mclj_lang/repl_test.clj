@@ -5,6 +5,7 @@
             [mclj-lang.api :as lang]
             [mclj-lang.repl]
             [mclj-lang.grammar :as grammar]
+            [meme.tools.clj.repl :as clj-repl]
             [meme.tools.clj.stages :as stages]
             [meme.tools.repl]))
 
@@ -160,3 +161,17 @@
     (let [result (binding [*out* (java.io.StringWriter.)]
                    (read-input "=> " (mock-read-line [""]) nil))]
       (is (= "" result)))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: meme.tools.clj.repl/start without :grammar must fail with a
+;; named ex-info, not silently boot a half-configured REPL. Built-in mclj-lang
+;; injects grammar in its shim; user-written sibling langs must do the same.
+;; ---------------------------------------------------------------------------
+
+(deftest tools-clj-repl-start-without-grammar-throws
+  (testing "missing :grammar surfaces as :mclj/missing-grammar ex-info"
+    (try (clj-repl/start {:install-loader? false})
+         (is false "expected :mclj/missing-grammar but no exception thrown")
+         (catch clojure.lang.ExceptionInfo e
+           (is (= :mclj/missing-grammar (:type (ex-data e))))
+           (is (re-find #"requires :grammar" (ex-message e)))))))

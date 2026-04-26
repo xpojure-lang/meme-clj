@@ -95,7 +95,7 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 (mclj-lang.api/format-mclj-forms forms opts)
 ```
 
-Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:mclj/leading-trivia` metadata (attached by the pipeline's scan stage). All platforms.
+Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:mclj/leading-trivia` metadata (attached by the parser during `step-parse`). All platforms.
 
 Options:
 - `:width` — target line width (default: 80)

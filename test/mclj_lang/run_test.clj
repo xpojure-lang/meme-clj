@@ -164,3 +164,11 @@
     (is (= 3 (run/run-string (str "\uFEFF" "+(1 2)")))))
   (testing "source without BOM still works"
     (is (= 3 (run/run-string "+(1 2)")))))
+
+(deftest run-string-numeric-literals
+  (testing "hex literal evaluates to its decimal value"
+    (is (= 255 (run/run-string "0xFF"))))
+  (testing "scientific notation evaluates to a double"
+    (is (= 100.0 (run/run-string "1e2"))))
+  (testing "negative hex evaluates correctly"
+    (is (= -16 (run/run-string "-0x10")))))

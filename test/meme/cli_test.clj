@@ -210,3 +210,56 @@
         (validate! "/absolute/path"))
       (is (false? @exit-called?)
           "nil and non-blank strings must not trigger exit"))))
+
+;; ---------------------------------------------------------------------------
+;; help / version / inspect-lang — direct unit tests for the small println
+;; commands that were only exercised via subprocess e2e.
+;; ---------------------------------------------------------------------------
+
+(deftest help-prints-commands-and-langs
+  (let [out (with-out-str (cli/help nil))]
+    (is (str/includes? out "meme — M-expressions for Clojure"))
+    (is (str/includes? out "Commands:"))
+    (is (str/includes? out "meme run"))
+    (is (str/includes? out "meme repl"))
+    (is (str/includes? out "Langs:"))))
+
+(deftest version-prints-meme-prefix
+  (let [out (with-out-str (cli/version nil))]
+    (is (str/starts-with? out "meme "))))
+
+(deftest inspect-lang-prints-supported-commands
+  (testing "default lang"
+    (let [out (with-out-str (cli/inspect-lang {}))]
+      (is (str/includes? out "Lang: mclj"))
+      (is (str/includes? out "Supported:"))
+      (is (str/includes? out "run"))
+      (is (str/includes? out "format"))))
+  (testing "explicit --lang mclj"
+    (let [out (with-out-str (cli/inspect-lang {:lang "mclj"}))]
+      (is (str/includes? out "Lang: mclj")))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: `run` used to slurp outside its try, so a missing or
+;; unreadable file produced a raw java.io.FileNotFoundException stack trace
+;; instead of a clean CLI error. Fix: wrap slurp; emit "Cannot read file:".
+;; ---------------------------------------------------------------------------
+
+(deftest run-missing-file-clean-error
+  (testing "missing file produces clean error message and exit 1"
+    (let [exit-code (atom nil)
+          err-buf   (java.io.StringWriter.)]
+      ;; cli-exit! must throw so control flow halts (matches production where
+      ;; it throws ::exit ex-info caught by -main); otherwise the function
+      ;; would proceed to call (:run l) on a nil source.
+      (with-redefs [cli/cli-exit! (fn [code]
+                                    (reset! exit-code code)
+                                    (throw (ex-info "test-exit" {::test-exit code})))]
+        (binding [*err* err-buf]
+          (try (cli/run {:file "/nonexistent/path/that/does/not/exist.mclj"})
+               (catch clojure.lang.ExceptionInfo e
+                 (when-not (::test-exit (ex-data e)) (throw e))))))
+      (is (= 1 @exit-code))
+      (is (str/includes? (str err-buf) "Cannot read file"))
+      (is (not (str/includes? (str err-buf) "FileNotFoundException"))
+          "raw Java exception must not surface to user"))))
