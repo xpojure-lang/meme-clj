@@ -283,18 +283,19 @@
 (deftest concurrent-register-conflict-detection
   (testing "concurrent registrations with same extension — at most one succeeds"
     (let [results (atom [])
-          barrier (java.util.concurrent.CyclicBarrier. 2)]
-      (dotimes [i 2]
-        (.start (Thread. (fn []
-                           (.await barrier)
-                           (try
-                             (registry/register! (keyword (str "conc" i))
-                                                 {:extension ".conflict-test"
-                                                  :run 'mclj-lang.run/run-string})
-                             (swap! results conj [:ok i])
-                             (catch Exception _
-                               (swap! results conj [:error i])))))))
-      (Thread/sleep 500)
+          barrier (java.util.concurrent.CyclicBarrier. 2)
+          futures (mapv (fn [i]
+                          (future
+                            (.await barrier)
+                            (try
+                              (registry/register! (keyword (str "conc" i))
+                                                  {:extension ".conflict-test"
+                                                   :run 'mclj-lang.run/run-string})
+                              (swap! results conj [:ok i])
+                              (catch Exception _
+                                (swap! results conj [:error i])))))
+                        (range 2))]
+      (run! deref futures)
       (let [ok-count (count (filter #(= :ok (first %)) @results))
             error-count (count (filter #(= :error (first %)) @results))]
         (is (<= ok-count 1) "at most one registration should succeed")

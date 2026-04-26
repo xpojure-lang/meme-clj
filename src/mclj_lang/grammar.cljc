@@ -11,6 +11,16 @@
             [mclj-lang.parselets :as mp]
             [meme.tools.clj.forms :as forms]))
 
+(declare grammar)
+
+(defn with-grammar
+  "Inject the mclj grammar as `:grammar` on `opts` if the caller didn't
+   supply one. Used by mclj-lang's `api`, `run`, and `repl` shims so each
+   stage entry-point can pass the grammar through to the generic toolkit
+   without each caller threading it manually."
+  [opts]
+  (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar)))
+
 (def grammar
   "Meme language grammar: characters → scanlets."
   {:nud
