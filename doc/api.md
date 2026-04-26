@@ -470,17 +470,10 @@ Remove a single leading UTF-8 BOM (`﻿`) from a source string. Invoked by runti
 ### run
 
 ```clojure
-(meme.tools.clj.stages/run source)
 (meme.tools.clj.stages/run source opts)
 ```
 
-Run the pipeline: `step-parse → step-read`. Returns the complete context map. Does **not** include `step-expand-syntax-quotes` — forms contain AST nodes (`CljSyntaxQuote`, `CljRaw`) for tooling access. Call `step-expand-syntax-quotes` separately if you need eval-ready forms.
-
-```clojure
-(meme.tools.clj.stages/run "+(1 2)")
-;=> {:source "+(1 2)", :opts nil,
-;    :cst [...], :forms [(+ 1 2)]}
-```
+Run the pipeline: `step-parse → step-read`. `opts` must include `:grammar` (each lang supplies its own; e.g. `mclj-lang.grammar/grammar`). Returns the complete context map. Does **not** include `step-expand-syntax-quotes` — forms contain AST nodes (`CljSyntaxQuote`, `CljRaw`) for tooling access. Call `step-expand-syntax-quotes` separately if you need eval-ready forms.
 
 
 ## meme.cli

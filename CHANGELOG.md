@@ -106,6 +106,8 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **Stale references swept from prose docs.** `doc/PRD.md` title `"meme clojure"` → `"mclj"`; `doc/design-decisions.md` `read-meme-string` → `mclj->forms` (function had been renamed; the old name no longer existed anywhere in the codebase); `doc/api.md` now documents `mclj-lang.api/format-mclj` (source-to-source convenience used by `meme format` CLI) and `meme.tools.clj.stages/strip-bom`, both previously public but undocumented.
 
+- **`stages/run` doc updated for the grammar-required contract.** The `doc/api.md` example called `(stages/run "+(1 2)")`, which throws `:mclj/pipeline-error` since `step-parse` requires `:grammar` in opts (no implicit default). Removed the broken example and the no-arg signature; the remaining 2-arg signature now states the `:grammar` requirement inline.
+
 ## [5.0.0] — 2026-04-19
 
 Reader-conditional handling is now a pipeline stage instead of a reader flag. `meme->forms` and `meme->clj` are lossless by default for `.cljc` sources.
