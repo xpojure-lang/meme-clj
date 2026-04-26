@@ -1,12 +1,12 @@
 (ns meme.test-runner
-  "Run .mclj tests: eval-based and fixture-based.
+  "Run .m1clj tests: eval-based and fixture-based.
    All test sections run against every built-in lang pipeline."
   (:require [meme.tools.clj.forms :as forms]
             [meme.tools.clj.errors :as errors]
             [meme.registry :as registry]
             ;; Explicit requires trigger self-registration of each built-in
             ;; lang (post-refactor: registry imports no langs).
-            [mclj-lang.api]
+            [m1clj-lang.api]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]))
@@ -53,22 +53,22 @@
 
 (defn- resolve-lang-fns
   "Resolve the API functions for a built-in lang by requiring its namespace.
-   Returns a map of {:mclj->forms fn, :mclj->clj fn, :clj->mclj fn}, or nil
+   Returns a map of {:m1clj->forms fn, :m1clj->clj fn, :clj->m1clj fn}, or nil
    if the lang has no meme-compatible API."
   [lang-kw]
-  (when (= lang-kw :mclj)
-    (let [ns-sym 'mclj-lang.api]
+  (when (= lang-kw :m1clj)
+    (let [ns-sym 'm1clj-lang.api]
       (require ns-sym)
-      {:mclj->forms (ns-resolve (find-ns ns-sym) 'mclj->forms)
-       :mclj->clj   (ns-resolve (find-ns ns-sym) 'mclj->clj)
-       :clj->mclj   (ns-resolve (find-ns ns-sym) 'clj->mclj)})))
+      {:m1clj->forms (ns-resolve (find-ns ns-sym) 'm1clj->forms)
+       :m1clj->clj   (ns-resolve (find-ns ns-sym) 'm1clj->clj)
+       :clj->m1clj   (ns-resolve (find-ns ns-sym) 'clj->m1clj)})))
 
 ;; ---------------------------------------------------------------------------
-;; Eval-based tests (test/examples/tests/*.mclj — self-asserting)
+;; Eval-based tests (test/examples/tests/*.m1clj — self-asserting)
 ;; ---------------------------------------------------------------------------
 
 (defn- lang-extension
-  "Return the primary file extension for a lang-map (e.g. \".mclj\")."
+  "Return the primary file extension for a lang-map (e.g. \".m1clj\")."
   [lang-map]
   (or (:extension lang-map)
       (first (:extensions lang-map))))
@@ -107,21 +107,21 @@
           failed))))))
 
 ;; ---------------------------------------------------------------------------
-;; Parse fixture tests (test/examples/fixtures-parse/*.mclj + *.edn)
+;; Parse fixture tests (test/examples/fixtures-parse/*.m1clj + *.edn)
 ;; ---------------------------------------------------------------------------
 
 (defn- run-parse-fixtures-for-lang
-  "Run fixture tests using the given lang's mclj->forms."
-  [dir mclj->forms-fn]
+  "Run fixture tests using the given lang's m1clj->forms."
+  [dir m1clj->forms-fn]
   (let [file-obj (io/file dir)
         files (sort (or (.listFiles file-obj) []))
-        meme-files (filter #(.endsWith (.getName %) ".mclj") files)]
+        meme-files (filter #(.endsWith (.getName %) ".m1clj") files)]
     (if (empty? meme-files)
-      (do (println (str "  ERROR: no .mclj files found in " dir))
+      (do (println (str "  ERROR: no .m1clj files found in " dir))
           1)
       (let [results (doall
                      (for [f meme-files]
-                       (let [base (str/replace (.getName f) #"\.mclj$" "")
+                       (let [base (str/replace (.getName f) #"\.m1clj$" "")
                              edn-file (io/file dir (str base ".edn"))]
                          (print (str "  " (.getName f) " ... "))
                          (flush)
@@ -131,7 +131,7 @@
                            (let [meme-src (slurp (str f))]
                              (try
                                (let [edn-src (slurp (str edn-file))
-                                     actual (mclj->forms-fn meme-src)
+                                     actual (m1clj->forms-fn meme-src)
                                      expected (edn/read-string {:readers edn-readers} edn-src)
                                      diff (diff-forms expected actual)]
                                  (if diff
@@ -157,14 +157,14 @@
 
 (defn- run-emit-fixtures-for-lang
   "Run emit/conversion fixture tests using the given lang's conversion fns."
-  [dir mclj->clj-fn clj->mclj-fn]
+  [dir m1clj->clj-fn clj->m1clj-fn]
   (let [file-obj (io/file dir)
         files (sort (or (.listFiles file-obj) []))
-        meme-files (filter #(and (.endsWith (.getName %) ".mclj")
+        meme-files (filter #(and (.endsWith (.getName %) ".m1clj")
                                  (not (str/includes? (.getName %) ".clj.")))
                            files)
         clj-files (filter #(and (.endsWith (.getName %) ".clj")
-                                (not (str/includes? (.getName %) ".mclj.")))
+                                (not (str/includes? (.getName %) ".m1clj.")))
                           files)
         fails (atom 0)]
     (when (and (empty? meme-files) (empty? clj-files))
@@ -188,7 +188,7 @@
           (try
             (let [meme-src (str/trim-newline (slurp (str f)))
                   expected (str/trim-newline (slurp (str clj-file)))
-                  actual (mclj->clj-fn meme-src)]
+                  actual (m1clj->clj-fn meme-src)]
               (if (= expected actual)
                 (println "OK")
                 (do (println "FAIL")
@@ -200,11 +200,11 @@
               (println (str "    " (.getMessage e)))
               (swap! fails inc))))))
     ;; --- clj→meme direction ---
-    (when clj->mclj-fn
+    (when clj->m1clj-fn
       (doseq [f clj-files]
         (let [base (.getName f)
-              meme-file (io/file dir (str base ".mclj"))]
-          (print (str "  " base " → .mclj ... "))
+              meme-file (io/file dir (str base ".m1clj"))]
+          (print (str "  " base " → .m1clj ... "))
           (flush)
           (if-not (.exists meme-file)
             (do (println "MISSING") (println (str "    Required: " (.getName meme-file)))
@@ -212,7 +212,7 @@
             (try
               (let [clj-src (str/trim-newline (slurp (str f)))
                     expected (str/trim-newline (slurp (str meme-file)))
-                    actual (clj->mclj-fn clj-src)]
+                    actual (clj->m1clj-fn clj-src)]
                 (if (= expected actual)
                   (println "OK")
                   (do (println "FAIL")
@@ -223,7 +223,7 @@
                 (println "ERROR")
                 (println (str "    " (.getMessage e)))
                 (swap! fails inc)))))))
-    (let [total (+ (count meme-files) (if clj->mclj-fn (count clj-files) 0))
+    (let [total (+ (count meme-files) (if clj->m1clj-fn (count clj-files) 0))
           failed @fails
           passed (- total failed)]
       (println (str "  emit: " passed "/" total " passed"
@@ -252,15 +252,15 @@
           (println))
 
         ;; Parse fixtures
-        (when (:mclj->forms fns)
+        (when (:m1clj->forms fns)
           (println (str "  Parse fixtures (test/examples/fixtures-parse):"))
-          (swap! total-fails + (run-parse-fixtures-for-lang "test/examples/fixtures-parse" (:mclj->forms fns)))
+          (swap! total-fails + (run-parse-fixtures-for-lang "test/examples/fixtures-parse" (:m1clj->forms fns)))
           (println))
 
         ;; Emit fixtures
-        (when (:mclj->clj fns)
+        (when (:m1clj->clj fns)
           (println (str "  Emit fixtures (test/examples/fixtures-emit):"))
-          (swap! total-fails + (run-emit-fixtures-for-lang "test/examples/fixtures-emit" (:mclj->clj fns) (:clj->mclj fns)))
+          (swap! total-fails + (run-emit-fixtures-for-lang "test/examples/fixtures-emit" (:m1clj->clj fns) (:clj->m1clj fns)))
           (println))))
 
     @total-fails))

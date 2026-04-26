@@ -1,5 +1,5 @@
 (ns meme.vendor-roundtrip-test
-  "Roundtrip vendor Clojure projects through clj->mclj->clj.
+  "Roundtrip vendor Clojure projects through clj->m1clj->clj.
    Each git submodule in test/vendor/ is a real-world Clojure project.
    Every .clj/.cljc file is roundtripped per-form with precise accounting."
   (:require [clojure.test :refer [deftest is]]

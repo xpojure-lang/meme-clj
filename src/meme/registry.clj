@@ -7,14 +7,14 @@
      :repl     (fn [opts] → nil)            — interactive loop
      :format   (fn [source opts] → text)    — format a file
      :to-clj   (fn [source] → clj-text)     — convert meme→clj
-     :to-mclj  (fn [source] → mclj-text)    — convert clj→mclj
+     :to-m1clj  (fn [source] → m1clj-text)    — convert clj→m1clj
 
    Plus optional metadata:
      :extension   \".ext\"           — file extension (string or vector)
      :extensions  [\".ext\" \".e\"]  — file extensions (string or vector)
      :form-shape  registry           — lang-owned decomposer map consumed by
                                        the printer/formatter (see
-                                       `mclj-lang.form-shape`)
+                                       `m1clj-lang.form-shape`)
    Both extension forms are accepted and normalized to :extensions [...].
 
    Every key is optional. A lang supports exactly the commands it has keys for.
@@ -22,7 +22,7 @@
    Built-in langs are self-describing: each defines a lang-map in its own namespace.
    User langs can be registered via register! with EDN-style config maps.
 
-   String values in a lang-map (e.g. `:run \"prelude.mclj\"` in EDN) are
+   String values in a lang-map (e.g. `:run \"prelude.m1clj\"` in EDN) are
    resolved through handlers installed via `register-string-handler!`. This
    keeps the registry lang-agnostic — langs install their own conventions
    rather than the registry hardcoding meme's."
@@ -70,7 +70,7 @@
   (swap! registry assoc lang-name
          (vary-meta (normalize-extensions lang-map) assoc :builtin? true)))
 
-(def default-lang "The default lang used when none is specified." :mclj)
+(def default-lang "The default lang used when none is specified." :m1clj)
 
 ;; ---------------------------------------------------------------------------
 ;; EDN value resolution (for user-defined langs)
@@ -191,7 +191,7 @@
       (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
                            " — extension must be a non-empty string")
                       {:lang lang-name})))
-    (when (#{".mclj" ".meme"} ext)
+    (when (#{".m1clj" ".meme"} ext)
       (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
                            " — extension " ext " is reserved for built-in langs")
                       {:lang lang-name :extension ext})))

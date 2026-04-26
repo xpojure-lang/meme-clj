@@ -3,14 +3,14 @@
 
    These tests drive the CST reader directly via meme.tools.parser/parse →
    cst-reader/read-forms, bypassing the higher-level stages pipeline and the
-   mclj-lang.api wrappers. Integration-level behavior is covered elsewhere
+   m1clj-lang.api wrappers. Integration-level behavior is covered elsewhere
    (stages_test, reader/*_test) — here we assert that read-forms produces the
    right Clojure values, preserves the right metadata, and raises errors with
    position info for malformed input."
   (:require [clojure.test :refer [deftest is testing]]
             [meme.tools.clj.cst-reader :as cst-reader]
             [meme.tools.clj.forms :as forms]
-            [mclj-lang.grammar :as grammar]
+            [m1clj-lang.grammar :as grammar]
             [meme.tools.parser :as pratt]))
 
 ;; ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@
 
 (deftest read-set-preserves-insertion-order-meta
   (let [s (read1 "#{3 1 2}")]
-    (is (= [3 1 2] (:mclj/insertion-order (meta s))))))
+    (is (= [3 1 2] (:m1clj/insertion-order (meta s))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Reader-sugar forms: quote, deref, var-quote
@@ -151,23 +151,23 @@
 (deftest read-quote-produces-sugar-marker
   (let [form (read1 "'x")]
     (is (= '(quote x) form))
-    (is (true? (:mclj/sugar (meta form))))))
+    (is (true? (:m1clj/sugar (meta form))))))
 
 (deftest read-quote-call-has-no-sugar-marker
-  (testing "quote(x) reads to the same Clojure form but without :mclj/sugar"
+  (testing "quote(x) reads to the same Clojure form but without :m1clj/sugar"
     (let [form (read1 "quote(x)")]
       (is (= '(quote x) form))
-      (is (not (:mclj/sugar (meta form)))))))
+      (is (not (:m1clj/sugar (meta form)))))))
 
 (deftest read-deref-sugar
   (let [form (read1 "@x")]
     (is (= '(clojure.core/deref x) form))
-    (is (true? (:mclj/sugar (meta form))))))
+    (is (true? (:m1clj/sugar (meta form))))))
 
 (deftest read-var-quote-sugar
   (let [form (read1 "#'foo")]
     (is (= '(var foo) form))
-    (is (true? (:mclj/sugar (meta form))))))
+    (is (true? (:m1clj/sugar (meta form))))))
 
 (deftest read-var-quote-non-symbol-error
   (let [d (ex-data-of "#'42")]
@@ -193,9 +193,9 @@
     (is (= 1 (:a (meta form))))))
 
 (deftest read-meta-chain-stacks
-  (testing "multiple ^ annotations accumulate on :mclj/meta-chain"
+  (testing "multiple ^ annotations accumulate on :m1clj/meta-chain"
     (let [form (read1 "^:a ^:b x")
-          chain (:mclj/meta-chain (meta form))]
+          chain (:m1clj/meta-chain (meta form))]
       (is (vector? chain))
       (is (= 2 (count chain))))))
 
@@ -258,7 +258,7 @@
     (is (= 'fn (first form)))
     (is (vector? (nth form 1)))
     (is (= 2 (count (nth form 1))))
-    (is (true? (:mclj/sugar (meta form))))))
+    (is (true? (:m1clj/sugar (meta form))))))
 
 (deftest read-anon-fn-rest-arg
   (let [form (read1 "#(apply + %&)")
@@ -282,13 +282,13 @@
     (is (map? form))
     (is (contains? form :user/name))
     (is (contains? form :user/age))
-    (is (= "user" (:mclj/namespace-prefix (meta form))))))
+    (is (= "user" (:m1clj/namespace-prefix (meta form))))))
 
 (deftest read-auto-namespaced-map-preserves-prefix
-  (testing "#::alias{...} preserves :: prefix in :mclj/namespace-prefix meta"
+  (testing "#::alias{...} preserves :: prefix in :m1clj/namespace-prefix meta"
     (let [form (read1 "#::alias{:k 1}")]
       (is (map? form))
-      (is (= "::alias" (:mclj/namespace-prefix (meta form)))))))
+      (is (= "::alias" (:m1clj/namespace-prefix (meta form)))))))
 
 (deftest read-namespaced-map-odd-count-error
   (let [d (ex-data-of "#:user{:a}")]

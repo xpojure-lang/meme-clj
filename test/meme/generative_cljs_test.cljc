@@ -5,9 +5,9 @@
   (:require [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [mclj-lang.api :as lang]
-            [mclj-lang.formatter.canon :as fmt-canon]
-            [mclj-lang.formatter.flat :as fmt-flat]))
+            [m1clj-lang.api :as lang]
+            [m1clj-lang.formatter.canon :as fmt-canon]
+            [m1clj-lang.formatter.flat :as fmt-flat]))
 
 ;; ===========================================================================
 ;; Leaf generators (portable — no chars, ratios, BigDecimal, BigInt)
@@ -19,7 +19,7 @@
 (def reserved-symbols #{'fn 'quote 'var 'clojure.core/deref
                         (symbol "nil") (symbol "true") (symbol "false")})
 
-(def reserved-meta-keywords #{:mclj/leading-trivia :line :column :file})
+(def reserved-meta-keywords #{:m1clj/leading-trivia :line :column :file})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))
@@ -127,7 +127,7 @@
 (defn roundtrip-ok? [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
-          read-back (lang/mclj->forms printed)]
+          read-back (lang/m1clj->forms printed)]
       (= [form] read-back))
     (catch #?(:clj Exception :cljs :default) _
       false)))
@@ -151,7 +151,7 @@
                              (gen/let [h (gen/fmap str gen-simple-symbol)]
                                (str h "([)"))])]
     (try
-      (lang/mclj->forms meme-str)
+      (lang/m1clj->forms meme-str)
       false
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (let [data (ex-data e)]
@@ -167,7 +167,7 @@
                             [(gen/return "f(x")
                              (gen/return "[1 2")])]
     (try
-      (lang/mclj->forms meme-str)
+      (lang/m1clj->forms meme-str)
       false
       (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e
         (:incomplete (ex-data e)))
@@ -177,6 +177,6 @@
 (defspec prop-cljs-canon-formatter-idempotent 100
   (prop/for-all [form gen-form]
     (let [fmt1 (fmt-canon/format-forms [form] {:width 80})
-          reparsed (lang/mclj->forms fmt1)
+          reparsed (lang/m1clj->forms fmt1)
           fmt2 (fmt-canon/format-forms reparsed {:width 80})]
       (= fmt1 fmt2))))

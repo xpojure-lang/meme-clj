@@ -2,8 +2,8 @@
   "Shared test utilities for meme-clj test suite.
    Extracts helpers that were duplicated across dogfood, vendor roundtrip,
    and benchmark tests."
-  (:require [mclj-lang.api :as lang]
-            [mclj-lang.formatter.flat :as fmt-flat]
+  (:require [m1clj-lang.api :as lang]
+            [m1clj-lang.formatter.flat :as fmt-flat]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -55,11 +55,11 @@
 
 (defn try-roundtrip-form
   "Try to roundtrip a single form. Returns {:ok form} or {:error msg}.
-   mclj->forms preserves ReaderConditional records by default."
+   m1clj->forms preserves ReaderConditional records by default."
   [form]
   (try
     (let [meme-text (fmt-flat/format-form form)
-          forms2 (lang/mclj->forms meme-text)]
+          forms2 (lang/m1clj->forms meme-text)]
       {:ok (if (= 1 (count forms2)) (first forms2) forms2)})
     (catch Exception e
       {:error (.getMessage e)})))

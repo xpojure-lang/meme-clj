@@ -4,9 +4,9 @@ Form-shape is the middle layer in meme's three-layer formatter architecture:
 
 | Layer | Owns | Module |
 |---|---|---|
-| **Notation** | Call-syntax rendering, delimiter placement, mode (mclj vs clj) | `mclj-lang.printer` |
-| **Form-shape** | Decomposing special forms into named semantic slots | `mclj-lang.form-shape` |
-| **Style** | Opinions on layout *per slot name* | `mclj-lang.formatter.canon/style` and any user/lang-provided alternative |
+| **Notation** | Call-syntax rendering, delimiter placement, mode (m1clj vs clj) | `m1clj-lang.printer` |
+| **Form-shape** | Decomposing special forms into named semantic slots | `m1clj-lang.form-shape` |
+| **Style** | Opinions on layout *per slot name* | `m1clj-lang.formatter.canon/style` and any user/lang-provided alternative |
 
 Form-shape is the **language-level semantic vocabulary**: it answers *what the parts of a form mean*, independent of how they're laid out. A lang owns its registry (decision: [lang sovereignty](design-decisions.md)); formatters consume it.
 
@@ -42,7 +42,7 @@ A single form generally emits a mix of these — e.g.
 ### Querying a decomposition
 
 ```clojure
-(require '[mclj-lang.form-shape :as fs])
+(require '[m1clj-lang.form-shape :as fs])
 
 (fs/decompose fs/registry 'defn '[foo [x] (+ x 1)])
 ;=> [[:name foo] [:params [x]] [:body (+ x 1)]]
@@ -88,7 +88,7 @@ Only these two patterns are inferred because they're unambiguous — narrower ru
 ### Passing a registry to the formatter
 
 ```clojure
-(require '[mclj-lang.formatter.canon :as canon])
+(require '[m1clj-lang.formatter.canon :as canon])
 
 (canon/format-form '(my-defn foo [x] body)
                    {:width 20
@@ -100,7 +100,7 @@ Only these two patterns are inferred because they're unambiguous — narrower ru
 
 ## The style map
 
-A style opines on layout over *slot names*, not form names. The canonical style ships in `mclj-lang.formatter.canon/style` and is minimal:
+A style opines on layout over *slot names*, not form names. The canonical style ships in `m1clj-lang.formatter.canon/style` and is minimal:
 
 ```clojure
 {:head-line-slots
@@ -125,11 +125,11 @@ The printer ships defaults for structural slots whose values aren't plain forms:
 | `:bindings` | Columnar `[k v\n k v]` layout via `binding-vector-doc` |
 | `:clause` | `[test value]` rendered as `test value` joined by a space |
 
-A style's `:slot-renderers` is layered **on top of** `mclj-lang.printer/default-slot-renderers` via map merge, not replacing it wholesale — a style overriding only `:clause` still inherits the `:bindings` default. See the defaults map for the full built-in list.
+A style's `:slot-renderers` is layered **on top of** `m1clj-lang.printer/default-slot-renderers` via map merge, not replacing it wholesale — a style overriding only `:clause` still inherits the `:bindings` default. See the defaults map for the full built-in list.
 
 ## Built-in decomposers
 
-The default `mclj-lang.form-shape/registry` registers these Clojure forms:
+The default `m1clj-lang.form-shape/registry` registers these Clojure forms:
 
 | Family | Members |
 |---|---|
@@ -158,6 +158,6 @@ The slot vocabulary is the shared contract these would sit on. Keeping it stable
 
 ## See also
 
-- [`api.md`](api.md) — full reference for `mclj-lang.form-shape` functions
+- [`api.md`](api.md) — full reference for `m1clj-lang.form-shape` functions
 - [`design-decisions.md`](design-decisions.md) — rationale for the three-layer split
-- Source: [`src/mclj_lang/form_shape.cljc`](../src/mclj_lang/form_shape.cljc)
+- Source: [`src/m1clj_lang/form_shape.cljc`](../src/m1clj_lang/form_shape.cljc)

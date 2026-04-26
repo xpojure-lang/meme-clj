@@ -21,7 +21,7 @@ Everything else is Clojure.
 
 The reader has two core stages; eval paths compose two additional stages:
 
-1. **step-parse** (`meme.tools.parser` with `mclj-lang.grammar`) — unified scanlet-parselet Pratt parser. Reads directly from a source string. Scanning (character dispatch), trivia classification, and structural parsing are all defined in the grammar spec. Produces a lossless CST. Grammar is a map of characters to scanlet/parselet functions.
+1. **step-parse** (`meme.tools.parser` with `m1clj-lang.grammar`) — unified scanlet-parselet Pratt parser. Reads directly from a source string. Scanning (character dispatch), trivia classification, and structural parsing are all defined in the grammar spec. Produces a lossless CST. Grammar is a map of characters to scanlet/parselet functions.
 2. **step-read** (`meme.tools.clj.cst-reader`) — lowers CST to Clojure forms. No `read-string` delegation — all values resolved natively via `meme.tools.clj.resolve`. Reader conditionals are preserved as `CljReaderConditional` records.
 3. **step-evaluate-reader-conditionals** (`meme.tools.clj.stages`) — materializes `#?` / `#?@` for the target platform. Runs on eval paths only; tooling sees records.
 4. **step-expand-syntax-quotes** (`meme.tools.clj.expander`) — syntax-quote AST nodes → plain Clojure forms. Only needed before eval.
@@ -44,7 +44,7 @@ modes: `:eval` (default — pick the current platform's branch at read
 time) and `:preserve` (return a `ReaderConditional` record). The flag
 conflated two orthogonal questions — *is `#?` still a record?* and *are
 these forms eval-ready?* — and created a visible asymmetry: a direct
-`mclj->forms` call on `.cljc`-like source silently dropped the
+`m1clj->forms` call on `.cljc`-like source silently dropped the
 off-platform branch, while the `to-clj` CLI adapter (which hardcoded
 `:preserve`) did not.
 
@@ -54,7 +54,7 @@ The fix moves platform materialization out of the reader entirely.
 Eval paths (`run-string`, `run-file`, REPL) compose the stage between
 read and syntax-quote expansion — matching native Clojure's order, where
 the reader evaluates `#?` before `` ` `` is processed. Tooling paths
-(`mclj->forms`, `mclj->clj`, `format-mclj`, `to-clj`) skip the stage and
+(`m1clj->forms`, `m1clj->clj`, `format-m1clj`, `to-clj`) skip the stage and
 see the full record, making conversion lossless by default.
 
 The stage recurses into `CljSyntaxQuote`, `CljUnquote`, and
@@ -239,7 +239,7 @@ it has a scar tissue test.
 - **With `:resolve-keyword` option** (REPL, file runner): resolved at
   read time to `:actual.ns/foo`, matching Clojure's semantics. The
   caller provides the resolver function.
-- **Without option on JVM/Babashka** (tooling, bare `mclj->forms`):
+- **Without option on JVM/Babashka** (tooling, bare `m1clj->forms`):
   deferred to eval time. The printer detects the deferred form and
   emits `::foo` for roundtripping.
 - **Without option on CLJS**: errors, since deferred resolution would
@@ -262,8 +262,8 @@ The codebase is split into four platform tiers:
 
 - **Generic tools** (`meme.tools.{parser, lexer, render}`) — portable `.cljc`, runs on JVM, Babashka, and ClojureScript. Language-agnostic library surface: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
 - **Clojure-surface commons** (`meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values}`) — portable `.cljc`. Shared across any Clojure-flavored frontend: lexical conventions, Clojure atom resolution, CST reader, stages, the `Clj*` AST records.
-- **Core translation** (`mclj-lang.{api, grammar, lexlets, parselets, form-shape, printer, formatter.flat, formatter.canon}`) — portable `.cljc`. Meme's syntactic identity: grammar spec, scanlet/parselet glue, semantic decomposition, Doc-tree builder, formatters. Pure functions with no eval or I/O dependency.
-- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `mclj-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
+- **Core translation** (`m1clj-lang.{api, grammar, lexlets, parselets, form-shape, printer, formatter.flat, formatter.canon}`) — portable `.cljc`. Meme's syntactic identity: grammar spec, scanlet/parselet glue, semantic decomposition, Doc-tree builder, formatters. Pure functions with no eval or I/O dependency.
+- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `m1clj-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
 - **Test infrastructure** (test-runner, dogfood-test, vendor-roundtrip-test) — `.clj`, JVM only.
   These use `java.io`, `PushbackReader`, `System/exit`.
 
@@ -274,7 +274,7 @@ code.
 
 ## `#()` printer shorthand
 
-The printer emits `#(body)` when the form has `:mclj/sugar true` metadata —
+The printer emits `#(body)` when the form has `:m1clj/sugar true` metadata —
 set by the reader when it parses `#(...)` source syntax. A user-written
 `fn([%1] body)` lacks this metadata and prints back as `fn(...)`.
 
@@ -344,11 +344,11 @@ collapses two notations into the same Clojure form, it must tag the form
 with metadata recording which notation was used. The printer checks that
 metadata to reconstruct the original syntax.
 
-**Implementation:** The reader attaches `:mclj/sugar true` metadata to
+**Implementation:** The reader attaches `:m1clj/sugar true` metadata to
 forms produced by sugar syntax (`'`, `@`, `#'`). The printer checks
 this: sugar-tagged forms emit sugar; untagged forms emit the explicit
-call. The `:mclj/sugar` key is stripped from display metadata (alongside
-`:line`, `:column`, `:file`, `:mclj/leading-trivia`) so it never appears in output.
+call. The `:m1clj/sugar` key is stripped from display metadata (alongside
+`:line`, `:column`, `:file`, `:m1clj/leading-trivia`) so it never appears in output.
 
 **Why this matters:** Without this, the stages silently normalize
 user code. `var(x)` becomes `#'x`. `quote(list)` becomes `'list`.
@@ -363,10 +363,10 @@ distinguish them.
 
 **Previously fixed** (these were losses in earlier versions, now preserved
 via metadata):
-- Namespaced maps: preserved via `:mclj/namespace-prefix` metadata on the map.
-- Chained metadata annotations: preserved via `:mclj/meta-chain`.
-- Set element ordering: preserved via `:mclj/insertion-order` (insertion order).
-- `#()` vs `fn()`: preserved via `:mclj/sugar` (see above section).
+- Namespaced maps: preserved via `:m1clj/namespace-prefix` metadata on the map.
+- Chained metadata annotations: preserved via `:m1clj/meta-chain`.
+- Set element ordering: preserved via `:m1clj/insertion-order` (insertion order).
+- `#()` vs `fn()`: preserved via `:m1clj/sugar` (see above section).
 
 
 ## Three layers of formatting: notation, form-shape, style
@@ -375,8 +375,8 @@ The printer and formatter were originally one concern: "given a form, produce me
 
 The three concerns, ranked by how often they change:
 
-1. **Notation** — how the call syntax renders: parens, delimiter placement, `:mclj` vs `:clj` mode. This is fixed per language and lives in `mclj-lang.printer`. The printer knows *no form names and no slot semantics* beyond its fallback recursion.
-2. **Form-shape** — what the parts of a special form *mean*. A registry keyed by head symbol maps to decomposers; each decomposer emits `[slot-name value]` pairs (e.g. `(defn foo [x] body)` → `[[:name foo] [:params [x]] [:body body]]`). This is language-level semantic vocabulary and lives in `mclj-lang.form-shape`. **One per lang** — each lang carries its own registry.
+1. **Notation** — how the call syntax renders: parens, delimiter placement, `:m1clj` vs `:clj` mode. This is fixed per language and lives in `m1clj-lang.printer`. The printer knows *no form names and no slot semantics* beyond its fallback recursion.
+2. **Form-shape** — what the parts of a special form *mean*. A registry keyed by head symbol maps to decomposers; each decomposer emits `[slot-name value]` pairs (e.g. `(defn foo [x] body)` → `[[:name foo] [:params [x]] [:body body]]`). This is language-level semantic vocabulary and lives in `m1clj-lang.form-shape`. **One per lang** — each lang carries its own registry.
 3. **Style** — opinions *per slot name*, not per form. `:head-line-slots #{:name :params ...}` says "keep these slots with the call head on break," and `:force-open-space-for #{:name}` handles the `defn( ` convention. **N per lang** — canon and flat today, compact or project-local styles tomorrow.
 
 The ratio is **N styles : 1 form-shape : 1 lang**. Style and form-shape live at different layers of composition — style is *formatter-owned*, form-shape is *lang-owned* — which is why they're distinct keys in the lang-map rather than folded into one.
@@ -410,9 +410,9 @@ See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint
 
 The registry (`meme.registry`) owns generic infrastructure: a keyword-to-lang-map index, extension dispatch, user-lang registration via EDN, safety guards.  It does *not* own the list of built-in langs.
 
-Earlier the registry imported each built-in's `api` namespace directly (`mclj-lang.api`) and called `register-builtin!` on each.  That had two costs:
+Earlier the registry imported each built-in's `api` namespace directly (`m1clj-lang.api`) and called `register-builtin!` on each.  That had two costs:
 
-1. A circular dependency.  The registry imported `mclj-lang.api`; `mclj-lang.api` transitively used `mclj-lang.run`; `mclj-lang.run` needed the registry back to dispatch by file extension.  The cycle was worked around with `requiring-resolve` calls in `mclj-lang.run`, `mclj-lang.repl`, `meme.cli`, and `meme.loader` — four invisible runtime dependencies that didn't show up in the static `:require` graph.
+1. A circular dependency.  The registry imported `m1clj-lang.api`; `m1clj-lang.api` transitively used `m1clj-lang.run`; `m1clj-lang.run` needed the registry back to dispatch by file extension.  The cycle was worked around with `requiring-resolve` calls in `m1clj-lang.run`, `m1clj-lang.repl`, `meme.cli`, and `meme.loader` — four invisible runtime dependencies that didn't show up in the static `:require` graph.
 
 2. A hidden manifest.  The "lang registry" was secretly also the "list of built-in langs," which meant adding a lang required editing two namespaces: the new lang and the registry.  Worse, every `meme` invocation (even `meme format`) paid for fully loading every built-in's namespace graph, because all were imported unconditionally at registry ns-load.
 
@@ -426,7 +426,7 @@ Both problems have the same fix: invert the control.
 (ns meme.cli
   (:require [meme.registry :as registry]
             [meme.loader :as loader]
-            [mclj-lang.api]      ;; side-effect: registers :mclj
+            [m1clj-lang.api]      ;; side-effect: registers :m1clj
             ;; additional built-ins added the same way
             ...))
 ```
@@ -448,7 +448,7 @@ Each stage in `meme.tools.clj.stages` declares its required ctx keys in a public
  :step-expand-syntax-quotes         {:requires #{:forms}  :produces #{:forms}}}
 ```
 
-Stages validate their ctx against the contract at entry (via an internal `check-contract!`) and throw `:mclj/pipeline-error` with the missing key(s) and the actual ctx keys present.  Miscomposed pipelines (e.g. calling `step-read` before `step-parse`) surface their mistake at the point of composition instead of raising a deep-inside NPE.
+Stages validate their ctx against the contract at entry (via an internal `check-contract!`) and throw `:m1clj/pipeline-error` with the missing key(s) and the actual ctx keys present.  Miscomposed pipelines (e.g. calling `step-read` before `step-parse`) surface their mistake at the point of composition instead of raising a deep-inside NPE.
 
 A heavier spec-based validation (PL8 in `PRD.md`) was tried and removed during an earlier refactor.  This replacement is deliberately lighter:
 
@@ -458,11 +458,11 @@ A heavier spec-based validation (PL8 in `PRD.md`) was tried and removed during a
 
 ## Clojure-surface commons (`meme.tools.clj.*`)
 
-Between the lang-agnostic `meme.tools.{parser, lexer, render}` and the meme-specific `mclj-lang.*`, a middle tier `meme.tools.clj.*` carries Clojure-flavored concerns: symbol/keyword lexical conventions, numeric atom resolution, the `Clj*` AST records, CST-to-Clojure-forms lowering, the stages framework, the syntax-quote expander, value serialization, and the run/repl harnesses.
+Between the lang-agnostic `meme.tools.{parser, lexer, render}` and the meme-specific `m1clj-lang.*`, a middle tier `meme.tools.clj.*` carries Clojure-flavored concerns: symbol/keyword lexical conventions, numeric atom resolution, the `Clj*` AST records, CST-to-Clojure-forms lowering, the stages framework, the syntax-quote expander, value serialization, and the run/repl harnesses.
 
-The commons were extracted from `mclj-lang.*` once a second Clojure-flavored frontend proved that none of these concerns are meme-specific. They describe what any frontend targeting Clojure-the-host needs to handle — surface syntax aside. Keeping them under `mclj-lang` made the namespace a misnomer: `mclj-lang.cst-reader` read CST nodes but emitted plain Clojure, not anything meme-shaped; `mclj-lang.resolve` resolved *Clojure* atom text, not meme constructs.
+The commons were extracted from `m1clj-lang.*` once a second Clojure-flavored frontend proved that none of these concerns are meme-specific. They describe what any frontend targeting Clojure-the-host needs to handle — surface syntax aside. Keeping them under `m1clj-lang` made the namespace a misnomer: `m1clj-lang.cst-reader` read CST nodes but emitted plain Clojure, not anything meme-shaped; `m1clj-lang.resolve` resolved *Clojure* atom text, not meme constructs.
 
-The rubric is the sibling-lang test: if any Clojure-flavored frontend would need the function and would not need to specialize it, it belongs in `meme.tools.clj.*`. Grammar, parselets, form-shape, and the printer stay in `mclj-lang.*` because that is where surface syntax diverges between langs.
+The rubric is the sibling-lang test: if any Clojure-flavored frontend would need the function and would not need to specialize it, it belongs in `meme.tools.clj.*`. Grammar, parselets, form-shape, and the printer stay in `m1clj-lang.*` because that is where surface syntax diverges between langs.
 
 The toolkit stays accessible to guest frontends that want the same commons without inheriting meme's surface: a `.mcj` lang (McCarthy's original brackets) or a user's own Clojure frontend requires only a grammar and a handful of parselets.
 
@@ -474,13 +474,13 @@ Earlier these were named `Meme*` (`MemeSyntaxQuote`, etc.). That name was mislea
 
 Predicates follow: `meme-reader-conditional?` → `clj-reader-conditional?`. The predicate answers "is this a Clojure reader conditional as represented in our AST?", nothing about meme.
 
-## `:mclj/*` metadata reserved for toolkit emissions
+## `:m1clj/*` metadata reserved for toolkit emissions
 
-The internal metadata keys the toolkit attaches (`:mclj/leading-trivia`, `:mclj/sugar`, `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`, `:mclj/bare-percent`) live in the bare `:mclj/` namespace — not `:mclj-lang/`.
+The internal metadata keys the toolkit attaches (`:m1clj/leading-trivia`, `:m1clj/sugar`, `:m1clj/insertion-order`, `:m1clj/namespace-prefix`, `:m1clj/meta-chain`, `:m1clj/bare-percent`) live in the bare `:m1clj/` namespace — not `:m1clj-lang/`.
 
 These keys are emitted by the generic toolkit (`meme.tools.clj.cst-reader`, printer, etc.), not by the meme language per se. A user's `.mcj` lang using the same toolkit would produce the same trivia and sugar metadata. The keys describe toolkit artefacts, so their namespace matches the toolkit, not any one frontend.
 
-There's a brief history here (see CHANGELOG): bare `:mclj/*` → namespaced `:mclj-lang/*` in 3.0.0 to carve out `:mclj/` for generic tooling; then back to `:mclj/*` post-5.0.0 once the keys were recognised as toolkit-emitted rather than lang-emitted. The direction of travel was driven each time by the same question — *who emits this?* — and the second move corrected the first.
+There's a brief history here (see CHANGELOG): bare `:m1clj/*` → namespaced `:m1clj-lang/*` in 3.0.0 to carve out `:m1clj/` for generic tooling; then back to `:m1clj/*` post-5.0.0 once the keys were recognised as toolkit-emitted rather than lang-emitted. The direction of travel was driven each time by the same question — *who emits this?* — and the second move corrected the first.
 
 ## Sibling langs are peers, not modes
 
@@ -488,7 +488,7 @@ A new Clojure-flavored frontend ships as a separate registered lang, not as a `-
 
 A mode flag would have been cheaper in files — but wrong in design. Sibling syntaxes differ in scanners (e.g. infix word operators), parselets (forms with no meme equivalent), form-shape registries (different special-form decompositions), and printers. A mode flag would be a euphemism for multiple languages in one file.
 
-The peer structure makes the Clojure-surface commons load-bearing: anything that two Clojure-flavored frontends would share has to live there and be reusable. The shape `mclj-lang.api`/`run`/`repl` codifies the contract for new frontends: grammar + parselets + form-shape registry + printer, plus a thin shim trio that injects the grammar/banner.
+The peer structure makes the Clojure-surface commons load-bearing: anything that two Clojure-flavored frontends would share has to live there and be reusable. The shape `m1clj-lang.api`/`run`/`repl` codifies the contract for new frontends: grammar + parselets + form-shape registry + printer, plus a thin shim trio that injects the grammar/banner.
 
 ## CAS retry for `register!` atomicity
 
@@ -500,9 +500,9 @@ EDN resolution (`resolve-edn`, which reads the classpath for the lang's grammar)
 
 ## Lang backend
 
-meme uses a single implementation of the meme↔Clojure translation, registered as `:mclj` in the lang registry.
+meme uses a single implementation of the meme↔Clojure translation, registered as `:m1clj` in the lang registry.
 
-The pipeline combines a unified scanlet-parselet Pratt parser (`meme.tools.parser` with `mclj-lang.grammar`) and a Wadler-Lindig document printer (`mclj-lang.printer`). It preserves all metadata, sugar flags (`:mclj/sugar`), whitespace annotations, and comment positions through roundtrips.
+The pipeline combines a unified scanlet-parselet Pratt parser (`meme.tools.parser` with `m1clj-lang.grammar`) and a Wadler-Lindig document printer (`m1clj-lang.printer`). It preserves all metadata, sugar flags (`:m1clj/sugar`), whitespace annotations, and comment positions through roundtrips.
 
 **Use for:** formatting, tooling integration, roundtrip-sensitive workflows.
 
@@ -518,11 +518,11 @@ Clojure accepts `"\uD800\uDC00"` (a valid UTF-16 surrogate pair encoding U+10000
 
 ### Map key ordering for maps with >8 entries
 
-Clojure's `array-map` preserves insertion order for up to 8 entries. Beyond that, it promotes to `PersistentHashMap` which does not preserve order. Since the meme parser builds maps via `(apply array-map forms)`, maps with 9+ keys may have their key order shuffled in output. Sets preserve order via `:mclj/insertion-order` metadata, but maps do not have an equivalent mechanism. This is a Clojure platform limitation, not a meme design choice.
+Clojure's `array-map` preserves insertion order for up to 8 entries. Beyond that, it promotes to `PersistentHashMap` which does not preserve order. Since the meme parser builds maps via `(apply array-map forms)`, maps with 9+ keys may have their key order shuffled in output. Sets preserve order via `:m1clj/insertion-order` metadata, but maps do not have an equivalent mechanism. This is a Clojure platform limitation, not a meme design choice.
 
 ### Comments on primitive map keys
 
-Comments in meme source (`;; comment`) are attached as `:mclj/leading-trivia` metadata to the following form. However, primitive types (keywords, numbers, strings, booleans) do not implement `IMeta` in Clojure and cannot carry metadata. When a comment appears before a keyword map key (e.g., `{; comment\n :a 1}`), the comment is lost because `:a` cannot store metadata. This is a fundamental Clojure platform limitation. Comments before symbols, vectors, maps, and sets are preserved correctly.
+Comments in meme source (`;; comment`) are attached as `:m1clj/leading-trivia` metadata to the following form. However, primitive types (keywords, numbers, strings, booleans) do not implement `IMeta` in Clojure and cannot carry metadata. When a comment appears before a keyword map key (e.g., `{; comment\n :a 1}`), the comment is lost because `:a` cannot store metadata. This is a fundamental Clojure platform limitation. Comments before symbols, vectors, maps, and sets are preserved correctly.
 
 ### End-of-line comment repositioning
 
@@ -546,7 +546,7 @@ Programmatically constructed symbols containing whitespace, parentheses, or othe
 
 ### Inline comments on primitive values lost during formatting
 
-Comments are preserved through the pipeline via `:mclj/leading-trivia` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
+Comments are preserved through the pipeline via `:m1clj/leading-trivia` metadata attached to parsed forms. However, Clojure's metadata system only works on types that implement `IMeta` — symbols, keywords, collections, and records. Primitive values (numbers, strings, booleans, characters, nil, and regex) cannot carry metadata. When a comment appears before a primitive value inside a form (e.g., `def(x ;; important\n  42)`), the comment is attached to the `42` token during scanning, but is irretrievably lost when the parser resolves the token to a `Long`.
 
 Comments that **survive** formatting: those before symbols, keywords, collections, and calls. Comments that are **lost**: those before numbers, strings, booleans, characters, nil, and regex literals.
 
@@ -585,7 +585,7 @@ Exactly four hex digits follow `\u`. Any trailing alphanumeric character on a `\
 
 ### Scanner: structural vs semantic validation
 
-The scanner layer (lexical scanlets in `meme.tools.clj.lex`, wrapped by `mclj-lang.lexlets` for meme's grammar) is a structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. Semantic validation is split between the resolver (`meme.tools.clj.resolve`) and the CST reader (`meme.tools.clj.cst-reader`):
+The scanner layer (lexical scanlets in `meme.tools.clj.lex`, wrapped by `m1clj-lang.lexlets` for meme's grammar) is a structural scanner — it partitions input into tokens without knowing Clojure's semantic rules. Semantic validation is split between the resolver (`meme.tools.clj.resolve`) and the CST reader (`meme.tools.clj.cst-reader`):
 
 - **Reserved dispatch chars** (`#<`, `#=`, `#%`): The scanner classifies `#=foo` as `:tagged-literal` (structurally, it IS `#` + symbol). Whether `=` is a reserved dispatch character is a semantic rule enforced downstream.
 - **Unterminated strings/regex**: The scanner returns the EOF position without signaling error, but the resolver (`resolve-string`, `resolve-regex`) detects the missing closing delimiter and throws with `:incomplete true` — enabling the REPL to prompt for continuation.
@@ -609,7 +609,7 @@ The infrastructure exists: the unified Pratt parser takes a grammar spec, trivia
 
 ### Completed: Data-driven scanner (unified scanlet-parselet architecture)
 
-The scanner is now fully data-driven. The unified scanlet-parselet Pratt parser (`meme.tools.parser`) defines scanning as part of the grammar spec. Character dispatch, trivia classification, and structural parsing are all configured via the grammar map. Clojure-surface consume functions live in `meme.tools.clj.lex` (shared across any Clojure-flavored frontend) and are wrapped into scanlets by the generic builders in `meme.tools.lexer`; `mclj-lang.lexlets` is a thin shim that forwards to `meme.tools.clj.lex`. This replaces the previous separate tokenizer that had Clojure-family knowledge baked in.
+The scanner is now fully data-driven. The unified scanlet-parselet Pratt parser (`meme.tools.parser`) defines scanning as part of the grammar spec. Character dispatch, trivia classification, and structural parsing are all configured via the grammar map. Clojure-surface consume functions live in `meme.tools.clj.lex` (shared across any Clojure-flavored frontend) and are wrapped into scanlets by the generic builders in `meme.tools.lexer`; `m1clj-lang.lexlets` is a thin shim that forwards to `meme.tools.clj.lex`. This replaces the previous separate tokenizer that had Clojure-family knowledge baked in.
 
 The grammar spec shape:
 ```clojure
@@ -662,7 +662,7 @@ The meme printer converts Clojure forms back to meme syntax. When it encounters 
 
 The printer does not inject `quote` because it cannot know whether the list was intended as a call or as data — that information is not present in the Clojure form. A `(1 2 3)` produced by `(list 1 2 3)` at runtime is indistinguishable from one produced by reading `'(1 2 3)`. This is a consequence of homoiconicity, not a printer limitation.
 
-When the list originates from the meme reader with `'1(2 3)`, the reader attaches `{:mclj/sugar true}` metadata to the `(quote ...)` wrapper. The printer uses this to reproduce the quote sugar. Without that metadata (e.g., for programmatically constructed lists), the printer has no way to know whether quote was originally present.
+When the list originates from the meme reader with `'1(2 3)`, the reader attaches `{:m1clj/sugar true}` metadata to the `(quote ...)` wrapper. The printer uses this to reproduce the quote sugar. Without that metadata (e.g., for programmatically constructed lists), the printer has no way to know whether quote was originally present.
 
 ### Implications for language designers using `meme.tools.*`
 

@@ -42,7 +42,7 @@
     (when (some #(str/ends-with? path %) deprecated-extensions)
       (when (compare-and-set! deprecation-warned? false true)
         (binding [*out* *err*]
-          (println (str "warning: file extension is deprecated; rename to .mclj. "
+          (println (str "warning: file extension is deprecated; rename to .m1clj. "
                         "Recognition will be removed in the next major release. "
                         "(first seen: " path ")")))))))
 
@@ -131,7 +131,7 @@
                 (recur (rest remaining) (conj pending path))))))))))
 
 (defn- lang-load-file
-  "Replacement for clojure.core/load-file that handles .mclj files.
+  "Replacement for clojure.core/load-file that handles .m1clj files.
    Delegates to the lang's :run function for registered extensions,
    falls back to original load-file for everything else.
    Wraps run-fn in a binding to save/restore *ns*, matching Compiler/loadFile."

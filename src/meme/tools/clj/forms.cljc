@@ -5,9 +5,9 @@
    CljUnquoteSplicing, CljRaw, CljAutoKeyword, CljReaderConditional)
    that the reader produces for forms that don't round-trip through plain
    Clojure data, plus anonymous-function helpers and the shared metadata
-   key vocabulary (`:mclj/leading-trivia`, `:mclj/sugar`,
-   `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`,
-   `:mclj/bare-percent`) used by reader, stages, and printer."
+   key vocabulary (`:m1clj/leading-trivia`, `:m1clj/sugar`,
+   `:m1clj/insertion-order`, `:m1clj/namespace-prefix`, `:m1clj/meta-chain`,
+   `:m1clj/bare-percent`) used by reader, stages, and printer."
   (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@
 ;; JVM has clojure.lang.ReaderConditional (created by reader-conditional,
 ;; tested by reader-conditional?). CLJS has no equivalent, so we provide
 ;; a defrecord polyfill and portable constructor/predicate/accessors.
-;; On JVM we use the native type so forms from mclj->forms and clj->forms
+;; On JVM we use the native type so forms from m1clj->forms and clj->forms
 ;; are the same type — critical for roundtrip equality.
 ;; ---------------------------------------------------------------------------
 
@@ -148,13 +148,13 @@
    Excluded when checking for user-visible metadata.
    Both :col (meme tokenizer) and :column (Clojure reader) are included
    so stripping works regardless of which reader produced the metadata."
-  #{:line :col :column :file :mclj/leading-trivia :mclj/sugar :mclj/insertion-order :mclj/namespace-prefix :mclj/meta-chain :mclj/bare-percent})
+  #{:line :col :column :file :m1clj/leading-trivia :m1clj/sugar :m1clj/insertion-order :m1clj/namespace-prefix :m1clj/meta-chain :m1clj/bare-percent})
 
 (def notation-meta-keys
   "Internal metadata keys that encode the user's notation choices.
    Must survive metadata stripping so the printer can reconstruct
    the original syntax (e.g. #:ns{} maps, set insertion order, quote sugar)."
-  #{:mclj/namespace-prefix :mclj/insertion-order :mclj/sugar :mclj/bare-percent})
+  #{:m1clj/namespace-prefix :m1clj/insertion-order :m1clj/sugar :m1clj/bare-percent})
 
 (defn strip-internal-meta
   "Remove internal meme metadata keys, returning only user-visible metadata."
@@ -164,7 +164,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Set-with-source-order helpers
 ;;
-;; Sets carry source order in :mclj/insertion-order metadata so the printer
+;; Sets carry source order in :m1clj/insertion-order metadata so the printer
 ;; can reproduce the user's written order. Walkers that touch a set must
 ;; iterate in source order AND refresh the metadata from the walked elements,
 ;; otherwise the order vector and the set's contents diverge silently — the
@@ -175,26 +175,26 @@
 ;; ---------------------------------------------------------------------------
 
 (defn meme-set-source-seq
-  "Return the elements of set `s` in source order: the :mclj/insertion-order
+  "Return the elements of set `s` in source order: the :m1clj/insertion-order
    vector when present and consistent with the set, otherwise the set's own
    iteration order. Use this anywhere you need to walk a set that came from
    the meme reader and care about the user's written ordering."
   [s]
-  (let [order (:mclj/insertion-order (meta s))]
+  (let [order (:m1clj/insertion-order (meta s))]
     (if (and order (= (count order) (count s))) order s)))
 
 (defn with-refreshed-set-order
-  "Attach a fresh :mclj/insertion-order to set `s` derived from the
+  "Attach a fresh :m1clj/insertion-order to set `s` derived from the
    `walked-elements` collection (the elements just inserted). Use this when
    the set you're returning has different contents from the one you started
    with — e.g. expand-syntax-quotes replacing a CljSyntaxQuote with its
    expanded form. Distinct-dedups the order vector to match set semantics."
   [s walked-elements]
-  (vary-meta s assoc :mclj/insertion-order (vec (distinct walked-elements))))
+  (vary-meta s assoc :m1clj/insertion-order (vec (distinct walked-elements))))
 
 (defn walk-meme-set
   "Walk a meme set element-by-element via `f` (one-in, one-out), preserving
-   source order on input and refreshing :mclj/insertion-order on output so
+   source order on input and refreshing :m1clj/insertion-order on output so
    it stays consistent with the new contents. The right helper for a walker
    that transforms each element to exactly one element. For multi-out walkers
    (e.g. #?@ splice), use meme-set-source-seq + with-refreshed-set-order
@@ -313,7 +313,7 @@
    form))
 
 (defn restore-bare-percent
-  "Replace %1 with % in a form tree. Used when :mclj/bare-percent metadata
+  "Replace %1 with % in a form tree. Used when :m1clj/bare-percent metadata
    indicates the user wrote bare % (normalized to %1 for eval correctness).
    Skips nested (fn ...) bodies — matches normalize-bare-percent guard."
   [form]

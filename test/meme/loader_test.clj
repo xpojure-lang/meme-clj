@@ -6,13 +6,13 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.loader :as loader]
-            ;; Required so mclj-lang registers itself with the registry.
-            ;; Without this, the loader installs but finds no `.mclj` extension,
-            ;; so require/load-file of `.mclj` files falls through to Clojure's
+            ;; Required so m1clj-lang registers itself with the registry.
+            ;; Without this, the loader installs but finds no `.m1clj` extension,
+            ;; so require/load-file of `.m1clj` files falls through to Clojure's
             ;; original load and fails. This made the tests implicitly depend
             ;; on test-ordering (passing only if some earlier test happened
-            ;; to have loaded mclj-lang.api first).
-            [mclj-lang.api])
+            ;; to have loaded m1clj-lang.api first).
+            [m1clj-lang.api])
   (:import (java.util.concurrent CountDownLatch TimeUnit)))
 
 (use-fixtures :each
@@ -41,8 +41,8 @@
     ;; reinstall for rest of test
     (loader/install!)))
 
-(deftest require-mclj-namespace
-  (testing "require loads .mclj/.meme file from classpath"
+(deftest require-m1clj-namespace
+  (testing "require loads .m1clj/.meme file from classpath"
     (require 'test-meme-ns.greeter)
     (let [hello (ns-resolve 'test-meme-ns.greeter 'hello)
           add (ns-resolve 'test-meme-ns.greeter 'add)]
@@ -56,15 +56,15 @@
     (require 'clojure.string)
     (is (some? (ns-resolve 'clojure.string 'join)))))
 
-(deftest mclj-takes-precedence-over-clj
-  (testing ".mclj file is loaded when both .mclj and .clj exist"
+(deftest m1clj-takes-precedence-over-clj
+  (testing ".m1clj file is loaded when both .m1clj and .clj exist"
     (require 'test-meme-ns.shadow :reload)
     (let [source-var (ns-resolve 'test-meme-ns.shadow 'source)]
       (is (some? source-var) "source should be defined")
-      (is (= :mclj @source-var) ".mclj file should take precedence over .clj"))))
+      (is (= :m1clj @source-var) ".m1clj file should take precedence over .clj"))))
 
-(deftest mclj-parse-error-propagates
-  (testing "require of a .mclj file with syntax error throws"
+(deftest m1clj-parse-error-propagates
+  (testing "require of a .m1clj file with syntax error throws"
     (is (thrown? Exception
                 (require 'test-meme-ns.broken :reload)))))
 
@@ -267,23 +267,23 @@
         "Should not detect Babashka on JVM")))
 
 ;; ---------------------------------------------------------------------------
-;; Cross-require: .mclj file that requires another mclj-flavored file
+;; Cross-require: .m1clj file that requires another m1clj-flavored file
 ;; (greeter is intentionally still a .meme file — exercises mixed-extension
 ;; loading and the deprecated-extension back-compat path together.)
 ;; ---------------------------------------------------------------------------
 
-(deftest require-mclj-that-requires-mclj
-  (testing ".mclj file requiring another mclj-lang namespace works"
+(deftest require-m1clj-that-requires-m1clj
+  (testing ".m1clj file requiring another m1clj-lang namespace works"
     (require 'test-meme-ns.caller :reload)
     (let [greet-world (ns-resolve 'test-meme-ns.caller 'greet-world)]
       (is (some? greet-world) "greet-world should be defined")
       (is (= "Hello, World!" (greet-world))))))
 
 ;; ---------------------------------------------------------------------------
-;; load-file: .mclj/.meme and .clj files by filesystem path
+;; load-file: .m1clj/.meme and .clj files by filesystem path
 ;; ---------------------------------------------------------------------------
 
-(deftest load-file-mclj-by-deprecated-extension
+(deftest load-file-m1clj-by-deprecated-extension
   (testing "load-file handles .meme files via the back-compat path"
     (load-file "test/resources/test_meme_ns/greeter.meme")
     (let [hello (ns-resolve 'test-meme-ns.greeter 'hello)]
@@ -297,7 +297,7 @@
       (is (some? source-var) "source should be defined")
       (is (= :clj @source-var) ".clj file should load normally"))))
 
-(deftest load-file-mclj-preserves-caller-ns
+(deftest load-file-m1clj-preserves-caller-ns
   (testing "load-file does not clobber the caller's *ns*"
     (let [ns-before *ns*]
       (load-file "test/resources/test_meme_ns/greeter.meme")
@@ -360,7 +360,7 @@
           (finally (reset! original-load-atom saved)))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: a .mclj file with an `ns` form must produce a fully-interned
+;; Scar tissue: a .m1clj file with an `ns` form must produce a fully-interned
 ;; namespace (find-ns returns it), its vars carry correct :ns metadata, and
 ;; the caller's *ns* is unchanged after require. The code review flagged
 ;; that (binding [*ns* *ns*] ...) alone doesn't guarantee this when the
@@ -407,7 +407,7 @@
           (binding [*err* err1]
             (loader/warn-deprecated-extension! "/path/to/foo.meme"))
           (is (str/includes? (str err1) "deprecated"))
-          (is (str/includes? (str err1) ".mclj"))
+          (is (str/includes? (str err1) ".m1clj"))
           (is (str/includes? (str err1) "foo.meme")))
         (let [err2 (java.io.StringWriter.)]
           (binding [*err* err2]
@@ -417,14 +417,14 @@
         (finally (reset! warned-atom saved))))))
 
 (deftest deprecated-extension-non-deprecated-paths-do-not-warn
-  (testing ".mclj path does not emit a warning"
+  (testing ".m1clj path does not emit a warning"
     (let [warned-atom @(resolve 'meme.loader/deprecation-warned?)
           saved       @warned-atom]
       (try
         (reset! warned-atom false)
         (let [err (java.io.StringWriter.)]
           (binding [*err* err]
-            (loader/warn-deprecated-extension! "/path/to/foo.mclj")
+            (loader/warn-deprecated-extension! "/path/to/foo.m1clj")
             (loader/warn-deprecated-extension! "/path/to/bar.clj")
             (loader/warn-deprecated-extension! nil))
           (is (str/blank? (str err)))

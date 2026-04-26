@@ -14,9 +14,9 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [mclj-lang.api :as lang]
-            [mclj-lang.formatter.canon :as fmt-canon]
-            [mclj-lang.formatter.flat :as fmt-flat]
+            [m1clj-lang.api :as lang]
+            [m1clj-lang.formatter.canon :as fmt-canon]
+            [m1clj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.expander :as expander]))
 
 ;; ===========================================================================
@@ -30,7 +30,7 @@
                         (symbol "nil") (symbol "true") (symbol "false")})
 
 ;; Keywords the printer strips from metadata (compiler/reader-added keys)
-(def reserved-meta-keywords #{:mclj/leading-trivia :line :column :file})
+(def reserved-meta-keywords #{:m1clj/leading-trivia :line :column :file})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))
@@ -366,7 +366,7 @@
 (defn roundtrip-ok? [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
-          read-back (lang/mclj->forms printed)]
+          read-back (lang/m1clj->forms printed)]
       (= [form] read-back))
     (catch Exception e
       (println "Roundtrip failed for form:" (pr-str form))
@@ -374,13 +374,13 @@
       false)))
 
 (defn meta-roundtrip-ok?
-  "Check roundtrip preserving metadata (ignoring :mclj/leading-trivia added by reader)."
+  "Check roundtrip preserving metadata (ignoring :m1clj/leading-trivia added by reader)."
   [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
-          read-back (first (lang/mclj->forms printed))]
+          read-back (first (lang/m1clj->forms printed))]
       (and (= form read-back)
-           (= (meta form) (dissoc (meta read-back) :mclj/leading-trivia :mclj/meta-chain))))
+           (= (meta form) (dissoc (meta read-back) :m1clj/leading-trivia :m1clj/meta-chain))))
     (catch Exception e
       (println "Meta roundtrip failed for form:" (pr-str form))
       (println "Error:" (.getMessage e))
@@ -429,7 +429,7 @@
     ;; prefix #_discard target → prefix applies to nil, target is separate
                 (try
                   (let [meme-str (str prefix-op "#_" discard-form " " target)
-                        forms (lang/mclj->forms meme-str)]
+                        forms (lang/m1clj->forms meme-str)]
                     (= 2 (count forms)))
                   (catch Exception _ false))))
 
@@ -451,7 +451,7 @@
   (prop/for-all [form gen-anon-fn-form]
                 (try
                   (let [printed (fmt-flat/format-form form)
-                        read-back (first (lang/mclj->forms printed))]
+                        read-back (first (lang/m1clj->forms printed))]
                     (= form read-back))
                   (catch Exception e
                     (println "Anon fn roundtrip failed for:" (pr-str form))
@@ -480,8 +480,8 @@
                 (try
                   (let [printed (fmt-flat/format-forms [form])
                         discard-printed (str "#_" (fmt-flat/format-forms [discard-form]) " " printed)
-                        read-normal (lang/mclj->forms printed)
-                        read-discard (lang/mclj->forms discard-printed)]
+                        read-normal (lang/m1clj->forms printed)
+                        read-discard (lang/m1clj->forms discard-printed)]
                     (= read-normal read-discard))
                   (catch Exception _ false))))
 
@@ -493,16 +493,16 @@
 (defspec prop-meme-text-parses 300
   (prop/for-all [meme-str gen-meme-text]
                 (try
-                  (lang/mclj->forms meme-str)
+                  (lang/m1clj->forms meme-str)
                   true
                   (catch Exception _ false))))
 
 (defspec prop-meme-text-roundtrip 300
   (prop/for-all [meme-str gen-meme-text]
                 (try
-                  (let [forms (lang/mclj->forms meme-str)
+                  (let [forms (lang/m1clj->forms meme-str)
                         printed (fmt-flat/format-forms forms)
-                        re-read (lang/mclj->forms printed)]
+                        re-read (lang/m1clj->forms printed)]
         ;; pr-str comparison: handles Pattern (no equals) and NaN (!= itself)
                     (= (pr-str forms) (pr-str re-read)))
                   (catch Exception _ false))))
@@ -515,7 +515,7 @@
 (defspec prop-errors-have-location 200
   (prop/for-all [meme-str gen-invalid-meme]
                 (try
-                  (lang/mclj->forms meme-str)
+                  (lang/m1clj->forms meme-str)
                   false ;; should have thrown
                   (catch clojure.lang.ExceptionInfo e
                     (let [data (ex-data e)]
@@ -543,7 +543,7 @@
 (defspec prop-unclosed-is-incomplete 100
   (prop/for-all [meme-str gen-unclosed-delimiter-meme]
                 (try
-                  (lang/mclj->forms meme-str)
+                  (lang/m1clj->forms meme-str)
                   false ;; should have thrown
                   (catch clojure.lang.ExceptionInfo e
                     (:incomplete (ex-data e)))
@@ -565,7 +565,7 @@
 (defspec prop-syntax-quote-parses 200
   (prop/for-all [meme-str gen-syntax-quote-meme]
                 (try
-                  (lang/mclj->forms meme-str)
+                  (lang/m1clj->forms meme-str)
                   true
                   (catch Exception _ false))))
 
@@ -579,7 +579,7 @@
 (defspec prop-syntax-quote-with-unquote-parses 200
   (prop/for-all [meme-str gen-syntax-quote-with-unquote]
                 (try
-                  (lang/mclj->forms meme-str)
+                  (lang/m1clj->forms meme-str)
                   true
                   (catch Exception _ false))))
 
@@ -590,7 +590,7 @@
 (defspec prop-canon-formatter-idempotent 300
   (prop/for-all [form gen-form]
     (let [fmt1 (fmt-canon/format-forms [form] {:width 80})
-          reparsed (lang/mclj->forms fmt1)
+          reparsed (lang/m1clj->forms fmt1)
           fmt2 (fmt-canon/format-forms reparsed {:width 80})]
       (= fmt1 fmt2))))
 
@@ -624,7 +624,7 @@
 (defspec prop-char-literal-roundtrip 200
   (prop/for-all [char-text gen-char-literal-text]
     (try
-      (let [forms (lang/mclj->forms char-text)]
+      (let [forms (lang/m1clj->forms char-text)]
         (and (= 1 (count forms))
              (char? (let [f (first forms)]
                       (if (instance? meme.tools.clj.forms.CljRaw f) (:value f) f)))))
@@ -633,7 +633,7 @@
 (defspec prop-invalid-char-literal-errors 100
   (prop/for-all [char-text gen-invalid-char-literal-text]
     (try
-      (lang/mclj->forms char-text)
+      (lang/m1clj->forms char-text)
       false  ;; should have thrown
       (catch clojure.lang.ExceptionInfo e
         (let [data (ex-data e)]
@@ -673,23 +673,23 @@
 (defspec prop-reader-cond-parses 200
   (prop/for-all [text gen-reader-cond-text]
     (try
-      (lang/mclj->forms text)
+      (lang/m1clj->forms text)
       true
       (catch Exception _ false))))
 
 (defspec prop-reader-cond-tricky-parses 200
   (prop/for-all [text gen-reader-cond-with-tricky-content]
     (try
-      (lang/mclj->forms text)
+      (lang/m1clj->forms text)
       true
       (catch Exception _ false))))
 
 (defspec prop-namespaced-map-roundtrip 200
   (prop/for-all [text gen-namespaced-map-text]
     (try
-      (let [forms (lang/mclj->forms text)
+      (let [forms (lang/m1clj->forms text)
             printed (fmt-flat/format-forms forms)
-            re-read (lang/mclj->forms printed)]
+            re-read (lang/m1clj->forms printed)]
         (= (pr-str forms) (pr-str re-read)))
       (catch Exception _ false))))
 
@@ -718,16 +718,16 @@
 (defspec prop-signed-number-parses 200
   (prop/for-all [text gen-signed-number-context]
     (try
-      (lang/mclj->forms text)
+      (lang/m1clj->forms text)
       true
       (catch Exception _ false))))
 
 (defspec prop-signed-number-roundtrip 200
   (prop/for-all [text gen-signed-number-context]
     (try
-      (let [forms (lang/mclj->forms text)
+      (let [forms (lang/m1clj->forms text)
             printed (fmt-flat/format-forms forms)
-            re-read (lang/mclj->forms printed)]
+            re-read (lang/m1clj->forms printed)]
         (= (pr-str forms) (pr-str re-read)))
       (catch Exception _ false))))
 
@@ -747,9 +747,9 @@
 (defspec prop-radix-number-roundtrip 100
   (prop/for-all [text gen-radix-number-text]
     (try
-      (let [forms (lang/mclj->forms text)
+      (let [forms (lang/m1clj->forms text)
             printed (fmt-flat/format-forms forms)
-            re-read (lang/mclj->forms printed)]
+            re-read (lang/m1clj->forms printed)]
         (= (pr-str forms) (pr-str re-read)))
       (catch Exception _ false))))
 
@@ -762,7 +762,7 @@
   (prop/for-all [form gen-form
                  width (gen/choose 20 60)]
     (let [fmt1 (fmt-canon/format-forms [form] {:width width})
-          reparsed (lang/mclj->forms fmt1)
+          reparsed (lang/m1clj->forms fmt1)
           fmt2 (fmt-canon/format-forms reparsed {:width width})]
       (= fmt1 fmt2))))
 
@@ -787,7 +787,7 @@
 (defspec prop-arbitrary-string-no-raw-exception 500
   (prop/for-all [s gen-meme-char-soup]
     (try
-      (lang/mclj->forms s)
+      (lang/m1clj->forms s)
       true
       (catch clojure.lang.ExceptionInfo _ true)  ;; meme errors OK
       (catch StackOverflowError _ true)           ;; depth limit OK
@@ -811,7 +811,7 @@
 (defspec prop-tagged-literal-parses 200
   (prop/for-all [text gen-tagged-literal-text]
     (try
-      (some? (lang/mclj->forms text))
+      (some? (lang/m1clj->forms text))
       (catch Exception _ false))))
 
 ;; --- Auto-alias namespaced maps (#::alias{}) ---
@@ -828,9 +828,9 @@
 (defspec prop-alias-namespaced-map-roundtrip 200
   (prop/for-all [text gen-alias-namespaced-map-text]
     (try
-      (let [forms (lang/mclj->forms text)
+      (let [forms (lang/m1clj->forms text)
             printed (fmt-flat/format-forms forms)
-            re-read (lang/mclj->forms printed)]
+            re-read (lang/m1clj->forms printed)]
         (= (pr-str forms) (pr-str re-read)))
       (catch Exception _ false))))
 
@@ -843,7 +843,7 @@
 (defspec prop-invalid-keyword-errors 100
   (prop/for-all [text gen-invalid-keyword-text]
     (try
-      (lang/mclj->forms text)
+      (lang/m1clj->forms text)
       false  ;; should have thrown
       (catch clojure.lang.ExceptionInfo _ true)
       (catch Exception _ false))))
@@ -858,7 +858,7 @@
 (defspec prop-unterminated-regex-errors 100
   (prop/for-all [text gen-unterminated-regex-text]
     (try
-      (lang/mclj->forms text)
+      (lang/m1clj->forms text)
       false  ;; should have thrown
       (catch clojure.lang.ExceptionInfo _ true)
       (catch Exception _ false))))
@@ -869,7 +869,7 @@
   (prop/for-all [body (gen/fmap #(apply str %) (gen/vector gen/char-alpha 1 10))]
     (let [text (str "\"" body)]
       (try
-        (lang/mclj->forms text)
+        (lang/m1clj->forms text)
         false  ;; should have thrown
         (catch clojure.lang.ExceptionInfo _ true)
         (catch Exception _ false)))))
@@ -882,7 +882,7 @@
       (let [syms (mapv #(str "s" %) (range (inc n)))
             discards (apply str (repeat n "#_ "))
             input (str discards (str/join " " syms))
-            result (lang/mclj->forms input)]
+            result (lang/m1clj->forms input)]
         ;; N discards should leave only the last form
         (= 1 (count result)))
       (catch Exception _ false))))
@@ -902,19 +902,19 @@
 (defspec prop-nested-syntax-quote-parses 200
   (prop/for-all [text gen-nested-syntax-quote-text]
     (try
-      (some? (lang/mclj->forms text))
+      (some? (lang/m1clj->forms text))
       (catch Exception _ false))))
 
 ;; ===========================================================================
-;; Property: set walker invariants for :mclj/insertion-order
+;; Property: set walker invariants for :m1clj/insertion-order
 ;;
 ;; Lesson from bugs #2/#3 (and the earlier 5f7d0fb walk-rc fix): any walker
-;; that rebuilds a set must keep :mclj/insertion-order consistent with the
+;; that rebuilds a set must keep :m1clj/insertion-order consistent with the
 ;; new contents. Without this invariant, the printer's "use order vector
 ;; when count matches" path renders stale entries (e.g. an unexpanded
 ;; CljSyntaxQuote that the walker has actually replaced with (quote x)).
 ;;
-;; Invariant: for any set produced by expand-forms, if :mclj/insertion-order
+;; Invariant: for any set produced by expand-forms, if :m1clj/insertion-order
 ;; is present its count equals the set size AND every entry is `=` to a
 ;; member of the set. Holds whether or not the source was syntax-quoted —
 ;; the outer walker is what bug #2 exercised.
@@ -949,10 +949,10 @@
 (defspec prop-expanded-set-meta-consistent 300
   (prop/for-all [src gen-meme-set-text]
     (try
-      (let [walked (expander/expand-forms (lang/mclj->forms src))
+      (let [walked (expander/expand-forms (lang/m1clj->forms src))
             sets   (mapcat find-sets walked)]
         (every? (fn [s]
-                  (let [order (:mclj/insertion-order (meta s))]
+                  (let [order (:m1clj/insertion-order (meta s))]
                     (or (nil? order)
                         (and (= (count order) (count s))
                              (every? #(contains? s %) order)))))
@@ -1017,10 +1017,10 @@
       :set-with-sq    (str "#{`" sym " " (str/join " " elts) "}"))))
 
 (defn- eval-via-meme [src]
-  (eval (first (expander/expand-forms (lang/mclj->forms src)))))
+  (eval (first (expander/expand-forms (lang/m1clj->forms src)))))
 
 (defn- eval-via-clj [src]
-  (eval (read-string (lang/forms->clj (lang/mclj->forms src)))))
+  (eval (read-string (lang/forms->clj (lang/m1clj->forms src)))))
 
 (defspec prop-forms->clj-eval-equivalent 200
   (prop/for-all [src gen-meme-eval-text]

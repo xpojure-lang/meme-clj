@@ -1,52 +1,52 @@
 # meme API Reference
 
-Namespaces are organized in four tiers: `meme.tools.{parser,lexer,render}` (generic tools), `meme.tools.clj.*` (Clojure-surface commons shared across Clojure-flavored frontends), `mclj-lang.*` (meme language), and `meme.*` (shared runtime infra — `meme.registry`, `meme.loader` — plus the `meme.cli` app).
+Namespaces are organized in four tiers: `meme.tools.{parser,lexer,render}` (generic tools), `meme.tools.clj.*` (Clojure-surface commons shared across Clojure-flavored frontends), `m1clj-lang.*` (meme language), and `meme.*` (shared runtime infra — `meme.registry`, `meme.loader` — plus the `meme.cli` app).
 
-## mclj-lang.api
+## m1clj-lang.api
 
 The public API for reading and printing meme syntax, organized in three tracks:
 
 ```
          text-to-form          form-to-text
-meme str ──→ mclj->forms ──→ forms ──→ forms->mclj ──→ meme str
+meme str ──→ m1clj->forms ──→ forms ──→ forms->m1clj ──→ meme str
 clj str  ──→ clj->forms  ──→ forms ──→ forms->clj  ──→ clj str
 
          text-to-text (compositions)
-meme str ──→ mclj->clj ──→ clj str
-clj str  ──→ clj->mclj ──→ meme str
+meme str ──→ m1clj->clj ──→ clj str
+clj str  ──→ clj->m1clj ──→ meme str
 ```
 
 ### Text-to-form track
 
-#### mclj->forms
+#### m1clj->forms
 
 ```clojure
-(mclj-lang.api/mclj->forms s)
-(mclj-lang.api/mclj->forms s opts)
+(m1clj-lang.api/m1clj->forms s)
+(m1clj-lang.api/m1clj->forms s opts)
 ```
 
 Read a meme source string. Returns a vector of Clojure forms. All platforms.
 
 Options:
 - `:resolve-keyword` — function that resolves auto-resolve keyword strings (`"::foo"`) to keywords at read time. When absent on JVM/Babashka, `::` keywords are deferred to eval time via `(read-string "::foo")`. Required on CLJS (errors without it, since `cljs.reader` cannot resolve `::` in the correct namespace).
-- `:resolve-symbol` — function that resolves symbols during syntax-quote expansion (e.g., `foo` → `my.ns/foo`). On JVM/Babashka, `run-string`/`run-file`/`start` inject a default that matches Clojure's `SyntaxQuoteReader` (inlined in `mclj-lang.run`). When calling `mclj->forms` directly, symbols in syntax-quote are left unqualified unless this option is provided. On CLJS, no default is available.
+- `:resolve-symbol` — function that resolves symbols during syntax-quote expansion (e.g., `foo` → `my.ns/foo`). On JVM/Babashka, `run-string`/`run-file`/`start` inject a default that matches Clojure's `SyntaxQuoteReader` (inlined in `m1clj-lang.run`). When calling `m1clj->forms` directly, symbols in syntax-quote are left unqualified unless this option is provided. On CLJS, no default is available.
 
-Reader conditionals (`#?`, `#?@`) are always returned as `CljReaderConditional` records. To materialize the platform branch, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:mclj/deprecated-opt`.
+Reader conditionals (`#?`, `#?@`) are always returned as `CljReaderConditional` records. To materialize the platform branch, compose `meme.tools.clj.stages/step-evaluate-reader-conditionals` after reading, or use `run-string`/`run-file`/`start` (which do so automatically). The `:read-cond` option is no longer accepted — passing it throws `:m1clj/deprecated-opt`.
 
 ```clojure
-(mclj->forms "+(1 2 3)")
+(m1clj->forms "+(1 2 3)")
 ;=> [(+ 1 2 3)]
 
-(mclj->forms "def(x 42)\nprintln(x)")
+(m1clj->forms "def(x 42)\nprintln(x)")
 ;=> [(def x 42) (println x)]
 ```
 
-**Note:** `mclj->forms` may return internal record types for forms that preserve source notation: `CljRaw` (for hex numbers, unicode escapes, etc.) wraps a `:value` and `:raw` text; `CljAutoKeyword` (for `::` keywords) wraps a `:raw` string. These are unwrapped to plain values by `step-expand-syntax-quotes` (which `run-string`/`run-file` call before eval). If you need plain Clojure values from `mclj->forms`, compose with `meme.tools.clj.stages/step-expand-syntax-quotes`.
+**Note:** `m1clj->forms` may return internal record types for forms that preserve source notation: `CljRaw` (for hex numbers, unicode escapes, etc.) wraps a `:value` and `:raw` text; `CljAutoKeyword` (for `::` keywords) wraps a `:raw` string. These are unwrapped to plain values by `step-expand-syntax-quotes` (which `run-string`/`run-file` call before eval). If you need plain Clojure values from `m1clj->forms`, compose with `meme.tools.clj.stages/step-expand-syntax-quotes`.
 
-#### forms->mclj
+#### forms->m1clj
 
 ```clojure
-(mclj-lang.api/forms->mclj forms)
+(m1clj-lang.api/forms->m1clj forms)
 ```
 
 Print a sequence of Clojure forms as meme text. All platforms.
@@ -54,7 +54,7 @@ Print a sequence of Clojure forms as meme text. All platforms.
 **Note:** Reference types (atoms, refs, agents) print as `#object[...]` which cannot be round-tripped. This matches Clojure's own behavior.
 
 ```clojure
-(forms->mclj ['(+ 1 2 3)])
+(forms->m1clj ['(+ 1 2 3)])
 ;=> "+(1 2 3)"
 ```
 
@@ -63,7 +63,7 @@ Print a sequence of Clojure forms as meme text. All platforms.
 #### forms->clj
 
 ```clojure
-(mclj-lang.api/forms->clj forms)
+(m1clj-lang.api/forms->clj forms)
 ```
 
 Print Clojure forms as a Clojure source string. All platforms.
@@ -76,7 +76,7 @@ Print Clojure forms as a Clojure source string. All platforms.
 #### clj->forms
 
 ```clojure
-(mclj-lang.api/clj->forms clj-src)
+(m1clj-lang.api/clj->forms clj-src)
 ```
 
 Read a Clojure source string, return a vector of forms. JVM/Babashka only.
@@ -88,86 +88,86 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 
 ### Pretty-printing
 
-#### format-mclj-forms
+#### format-m1clj-forms
 
 ```clojure
-(mclj-lang.api/format-mclj-forms forms)
-(mclj-lang.api/format-mclj-forms forms opts)
+(m1clj-lang.api/format-m1clj-forms forms)
+(m1clj-lang.api/format-m1clj-forms forms opts)
 ```
 
-Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:mclj/leading-trivia` metadata (attached by the parser during `step-parse`). All platforms.
+Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:m1clj/leading-trivia` metadata (attached by the parser during `step-parse`). All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
 
 ```clojure
-(format-mclj-forms ['(defn greet [name] (println (str "Hello " name)))])
+(format-m1clj-forms ['(defn greet [name] (println (str "Hello " name)))])
 ;=> "defn(greet [name]\n  println(str(\"Hello \" name)))"
 ```
 
-#### format-mclj
+#### format-m1clj
 
 ```clojure
-(mclj-lang.api/format-mclj meme-src)
-(mclj-lang.api/format-mclj meme-src opts)
+(m1clj-lang.api/format-m1clj meme-src)
+(m1clj-lang.api/format-m1clj meme-src opts)
 ```
 
-Source-to-source convenience: parses a meme source string and re-emits it via `format-mclj-forms` at the requested width. Equivalent to `(format-mclj-forms (mclj->forms meme-src) opts)`. Used by the `meme format` CLI command. All platforms.
+Source-to-source convenience: parses a meme source string and re-emits it via `format-m1clj-forms` at the requested width. Equivalent to `(format-m1clj-forms (m1clj->forms meme-src) opts)`. Used by the `meme format` CLI command. All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
 
 ### Text-to-text track
 
-#### mclj->clj
+#### m1clj->clj
 
 ```clojure
-(mclj-lang.api/mclj->clj meme-src)
-(mclj-lang.api/mclj->clj meme-src opts)
+(m1clj-lang.api/m1clj->clj meme-src)
+(m1clj-lang.api/m1clj->clj meme-src opts)
 ```
 
-Convert meme source string to Clojure source string (lossless by default). All platforms. Equivalent to `(forms->clj (mclj->forms meme-src opts))`.
+Convert meme source string to Clojure source string (lossless by default). All platforms. Equivalent to `(forms->clj (m1clj->forms meme-src opts))`.
 
 Reader conditionals are preserved as `#?(...)` in the output — faithful for `.cljc` conversion. For the eval-time value, use `run-string` instead.
 
-Options: same as `mclj->forms` (`:resolve-keyword`, `:resolve-symbol`).
+Options: same as `m1clj->forms` (`:resolve-keyword`, `:resolve-symbol`).
 
 ```clojure
-(mclj->clj "println(\"hello\")")
+(m1clj->clj "println(\"hello\")")
 ;=> "(println \"hello\")"
 ```
 
-#### clj->mclj
+#### clj->m1clj
 
 ```clojure
-(mclj-lang.api/clj->mclj clj-src)
+(m1clj-lang.api/clj->m1clj clj-src)
 ```
 
-Convert a Clojure source string to meme source string. JVM/Babashka only. Equivalent to `(forms->mclj (clj->forms clj-src))`.
+Convert a Clojure source string to meme source string. JVM/Babashka only. Equivalent to `(forms->m1clj (clj->forms clj-src))`.
 
-**Known limitation:** Clojure's reader expands reader sugar before meme sees the forms. `'(f x)` becomes `(quote (f x))` → `quote(f(x))` instead of `'f(x)`. Similarly, `@atom` → `clojure.core/deref(atom)`, and `#(+ % 1)` → `fn*([p1__N#] +(p1__N# 1))`. The `mclj->clj->mclj` roundtrip preserves semantics but not notation for these forms.
+**Known limitation:** Clojure's reader expands reader sugar before meme sees the forms. `'(f x)` becomes `(quote (f x))` → `quote(f(x))` instead of `'f(x)`. Similarly, `@atom` → `clojure.core/deref(atom)`, and `#(+ % 1)` → `fn*([p1__N#] +(p1__N# 1))`. The `m1clj->clj->m1clj` roundtrip preserves semantics but not notation for these forms.
 
 ```clojure
-(clj->mclj "(defn f [x] (+ x 1))")
+(clj->m1clj "(defn f [x] (+ x 1))")
 ;=> "defn(f [x] +(x 1))"
 ```
 
 ### lang-map
 
 ```clojure
-mclj-lang.api/lang-map
+m1clj-lang.api/lang-map
 ```
 
-The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:run`, `:repl`. `:to-mclj` (CLI alias `from-clj`) is optional — only present on langs that own a syntax printer. Meme registers itself under `:mclj` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly.
+The self-description map the CLI and registry consume. Keys: `:extension`, `:extensions` (additional variants), `:format`, `:to-clj`, `:form-shape`, and — JVM-only — `:run`, `:repl`. `:to-m1clj` (CLI alias `from-clj`) is optional — only present on langs that own a syntax printer. Meme registers itself under `:m1clj` at ns-load via `meme.registry/register-builtin!`; other hosts can inspect or reference `lang-map` directly.
 
-## mclj-lang.form-shape
+## m1clj-lang.form-shape
 
 Semantic decomposition of Clojure special forms into named slots. See [doc/form-shape.md](form-shape.md) for the slot vocabulary, extension patterns, and consumer sketches. The three slot layers — notation (printer), form-shape (this namespace), style (formatter) — are independently composable.
 
 ### registry
 
 ```clojure
-mclj-lang.form-shape/registry
+m1clj-lang.form-shape/registry
 ```
 
 The built-in registry of decomposers, a plain map `{head-symbol → (fn [args-vec] → slots)}`. Extend with `assoc`, compose with `merge`, or wrap with `with-structural-fallback`. Consumed by `lang-map`'s `:form-shape` key and threaded through formatters to the printer.
@@ -175,7 +175,7 @@ The built-in registry of decomposers, a plain map `{head-symbol → (fn [args-ve
 ### decompose
 
 ```clojure
-(mclj-lang.form-shape/decompose registry head args)
+(m1clj-lang.form-shape/decompose registry head args)
 ```
 
 Look up `head` in `registry` and apply its decomposer to `args`. Returns a vector of `[slot-name value]` pairs in source order, or `nil` if no decomposer matches (and no structural fallback is installed). A nil `registry` yields nil for every head — every form renders as a plain call.
@@ -185,7 +185,7 @@ When the registry carries a `::fallback-fn` in its metadata (see `with-structura
 ### with-structural-fallback
 
 ```clojure
-(mclj-lang.form-shape/with-structural-fallback registry)
+(m1clj-lang.form-shape/with-structural-fallback registry)
 ```
 
 Return a registry (same entries) that uses structural inference when no entry matches a given head. Two patterns are recognized:
@@ -198,33 +198,33 @@ A user macro matching either pattern inherits canonical layout without being reg
 Opt-in: the built-in `registry` has no fallback by default, so existing code doesn't silently change layout for user macros.
 
 
-## mclj-lang.printer
+## m1clj-lang.printer
 
 Low-level Doc tree builder. Most callers should use `formatter.flat` or `formatter.canon` instead.
 
 ### to-doc
 
 ```clojure
-(mclj-lang.printer/to-doc form)
-(mclj-lang.printer/to-doc form mode)
-(mclj-lang.printer/to-doc form mode style)
-(mclj-lang.printer/to-doc form mode style form-shape)
+(m1clj-lang.printer/to-doc form)
+(m1clj-lang.printer/to-doc form mode)
+(m1clj-lang.printer/to-doc form mode style)
+(m1clj-lang.printer/to-doc form mode style form-shape)
 ```
 
 Convert a Clojure form to a Wadler-Lindig Doc tree. The Doc tree is passed to `meme.tools.render/layout` for final string output.
 
-- `mode` — `:mclj` (call notation, default) or `:clj` (standard Clojure with reader sugar).
-- `style` — layout policy map (nil = pass-through). Keyed by semantic slot names from `mclj-lang.form-shape` (`:name`, `:params`, `:bindings`, etc.), not by form names. See `mclj-lang.formatter.canon/style` for the canonical policy.
-- `form-shape` — registry map `{head-symbol → decomposer-fn}`. When nil, no special-form decomposition runs and every call renders as a plain body sequence. Callers normally pass `mclj-lang.form-shape/registry`; the lang's `lang-map` exposes its registry under `:form-shape`.
+- `mode` — `:m1clj` (call notation, default) or `:clj` (standard Clojure with reader sugar).
+- `style` — layout policy map (nil = pass-through). Keyed by semantic slot names from `m1clj-lang.form-shape` (`:name`, `:params`, `:bindings`, etc.), not by form names. See `m1clj-lang.formatter.canon/style` for the canonical policy.
+- `form-shape` — registry map `{head-symbol → decomposer-fn}`. When nil, no special-form decomposition runs and every call renders as a plain body sequence. Callers normally pass `m1clj-lang.form-shape/registry`; the lang's `lang-map` exposes its registry under `:form-shape`.
 
-## mclj-lang.formatter.flat
+## m1clj-lang.formatter.flat
 
 Flat (single-line) formatter. Composes printer + render at infinite width.
 
 ### format-form
 
 ```clojure
-(mclj-lang.formatter.flat/format-form form)
+(m1clj-lang.formatter.flat/format-form form)
 ```
 
 Format a single Clojure form as flat meme text (single-line).
@@ -243,7 +243,7 @@ Format a single Clojure form as flat meme text (single-line).
 ### format-forms
 
 ```clojure
-(mclj-lang.formatter.flat/format-forms forms)
+(m1clj-lang.formatter.flat/format-forms forms)
 ```
 
 Format a sequence of Clojure forms as flat meme text, separated by blank lines.
@@ -251,47 +251,47 @@ Format a sequence of Clojure forms as flat meme text, separated by blank lines.
 ### format-clj
 
 ```clojure
-(mclj-lang.formatter.flat/format-clj forms)
+(m1clj-lang.formatter.flat/format-clj forms)
 ```
 
 Format Clojure forms as Clojure text with reader sugar (`'quote`, `@deref`, `#'var`).
 
 
-## mclj-lang.formatter.canon
+## m1clj-lang.formatter.canon
 
 Canonical (width-aware) formatter. Composes printer + render at target width. Used by `meme format` CLI.
 
 ### format-form
 
 ```clojure
-(mclj-lang.formatter.canon/format-form form)
-(mclj-lang.formatter.canon/format-form form opts)
+(m1clj-lang.formatter.canon/format-form form)
+(m1clj-lang.formatter.canon/format-form form opts)
 ```
 
-Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:mclj/leading-trivia` metadata.
+Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:m1clj/leading-trivia` metadata.
 
 Options:
 - `:width` — target line width (default: 80)
-- `:form-shape` — form-shape registry (default: `mclj-lang.form-shape/registry`). Override to add user-defined defining macros or to disable decomposition entirely (pass `nil` for plain-call layout). Wrap with `mclj-lang.form-shape/with-structural-fallback` to enable structural inference for user macros that mirror `defn` (name + params vector) or `let` (leading bindings vector) shapes.
-- `:style` — slot-keyed style map (default: `mclj-lang.formatter.canon/style`). Override for project-level tweaks — e.g. a narrower `:head-line-slots` set, or a custom `:slot-renderers` map that replaces the printer defaults for `:bindings` or `:clause`. See [form-shape.md](form-shape.md) for the style map schema.
+- `:form-shape` — form-shape registry (default: `m1clj-lang.form-shape/registry`). Override to add user-defined defining macros or to disable decomposition entirely (pass `nil` for plain-call layout). Wrap with `m1clj-lang.form-shape/with-structural-fallback` to enable structural inference for user macros that mirror `defn` (name + params vector) or `let` (leading bindings vector) shapes.
+- `:style` — slot-keyed style map (default: `m1clj-lang.formatter.canon/style`). Override for project-level tweaks — e.g. a narrower `:head-line-slots` set, or a custom `:slot-renderers` map that replaces the printer defaults for `:bindings` or `:clause`. See [form-shape.md](form-shape.md) for the style map schema.
 
 ### format-forms
 
 ```clojure
-(mclj-lang.formatter.canon/format-forms forms)
-(mclj-lang.formatter.canon/format-forms forms opts)
+(m1clj-lang.formatter.canon/format-forms forms)
+(m1clj-lang.formatter.canon/format-forms forms opts)
 ```
 
-Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:mclj/leading-trivia` metadata, including trailing comments after the last form.
+Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:m1clj/leading-trivia` metadata, including trailing comments after the last form.
 
 
-## mclj-lang.repl
+## m1clj-lang.repl
 
 ### input-state
 
 ```clojure
-(mclj-lang.repl/input-state s)
-(mclj-lang.repl/input-state s opts)
+(m1clj-lang.repl/input-state s)
+(m1clj-lang.repl/input-state s opts)
 ```
 
 Returns the parse state of a meme input string: `:complete` (parsed successfully), `:incomplete` (unclosed delimiter — keep reading), or `:invalid` (malformed, non-recoverable error). Used internally by the REPL for multi-line input handling; also useful for editor integration.
@@ -307,8 +307,8 @@ The optional `opts` map is forwarded to `stages/run` — useful for callers that
 ### start
 
 ```clojure
-(mclj-lang.repl/start)
-(mclj-lang.repl/start opts)
+(m1clj-lang.repl/start)
+(m1clj-lang.repl/start opts)
 ```
 
 Start the meme REPL. Reads meme syntax, evaluates as Clojure, prints results.
@@ -319,7 +319,7 @@ Options:
 - `:resolve-keyword` — function to resolve `::` keywords at read time (default: `clojure.core/read-string` on JVM; required on CLJS for code that uses `::` keywords)
 - `:prelude` — vector of forms to eval before the first user input (e.g., guest language standard library)
 
-On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's syntax-quote resolution, inlined in `mclj-lang.run`) unless explicitly provided.
+On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's syntax-quote resolution, inlined in `m1clj-lang.run`) unless explicitly provided.
 
 ```
 $ bb meme repl
@@ -333,16 +333,16 @@ user=> map(inc [1 2 3])
 The prompt shows the current namespace (e.g., `user=>` on JVM/Babashka, `meme=>` on ClojureScript).
 
 
-## mclj-lang.run
+## m1clj-lang.run
 
-Run `.mclj` files or meme source strings.
+Run `.m1clj` files or meme source strings.
 
 ### run-string
 
 ```clojure
-(mclj-lang.run/run-string s)
-(mclj-lang.run/run-string s eval-fn)
-(mclj-lang.run/run-string s opts)
+(m1clj-lang.run/run-string s)
+(m1clj-lang.run/run-string s eval-fn)
+(m1clj-lang.run/run-string s opts)
 ```
 
 Read meme source string, eval each form, return the last result. Strips leading `#!` shebang lines before parsing. The second argument can be an eval function (backward compatible) or an opts map.
@@ -352,7 +352,7 @@ Options (when passing a map):
 - `:resolve-keyword` — function to resolve `::` keywords at read time (default: none — `::` keywords resolve at eval time in the file's declared namespace. Required on CLJS for code that uses `::` keywords)
 - `:prelude` — vector of forms to eval before user code (e.g., guest language standard library)
 
-On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's syntax-quote resolution, inlined in `mclj-lang.run`) unless explicitly provided.
+On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's syntax-quote resolution, inlined in `m1clj-lang.run`) unless explicitly provided.
 
 ```clojure
 (run-string "def(x 42)\n+(x 1)")
@@ -362,21 +362,21 @@ On JVM/Babashka, `:resolve-symbol` is automatically injected (matching Clojure's
 ### run-file
 
 ```clojure
-(mclj-lang.run/run-file path)
-(mclj-lang.run/run-file path eval-fn)
-(mclj-lang.run/run-file path opts)
+(m1clj-lang.run/run-file path)
+(m1clj-lang.run/run-file path eval-fn)
+(m1clj-lang.run/run-file path opts)
 ```
 
-Read and eval a `.mclj` file. Returns the last result. Uses `slurp` internally (JVM/Babashka only). Second argument follows the same convention as `run-string`.
+Read and eval a `.m1clj` file. Returns the last result. Uses `slurp` internally (JVM/Babashka only). Second argument follows the same convention as `run-string`.
 
-By default runs the file as meme and installs `meme.loader` so `require`/`load-file` of `.mclj` namespaces work from within. Optional opts:
+By default runs the file as meme and installs `meme.loader` so `require`/`load-file` of `.m1clj` namespaces work from within. Optional opts:
 
 - `:install-loader?` — default `true`. Pass `false` to skip installing the loader (for hosts that own their own `clojure.core/load` interception).
 - `:resolve-lang-for-path` — `(fn [path opts] → run-fn-or-nil)` for extension-based lang dispatch. When non-nil return value handles the file; otherwise falls through to meme. The CLI wires this to `meme.registry`.
 
 ```clojure
 ;; Default — always runs as meme
-(run-file "test/examples/tests/01_core_rules.mclj")
+(run-file "test/examples/tests/01_core_rules.m1clj")
 
 ;; With registry-driven dispatch (e.g. to run a sibling lang by extension)
 (run-file "app.sibling"
@@ -390,7 +390,7 @@ By default runs the file as meme and installs `meme.loader` so `require`/`load-f
 
 Explicit pipeline composition. Each stage is a `ctx → ctx` function operating on a shared context map with keys `:source`, `:opts`, `:cst`, `:forms`.
 
-Each stage validates its required keys at entry against `stage-contracts` — miscomposed pipelines (e.g. calling `step-read` before `step-parse`) throw a clear `:mclj/pipeline-error` with the missing key(s) and the actual ctx keys present, instead of surfacing a deep-inside NPE.
+Each stage validates its required keys at entry against `stage-contracts` — miscomposed pipelines (e.g. calling `step-read` before `step-parse`) throw a clear `:m1clj/pipeline-error` with the missing key(s) and the actual ctx keys present, instead of surfacing a deep-inside NPE.
 
 ### stage-contracts
 
@@ -405,7 +405,7 @@ meme.tools.clj.stages/stage-contracts
 Machine-readable pipeline contract.  Tools that compose custom stages can extend their own contracts in the same shape.
 
 Pipelines:
-- **Tooling** (`mclj->forms`, `mclj->clj`, `format-mclj`): `step-parse → step-read`.
+- **Tooling** (`m1clj->forms`, `m1clj->clj`, `format-m1clj`): `step-parse → step-read`.
 - **Eval** (`run-string`, `run-file`, REPL): `step-parse → step-read → step-evaluate-reader-conditionals → step-expand-syntax-quotes`.
 
 ### step-parse
@@ -414,7 +414,7 @@ Pipelines:
 (meme.tools.clj.stages/step-parse ctx)
 ```
 
-Parse source string into a lossless CST via the unified Pratt parser. Scanning (character dispatch, trivia) and parsing (structure) are handled in a single pass. Requires `:grammar` in `:opts` — no implicit default; each lang passes its own grammar (e.g. `mclj-lang.grammar/grammar`). Reads `:source`, assocs `:cst`.
+Parse source string into a lossless CST via the unified Pratt parser. Scanning (character dispatch, trivia) and parsing (structure) are handled in a single pass. Requires `:grammar` in `:opts` — no implicit default; each lang passes its own grammar (e.g. `m1clj-lang.grammar/grammar`). Reads `:source`, assocs `:cst`.
 
 ### step-read
 
@@ -422,7 +422,7 @@ Parse source string into a lossless CST via the unified Pratt parser. Scanning (
 (meme.tools.clj.stages/step-read ctx)
 ```
 
-Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `CljReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:mclj/deprecated-opt`.
+Lower CST to Clojure forms. Reads `:cst`, `:opts`, assocs `:forms`. Reader conditionals are preserved as `CljReaderConditional` records — materialize via `step-evaluate-reader-conditionals`. Passing `:read-cond` in `:opts` throws `:m1clj/deprecated-opt`.
 
 ### step-evaluate-reader-conditionals
 
@@ -449,7 +449,7 @@ Expand syntax-quote AST nodes (`CljSyntaxQuote`) into plain Clojure forms (`seq`
 (meme.tools.clj.stages/expand-syntax-quotes forms opts)
 ```
 
-Plain-forms convenience wrapper around `step-expand-syntax-quotes` that doesn't require building a ctx map. Takes a vector of forms plus an opts map, returns the expanded forms. Use this when you already have a forms vector in hand (e.g. from `mclj->forms`) and want eval-ready output without the stages machinery.
+Plain-forms convenience wrapper around `step-expand-syntax-quotes` that doesn't require building a ctx map. Takes a vector of forms plus an opts map, returns the expanded forms. Use this when you already have a forms vector in hand (e.g. from `m1clj->forms`) and want eval-ready output without the stages machinery.
 
 ### strip-shebang
 
@@ -473,7 +473,7 @@ Remove a single leading UTF-8 BOM (`﻿`) from a source string. Invoked by runti
 (meme.tools.clj.stages/run source opts)
 ```
 
-Run the pipeline: `step-parse → step-read`. `opts` must include `:grammar` (each lang supplies its own; e.g. `mclj-lang.grammar/grammar`). Returns the complete context map. Does **not** include `step-expand-syntax-quotes` — forms contain AST nodes (`CljSyntaxQuote`, `CljRaw`) for tooling access. Call `step-expand-syntax-quotes` separately if you need eval-ready forms.
+Run the pipeline: `step-parse → step-read`. `opts` must include `:grammar` (each lang supplies its own; e.g. `m1clj-lang.grammar/grammar`). Returns the complete context map. Does **not** include `step-expand-syntax-quotes` — forms contain AST nodes (`CljSyntaxQuote`, `CljRaw`) for tooling access. Call `step-expand-syntax-quotes` separately if you need eval-ready forms.
 
 
 ## meme.cli
@@ -484,19 +484,19 @@ Unified CLI for meme. JVM/Babashka only.
 
 | Command | Description |
 |---------|-------------|
-| `meme run <file>` | Run a `.mclj` file |
+| `meme run <file>` | Run a `.m1clj` file |
 | `meme repl` | Start the meme REPL |
-| `meme to-clj <file\|dir>` | Convert `.mclj` files to `.clj` (in-place). |
-| `meme to-mclj <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.mclj`. |
-| `meme format <file\|dir>` | Format `.mclj` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
-| `meme transpile <dir\|file...>` | Transpile `.mclj` to `.clj` in a separate output directory (`--out target/mclj` by default). Output preserves relative paths — add the output dir to `:paths` in deps.edn for standard `require` without runtime patching. Alias: `compile`. |
-| `meme build <dir\|file...>` | Transpile then AOT-compile to JVM bytecode. Staging in `target/mclj` (implementation detail), output `.class` files to `--out target/classes`. Spawns `clojure` with the staging dir on the classpath and runs `clojure.core/compile` per namespace. Stops at bytecode; use your own tools.build for JAR packaging. See `doc/language-reference.md` for `build.clj`-integrated recipes. |
+| `meme to-clj <file\|dir>` | Convert `.m1clj` files to `.clj` (in-place). |
+| `meme to-m1clj <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.m1clj`. |
+| `meme format <file\|dir>` | Format `.m1clj` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
+| `meme transpile <dir\|file...>` | Transpile `.m1clj` to `.clj` in a separate output directory (`--out target/m1clj` by default). Output preserves relative paths — add the output dir to `:paths` in deps.edn for standard `require` without runtime patching. Alias: `compile`. |
+| `meme build <dir\|file...>` | Transpile then AOT-compile to JVM bytecode. Staging in `target/m1clj` (implementation detail), output `.class` files to `--out target/classes`. Spawns `clojure` with the staging dir on the classpath and runs `clojure.core/compile` per namespace. Stops at bytecode; use your own tools.build for JAR packaging. See `doc/language-reference.md` for `build.clj`-integrated recipes. |
 | `meme inspect [--lang]` | Show lang info and supported commands |
 | `meme version` | Print version |
 
-All file commands accept directories (processed recursively) and multiple paths. `to-clj`, `to-mclj`, and `format` accept `--stdout` to print to stdout instead of writing files. Use `--lang` to select a lang backend (default: mclj).
+All file commands accept directories (processed recursively) and multiple paths. `to-clj`, `to-m1clj`, and `format` accept `--stdout` to print to stdout instead of writing files. Use `--lang` to select a lang backend (default: m1clj).
 
-Entry point: `-main` dispatches via `babashka.cli`. For Clojure JVM, use `-T:meme` (e.g., `clojure -T:meme run :file '"hello.mclj"'`).
+Entry point: `-main` dispatches via `babashka.cli`. For Clojure JVM, use `-T:meme` (e.g., `clojure -T:meme run :file '"hello.m1clj"'`).
 
 
 ## meme.tools.clj.resolve
@@ -544,7 +544,7 @@ Common errors:
 
 ```clojure
 (try
-  (mclj-lang.api/mclj->forms "foo(")
+  (m1clj-lang.api/m1clj->forms "foo(")
   (catch Exception e
     (ex-data e)))
 ;=> {:line 1, :col 4}
@@ -554,7 +554,7 @@ Error recovery is not supported — the reader stops at the first error. This is
 
 ## meme.loader
 
-Namespace loader for `.mclj` files. Intercepts `clojure.core/load` and `clojure.core/load-file` to handle `.mclj` files transparently. JVM/Babashka only.
+Namespace loader for `.m1clj` files. Intercepts `clojure.core/load` and `clojure.core/load-file` to handle `.m1clj` files transparently. JVM/Babashka only.
 
 ### install! / uninstall!
 
@@ -571,14 +571,14 @@ Namespace loader for `.mclj` files. Intercepts `clojure.core/load` and `clojure.
 
 | Function | Effect | JVM | Babashka |
 |----------|--------|-----|----------|
-| `require` | `(require 'my.ns)` searches for `my/ns.mclj` on the classpath | Yes | No (SCI bypasses `clojure.core/load`) |
-| `load-file` | `(load-file "path/to/file.mclj")` runs through the meme pipeline | Yes | Yes |
+| `require` | `(require 'my.ns)` searches for `my/ns.m1clj` on the classpath | Yes | No (SCI bypasses `clojure.core/load`) |
+| `load-file` | `(load-file "path/to/file.m1clj")` runs through the meme pipeline | Yes | Yes |
 
-**Automatic installation:** `mclj-lang.run/run-string`, `run-file`, and `mclj-lang.repl/start` install the loader by default. The CLI (`bb meme run`, `bb meme repl`) goes through these, so the loader is up before any user code runs. Opt out with `:install-loader? false` (e.g. when embedding meme in a host that owns its own `clojure.core/load` interception).
+**Automatic installation:** `m1clj-lang.run/run-string`, `run-file`, and `m1clj-lang.repl/start` install the loader by default. The CLI (`bb meme run`, `bb meme repl`) goes through these, so the loader is up before any user code runs. Opt out with `:install-loader? false` (e.g. when embedding meme in a host that owns its own `clojure.core/load` interception).
 
-**Precedence:** When both `my/ns.mclj` and `my/ns.clj` exist on the classpath, `.mclj` takes priority.
+**Precedence:** When both `my/ns.m1clj` and `my/ns.clj` exist on the classpath, `.m1clj` takes priority.
 
-**Babashka limitation:** Babashka's SCI interpreter does not dispatch `require` through `clojure.core/load`, so `require` of `.mclj` namespaces is JVM-only. `load-file` works on both platforms. For Babashka projects that need `require`, use `meme transpile` to precompile `.mclj` to `.clj`.
+**Babashka limitation:** Babashka's SCI interpreter does not dispatch `require` through `clojure.core/load`, so `require` of `.m1clj` namespaces is JVM-only. `load-file` works on both platforms. For Babashka projects that need `require`, use `meme transpile` to precompile `.m1clj` to `.clj`.
 
 ## meme.tools.clj.errors
 
@@ -661,7 +661,7 @@ Both `:extension` (string) and `:extensions` (vector) are accepted. Both are nor
 ```clojure
 ;; Single extension — prelude file path
 (registry/register! :my-lang {:extension ".ml"
-                              :run "path/to/prelude.mclj"})
+                              :run "path/to/prelude.m1clj"})
 
 ;; Multiple extensions — pre-resolved run fn
 (registry/register! :my-lang {:extensions [".ml" ".mlx"]
@@ -682,10 +682,10 @@ Both `:extension` (string) and `:extensions` (vector) are accepted. Both are nor
 
 Install a handler for resolving string values in the given command slot. `handler` is `(fn [string-value] → command-fn)` and is called once per `register!`/`load-edn` for each string value in that slot.
 
-The registry itself is lang-agnostic: it does not know how to interpret a string path. Meme installs its own `:run` handler at load time, which treats the string as a prelude `.mclj` file path:
+The registry itself is lang-agnostic: it does not know how to interpret a string path. Meme installs its own `:run` handler at load time, which treats the string as a prelude `.m1clj` file path:
 
 ```clojure
-;; mclj-lang.api (JVM only)
+;; m1clj-lang.api (JVM only)
 (registry/register-string-handler! :run
   (fn [prelude-path]
     (fn [source opts]
@@ -701,7 +701,7 @@ A sibling lang with different string conventions would install its own handler (
 (meme.registry/resolve-by-extension path)
 ```
 
-Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Meme ships with `.mclj`, `.mcljc`, `.mcljj`, `.mcljs`.
+Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Meme ships with `.m1clj`, `.m1cljc`, `.m1cljj`, `.m1cljs`.
 
 ### registered-langs
 
@@ -709,7 +709,7 @@ Given a file path, find the lang whose `:extensions` (plural, normalized) includ
 (meme.registry/registered-langs)
 ```
 
-List all registered **user** lang names (keywords). Excludes built-ins (mclj-lang).
+List all registered **user** lang names (keywords). Excludes built-ins (m1clj-lang).
 
 ### available-langs
 

@@ -3,11 +3,11 @@
    for a broad set of inputs. Regression net for tokenizer and reader
    output — if any of these break, something changed observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
-            [mclj-lang.api :as lang]
+            [m1clj-lang.api :as lang]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.stages :as stages]
-            [mclj-lang.grammar :as grammar]
-            [mclj-lang.test-util :as tokenizer]))
+            [m1clj-lang.grammar :as grammar]
+            [m1clj-lang.test-util :as tokenizer]))
 
 (defn- eval-rc-forms
   "Read src and run step-evaluate-reader-conditionals; return :forms."
@@ -32,7 +32,7 @@
         (tokenizer/tokenize s)))
 
 (defn- forms-for [s]
-  (lang/mclj->forms s))
+  (lang/m1clj->forms s))
 
 ;; ---------------------------------------------------------------------------
 ;; Token snapshots — exact type/value/line/col for representative inputs
@@ -321,7 +321,7 @@
 (deftest form-snapshot-metadata
   (let [form (first (forms-for "^:private x"))]
     (is (= 'x form))
-    (is (= {:private true} (dissoc (meta form) :mclj/leading-trivia :mclj/meta-chain)))))
+    (is (= {:private true} (dissoc (meta form) :m1clj/leading-trivia :m1clj/meta-chain)))))
 
 (deftest form-snapshot-anon-fn
   (is (= '[(fn [%1] (inc %1))] (forms-for "#(inc(%))")))
@@ -382,7 +382,7 @@
        (is (tagged-literal? form)))))
 
 (deftest form-snapshot-reader-conditional
-  (testing "mclj->forms preserves the record; eval-rc yields platform value"
+  (testing "m1clj->forms preserves the record; eval-rc yields platform value"
     (is (forms/clj-reader-conditional? (first (forms-for "#?(:clj 1 :cljs 2)"))))
     (is (= #?(:clj 1 :cljs 2) (first (eval-rc-forms "#?(:clj 1 :cljs 2)"))))))
 
