@@ -112,8 +112,8 @@ A style opines on layout over *slot names*, not form names. The canonical style 
 
 Keys the formatter understands:
 
-- **`:head-line-slots`** — slot names that stay on the head line with the call head when the form breaks. Other slots go into the indented body.
-- **`:force-open-space-for`** — slot names whose presence triggers `head( ` (space after open paren) even on flat output. For meme, this is the classic "`defn(` becomes `defn( `" rule; any form carrying a `:name` slot gets the treatment.
+- **`:head-line-slots`** — slot names that stay on the head line with the call head when the form breaks. Other slots go into the indented body. Mode-independent: the same set drives both `:m1clj` and `:clj` output.
+- **`:force-open-space-for`** — slot names whose presence triggers `head( ` (space after open paren) even on flat output. For meme, this is the classic "`defn(` becomes `defn( `" rule; any form carrying a `:name` slot gets the treatment. **Meme-only** — silently ignored under `:mode :clj`, which has no `head( ` convention (Clojure writes `(head ...)` with the head inside the parens).
 - **`:slot-renderers`** *(optional; not in the shipped `canon/style`)* — a map `{slot-name → (fn [value ctx] → Doc)}` supplied by callers to override printer defaults. Useful when a project wants a slot rendered differently, or a new custom slot needs display logic. Pass it via the formatter opts or merge it into a style copy.
 
 ### Slot renderers and defaults

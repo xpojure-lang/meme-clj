@@ -353,7 +353,14 @@
   (-lower [n opts] (lower-meta n opts))
 
   #?(:clj meme.tools.clj.ast.nodes.CljNamespacedMap :cljs nodes/CljNamespacedMap)
-  (-lower [n opts] (lower-namespaced-map n opts)))
+  (-lower [n opts] (lower-namespaced-map n opts))
+
+  ;; CljRoot is a multi-form container, not a form. ast->form on a root
+  ;; is a category error; the caller wanted ast->forms.
+  #?(:clj meme.tools.clj.ast.nodes.CljRoot :cljs nodes/CljRoot)
+  (-lower [_ _]
+    (throw (ex-info "ast->form on CljRoot — use ast->forms for the multi-form container"
+                    {:type ::root-lowered-as-form}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Top-level

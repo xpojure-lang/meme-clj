@@ -193,3 +193,20 @@
     (doseq [src snippets]
       (testing src
         (check-equiv src)))))
+
+;; ast->form on a CljRoot is a category error — it's a multi-form
+;; container, not a form. The Lowerable arm rejects it with a typed
+;; ex-info so callers get a clear pointer to ast->forms instead of a
+;; cryptic protocol-dispatch failure.
+(deftest ast-form-on-root-throws
+  (let [root (-> (parse "1 2 3") (ast-build/cst->ast nil))]
+    (is (thrown-with-msg?
+         #?(:clj clojure.lang.ExceptionInfo :cljs cljs.core/ExceptionInfo)
+         #"ast->forms"
+         (ast-lower/ast->form root)))
+    (try
+      (ast-lower/ast->form root)
+      (is false "expected throw")
+      (catch #?(:clj clojure.lang.ExceptionInfo :cljs js/Error) e
+        (is (= :meme.tools.clj.ast.lower/root-lowered-as-form
+               (:type (ex-data e))))))))
