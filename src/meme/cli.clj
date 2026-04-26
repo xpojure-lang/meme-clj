@@ -9,6 +9,7 @@
             [meme.registry :as registry]
             ;; Built-in lang registrations fire on ns-load:
             [m1clj-lang.api]
+            [clj-lang.api]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]))
@@ -42,7 +43,18 @@
               (if (pred path) [path] [])))
           inputs))
 
-(defn- m1clj-file? [path] (some? (registry/resolve-by-extension path)))
+(defn- m1clj-file?
+  "True if `path`'s extension is one of m1clj's. Used by lang-specific
+   commands (`to-clj`, `transpile`, `build`) that operate only on
+   meme source — not by `format`, which works on any registered lang."
+  [path]
+  (let [m1clj-lang (registry/resolve-lang :m1clj)]
+    (boolean (some #(str/ends-with? path %) (:extensions m1clj-lang)))))
+(defn- recognized-file?
+  "True if any registered lang claims `path`'s extension. Used by
+   `format`, which dispatches on the file's lang per the registry."
+  [path]
+  (some? (registry/resolve-by-extension path)))
 (defn- clj-file? [path] (boolean (re-find #"\.clj[cdsx]?$" path)))
 (defn- swap-ext [path from to]
   (if (= from "m1clj")
@@ -195,7 +207,7 @@
    --stdout, --check as needed."
   [opts]
   (file-command opts
-    {:cmd :format, :pred m1clj-file?, :output-fn nil
+    {:cmd :format, :pred recognized-file?, :output-fn nil
      :verb "formatted", :usage "Usage: meme format <file|dir> [--width N] [--style canon|flat|clj] [--stdout] [--check]"}))
 
 (defn- validate-out-dir!

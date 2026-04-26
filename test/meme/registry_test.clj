@@ -156,7 +156,8 @@
       (is (= :test-lang name)))
     (let [[meme-name _] (registry/resolve-by-extension "app.meme")]
       (is (= :m1clj meme-name) "built-in m1clj resolves by extension"))
-    (is (nil? (registry/resolve-by-extension "app.clj"))))
+    (let [[clj-name _] (registry/resolve-by-extension "app.clj")]
+      (is (= :clj clj-name) "built-in :clj resolves by extension")))
   (testing "registered-langs returns names"
     (is (contains? (set (registry/registered-langs)) :test-lang)))
   (testing "resolve-lang finds user langs"

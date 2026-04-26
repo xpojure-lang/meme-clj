@@ -33,12 +33,12 @@
    #{:name}})
 
 (defn format-form
-  "Format a single Clojure form as canonical meme text.
+  "Format a single Clojure form as canonical text.
    Width-aware — uses indented multi-line layout for forms that exceed width.
-   Preserves comments only when called on AST nodes (`m1clj-lang.api/m1clj->ast`);
-   plain forms carry no comment data.
+   Preserves comments only when called on AST nodes (`m1clj-lang.api/m1clj->ast`,
+   `meme.tools.clj.parser.api/clj->ast`); plain forms carry no comment data.
 
-   opts: {:width 80 :form-shape reg :style s} or bare integer width.
+   opts: {:width 80 :form-shape reg :style s :mode m} or bare integer width.
      :width       target line width (default 80)
      :form-shape  registry (default m1clj-lang.form-shape/registry).  Pass
                   a custom registry to teach canon about user macros or
@@ -46,19 +46,22 @@
                   unregistered heads.  Pass nil to disable decomposition.
      :style       slot-keyed style map (default this namespace's `style`).
                   Useful for project-level tweaks like custom slot renderers
-                  or a narrower :head-line-slots set."
+                  or a narrower :head-line-slots set.
+     :mode        :m1clj (default) — emit M-expression / meme syntax
+                  :clj             — emit native Clojure surface"
   ([form] (format-form form nil))
   ([form opts]
    (let [opts       (if (integer? opts) {:width opts} opts)
          width      (or (:width opts) default-width)
          form-shape (:form-shape opts form-shape/registry)
-         effective  (:style opts style)]
-     (render/layout (printer/to-doc form :m1clj effective form-shape) width))))
+         effective  (:style opts style)
+         mode       (or (:mode opts) :m1clj)]
+     (render/layout (printer/to-doc form mode effective form-shape) width))))
 
 (defn format-forms
-  "Format a sequence of Clojure forms as canonical meme text, separated by
+  "Format a sequence of Clojure forms as canonical text, separated by
    blank lines. Comments are preserved only for AST input.
-   opts: {:width 80} or bare integer width."
+   opts: {:width 80 :mode :m1clj|:clj} or bare integer width."
   ([forms] (format-forms forms nil))
   ([forms opts]
    (printer/validate-format-input forms)
