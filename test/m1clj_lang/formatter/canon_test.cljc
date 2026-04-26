@@ -326,3 +326,71 @@
   (testing "nested multi-line indentation compounds"
     (let [result (fmt-canon/format-form '(defn f [x] (let [y 1] (+ x y))) {:width 15})]
       (is (re-find #"\n    " result) "inner let body should be indented 4 spaces"))))
+
+;; ---------------------------------------------------------------------------
+;; :clj mode — slot-aware native Clojure formatting
+;;
+;; Slot decomposition is mode-independent: the same form-shape registry
+;; drives both meme and Clojure output. Only the *geometry* differs.
+;; These tests assert that head-line slots (`:bindings`, `:params`,
+;; `:test`, `:expr`, `:name`) stay attached to the head in `:clj` mode
+;; and that the closing paren hugs the last body arg per Clojure
+;; convention.
+;; ---------------------------------------------------------------------------
+
+(deftest clj-mode-let-bindings-stay-on-head-line
+  (testing "let in :clj mode keeps bindings inline with head when broken"
+    (let [result (fmt-canon/format-form
+                  '(let [x 1 y 2 z 3] (println x) (println y) (println z))
+                  {:mode :clj :width 30})]
+      (is (= "(let [x 1 y 2 z 3]\n  (println x)\n  (println y)\n  (println z))"
+             result)))))
+
+(deftest clj-mode-defn-params-stay-on-head-line
+  (testing "defn in :clj mode keeps name + params inline with head"
+    (let [result (fmt-canon/format-form
+                  '(defn process [items] (reduce + 0 items) (count items))
+                  {:mode :clj :width 30})]
+      (is (re-find #"^\(defn process \[items\]\n" result))
+      (is (re-find #"\)$" result)))))
+
+(deftest clj-mode-cond-clauses-render-as-pairs
+  (testing "cond in :clj mode renders test/value pairs on consecutive lines"
+    (let [result (fmt-canon/format-form
+                  '(cond (pos? n) :positive (neg? n) :negative :else :zero)
+                  {:mode :clj :width 30})]
+      (is (= "(cond\n  (pos? n) :positive\n  (neg? n) :negative\n  :else :zero)"
+             result)))))
+
+(deftest clj-mode-no-head-paren-space
+  (testing ":force-open-space-for is meme-only — :clj mode never emits ( "
+    (let [defn-out (fmt-canon/format-form '(defn f [x] (+ x 1)) {:mode :clj :width 15})
+          let-out  (fmt-canon/format-form '(let [x 1] (+ x 1))  {:mode :clj :width 15})]
+      (is (not (re-find #"\( " defn-out)) (str "defn output: " defn-out))
+      (is (not (re-find #"\( " let-out)) (str "let output: " let-out)))))
+
+(deftest clj-mode-closing-paren-hugs-last-arg
+  (testing "Clojure convention: ) on same line as last body arg, not dedented"
+    (let [result (fmt-canon/format-form
+                  '(when (ready? x) (run x) (clean x))
+                  {:mode :clj :width 20})]
+      (is (re-find #"\(clean x\)\)$" result)
+          (str "expected `(clean x))` at end, got: " result)))))
+
+(deftest clj-mode-flat-when-fits
+  (testing "small forms render flat in :clj mode"
+    (is (= "(+ 1 2)" (fmt-canon/format-form '(+ 1 2) {:mode :clj :width 80})))
+    (is (= "(let [x 1] (+ x 1))"
+           (fmt-canon/format-form '(let [x 1] (+ x 1)) {:mode :clj :width 80})))))
+
+#?(:clj
+   (deftest clj-mode-roundtrips-via-read-string
+     (testing "broken :clj output reparses to the same form"
+       (doseq [form ['(defn add [a b] (+ a b))
+                     '(let [x 1 y 2 z 3] (println x) (println y) (println z))
+                     '(cond (pos? n) :positive (neg? n) :negative :else :zero)
+                     '(when (ready? x) (run x) (clean x))
+                     '(if (some-test? x) (do-thing) (do-other))]]
+         (let [out (fmt-canon/format-form form {:mode :clj :width 25})
+               re  (read-string out)]
+           (is (= form re) (str "roundtrip mismatch:\n" out)))))))

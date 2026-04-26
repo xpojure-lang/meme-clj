@@ -297,8 +297,9 @@
     render/line0
     doc-close-paren)))
 
-(defn- call-doc-clj
-  "Clojure mode: (head arg1 arg2) with no head-line split."
+(defn- body-sequence-doc-clj
+  "Clojure mode body sequence: `(head a b c)`. Closing paren hugs the
+   last arg per Clojure convention (no line0 before `)`)."
   [head-doc arg-docs]
   (if (empty? arg-docs)
     (render/group (render/doc-cat doc-open-paren head-doc doc-close-paren))
@@ -308,43 +309,68 @@
       (render/nest 2 (render/doc-cat render/line (intersperse render/line arg-docs)))
       doc-close-paren))))
 
+(defn- head-body-split-doc-clj
+  "Clojure mode head-line / body split: `(head h1 h2\\n  b1\\n  b2)`.
+   Head-line slots stay inline with the head (forced space, not a
+   breakable line) — `(let [bindings]\\n  body)` not `(let\\n  [bindings]\\n  body)`.
+   Body slots break onto subsequent lines indented by 2. Closing paren
+   hugs the last body arg per Clojure convention."
+  [head-doc head-docs body-docs]
+  (render/group
+   (render/doc-cat
+    doc-open-paren head-doc
+    doc-space
+    (render/nest 2
+                 (render/doc-cat
+                  (render/group (intersperse render/line head-docs))
+                  (reduce (fn [acc d] (render/doc-cat acc render/line d)) nil body-docs)))
+    doc-close-paren)))
+
 (defn- call-doc
   "Build Doc for a call form.
 
-   Dispatches on mode (meme vs clj) and on whether form-shape provides a
-   semantic decomposition for the head.  When a decomposition is present,
-   style opines on which slot names stay on the head line; when absent
-   (plain calls, user fns without a registered shape), all args render in
-   the body."
+   Slot decomposition is mode-independent: `form-shape/decompose` runs
+   in both `:m1clj` and `:clj` mode and the resulting head/body slot
+   split is the same. Only the *geometry* differs by mode — meme writes
+   `head( body )` with optional after-paren spacing, Clojure writes
+   `(head body)` with the closing paren hugging the last arg. The style
+   key `:force-open-space-for` is meme-specific and is ignored under
+   `:clj` mode."
   [head args ctx]
   (let [mode     (:mode ctx)
-        head-doc (to-doc-inner head ctx)]
-    (if (= mode :clj)
-      (call-doc-clj head-doc (mapv #(to-doc-inner % ctx) args))
-      (if-let [slots (form-shape/decompose (:form-shape ctx) head args)]
-        ;; Slot-aware rendering
-        (let [style        (ctx-style ctx)
-              head-set     (:head-line-slots style #{})
-              force-set    (:force-open-space-for style #{})
-              {head-slots  true
-               body-slots  false} (group-by #(contains? head-set (first %)) slots)
-              head-docs    (mapv #(slot->doc % ctx) head-slots)
-              body-docs    (mapv #(slot->doc % ctx) body-slots)
-              force-space? (boolean (some #(contains? force-set (first %)) head-slots))
-              after-paren  (if force-space?
-                             doc-space
-                             (render/->DocIfBreak doc-space nil))]
-          (cond
-            ;; Both head and body non-empty — split layout applies.
-            (and (seq head-docs) (seq body-docs))
-            (head-body-split-doc head-doc head-docs body-docs after-paren)
+        head-doc (to-doc-inner head ctx)
+        clj?     (= mode :clj)]
+    (if-let [slots (form-shape/decompose (:form-shape ctx) head args)]
+      ;; Slot-aware rendering
+      (let [style        (ctx-style ctx)
+            head-set     (:head-line-slots style #{})
+            {head-slots  true
+             body-slots  false} (group-by #(contains? head-set (first %)) slots)
+            head-docs    (mapv #(slot->doc % ctx) head-slots)
+            body-docs    (mapv #(slot->doc % ctx) body-slots)]
+        (cond
+          ;; Both head and body non-empty — split layout applies.
+          (and (seq head-docs) (seq body-docs))
+          (if clj?
+            (head-body-split-doc-clj head-doc head-docs body-docs)
+            (let [force-set    (:force-open-space-for style #{})
+                  force-space? (boolean (some #(contains? force-set (first %)) head-slots))
+                  after-paren  (if force-space?
+                                 doc-space
+                                 (render/->DocIfBreak doc-space nil))]
+              (head-body-split-doc head-doc head-docs body-docs after-paren)))
 
-            ;; Only one side has entries — treat as a single body sequence.
-            ;; Matches prior behavior: `defn(foo)` flat, not `defn( foo)`.
-            :else
-            (body-sequence-doc head-doc (into head-docs body-docs))))
-        ;; No form-shape registered — plain call, all args in body.
-        (body-sequence-doc head-doc (mapv #(to-doc-inner % ctx) args))))))
+          ;; Only one side has entries — single body sequence.
+          ;; Preserves prior flat shape for forms like `defn(foo)`.
+          :else
+          (if clj?
+            (body-sequence-doc-clj head-doc (into head-docs body-docs))
+            (body-sequence-doc head-doc (into head-docs body-docs)))))
+      ;; No form-shape registered — plain call, all args in body.
+      (let [arg-docs (mapv #(to-doc-inner % ctx) args)]
+        (if clj?
+          (body-sequence-doc-clj head-doc arg-docs)
+          (body-sequence-doc head-doc arg-docs))))))
 
 (defn- collection-doc
   "Build Doc for a delimited collection: [elems], #{elems}, #(body).

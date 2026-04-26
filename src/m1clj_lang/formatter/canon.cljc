@@ -20,9 +20,16 @@
    part?), not about particular forms (`defn`, `let`, ...) — so any form
    that decomposes to the same slots inherits this layout for free.
 
+   The same style serves both `:m1clj` and `:clj` output modes; slot
+   decomposition is mode-independent. Only the geometry around the call
+   (paren placement, spacing) differs by mode.
+
    :head-line-slots       slots kept on the head line with the call head
+                          (applies to both modes)
    :force-open-space-for  slots whose presence forces `head( ` (open-paren
-                          followed by space even when the call is flat)"
+                          followed by space even when the call is flat).
+                          Meme-only — silently ignored under `:mode :clj`,
+                          which has no `head( ` convention."
   {:head-line-slots
    #{:name :doc :params
      :dispatch-val :dispatch-fn
