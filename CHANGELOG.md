@@ -61,6 +61,18 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **Legacy lang aliases** `:classic`, `:meme-classic`, `:meme-experimental` and their deprecation-warning branch in `registry/resolve-lang`. The aliases had no callers in `src/`, `test/`, `doc/`, or any consumer — just dead cruft since the pre-lang naming was retired. Users must pass `:meme` directly; the existing "Unknown lang: ..." error still lists available langs if someone hits a removed name.
 
+### Added
+
+- **AST tier (`meme.tools.clj.ast.*`).** A structural representation between CST and Clojure forms, with notation, position, and trivia preserved as record fields rather than metadata. Survives any walker — including ones that don't know about m1clj's `:m1clj/*` metadata vocabulary. 25 record types covering atoms (`CljSymbol`, `CljKeyword`, `CljNumber`, `CljString`, `CljChar`, `CljRegex`, `CljNil`, `CljBool`), collections (`CljList`, `CljVector`, `CljMap`, `CljSet`), reader-macro nodes (`CljQuote`, `CljDeref`, `CljVar`, `CljSyntaxQuote`, `CljUnquote`, `CljUnquoteSplicing`, `CljAnonFn`, `CljDiscard`), compound forms (`CljTagged`, `CljReaderCond`, `CljMeta`, `CljNamespacedMap`), and a top-level container (`CljRoot`). Each implements the `AstNode` protocol with `children` / `rebuild`. `ast=` is structural-equality-without-notation (ignores `pos`, `trivia`, `raw`); defrecord `=` stays strict. Lives in `meme.tools.clj.ast.nodes`. Public API — semver-protected.
+
+- **`meme.tools.clj.ast.build/cst->ast`** — walks a CST and produces a `CljRoot` AST. Mirrors `cst-reader/read-node` node-by-node, reusing the existing atomic resolvers (resolve-number / -char / -regex) for value parsing. Defers `::keyword` and tagged-literal resolution to the lowering phase — the AST captures source structure, not resolved values.
+
+- **`meme.tools.clj.ast.lower/ast->form` + `ast->forms`** — projects an AST back to plain Clojure forms with `:m1clj/*` metadata, producing output identical to `cst-reader/read-forms` for every existing test case. The AST tier is provably as expressive as the form layer (proven by the 70-assertion equivalence test in `test/meme/tools/clj/ast/equivalence_test.cljc`). Wired via the `Lowerable` protocol extended once across all 24 record types.
+
+- **`m1clj-lang.api/m1clj->ast`** — public entry point for the AST tier. Returns a `CljRoot`. Tooling that needs round-trip fidelity (refactor, lint, transpile, format) consumes this directly. `m1clj->forms` is now a thin shim: `(ast->forms (m1clj->ast s opts) opts)`.
+
+  The form-printer continues to consume forms-with-metadata via the lowering bridge, so this release is internally additive — the `:m1clj/*` metadata vocabulary is still in use by the printer/formatter. Migrating those to consume the AST directly (and retiring the metadata vocabulary) is planned for the next release.
+
 ### Changed
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
