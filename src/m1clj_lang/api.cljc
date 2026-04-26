@@ -6,9 +6,9 @@
    tier (position, trivia, and notation as fields); ast→form lowers AST
    to plain Clojure values for eval. Tooling consumers stop at the AST."
   (:require [meme.tools.clj.stages :as stages]
-            [meme.tools.clj.forms :as forms]
             [meme.tools.clj.ast.build :as ast-build]
             [meme.tools.clj.ast.lower :as ast-lower]
+            [meme.tools.clj.parser.api :as clj-parser]
             [meme.tools.parser :as parser]
             [m1clj-lang.grammar :as grammar]
             [m1clj-lang.form-shape :as form-shape]
@@ -129,46 +129,58 @@
          children (ast-root->children-with-trailing ast)]
      (fmt-flat/format-clj children))))
 
-#?(:clj
-   (do
-     (def ^:private eof-sentinel (Object.))
-     (defn- check-depth
-       "Walk form and throw if nesting exceeds max-parse-depth.
-       Uses `>=` to match `meme.tools.clj.cst-reader/read-node`: both entry points
-       reject at exactly `max-parse-depth` levels of nesting."
-       [form depth]
-       (when (>= depth forms/max-parse-depth)
-         (throw (ex-info "Clojure source exceeds maximum nesting depth"
-                         {:depth depth})))
-       (when (coll? form)
-         (run! #(check-depth % (inc depth)) form)))
+(defn clj->ast
+  "Read Clojure source string. Returns a `CljRoot` AST node whose
+  `:children` vec contains one AST node per top-level form.
 
-     (defn clj->forms
-       "Read Clojure source string, return a vector of forms.
-       JVM/Babashka only — Clojure's reader is needed for full form support."
-       [clj-src]
-       {:pre [(string? clj-src)]}
-       (binding [*read-eval* false]
-         (let [rdr (java.io.PushbackReader. (java.io.StringReader. clj-src))
-               result (loop [forms []]
-                        (let [form (try
-                                     (read {:read-cond :preserve :eof eof-sentinel} rdr)
-                                     (catch StackOverflowError _
-                                       (throw (ex-info "Clojure source exceeds maximum nesting depth"
-                                                       {:source (subs clj-src 0 (min 200 (count clj-src)))})))
-                                     (catch Exception e
-                                       (throw (ex-info (str "Clojure read error: " (ex-message e)) {:source clj-src} e))))]
-                          (if (identical? form eof-sentinel)
-                            forms
-                            (recur (conj forms form)))))]
-           (run! #(check-depth % 0) result)
-           result)))))
-#?(:clj
-   (defn clj->m1clj
-     "Convert Clojure source to m1clj source string. JVM only."
-     [clj-src]
-     {:pre [(string? clj-src)]}
-     (forms->m1clj (clj->forms clj-src))))
+  Uses the native Clojure parser — works on JVM, Babashka, and
+  ClojureScript without depending on host `read-string`. Reader
+  conditionals (`#?`, `#?@`) are preserved as `CljReaderCond` AST
+  records.
+
+  See `m1clj->ast` for the AST shape; both routines produce the same
+  `Clj*` node taxonomy. The only difference is which parser surface
+  read the source.
+
+  opts keys:
+    :resolve-keyword  — fn applied at lowering for `::kw`
+    :grammar          — alternate Pratt grammar spec (advanced)"
+  ([clj-src] (clj->ast clj-src nil))
+  ([clj-src opts]
+   {:pre [(string? clj-src)]}
+   (clj-parser/clj->ast clj-src opts)))
+
+(defn clj->forms
+  "Read Clojure source string, return a vector of plain Clojure forms.
+
+  Composes `clj->ast` followed by AST → form lowering. Cross-platform —
+  no longer depends on `clojure.core/read-string`. Reader conditionals
+  are returned as `CljReaderConditional` records (use `step-evaluate-reader-conditionals`
+  to materialise a platform branch).
+
+  opts keys:
+    :resolve-keyword  — fn to resolve auto-resolve keywords (`::kw`)
+    :grammar          — alternate Pratt grammar spec"
+  ([clj-src] (clj->forms clj-src nil))
+  ([clj-src opts]
+   {:pre [(string? clj-src)]}
+   (clj-parser/clj->forms clj-src opts)))
+
+(defn clj->m1clj
+  "Convert Clojure source to m1clj source string (lossless via AST).
+
+  Routes through the AST tier and the printer's default `:m1clj` mode
+  — comments, namespaced-map prefixes, set source order, multi-tier
+  metadata, and bare `%` notation all survive the conversion. Reader
+  conditionals are preserved as `#?(...)` rather than evaluated.
+
+  opts: same as `clj->ast` (`:resolve-keyword`, `:grammar`)."
+  ([clj-src] (clj->m1clj clj-src nil))
+  ([clj-src opts]
+   {:pre [(string? clj-src)]}
+   (let [ast (clj->ast clj-src opts)
+         children (ast-root->children-with-trailing ast)]
+     (fmt-flat/format-forms children))))
 
 ;; ---------------------------------------------------------------------------
 ;; Lang commands (for CLI dispatch)

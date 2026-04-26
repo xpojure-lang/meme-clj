@@ -10,7 +10,7 @@ defn(inc-by [x](inc-by(x 1)) [x n](+(x n)))
 
 defn-(helper [x] +(x 1))
 
-defmacro(my-log [tag expr] list(quote(println) tag expr))
+defmacro(my-log [tag expr] list('println tag expr))
 
 fn([x] *(x x))
 

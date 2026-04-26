@@ -187,6 +187,19 @@
                                                       reader-cond-extra)
                          engine tok)))))
 
+              ;; #= — Clojure reader's read-eval form. Not a real tagged
+              ;; literal; meme rejects it because we don't support eval at
+              ;; read time. (m1clj's grammar catches it incidentally via
+              ;; the bare-parens-no-head rule; native Clojure needs an
+              ;; explicit reject so `#=(+ 1 2)` doesn't quietly become a
+              ;; `#=`-tagged form.)
+              (= next-ch \=)
+              (do (pratt/advance! engine 2)
+                  (let [tok (pratt/make-token! engine :invalid start)]
+                    (pratt/cst :error
+                               {:token tok
+                                :message "#= read-eval is not supported"})))
+
               ;; ## symbolic value (##Inf, ##NaN, etc.)
               (= next-ch \#)
               (let [end (loop [i (+ start 2)]
