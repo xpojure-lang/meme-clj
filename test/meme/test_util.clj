@@ -124,6 +124,13 @@
   ;; Native lowering emits #() args as %<N>.
   #"%(\d+)")
 
+(def ^:private rest-arg-rs-pattern
+  ;; read-string emits #()'s rest-arg `%&` as `rest__<id>#`. The trailing
+  ;; `#` is what distinguishes this from `rest__<id>__auto__` (a user-named
+  ;; auto-gensym `rest#` inside syntax-quote, which the auto-gensym pattern
+  ;; below already collapses).
+  #"rest__\d+#")
+
 (def ^:private auto-gensym-pattern
   ;; Auto-gensym inside `: prefix__<gensym-id>__auto__.
   ;; Native passes through `(gensym)` which prepends G__, so the prefix
@@ -142,6 +149,10 @@
       (or (= sym 'fn*)
           (= sym 'clojure.core/fn))
       'fn
+
+      ;; #()'s rest-arg: native emits `%&`, read-string emits `rest__<id>#`.
+      (or (= sym '%&) (re-matches rest-arg-rs-pattern n))
+      '<rest>
 
       (re-matches gensym-arg-rs-pattern n)
       (let [[_ idx] (re-matches gensym-arg-rs-pattern n)]
@@ -166,6 +177,11 @@
   [form]
   (cond
     (symbol? form) (normalize-symbol form)
+
+    ;; IEEE 754 NaN is never `=` to itself; collapse to a sentinel.
+    ;; Without this, ##NaN inputs always diverge between read-string and
+    ;; the native parser even though both produce a (`Double/isNaN`) value.
+    (and (number? form) (Double/isNaN (double form))) ::NaN
 
     ;; java.util.regex.Pattern equality is identity; collapse to a
     ;; pattern-string token instead.
