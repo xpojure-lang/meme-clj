@@ -85,6 +85,8 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **`#=` read-eval explicitly rejected.** The dispatch-scanlet now emits an error CST node for `#=` instead of treating it as a tagged literal. m1clj's grammar caught this incidentally via the bare-parens rule; the native Clojure grammar needs an explicit reject so `#=(+ 1 2)` doesn't quietly become a `#=`-tagged form. Matches the prior `read-string`-with-`*read-eval* false` behavior of `clj->forms`.
 
+- **Vendor cross-check (`test/meme/vendor_cross_check_test.clj`).** A regression net for the native Clojure parser: every `.clj`/`.cljc` file in the vendor submodules is parsed via `clj->forms`, and the test fails if the native parser crashes on any input that `clojure.core/read-string` accepts cleanly. Form-level equality between the two readers is intentionally not asserted — they differ in cosmetic ways (`fn*` vs `fn` for `#()`, gensym-named params vs source-preserved `%1`, syntax-quote-as-record vs expanded `(seq (concat ...))`) — a tighter parity gate is future work. Currently green on all 7 vendor projects (core.async, specter, malli, ring, clj-http, medley, hiccup); native parser handles real-world Clojure source the same set as `read-string` modulo features that need namespace context (auto-resolve keywords) or `*read-eval*` (record literals).
+
 ### Changed
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
