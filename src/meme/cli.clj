@@ -9,6 +9,7 @@
             [meme.registry :as registry]
             ;; Built-in lang registrations fire on ns-load:
             [m1clj-lang.api]
+            [m2clj-lang.api]
             [clj-lang.api]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
@@ -43,28 +44,34 @@
               (if (pred path) [path] [])))
           inputs))
 
-(defn- m1clj-file?
-  "True if `path`'s extension is one of m1clj's. Used by lang-specific
-   commands (`to-clj`, `transpile`, `build`) that operate only on
-   m1clj source — not by `format`, which works on any registered lang."
+(defn- clj-file? [path] (boolean (re-find #"\.clj[cdsx]?$" path)))
+
+(defn- guest-file?
+  "True if `path` is a guest-lang file (any registered lang EXCEPT :clj).
+   Used by lang-specific commands (`to-clj`, `transpile`, `build`) that
+   operate on guest source — not on Clojure files. `format` uses
+   `recognized-file?` instead, which accepts every registered lang
+   including :clj."
   [path]
-  (let [m1clj-lang (registry/resolve-lang :m1clj)]
-    (boolean (some #(str/ends-with? path %) (:extensions m1clj-lang)))))
+  (boolean (when-let [[lang-name _] (registry/resolve-by-extension path)]
+             (not= :clj lang-name))))
+
 (defn- recognized-file?
   "True if any registered lang claims `path`'s extension. Used by
    `format`, which dispatches on the file's lang per the registry."
   [path]
   (some? (registry/resolve-by-extension path)))
-(defn- clj-file? [path] (boolean (re-find #"\.clj[cdsx]?$" path)))
+
 (defn- swap-ext [path from to]
   (if (= from "m1clj")
-    ;; m1clj→clj: strip any registered m1clj extension (incl. deprecated .meme),
-    ;; append target.
+    ;; guest→clj: strip the registered guest extension, append target.
+    ;; The `from` parameter is historic; the actual extension swap comes
+    ;; from the registry-resolved lang for the file.
     (if-let [[_ lang] (registry/resolve-by-extension path)]
       (let [ext (first (filter #(str/ends-with? path %) (:extensions lang)))]
         (str (subs path 0 (- (count path) (count ext))) "." to))
-      (str/replace path #"\.(m1clj|meme)$" (str "." to)))
-    ;; clj→m1clj: .clj[cdsx]? regex works for Clojure extensions
+      (str/replace path #"\.(m1clj|m2clj|meme)$" (str "." to)))
+    ;; clj→guest: .clj[cdsx]? regex works for Clojure extensions
     (str/replace path (re-pattern (str "\\." from "[cdsx]?$")) (str "." to))))
 
 ;; ---------------------------------------------------------------------------
@@ -141,12 +148,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- file-command
-  "Generic: resolve lang, check support, process files via lang command."
+  "Generic: resolve lang, check support, process files via lang command.
+
+   `:lang-override` (in cmd-spec) pins the lang to a specific keyword
+   regardless of file extension or `--lang` opt. Used by `to-m1clj` /
+   `to-m2clj` whose target is implicit in the command name and whose
+   source files are always Clojure (so extension dispatch would resolve
+   to clj-lang, which doesn't carry guest-target slots)."
   [{:keys [file files stdout check lang] :as opts}
-   {:keys [cmd pred output-fn verb usage]}]
+   {:keys [cmd pred output-fn verb usage lang-override]}]
   (let [inputs (or files (when file [file]))]
     (when (empty? inputs) (println usage) (cli-exit! 1))
-    (let [[lang-name l] (get-lang lang file)
+    (let [[lang-name l] (if lang-override
+                          [lang-override (registry/resolve-lang lang-override)]
+                          (get-lang lang file))
           lopts (lang-opts opts)]
       (registry/check-support l lang-name cmd)
       (process-files
@@ -189,10 +204,11 @@
     ((:repl l) (lang-opts opts))))
 
 (defn to-clj
-  "Convert m1clj files to Clojure and print to stdout or write to .clj files."
+  "Convert guest files (m1clj, m2clj, …) to Clojure and print to stdout or
+   write to .clj files. Auto-detects the source lang via file extension."
   [opts]
   (file-command opts
-    {:cmd :to-clj, :pred m1clj-file?, :output-fn #(swap-ext % "m1clj" "clj")
+    {:cmd :to-clj, :pred guest-file?, :output-fn #(swap-ext % "m1clj" "clj")
      :verb "converted", :usage "Usage: meme to-clj <file|dir> [--lang name] [--stdout]"}))
 
 (defn to-m1clj
@@ -200,7 +216,16 @@
   [opts]
   (file-command opts
     {:cmd :to-m1clj, :pred clj-file?, :output-fn #(swap-ext % "clj" "m1clj")
-     :verb "converted", :usage "Usage: meme to-m1clj <file|dir> [--lang name] [--stdout]"}))
+     :lang-override :m1clj
+     :verb "converted", :usage "Usage: meme to-m1clj <file|dir> [--stdout]"}))
+
+(defn to-m2clj
+  "Convert Clojure files to m2clj and print to stdout or write to .m2clj files."
+  [opts]
+  (file-command opts
+    {:cmd :to-m2clj, :pred clj-file?, :output-fn #(swap-ext % "clj" "m2clj")
+     :lang-override :m2clj
+     :verb "converted", :usage "Usage: meme to-m2clj <file|dir> [--stdout]"}))
 
 (defn format-files
   "Format source files in canonical style (any registered guest). Pass --width, --style,
@@ -232,7 +257,7 @@
     (let [[lang-name l] (get-lang lang nil)
           _ (registry/check-support l lang-name :to-clj)
           to-clj-fn (:to-clj l)
-          expanded (expand-inputs inputs m1clj-file?)
+          expanded (expand-inputs inputs guest-file?)
           ;; Find the common root of all inputs to compute relative paths
           roots (mapv (fn [input]
                         (let [f (io/file input)]
@@ -362,6 +387,8 @@
     (when (has? :repl)    (println "  meme repl [--lang name]"))
     (when (has? :to-clj)  (println "  meme to-clj   <file|dir> [--lang name] [--stdout]  (alias: from-meme)"))
     (when (has? :to-m1clj) (println "  meme to-m1clj  <file|dir> [--lang name] [--stdout]  (alias: from-clj)"))
+    (when (some #(get (registry/resolve-lang %) :to-m2clj) (registry/available-langs))
+      (println "  meme to-m2clj  <file|dir> [--stdout]"))
     (when (has? :format)  (println "  meme format <file|dir> [--style canon|flat|clj] [--stdout] [--check]"))
     (when (has? :to-clj)  (println "  meme transpile <src-dir|file...> [--out target/m1clj] [--lang name]  (alias: compile)"))
     (when (has? :to-clj)  (println "  meme build     <src-dir|file...> [--out target/classes] [--lang name]"))
@@ -398,6 +425,7 @@
          (assoc file-spec :cmds ["from-meme"] :fn (file-cmd to-clj))
          (assoc file-spec :cmds ["to-m1clj"]   :fn (file-cmd to-m1clj))
          (assoc file-spec :cmds ["from-clj"]  :fn (file-cmd to-m1clj))
+         (assoc file-spec :cmds ["to-m2clj"]   :fn (file-cmd to-m2clj))
          {:cmds ["format"]  :fn (file-cmd format-files)
           :args->opts [:file] :spec {:stdout {:coerce :boolean} :check {:coerce :boolean}
                                      :lang {:coerce :string} :style {:coerce :string}

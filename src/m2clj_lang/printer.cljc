@@ -582,10 +582,27 @@
       ;; --- Collections -----------------------------------------------------
 
       (instance? CljList node)
-      (let [children (effective-ast-children (:children node))]
+      (let [children (effective-ast-children (:children node))
+            quote-call? (and (= :m2clj mode)
+                             (= 2 (count children))
+                             (let [h (first children)]
+                               (and (instance? CljSymbol h)
+                                    (= "quote" (:name h))
+                                    (nil? (:ns h)))))]
         (cond
           (empty? children)
           (render/text "()")
+
+          ;; (quote x) call form in :m2clj mode — canonicalise to bare-paren
+          ;; (when x is a non-empty list) or tick (otherwise). Mirrors the
+          ;; plain-form path so clj source's explicit (quote ...) renders
+          ;; idiomatically when converted to m2clj.
+          quote-call?
+          (let [arg (second children)]
+            (if (and (instance? CljList arg)
+                     (seq (effective-ast-children (:children arg))))
+              (collection-doc "(" ")" (effective-ast-children (:children arg)) ctx true)
+              (render/doc-cat doc-quote (to-doc-inner arg ctx))))
 
           ;; Treat as a call: head = first child, args = rest.
           :else

@@ -4,27 +4,31 @@
             [meme.cli :as cli])
   (:import [java.io File]))
 
-(deftest m1clj-file?-test
-  (let [m1clj-file? #'cli/m1clj-file?]
+(deftest guest-file?-test
+  (let [guest-file? #'cli/guest-file?]
     (testing "returns true for .m1clj files"
-      (is (true? (m1clj-file? "foo.m1clj")))
-      (is (true? (m1clj-file? "path/to/bar.m1clj")))
-      (is (true? (m1clj-file? "/absolute/path.m1clj"))))
+      (is (true? (guest-file? "foo.m1clj")))
+      (is (true? (guest-file? "path/to/bar.m1clj")))
+      (is (true? (guest-file? "/absolute/path.m1clj"))))
     (testing "returns true for registered m1clj extensions"
-      (is (true? (m1clj-file? "foo.m1cljc")))
-      (is (true? (m1clj-file? "foo.m1cljj")))
-      (is (true? (m1clj-file? "foo.m1cljs"))))
+      (is (true? (guest-file? "foo.m1cljc")))
+      (is (true? (guest-file? "foo.m1cljj")))
+      (is (true? (guest-file? "foo.m1cljs"))))
     (testing "back-compat: deprecated .meme extensions still recognized"
-      (is (true? (m1clj-file? "foo.meme")))
-      (is (true? (m1clj-file? "foo.memec")))
-      (is (true? (m1clj-file? "foo.memej")))
-      (is (true? (m1clj-file? "foo.memejs"))))
-    (testing "returns false for non-m1clj files"
-      (is (false? (m1clj-file? "foo.clj")))
-      (is (false? (m1clj-file? "foo.cljc")))
-      (is (false? (m1clj-file? "foo.txt")))
-      (is (false? (m1clj-file? "foo.memes")))
-      (is (false? (m1clj-file? "m1clj"))))))
+      (is (true? (guest-file? "foo.meme")))
+      (is (true? (guest-file? "foo.memec")))
+      (is (true? (guest-file? "foo.memej")))
+      (is (true? (guest-file? "foo.memejs"))))
+    (testing "returns true for .m2clj files (any non-clj registered guest)"
+      (is (true? (guest-file? "foo.m2clj")))
+      (is (true? (guest-file? "foo.m2cljc"))))
+    (testing "returns false for clj files (clj is not a guest, it's the host)"
+      (is (false? (guest-file? "foo.clj")))
+      (is (false? (guest-file? "foo.cljc"))))
+    (testing "returns false for unrecognised extensions"
+      (is (false? (guest-file? "foo.txt")))
+      (is (false? (guest-file? "foo.memes")))
+      (is (false? (guest-file? "m1clj"))))))
 
 (deftest clj-file?-test
   (let [clj-file? #'cli/clj-file?]
