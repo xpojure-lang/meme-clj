@@ -4,6 +4,7 @@
    and benchmark tests."
   (:require [m1clj-lang.api :as lang]
             [m1clj-lang.formatter.flat :as fmt-flat]
+            [meme.tools.clj.parser.api :as clj-parser]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -82,6 +83,53 @@
               :failed (filterv :error results)
               :read-errors read-errors}
        (:include-path opts) (assoc :path (str path))))))
+
+;; ---------------------------------------------------------------------------
+;; Native-parser cross-check — the native parser must not crash on
+;; any source that clojure.core/read-string accepts. This is a parser
+;; robustness net: real-world Clojure exercises corners (deep nesting,
+;; multi-arity defs, exotic numerics, reader-conditional splicing)
+;; that smoke tests miss.
+;;
+;; We deliberately do NOT do byte-level form equality. The two readers
+;; produce the same SHAPE but differ in cosmetic ways (`fn*` vs `fn`,
+;; gensym names vs `%1`, syntax-quote-in-record vs expanded form). A
+;; deeper parity gate is future work.
+;; ---------------------------------------------------------------------------
+
+(defn cross-check-file
+  "Run the native parser on `path` and report whether it succeeds.
+   Returns a status map with one of:
+     :ok                — native parser ran cleanly (read-string status irrelevant here)
+     :native-crash      — native parser threw on input read-string accepted
+     :read-string-also-failed — both parsers errored (skipped)
+     :native-only       — native parsed; read-string failed (informational)"
+  [path]
+  (let [read-results (read-clj-forms path)
+        read-errors (filterv :read-error read-results)
+        rs-failed? (boolean (seq read-errors))
+        native-result (try
+                        (clj-parser/clj->forms (slurp path))
+                        :ok
+                        (catch Exception e
+                          {:error (.getMessage e)}))
+        native-failed? (and (map? native-result) (:error native-result))]
+    (cond
+      (and rs-failed? native-failed?)
+      {:status :read-string-also-failed
+       :read-error (first (map :read-error read-errors))
+       :native-error (:error native-result)}
+
+      (and (not rs-failed?) native-failed?)
+      {:status :native-crash
+       :native-error (:error native-result)}
+
+      (and rs-failed? (not native-failed?))
+      {:status :native-only
+       :read-error (first (map :read-error read-errors))}
+
+      :else
+      {:status :ok})))
 
 ;; ---------------------------------------------------------------------------
 ;; File discovery
