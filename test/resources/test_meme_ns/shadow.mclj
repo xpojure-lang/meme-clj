@@ -1,3 +1,0 @@
-ns(test-meme-ns.shadow)
-
-def(source :mclj)

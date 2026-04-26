@@ -1,6 +1,6 @@
 # meme Language Reference
 
-Complete syntax reference for writing `.mclj` code.
+Complete syntax reference for writing `.m1clj` code.
 
 
 ## The Rule
@@ -150,7 +150,7 @@ defn-(helper [x] +(x 1))
 
 ### defmacro
 
-Macros work in `.mclj` files. Syntax-quote (`` ` ``) is parsed natively —
+Macros work in `.m1clj` files. Syntax-quote (`` ` ``) is parsed natively —
 meme call syntax applies inside backtick. `~` (unquote) and `~@` (unquote-splicing)
 work as prefix operators.
 
@@ -369,8 +369,8 @@ All of these work exactly as in Clojure:
 - Regex: `#"pattern"`
 - Character literals: `\a`, `\newline`, `\space`
 - Tagged literals: `#inst`, `#uuid`
-- Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `mclj->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
-- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`mclj->forms`, `mclj->clj`, `format-mclj-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. Meme call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
+- Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `m1clj->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
+- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`m1clj->forms`, `m1clj->clj`, `format-m1clj-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. Meme call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
 - Namespaced maps: `#:ns{}`
 - Destructuring in all binding positions
 - Commas are whitespace
@@ -418,7 +418,7 @@ A lang registers one or more file extensions. Both `:extension` (string) and `:e
 ```clojure
 ;; EDN file — single extension
 {:extension ".ml"
- :run "path/to/prelude.mclj"}
+ :run "path/to/prelude.m1clj"}
 
 ;; Runtime — multiple extensions
 (registry/register! :my-lang {:extensions [".ml" ".mlx"]
@@ -429,24 +429,24 @@ The CLI auto-detects the lang from file extension: `meme run app.ml` resolves to
 
 ### Namespace loader
 
-After `install!` (called automatically by `run-string`, `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.mclj` files transparently:
+After `install!` (called automatically by `run-string`, `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.m1clj` files transparently:
 
 ```
-;; In the meme REPL or a running .mclj file:
-require('[my-lib.core :as lib])   ; finds my_lib/core.mclj on classpath (JVM only)
-load-file("examples/demo.mclj")   ; loads by filesystem path (JVM + Babashka)
+;; In the meme REPL or a running .m1clj file:
+require('[my-lib.core :as lib])   ; finds my_lib/core.m1clj on classpath (JVM only)
+load-file("examples/demo.m1clj")   ; loads by filesystem path (JVM + Babashka)
 ```
 
 Files with registered lang extensions take precedence over `.clj` when both exist. The loader does not reserve any namespace prefix — keeping your lang files under your own namespace is your responsibility.
 
-**Babashka limitation:** `require` of `.mclj` namespaces is JVM-only (Babashka's SCI bypasses `clojure.core/load`). `load-file` works on both platforms.
+**Babashka limitation:** `require` of `.m1clj` namespaces is JVM-only (Babashka's SCI bypasses `clojure.core/load`). `load-file` works on both platforms.
 
 ### Precompilation
 
-For environments where runtime loading isn't available (Babashka `require`, nREPL, CI), transpile `.mclj` to `.clj`:
+For environments where runtime loading isn't available (Babashka `require`, nREPL, CI), transpile `.m1clj` to `.clj`:
 
 ```bash
-bb meme transpile src/                       # default: target/mclj
+bb meme transpile src/                       # default: target/m1clj
 bb meme transpile src/ --out target/classes  # or override
 ```
 
@@ -457,7 +457,7 @@ bb meme transpile src/ --out target/classes  # or override
 One-shot:
 
 ```bash
-bb meme build src/                         # default: transpile-staged in target/mclj,
+bb meme build src/                         # default: transpile-staged in target/m1clj,
                                            #          bytecode in target/classes
 bb meme build src/ --out out/classes       # custom output
 ```
@@ -476,7 +476,7 @@ For more control (different staging layout, no intermediate `.clj`, integration 
   ;; Shell out to meme transpile, then AOT the result.
   (b/process {:command-args ["bb" "meme" "transpile" "src"]})
   (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
-                  :src-dirs  ["target/mclj"]
+                  :src-dirs  ["target/m1clj"]
                   :class-dir "target/classes"}))
 ```
 
@@ -492,7 +492,7 @@ For more control (different staging layout, no intermediate `.clj`, integration 
   (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
                   :src-dirs  ["src"]
                   :class-dir "target/classes"
-                  :ns-compile '[my.ns]}))  ; list .mclj namespaces explicitly
+                  :ns-compile '[my.ns]}))  ; list .m1clj namespaces explicitly
 ```
 
 Both produce identical bytecode. The first leaves a readable `.clj` staging dir (useful for debugging); the second skips it and requires meme on the build classpath. Pick whichever fits your pipeline.

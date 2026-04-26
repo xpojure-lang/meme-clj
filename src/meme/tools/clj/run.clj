@@ -6,13 +6,13 @@
    provides a thin wrapper that injects its grammar and delegates here.
 
    Installs `meme.loader` by default so that `require` and `load-file`
-   of `.mclj` namespaces work from within the evaluated code. Callers
+   of `.m1clj` namespaces work from within the evaluated code. Callers
    embedding meme in a host that owns its own `clojure.core/load`
    interception can pass `:install-loader? false` to skip.
 
    Extension-based lang dispatch (running `.implj` or other sibling-lang
    files) is opt-in via `:resolve-lang-for-path` — programmatic callers
-   that pass a real `.mclj` path don't need it; the CLI wires it.
+   that pass a real `.m1clj` path don't need it; the CLI wires it.
    JVM/Babashka only."
   (:require [clojure.string :as str]
             [meme.tools.run :as run]

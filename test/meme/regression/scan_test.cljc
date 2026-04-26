@@ -2,12 +2,12 @@
   "Scar tissue: tokenizer regression tests.
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
-            [mclj-lang.api :as lang]
-            [mclj-lang.formatter.flat :as fmt-flat]
+            [m1clj-lang.api :as lang]
+            [m1clj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.stages :as stages]
-            [mclj-lang.grammar :as grammar]
-            [mclj-lang.test-util :as tokenizer]))
+            [m1clj-lang.grammar :as grammar]
+            [m1clj-lang.test-util :as tokenizer]))
 
 (defn- semantic-tokens
   "Filter tokenizer output to only semantic tokens (remove whitespace, newlines, comments).
@@ -21,15 +21,15 @@
 
 (deftest syntax-quote-native
   (testing "backtick on symbol produces a CljSyntaxQuote node"
-    (let [form (first (lang/mclj->forms "`foo"))]
+    (let [form (first (lang/m1clj->forms "`foo"))]
       (is (some? form))
       (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))))
   (testing "backtick on call produces a CljSyntaxQuote wrapping the call"
-    (let [form (first (lang/mclj->forms "`a(b c)"))]
+    (let [form (first (lang/m1clj->forms "`a(b c)"))]
       (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))
       (is (= '(a b c) (:form form)))))
   (testing "backtick nested inside a call works"
-    (let [form (first (lang/mclj->forms "foo(`bar)"))]
+    (let [form (first (lang/m1clj->forms "foo(`bar)"))]
       (is (seq? form))
       (is (= 'foo (first form)))
       (is (instance? meme.tools.clj.forms.CljSyntaxQuote (second form))))))
@@ -41,21 +41,21 @@
 
 (deftest signed-number-vs-operator
   (testing "-1 standalone is negative number"
-    (is (= [-1] (lang/mclj->forms "-1"))))
+    (is (= [-1] (lang/m1clj->forms "-1"))))
   (testing "-(1 2 3) is a call to - with three args"
-    (is (= '[(- 1 2 3)] (lang/mclj->forms "-(1 2 3)"))))
+    (is (= '[(- 1 2 3)] (lang/m1clj->forms "-(1 2 3)"))))
   (testing "+1 standalone is positive number"
-    (is (= [1] (lang/mclj->forms "+1"))))
+    (is (= [1] (lang/m1clj->forms "+1"))))
   (testing "+(1 2) is a call to +"
-    (is (= '[(+ 1 2)] (lang/mclj->forms "+(1 2)"))))
+    (is (= '[(+ 1 2)] (lang/m1clj->forms "+(1 2)"))))
   (testing "-1 inside a call is negative number"
-    (is (= '[(foo -1 2)] (lang/mclj->forms "foo(-1 2)"))))
+    (is (= '[(foo -1 2)] (lang/m1clj->forms "foo(-1 2)"))))
   (testing "- as argument (with space) is symbol"
-    (is (= '[(map - [1 2 3])] (lang/mclj->forms "map(- [1 2 3])"))))
+    (is (= '[(map - [1 2 3])] (lang/m1clj->forms "map(- [1 2 3])"))))
   (testing "-> is a symbol, not sign + >"
-    (is (= '-> (first (lang/mclj->forms "->")))))
+    (is (= '-> (first (lang/m1clj->forms "->")))))
   (testing "->> is a symbol, not sign + >>"
-    (is (= '->> (first (lang/mclj->forms "->>"))))))
+    (is (= '->> (first (lang/m1clj->forms "->>"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Comments inside opaque forms (#?, #:ns{}) must not confuse depth tracking.
@@ -100,7 +100,7 @@
 
 (deftest syntax-quote-unquote-forms
   (testing "`~foo produces CljSyntaxQuote wrapping CljUnquote"
-    (let [form (first (lang/mclj->forms "`~foo"))]
+    (let [form (first (lang/m1clj->forms "`~foo"))]
       (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))
       (is (instance? meme.tools.clj.forms.CljUnquote (:form form)))
       (is (= 'foo (:form (:form form))))))
@@ -118,7 +118,7 @@
     ;; Experimental tokenizer produces :invalid token; CST reader reports it
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unexpected token: :invalid"
-                          (lang/mclj->forms "#")))))
+                          (lang/m1clj->forms "#")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: reader conditionals (#?, #?@) are opaque.
@@ -133,17 +133,17 @@
 #?(:clj
    (deftest radix-numbers-high-bases
      (testing "36rZ — base-36, value preserved in CljRaw"
-       (let [form (first (lang/mclj->forms "36rZ"))]
+       (let [form (first (lang/m1clj->forms "36rZ"))]
          (is (= 35 (:value form)))
          (is (= "36rZ" (:raw form)))))
      (testing "16rFF — hex via radix notation"
-       (let [form (first (lang/mclj->forms "16rFF"))]
+       (let [form (first (lang/m1clj->forms "16rFF"))]
          (is (= 255 (:value form)))))
      (testing "2r1010 — binary"
-       (let [form (first (lang/mclj->forms "2r1010"))]
+       (let [form (first (lang/m1clj->forms "2r1010"))]
          (is (= 10 (:value form)))))
      (testing "36rHelloWorld — large base-36 number"
-       (let [form (first (lang/mclj->forms "36rHelloWorld"))]
+       (let [form (first (lang/m1clj->forms "36rHelloWorld"))]
          (is (= 1767707668033969 (:value form)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@
       (is (= "\\a" (:raw (second tokens))))))
   #?(:clj
      (testing "[foo\\a] reads as two-element vector"
-       (is (= '[[foo \a]] (lang/mclj->forms "[foo\\a]"))))))
+       (is (= '[[foo \a]] (lang/m1clj->forms "[foo\\a]"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; B2: syntax-quote + unquote + string literal.
@@ -174,7 +174,7 @@
     (let [tokens (tokenizer/tokenize "`~\"foo\"")]
       (is (= :syntax-quote (:type (first tokens))))))
   (testing "`~\"foo\" produces CljSyntaxQuote wrapping CljUnquote of string"
-    (let [form (first (lang/mclj->forms "`~\"foo\""))]
+    (let [form (first (lang/m1clj->forms "`~\"foo\""))]
       (is (instance? meme.tools.clj.forms.CljSyntaxQuote form))
       (is (= "foo" (:form (:form form)))))))
 
@@ -194,7 +194,7 @@
     ;; CST reader rejects the incomplete char literal
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid character literal"
-                          (lang/mclj->forms "\\u00g1"))))
+                          (lang/m1clj->forms "\\u00g1"))))
   (testing "\\uXYZW — no hex digits after \\u, reads as char u + symbol"
     ;; Experimental tokenizer: \\u is a valid char-literal (the char u),
     ;; XYZW is a separate symbol — no error at tokenizer or reader level
@@ -220,37 +220,37 @@
     ;; Experimental pipeline: errors on incomplete unicode escape but
     ;; does not mark as :incomplete (it's an invalid char literal, not
     ;; a continuation scenario)
-    (let [ex (try (lang/mclj->forms "\\u0")
+    (let [ex (try (lang/m1clj->forms "\\u0")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (re-find #"Invalid character literal" (ex-message ex)))))
   (testing "\\u00 at EOF signals error"
-    (let [ex (try (lang/mclj->forms "\\u00")
+    (let [ex (try (lang/m1clj->forms "\\u00")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (re-find #"Invalid character literal" (ex-message ex)))))
   (testing "\\u000 at EOF signals error"
-    (let [ex (try (lang/mclj->forms "\\u000")
+    (let [ex (try (lang/m1clj->forms "\\u000")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (re-find #"Invalid character literal" (ex-message ex)))))
   (testing "\\u alone at EOF is complete (character u)"
-    (is (= [\u] (lang/mclj->forms "\\u"))))
+    (is (= [\u] (lang/m1clj->forms "\\u"))))
   (testing "\\u0041 is complete"
-    (is (= \A (:value (first (lang/mclj->forms "\\u0041"))))))
+    (is (= \A (:value (first (lang/m1clj->forms "\\u0041"))))))
   (testing "\\u00g1 is still :invalid (not :incomplete)"
-    (let [ex (try (lang/mclj->forms "\\u00g1")
+    (let [ex (try (lang/m1clj->forms "\\u00g1")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (not (:incomplete (ex-data ex))))))
   (testing "bare \\ at EOF signals error"
     ;; Experimental pipeline: bare backslash is an invalid char literal
-    (let [ex (try (lang/mclj->forms "\\")
+    (let [ex (try (lang/m1clj->forms "\\")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? ex))
       (is (re-find #"Invalid character literal" (ex-message ex)))))
   (testing "lone backtick signals :incomplete"
-    (let [ex (try (lang/mclj->forms "`")
+    (let [ex (try (lang/m1clj->forms "`")
                   (catch #?(:clj Exception :cljs :default) e e))]
       (is (:incomplete (ex-data ex))))))
 
@@ -263,10 +263,10 @@
   (testing "#3 throws clear error"
     ;; Experimental tokenizer produces :invalid token for #3
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Unexpected token: :invalid"
-                          (lang/mclj->forms "#3"))))
+                          (lang/m1clj->forms "#3"))))
   (testing "#0 throws clear error"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Unexpected token: :invalid"
-                          (lang/mclj->forms "#0")))))
+                          (lang/m1clj->forms "#0")))))
 
 ;; ---------------------------------------------------------------------------
 ;; B9: # followed by non-symbol char (], ), ~, @, ^, \, ;, }, `).
@@ -284,7 +284,7 @@
                         ["#`" "#`"] ["#;" "#;"]]]
     (testing (str desc " throws clear error")
       (is (thrown? #?(:clj Exception :cljs js/Error)
-                   (lang/mclj->forms input))))))
+                   (lang/m1clj->forms input))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: #() inside compound dispatch forms desynchronized bracket depth
@@ -297,7 +297,7 @@
        (let [tokens (tokenizer/tokenize "#:user{:f #(inc(%))}")]
          (is (= :namespaced-map (:type (first tokens))))))
      (testing "#:user{:f #(inc(%))} parses without error"
-       (is (some? (lang/mclj->forms "#:user{:f #(inc(%))}"))))))
+       (is (some? (lang/m1clj->forms "#:user{:f #(inc(%))}"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: unclosed compound dispatch forms returned :invalid instead of :incomplete.
@@ -306,29 +306,29 @@
 
 (deftest unclosed-opaque-forms-are-incomplete
   (testing "unclosed #?( is :incomplete for REPL continuation"
-    (let [e (try (lang/mclj->forms "#?(")
+    (let [e (try (lang/m1clj->forms "#?(")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
   (testing "unclosed #:ns{ is :incomplete"
-    (let [e (try (lang/mclj->forms "#:ns{")
+    (let [e (try (lang/m1clj->forms "#:ns{")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
   (testing "unclosed `( is an error"
-    (is (thrown? #?(:clj Exception :cljs :default) (lang/mclj->forms "`("))))
+    (is (thrown? #?(:clj Exception :cljs :default) (lang/m1clj->forms "`("))))
   (testing "unclosed #?(:clj is :incomplete"
-    (let [e (try (lang/mclj->forms "#?(:clj")
+    (let [e (try (lang/m1clj->forms "#?(:clj")
                  nil
                  (catch #?(:clj Exception :cljs :default) e e))]
       (is (some? e))
       (is (:incomplete (ex-data e)))))
   (testing "complete forms still work"
-    (is (some? (lang/mclj->forms "#?(:clj 1)")))
-    (is (some? (lang/mclj->forms "#:ns{:a 1}")))
-    (is (some? (lang/mclj->forms "`a(b)")))))
+    (is (some? (lang/m1clj->forms "#?(:clj 1)")))
+    (is (some? (lang/m1clj->forms "#:ns{:a 1}")))
+    (is (some? (lang/m1clj->forms "`a(b)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F3 update: Clojure allows multi-slash symbols (:foo/bar/baz).
@@ -357,9 +357,9 @@
       (is (= "foo" (:raw (second tokens))))))
   (testing "clojure.core// parses to one symbol"
     (is (= [(symbol "clojure.core" "/")]
-           (lang/mclj->forms "clojure.core//"))))
+           (lang/m1clj->forms "clojure.core//"))))
   (testing "plain / still works"
-    (is (= ['/] (lang/mclj->forms "/")))))
+    (is (= ['/] (lang/m1clj->forms "/")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug: `\char (syntax-quote of character literal) silently broke.
@@ -381,23 +381,23 @@
 #?(:clj
    (deftest symbolic-value-parsing
      (testing "##Inf parses to positive infinity"
-       (is (= ##Inf (first (lang/mclj->forms "##Inf")))))
+       (is (= ##Inf (first (lang/m1clj->forms "##Inf")))))
      (testing "##-Inf parses to negative infinity"
-       (is (= ##-Inf (first (lang/mclj->forms "##-Inf")))))
+       (is (= ##-Inf (first (lang/m1clj->forms "##-Inf")))))
      (testing "##NaN parses to NaN"
-       (is (Double/isNaN (first (lang/mclj->forms "##NaN")))))
+       (is (Double/isNaN (first (lang/m1clj->forms "##NaN")))))
      (testing "##Inf roundtrips through print → re-read"
-       (let [forms (lang/mclj->forms "##Inf")
+       (let [forms (lang/m1clj->forms "##Inf")
              printed (fmt-flat/format-forms forms)
-             re-read (lang/mclj->forms printed)]
+             re-read (lang/m1clj->forms printed)]
          (is (= "##Inf" printed))
          (is (= forms re-read))))
      (testing "##-Inf roundtrips"
-       (let [forms (lang/mclj->forms "##-Inf")
+       (let [forms (lang/m1clj->forms "##-Inf")
              printed (fmt-flat/format-forms forms)]
          (is (= "##-Inf" printed))))
      (testing "##NaN prints as ##NaN"
-       (is (= "##NaN" (fmt-flat/format-forms (lang/mclj->forms "##NaN")))))))
+       (is (= "##NaN" (fmt-flat/format-forms (lang/m1clj->forms "##NaN")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; EOF after backslash in string/regex — misleading error message.
@@ -478,10 +478,10 @@
       (is (= "#::" (:raw (first tokens))))))
   #?(:clj
      (testing "#::{:a 1} bare auto-resolve — keys stay unqualified (deferred to eval)"
-       (let [result (first (lang/mclj->forms "#::{:a 1}"))]
+       (let [result (first (lang/m1clj->forms "#::{:a 1}"))]
          (is (map? result))
          (is (= 1 (:a result)))
-         (is (= "::" (:mclj/namespace-prefix (meta result))))))))
+         (is (= "::" (:m1clj/namespace-prefix (meta result))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L10: ##foo was silently accepted and produced confusing error.
@@ -540,11 +540,11 @@
   ;; Clojure's own reader rejects these as literals, so we construct the
   ;; expected symbols/keywords with `symbol`/`keyword` instead.
   (testing "multi-slash keyword tokenizes as one keyword"
-    (is (= [(keyword "foo/bar/baz")] (lang/mclj->forms ":foo/bar/baz"))))
+    (is (= [(keyword "foo/bar/baz")] (lang/m1clj->forms ":foo/bar/baz"))))
   (testing "multi-slash symbol tokenizes as one symbol"
-    (is (= [(symbol "foo/bar/baz")] (lang/mclj->forms "foo/bar/baz"))))
+    (is (= [(symbol "foo/bar/baz")] (lang/m1clj->forms "foo/bar/baz"))))
   (testing "double-slash inside symbol tokenizes as one symbol"
-    (is (= [(symbol "foo//bar")] (lang/mclj->forms "foo//bar")))))
+    (is (= [(symbol "foo//bar")] (lang/m1clj->forms "foo//bar")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F4: Char literal \uNNNN overconsumption
@@ -559,15 +559,15 @@
   (testing "\\u00410 — 5th hex digit rejected"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid character literal"
-                          (lang/mclj->forms "\\u00410"))))
+                          (lang/m1clj->forms "\\u00410"))))
   (testing "\\u0041G — trailing letter rejected"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid character literal"
-                          (lang/mclj->forms "\\u0041G"))))
+                          (lang/m1clj->forms "\\u0041G"))))
   (testing "plain \\u0041 still works"
     (is (= [\A]
            (stages/expand-syntax-quotes
-             (lang/mclj->forms "\\u0041") nil)))))
+             (lang/m1clj->forms "\\u0041") nil)))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F17: U+2028 / U+2029 line counter
@@ -579,17 +579,17 @@
 
 (deftest unicode-line-separators-increment-line-counter
   (testing "U+2028 LINE SEPARATOR increments line counter"
-    (let [e (try (lang/mclj->forms "a\u2028(bare)") nil
+    (let [e (try (lang/m1clj->forms "a\u2028(bare)") nil
                  (catch #?(:clj Exception :cljs js/Error) ex ex))]
       (is (= 2 (:line (ex-data e))))
       (is (= 1 (:col (ex-data e))))))
   (testing "U+2029 PARAGRAPH SEPARATOR increments line counter"
-    (let [e (try (lang/mclj->forms "a\u2029(bare)") nil
+    (let [e (try (lang/m1clj->forms "a\u2029(bare)") nil
                  (catch #?(:clj Exception :cljs js/Error) ex ex))]
       (is (= 2 (:line (ex-data e))))
       (is (= 1 (:col (ex-data e))))))
   (testing "\\n still increments line counter (control case)"
-    (let [e (try (lang/mclj->forms "a\n(bare)") nil
+    (let [e (try (lang/m1clj->forms "a\n(bare)") nil
                  (catch #?(:clj Exception :cljs js/Error) ex ex))]
       (is (= 2 (:line (ex-data e)))))))
 
@@ -604,10 +604,10 @@
 (deftest variation-selectors-rejected-in-symbols
   (testing "U+FE0F (VS16) is rejected in a symbol"
     (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/mclj->forms "foo\uFE0F"))))
+                 (lang/m1clj->forms "foo\uFE0F"))))
   (testing "U+FE00 (VS1) is rejected in a symbol"
     (is (thrown? #?(:clj Exception :cljs js/Error)
-                 (lang/mclj->forms "foo\uFE00")))))
+                 (lang/m1clj->forms "foo\uFE00")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT6-F: Keyword :/ — bare slash keyword
@@ -618,11 +618,11 @@
 
 (deftest bare-slash-keyword-accepted
   (testing ":/ reads as (keyword \"/\")"
-    (is (= [(keyword "/")] (lang/mclj->forms ":/"))))
+    (is (= [(keyword "/")] (lang/m1clj->forms ":/"))))
   (testing ":/foo still rejected (empty namespace)"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms ":/foo")))))
+                          (lang/m1clj->forms ":/foo")))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT7: // and //a as symbols
@@ -637,15 +637,15 @@
   (testing "// rejected"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms "//"))))
+                          (lang/m1clj->forms "//"))))
   (testing "//a rejected"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms "//a"))))
+                          (lang/m1clj->forms "//a"))))
   (testing "bare / still accepted as division symbol"
-    (is (= '[/] (lang/mclj->forms "/"))))
+    (is (= '[/] (lang/m1clj->forms "/"))))
   (testing "clojure.core// still accepted (ns-qualified slash)"
-    (is (= [(symbol "clojure.core" "/")] (lang/mclj->forms "clojure.core//")))))
+    (is (= [(symbol "clojure.core" "/")] (lang/m1clj->forms "clojure.core//")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fuzzer finding: unterminated string/regex literals crash resolve-string/
@@ -659,39 +659,39 @@
   (testing "lone double-quote does not crash"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated string"
-                          (lang/mclj->forms "\""))))
+                          (lang/m1clj->forms "\""))))
   (testing "exclamation + double-quote does not crash"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated string"
-                          (lang/mclj->forms "!\""))))
+                          (lang/m1clj->forms "!\""))))
   (testing "multi-char unterminated string errors instead of truncating"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated string"
-                          (lang/mclj->forms "\"hello"))))
+                          (lang/m1clj->forms "\"hello"))))
   (testing "two-char unterminated string errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated string"
-                          (lang/mclj->forms "\"a"))))
+                          (lang/m1clj->forms "\"a"))))
   (testing "unterminated string with trailing backslash errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated string"
-                          (lang/mclj->forms "\"hello\\"))))
+                          (lang/m1clj->forms "\"hello\\"))))
   (testing "unterminated regex does not crash"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated regex"
-                          (lang/mclj->forms "#\""))))
+                          (lang/m1clj->forms "#\""))))
   (testing "multi-char unterminated regex errors instead of truncating"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated regex"
-                          (lang/mclj->forms "#\"hello"))))
+                          (lang/m1clj->forms "#\"hello"))))
   (testing "two-char unterminated regex errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated regex"
-                          (lang/mclj->forms "#\"ab"))))
+                          (lang/m1clj->forms "#\"ab"))))
   (testing "unterminated regex with trailing backslash errors"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Unterminated regex"
-                          (lang/mclj->forms "#\"hello\\\\")))))
+                          (lang/m1clj->forms "#\"hello\\\\")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: invalid keyword forms must be rejected (Clojure compatibility).
@@ -703,30 +703,30 @@
   (testing "bare colon : is invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token: :"
-                          (lang/mclj->forms ":"))))
+                          (lang/m1clj->forms ":"))))
   (testing "trailing colon :foo: is invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms ":foo:"))))
+                          (lang/m1clj->forms ":foo:"))))
   (testing "triple colon :::foo is invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms ":::foo"))))
+                          (lang/m1clj->forms ":::foo"))))
   (testing "embedded double colon :a::b is invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms ":a::b"))))
+                          (lang/m1clj->forms ":a::b"))))
   (testing "trailing slash :foo/ is invalid"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms ":foo/"))))
+                          (lang/m1clj->forms ":foo/"))))
   (testing "leading slash :/foo is invalid (matches Clojure)"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid token"
-                          (lang/mclj->forms ":/foo"))))
+                          (lang/m1clj->forms ":/foo"))))
   (testing "valid keywords still work"
-    (is (= [:foo] (lang/mclj->forms ":foo")))
-    (is (= [:foo/bar] (lang/mclj->forms ":foo/bar")))))
+    (is (= [:foo] (lang/m1clj->forms ":foo")))
+    (is (= [:foo/bar] (lang/m1clj->forms ":foo/bar")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: %0 must be rejected in anonymous functions.
@@ -738,21 +738,21 @@
   (testing "%0 is rejected as invalid param"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid % parameter"
-                          (lang/mclj->forms "#(+(%0 %1))"))))
+                          (lang/m1clj->forms "#(+(%0 %1))"))))
   (testing "%20 is valid (Clojure's max)"
-    (is (some? (lang/mclj->forms "#(%20)"))))
+    (is (some? (lang/m1clj->forms "#(%20)"))))
   (testing "%21 is rejected — exceeds Clojure's limit"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid % parameter"
-                          (lang/mclj->forms "#(%21)"))))
+                          (lang/m1clj->forms "#(%21)"))))
   (testing "%99999999999 is rejected — was OOM before cap"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid % parameter"
-                          (lang/mclj->forms "#(%99999999999)"))))
+                          (lang/m1clj->forms "#(%99999999999)"))))
   (testing "huge %N doesn't crash with NumberFormatException"
     (is (thrown-with-msg? #?(:clj Exception :cljs js/Error)
                           #"Invalid % parameter"
-                          (lang/mclj->forms "#(%99999999999999999999)")))))
+                          (lang/m1clj->forms "#(%99999999999999999999)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Fuzzer finding: #(%+ c%) threw IllegalArgumentException instead of
@@ -765,7 +765,7 @@
   (testing "#(%+ c%) produces meme error, not IllegalArgumentException"
     (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                           #"Invalid % parameter"
-                          (lang/mclj->forms "#(%+ c%)")))))
+                          (lang/m1clj->forms "#(%+ c%)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: 0x (empty hex body) produced Java error "Zero length BigInteger".
@@ -776,13 +776,13 @@
    (deftest empty-hex-literal-clean-error
      (testing "0x at EOF — empty hex body"
        (is (thrown-with-msg? Exception #"Empty hex literal"
-                             (lang/mclj->forms "0x"))))
+                             (lang/m1clj->forms "0x"))))
      (testing "0X at EOF — empty hex body (uppercase)"
        (is (thrown-with-msg? Exception #"Empty hex literal"
-                             (lang/mclj->forms "0X"))))
+                             (lang/m1clj->forms "0X"))))
      (testing "+0x at EOF — signed empty hex body"
        (is (thrown-with-msg? Exception #"Empty hex literal"
-                             (lang/mclj->forms "+0x"))))))
+                             (lang/m1clj->forms "+0x"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: U+2007 FIGURE SPACE entered symbol names on both platforms.
@@ -791,10 +791,10 @@
 
 (deftest figure-space-is-whitespace
   (testing "U+2007 is treated as whitespace, not part of symbol"
-    (let [forms (lang/mclj->forms (str "a" \u2007 "b"))]
+    (let [forms (lang/m1clj->forms (str "a" \u2007 "b"))]
       (is (= '[a b] forms))))
   (testing "U+2007 between tokens acts as separator"
-    (let [forms (lang/mclj->forms (str "[1" \u2007 "2]"))]
+    (let [forms (lang/m1clj->forms (str "[1" \u2007 "2]"))]
       (is (= [[1 2]] forms)))))
 
 ;; ---------------------------------------------------------------------------
@@ -810,7 +810,7 @@
        ;; so construct the string via char array.
        (let [src (str (String. (char-array [(char 0xD83D) (char 0xDE00)])) " x")]
          (is (thrown-with-msg? Exception #"Unexpected token"
-                               (lang/mclj->forms src)))))))
+                               (lang/m1clj->forms src)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) must
@@ -840,7 +840,7 @@
         (is (= 2 (:line b-tok)))
         (is (= 1 (:col b-tok)))))
     (testing "U+2028 between tokens still separates symbols"
-      (is (= (quote [a b]) (lang/mclj->forms (str "a" ls "b")))))
+      (is (= (quote [a b]) (lang/m1clj->forms (str "a" ls "b")))))
     (testing "tokenize invariant: source = concat of :raw fields"
       (let [src (str "a" ls "b" ps "c")]
         (is (= src (apply str (map :raw (tokenizer/tokenize src)))))))))

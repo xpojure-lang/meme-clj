@@ -71,7 +71,7 @@
                       :else
                       (str "opts key(s): " (str/join ", " (map pr-str missing-opts))))
                     ". Did you skip an earlier stage or forget to pass :grammar?")
-               {:type :mclj/pipeline-error
+               {:type :m1clj/pipeline-error
                 :stage stage-name
                 :missing-ctx (vec missing-ctx)
                 :missing-opts (vec missing-opts)
@@ -93,7 +93,7 @@
                            (if (nil? source) "nil"
                                #?(:clj (.getName (class source))
                                   :cljs (pr-str (type source)))))
-                      {:type :mclj/pipeline-error :stage :step-parse})))
+                      {:type :m1clj/pipeline-error :stage :step-parse})))
     (let [spec (get-in ctx [:opts :grammar])]
       (assoc ctx :cst (pratt/parse source spec)))))
 
@@ -103,7 +103,7 @@
 
    Reader conditionals are always preserved as CljReaderConditional records;
    the historical :read-cond opt is no longer accepted and throws
-   :mclj/deprecated-opt. To evaluate #?/#?@ for a target platform,
+   :m1clj/deprecated-opt. To evaluate #?/#?@ for a target platform,
    compose step-evaluate-reader-conditionals after this stage."
   [ctx]
   (check-contract! :step-read ctx)
@@ -113,8 +113,8 @@
                   "always preserves reader conditionals as CljReaderConditional "
                   "records. To evaluate them for a platform, compose "
                   "meme.tools.clj.stages/step-evaluate-reader-conditionals after "
-                  "step-read, or use mclj-lang.run/run-string / run-file.")
-             {:type    :mclj/deprecated-opt
+                  "step-read, or use m1clj-lang.run/run-string / run-file.")
+             {:type    :m1clj/deprecated-opt
               :opt     :read-cond
               :value   (get-in ctx [:opts :read-cond])
               :stage   :step-read})))

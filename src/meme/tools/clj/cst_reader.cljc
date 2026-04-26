@@ -166,7 +166,7 @@
 
 (defn- read-children
   "Read a vector of CST child nodes into Clojure forms, preserving
-   :mclj/leading-trivia metadata on metadatable children so interior
+   :m1clj/leading-trivia metadata on metadatable children so interior
    comments and whitespace survive for the printer.
    Non-metadatable atoms (keywords, numbers, strings, booleans) cannot
    carry metadata — their leading trivia is dropped. Discard nodes
@@ -181,7 +181,7 @@
                              first-tok (or (:token child) (:open child) (:ns child))
                              ws (ws-before first-tok)]
                          (if (and ws (metadatable? form))
-                           (vary-meta form assoc :mclj/leading-trivia ws)
+                           (vary-meta form assoc :m1clj/leading-trivia ws)
                            form)))))
           children)))
 
@@ -204,7 +204,7 @@
         (let [form (read-atom node opts)
               ws (ws-before tok)]
           (if (and ws (metadatable? form))
-            (vary-meta form assoc :mclj/leading-trivia ws)
+            (vary-meta form assoc :m1clj/leading-trivia ws)
             form))))
 
     :call
@@ -214,7 +214,7 @@
           ws-open (ws-before (:open node))
           result (apply list head args)]
       (if ws-open
-        (with-meta result (assoc (meta result) :mclj/leading-trivia ws-open))
+        (with-meta result (assoc (meta result) :m1clj/leading-trivia ws-open))
         result))
 
     :list
@@ -225,7 +225,7 @@
           items (read-children (:children node) opts)
           ws (ws-before (:open node))]
       (cond-> (vec items)
-        ws (vary-meta assoc :mclj/leading-trivia ws)))
+        ws (vary-meta assoc :m1clj/leading-trivia ws)))
 
     :map
     (let [_ (check-closed! node "map")
@@ -238,7 +238,7 @@
         (when-let [dup (first-duplicate ks)]
           (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node))))
       (cond-> (apply array-map items)
-        ws (vary-meta assoc :mclj/leading-trivia ws)))
+        ws (vary-meta assoc :m1clj/leading-trivia ws)))
 
     :set
     (let [_ (check-closed! node "set")
@@ -247,16 +247,16 @@
       (when-let [dup (first-duplicate items)]
         (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
       (cond-> (set items)
-        ws (vary-meta assoc :mclj/leading-trivia ws)
-        true (vary-meta assoc :mclj/insertion-order (vec items))))
+        ws (vary-meta assoc :m1clj/leading-trivia ws)
+        true (vary-meta assoc :m1clj/insertion-order (vec items))))
 
     :quote
     (let [form (read-node (:form node) opts)]
-      (with-meta (list 'quote form) {:mclj/sugar true}))
+      (with-meta (list 'quote form) {:m1clj/sugar true}))
 
     :deref
     (let [form (read-node (:form node) opts)]
-      (with-meta (list 'clojure.core/deref form) {:mclj/sugar true}))
+      (with-meta (list 'clojure.core/deref form) {:m1clj/sugar true}))
 
     :syntax-quote
     (let [form (read-node (:form node) opts)]
@@ -288,10 +288,10 @@
         (errors/meme-error
           (str "Metadata cannot be applied to " (pr-str target))
           (node-loc node)))
-      (let [chain (conj (let [existing (:mclj/meta-chain (meta target))]
+      (let [chain (conj (let [existing (:m1clj/meta-chain (meta target))]
                           (if (vector? existing) existing []))
                         entry)]
-        (vary-meta target merge entry {:mclj/meta-chain chain})))
+        (vary-meta target merge entry {:m1clj/meta-chain chain})))
 
     :var-quote
     (let [form (read-node (:form node) opts)]
@@ -299,7 +299,7 @@
         (errors/meme-error
           (str "#' (var-quote) requires a symbol — got " (pr-str form))
           (node-loc node)))
-      (with-meta (list 'var form) {:mclj/sugar true}))
+      (with-meta (list 'var form) {:m1clj/sugar true}))
 
     :discard
     ;; Discards at top level — read-forms filters them
@@ -329,7 +329,7 @@
             normalized (forms/walk-anon-fn-body forms/normalize-bare-percent body-form)
             params (forms/find-percent-params normalized)
             fn-params (forms/build-anon-fn-params params)]
-        (with-meta (list 'fn fn-params normalized) {:mclj/sugar true})))
+        (with-meta (list 'fn fn-params normalized) {:m1clj/sugar true})))
 
     :namespaced-map
     (let [_ (check-closed! node "namespaced map")
@@ -364,7 +364,7 @@
               (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
           resolved (into (array-map)
                          (map (fn [k [_ v]] [k v]) qualified-ks pairs))]
-      (with-meta resolved {:mclj/namespace-prefix ns-str}))
+      (with-meta resolved {:m1clj/namespace-prefix ns-str}))
 
     :reader-cond
     ;; The reader always preserves #?/#?@ as CljReaderConditional records.

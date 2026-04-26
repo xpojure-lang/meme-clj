@@ -6,9 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.clj.*`), correctness pack, **meme-lang → mclj-lang rename** (file extension, namespace, registry key, public API, metadata vocabulary, AST record names).
+Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.clj.*`), correctness pack, **meme-lang → mclj-lang rename**, then **mclj → m1clj rename** layered on top (file extension, namespace, registry key, public API, metadata vocabulary). The two renames compose: a 4.x consumer migrating today should apply the meme-lang→mclj-lang mapping first, then mclj→m1clj.
 
 ### Breaking Changes
+
+- **`mclj` → `m1clj` rename (literal substring sweep).** Every `mclj` token becomes `m1clj`:
+  - **Namespaces**: `mclj-lang.*` → `m1clj-lang.*` (directory `src/mclj_lang/` → `src/m1clj_lang/`, `test/mclj_lang/` → `test/m1clj_lang/`).
+  - **Registry key**: `:mclj` → `:m1clj`. `meme.registry/default-lang` is now `:m1clj`. EDN lang files passing `:format :mclj` must use `:format :m1clj`.
+  - **Public API**: `mclj->forms` → `m1clj->forms`, `forms->mclj` → `forms->m1clj`, `mclj->clj` → `m1clj->clj`, `clj->mclj` → `clj->m1clj`, `format-mclj` → `format-m1clj`, `format-mclj-forms` → `format-m1clj-forms`.
+  - **Lang-map keys**: `:to-mclj` → `:to-m1clj`. CLI subcommand `meme to-mclj` → `meme to-m1clj` (the `from-clj` alias still works).
+  - **File extensions**: `.mclj` → `.m1clj`, `.mcljc` → `.m1cljc`, `.mcljj` → `.m1cljj`, `.mcljs` → `.m1cljs`. The soft-deprecated `.meme*` extensions are unchanged (still recognized for one release with the existing warning).
+  - **Printer mode keyword**: `:mclj` → `:m1clj` (paired with `:clj`). Affects `m1clj-lang.printer/to-doc` callers passing the mode explicitly.
+  - **Metadata + ex-info vocabulary**: all `:mclj/*` keys become `:m1clj/*` — `:m1clj/leading-trivia`, `:m1clj/sugar`, `:m1clj/insertion-order`, `:m1clj/namespace-prefix`, `:m1clj/meta-chain`, `:m1clj/bare-percent`, `:m1clj/pipeline-error`, `:m1clj/deprecated-opt`, `:m1clj/missing-grammar`. External code walking emitted forms or catching `:mclj/pipeline-error` ex-infos must update.
+  - **Build staging directory**: `target/mclj` → `target/m1clj`. Affects `meme transpile` (default `--out`) and `meme build` (fixed staging path).
+  - **AST record names** (`Clj*`) and **project / CLI names** (`meme-clj/`, `meme` binary) are untouched — none contain the `mclj` substring. The `meme.tools.*`, `meme.tools.clj.*`, `meme.registry`, `meme.loader`, `meme.cli` toolkit namespaces are likewise unchanged.
 
 - **Namespace `meme-lang.*` → `mclj-lang.*`.** All 8 `src/mclj_lang/*` files and 15+ `test/mclj_lang/*` files. Toolkit (`meme.tools.*`, `meme.cli`, `meme.registry`, `meme.loader`) is unchanged.
 

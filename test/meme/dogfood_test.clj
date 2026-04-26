@@ -4,8 +4,8 @@
    - Per-form roundtrip with precise failure accounting
    - clj-kondo var-definition comparison for semantic equivalence"
   (:require [clojure.test :refer [deftest is testing]]
-            [mclj-lang.api :as lang]
-            [mclj-lang.formatter.flat :as fmt-flat]
+            [m1clj-lang.api :as lang]
+            [m1clj-lang.formatter.flat :as fmt-flat]
             [meme.test-util :as tu]
             [clojure.set :as set]
             [clojure.string :as str]
@@ -19,19 +19,19 @@
   ;; lang-map uses #?@(:clj [...]) inside a map literal which Clojure's reader
   ;; cannot read with :read-cond :preserve (always the meme default now) —
   ;; tolerate 1 read error for that form.
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/api.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/api.cljc")]
     (is (= (- total (count read-errors)) (count succeeded)) "readable forms roundtrip")
     (is (zero? (count failed)))
     (is (<= (count read-errors) 1) "at most 1 read error (lang-map #?@ splice)")))
 
 (deftest dogfood-per-form-run
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/run.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/run.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-repl
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/repl.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/repl.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
@@ -56,7 +56,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-printer
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/printer.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/printer.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -104,7 +104,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-grammar
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/grammar.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/grammar.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -112,7 +112,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-form-shape
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/form_shape.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/form_shape.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -120,7 +120,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-formatter-canon
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/mclj_lang/formatter/canon.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/formatter/canon.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -141,22 +141,22 @@
 
 (defn- roundtrip-to-tmp
   "Roundtrip a .cljc through meme and write result to a temp .clj file.
-   mclj->forms preserves ReaderConditional records by default.
+   m1clj->forms preserves ReaderConditional records by default.
    Returns the temp file path."
   [path]
   (let [read-results (tu/read-clj-forms path)
         forms (mapv :form (filterv :form read-results))
         meme-text (fmt-flat/format-forms forms)
-        roundtripped (lang/mclj->forms meme-text)
+        roundtripped (lang/m1clj->forms meme-text)
         tmp (java.io.File/createTempFile "dogfood" ".clj")]
     (spit tmp (str/join "\n\n" (map pr-str roundtripped)))
     tmp))
 
 (deftest dogfood-semantic-equivalence
-  (doseq [path ["src/mclj_lang/api.cljc" "src/mclj_lang/run.clj"
-                "src/mclj_lang/repl.clj" "test/meme/test_runner.clj"
+  (doseq [path ["src/m1clj_lang/api.cljc" "src/m1clj_lang/run.clj"
+                "src/m1clj_lang/repl.clj" "test/meme/test_runner.clj"
                 "src/meme/tools/clj/cst_reader.cljc"
-                "src/mclj_lang/printer.cljc"
+                "src/m1clj_lang/printer.cljc"
                 "src/meme/tools/clj/resolve.cljc"
                 "src/meme/tools/clj/stages.cljc"
                 "src/meme/tools/clj/errors.cljc"
@@ -164,9 +164,9 @@
                 "src/meme/cli.clj"
                 "src/meme/tools/parser.cljc"
                 "src/meme/tools/render.cljc"
-                "src/mclj_lang/grammar.cljc"
-                "src/mclj_lang/form_shape.cljc"
-                "src/mclj_lang/formatter/canon.cljc"]]
+                "src/m1clj_lang/grammar.cljc"
+                "src/m1clj_lang/form_shape.cljc"
+                "src/m1clj_lang/formatter/canon.cljc"]]
     (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)
             tmp (roundtrip-to-tmp path)
@@ -178,8 +178,8 @@
             (str "vars lost in roundtrip: " (set/difference expected roundtripped)))))))
 
 ;; ---------------------------------------------------------------------------
-;; Self-hosting: roundtrip .mclj files through mclj→forms→mclj→forms.
-;; The CLI is written in .mclj — this verifies mclj can read its own syntax.
+;; Self-hosting: roundtrip .m1clj files through m1clj→forms→m1clj→forms.
+;; The CLI is written in .m1clj — this verifies m1clj can read its own syntax.
 ;; ---------------------------------------------------------------------------
 
 (defn- normalize-for-compare
@@ -196,13 +196,13 @@
     :else form))
 
 (defn- roundtrip-meme-file
-  "Roundtrip a .mclj file: parse → print → re-parse. Returns {:total :succeeded :failed}.
+  "Roundtrip a .m1clj file: parse → print → re-parse. Returns {:total :succeeded :failed}.
    Compares structurally (ignoring metadata) since flat printing loses whitespace metadata."
   [path]
   (let [src (slurp path)
-        forms1 (lang/mclj->forms src)
+        forms1 (lang/m1clj->forms src)
         printed (fmt-flat/format-forms forms1)
-        forms2 (lang/mclj->forms printed)
+        forms2 (lang/m1clj->forms printed)
         pairs (map vector forms1 forms2)
         succeeded (filterv (fn [[a b]] (= (normalize-for-compare a) (normalize-for-compare b))) pairs)
         failed (filterv (fn [[a b]] (not= (normalize-for-compare a) (normalize-for-compare b))) pairs)]
@@ -212,7 +212,7 @@
 
 
 (deftest self-hosting-example-meme-files
-  (doseq [path ["examples/stars.mclj"]]
+  (doseq [path ["examples/stars.m1clj"]]
     (testing (str path " roundtrips")
       (let [{:keys [total succeeded failed]} (roundtrip-meme-file path)]
         (is (pos? total) (str path " should have forms"))

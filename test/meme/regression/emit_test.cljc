@@ -3,17 +3,17 @@
    Every test here prevents a specific bug from recurring."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [mclj-lang.api :as lang]
-            [mclj-lang.formatter.flat :as fmt-flat]
-            [mclj-lang.formatter.canon :as fmt-canon]
+            [m1clj-lang.api :as lang]
+            [m1clj-lang.formatter.flat :as fmt-flat]
+            [m1clj-lang.formatter.canon :as fmt-canon]
             [meme.tools.clj.values :as values]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.stages :as stages]
-            [mclj-lang.grammar :as grammar]))
+            [m1clj-lang.grammar :as grammar]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: quoted lists print correctly in both sugar and call modes.
-;; Sugar mode (:mclj/sugar true) emits 'f(x y).
+;; Sugar mode (:m1clj/sugar true) emits 'f(x y).
 ;; Call mode (no tag) emits quote(f(x y)).
 ;; Both roundtrip through the reader.
 ;; ---------------------------------------------------------------------------
@@ -34,19 +34,19 @@
           printed (fmt-flat/format-form form)]
       (is (not (str/starts-with? printed "#("))
           "surplus params must not emit #() shorthand")
-      (is (= form (first (lang/mclj->forms printed)))
+      (is (= form (first (lang/m1clj->forms printed)))
           "roundtrip must preserve arity")))
-  (testing "fn with matching % params uses #() only when :mclj/sugar tagged"
-    (let [form (with-meta '(fn [%1 %2] (+ %1 %2)) {:mclj/sugar true})
+  (testing "fn with matching % params uses #() only when :m1clj/sugar tagged"
+    (let [form (with-meta '(fn [%1 %2] (+ %1 %2)) {:m1clj/sugar true})
           printed (fmt-flat/format-form form)]
       (is (str/starts-with? printed "#(")
           "matching params with sugar tag should emit #() shorthand")))
-  (testing "fn without :mclj/sugar never uses #() shorthand"
+  (testing "fn without :m1clj/sugar never uses #() shorthand"
     (let [form '(fn [%1] (inc %1))
           printed (fmt-flat/format-form form)]
       (is (not (str/starts-with? printed "#("))
-          "without :mclj/sugar, fn always emits fn() form")
-      (is (= form (first (lang/mclj->forms printed)))
+          "without :m1clj/sugar, fn always emits fn() form")
+      (is (= form (first (lang/m1clj->forms printed)))
           "roundtrip must preserve form"))))
 
 ;; ---------------------------------------------------------------------------
@@ -62,11 +62,11 @@
     (let [form '(fn [%1] (fn [%1] %1))
           printed (fmt-flat/format-form form)]
       (is (not (str/starts-with? printed "#("))
-          "without :mclj/sugar, fn always emits fn() form")
-      (is (= form (first (lang/mclj->forms printed)))
+          "without :m1clj/sugar, fn always emits fn() form")
+      (is (= form (first (lang/m1clj->forms printed)))
           "roundtrip must preserve outer arity")))
   (testing "(fn [%1] (inc %1)) — with sugar emits #()"
-    (is (= "#(inc(%1))" (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:mclj/sugar true}))))))
+    (is (= "#(inc(%1))" (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:m1clj/sugar true}))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Quote roundtrips — both sugar and call paths.
@@ -157,32 +157,32 @@
       (is (re-find #"^\^ints" result)))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug: comment lines from :mclj/leading-trivia metadata emitted at column 0 inside nested
+;; Bug: comment lines from :m1clj/leading-trivia metadata emitted at column 0 inside nested
 ;; multi-line blocks.
 ;; ---------------------------------------------------------------------------
 
 (deftest canon-comment-indentation-in-nested-blocks
   (testing "single comment indented to match body"
-    (let [baz (with-meta '(baz) {:mclj/leading-trivia "; single\n"})
+    (let [baz (with-meta '(baz) {:m1clj/leading-trivia "; single\n"})
           form (list 'foo '(bar) baz)
           result (fmt-canon/format-form form {:width 10})
           lines (str/split-lines result)]
       (is (= "  ; single" (nth lines 2)))))
   (testing "multiple comment lines all indented"
-    (let [baz (with-meta '(baz) {:mclj/leading-trivia "; line 1\n; line 2\n"})
+    (let [baz (with-meta '(baz) {:m1clj/leading-trivia "; line 1\n; line 2\n"})
           form (list 'foo '(bar) baz)
           result (fmt-canon/format-form form {:width 10})
           lines (str/split-lines result)]
       (is (= "  ; line 1" (nth lines 2)))
       (is (= "  ; line 2" (nth lines 3)))))
   (testing "original whitespace stripped and re-indented"
-    (let [baz (with-meta '(baz) {:mclj/leading-trivia "    ; deep\n"})
+    (let [baz (with-meta '(baz) {:m1clj/leading-trivia "    ; deep\n"})
           form (list 'foo '(bar) baz)
           result (fmt-canon/format-form form {:width 10})
           lines (str/split-lines result)]
       (is (= "  ; deep" (nth lines 2)))))
   (testing "top-level comments unchanged"
-    (let [form (with-meta '(foo x) {:mclj/leading-trivia "; top\n"})
+    (let [form (with-meta '(foo x) {:m1clj/leading-trivia "; top\n"})
           result (fmt-canon/format-form form)]
       (is (str/starts-with? result "; top\n")))))
 
@@ -203,9 +203,9 @@
          (is (not (re-find #"clojure.core/read-string" result)))))
      (testing ":: keyword roundtrips through canon formatter"
        (let [src "def(x ::my-key)"
-             forms (lang/mclj->forms src)
+             forms (lang/m1clj->forms src)
              formatted (fmt-canon/format-forms forms {:width 10})
-             re-read (lang/mclj->forms formatted)]
+             re-read (lang/m1clj->forms formatted)]
          (is (= forms re-read))))))
 
 ;; ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@
 #?(:clj
    (deftest canon-preserves-deref-sugar
      (testing "@atom sugar preserved at narrow width"
-       (let [form (with-meta (list 'clojure.core/deref 'my-very-long-atom-name) {:mclj/sugar true})
+       (let [form (with-meta (list 'clojure.core/deref 'my-very-long-atom-name) {:m1clj/sugar true})
              result (fmt-canon/format-form form {:width 10})]
          (is (str/starts-with? result "@"))
          (is (not (str/includes? result "clojure.core/deref")))))
@@ -227,7 +227,7 @@
 #?(:clj
    (deftest canon-preserves-var-sugar
      (testing "#'sym sugar preserved at narrow width"
-       (let [form (with-meta (list 'var 'some.ns/my-var) {:mclj/sugar true})
+       (let [form (with-meta (list 'var 'some.ns/my-var) {:m1clj/sugar true})
              result (fmt-canon/format-form form {:width 5})]
          (is (str/starts-with? result "#'"))
          (is (not (str/includes? result "var(")))))
@@ -239,7 +239,7 @@
 #?(:clj
    (deftest canon-preserves-quote-sugar
      (testing "'sym sugar preserved at narrow width"
-       (let [form (with-meta (list 'quote 'my-long-symbol-name) {:mclj/sugar true})
+       (let [form (with-meta (list 'quote 'my-long-symbol-name) {:m1clj/sugar true})
              result (fmt-canon/format-form form {:width 5})]
          (is (str/starts-with? result "'"))
          (is (not (str/includes? result "quote(")))))
@@ -284,13 +284,13 @@
 (deftest canon-meme-raw-renders-source-notation
   #?(:clj
      (testing "hex literal in canon formatter renders as 0xFF, not {:value 255 :raw ...}"
-       (let [forms (lang/mclj->forms "let([x 0xFF] x)")
-             pp (lang/format-mclj-forms forms)]
+       (let [forms (lang/m1clj->forms "let([x 0xFF] x)")
+             pp (lang/format-m1clj-forms forms)]
          (is (str/includes? pp "0xFF") "formatter must preserve hex notation")
          (is (not (str/includes? pp ":value")) "formatter must not leak CljRaw fields"))))
   (testing "scientific notation in canon formatter"
-    (let [forms (lang/mclj->forms "def(y 1e5)")
-          pp (lang/format-mclj-forms forms)]
+    (let [forms (lang/m1clj->forms "def(y 1e5)")
+          pp (lang/format-m1clj-forms forms)]
       (is (str/includes? pp "1e5") "formatter must preserve scientific notation"))))
 
 ;; ---------------------------------------------------------------------------
@@ -300,38 +300,38 @@
 #?(:clj
    (deftest canon-preserves-anon-fn-sugar
      (testing "#() sugar preserved in multi-line"
-       (let [form (first (lang/mclj->forms "#(long-function(a b c d e f))"))
+       (let [form (first (lang/m1clj->forms "#(long-function(a b c d e f))"))
              result (fmt-canon/format-form form {:width 20})]
          (is (str/starts-with? result "#("))
          (is (not (str/includes? result "fn(")))))
      (testing "#() with short body stays flat (bare % normalized to %1)"
-       (let [form (first (lang/mclj->forms "#(inc(%))"))
+       (let [form (first (lang/m1clj->forms "#(inc(%))"))
              result (fmt-canon/format-form form {:width 80})]
          (is (= "#(inc(%1))" result))))))
 
 #?(:clj
    (deftest canon-preserves-namespaced-map
      (testing "#:ns{} prefix preserved in multi-line"
-       (let [form (first (lang/mclj->forms "#:user{:name \"x\" :age 42 :email \"long@example.com\"}"))
+       (let [form (first (lang/m1clj->forms "#:user{:name \"x\" :age 42 :email \"long@example.com\"}"))
              result (fmt-canon/format-form form {:width 20})]
          (is (str/starts-with? result "#:user{"))
          (is (not (re-find #"^\{" result)))))
-     ;; NOTE: The pipeline now stores the full prefix in :mclj/namespace-prefix metadata
+     ;; NOTE: The pipeline now stores the full prefix in :m1clj/namespace-prefix metadata
      ;; (including the :: prefix), so #::foo{} is printed as #::foo{}.
      (testing "#::ns{} auto-resolve — stores full ::foo prefix"
-       (let [form (first (lang/mclj->forms "#::foo{:a 1 :b 2 :c \"a-very-long-value-here\"}"))
+       (let [form (first (lang/m1clj->forms "#::foo{:a 1 :b 2 :c \"a-very-long-value-here\"}"))
              result (fmt-canon/format-form form {:width 20})]
          (is (str/starts-with? result "#::foo{"))))))
 
 #?(:clj
    (deftest canon-preserves-meta-chain
      (testing "^:a ^:b chain preserved in multi-line"
-       (let [form (first (lang/mclj->forms "^:private ^:deprecated defn(foo [x] x)"))
+       (let [form (first (lang/m1clj->forms "^:private ^:deprecated defn(foo [x] x)"))
              result (fmt-canon/format-form form {:width 30})]
          (is (str/starts-with? result "^:private ^:deprecated"))
          (is (not (str/includes? result "^{")))))
      (testing "single ^:key still works"
-       (let [form (first (lang/mclj->forms "^:private defn(foo [x] x)"))
+       (let [form (first (lang/m1clj->forms "^:private defn(foo [x] x)"))
              result (fmt-canon/format-form form {:width 20})]
          (is (str/starts-with? result "^:private"))))))
 
@@ -341,9 +341,9 @@
 
 (deftest regex-quote-in-pattern-escaped
   (testing "regex from meme source with \\\" roundtrips"
-    (let [forms (lang/mclj->forms "#\"a\\\"b\"")
+    (let [forms (lang/m1clj->forms "#\"a\\\"b\"")
           printed (fmt-flat/format-forms forms)
-          forms2 (lang/mclj->forms printed)]
+          forms2 (lang/m1clj->forms printed)]
       (is (= #?(:clj (.pattern ^java.util.regex.Pattern (first forms))
                 :cljs (.-source (first forms)))
              #?(:clj (.pattern ^java.util.regex.Pattern (first forms2))
@@ -353,13 +353,13 @@
        (let [r (re-pattern "a\"b")
              printed (fmt-flat/format-form r)]
          (is (re-find #"^#\"" printed))
-         (is (some? (lang/mclj->forms printed)))
+         (is (some? (lang/m1clj->forms printed)))
          (is (= (re-find r "a\"b")
-                (re-find (first (lang/mclj->forms printed)) "a\"b"))))))
+                (re-find (first (lang/m1clj->forms printed)) "a\"b"))))))
   (testing "no double-escaping of already-escaped quotes"
-    (let [forms (lang/mclj->forms "#\"x\\\"y\"")
+    (let [forms (lang/m1clj->forms "#\"x\\\"y\"")
           printed (fmt-flat/format-forms forms)
-          forms2 (lang/mclj->forms printed)]
+          forms2 (lang/m1clj->forms printed)]
       (is (= #?(:clj (.pattern ^java.util.regex.Pattern (first forms))
                 :cljs (.-source (first forms)))
              #?(:clj (.pattern ^java.util.regex.Pattern (first forms2))
@@ -368,7 +368,7 @@
      (testing "even backslashes before quote: \\\\ + \" not misidentified as escaped quote"
        (let [r (re-pattern "a\\\\\"b")
              printed (fmt-flat/format-form r)
-             forms (lang/mclj->forms printed)]
+             forms (lang/m1clj->forms printed)]
          (is (some? forms) "printed regex should parse without error")
          (is (= (re-find r "a\\\"b")
                 (re-find (first forms) "a\\\"b"))
@@ -399,7 +399,7 @@
                         ["non-capturing group"        #"(?:a|b)"]]]
        (testing label
          (let [printed (fmt-flat/format-form p)
-               forms (lang/mclj->forms printed)
+               forms (lang/m1clj->forms printed)
                reparsed (first forms)]
            (is (some? reparsed) (str "printed output must parse: " printed))
            (is (instance? java.util.regex.Pattern reparsed)
@@ -410,22 +410,22 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: #() shorthand in :clj mode wrapped the body in extra parens.
-;; (fn [%1] (+ %1 1)) with :mclj/sugar printed as #((+ %1 1)) instead of
+;; (fn [%1] (+ %1 1)) with :m1clj/sugar printed as #((+ %1 1)) instead of
 ;; #(+ %1 1). In Clojure, #((f)) calls the result of (f) — different semantics.
 ;; Fix: unwrap the body list in :clj mode.
 ;; ---------------------------------------------------------------------------
 
 (deftest anon-fn-clj-mode-no-double-parens
   (testing "single-arg #() in :clj mode"
-    (let [form (with-meta '(fn [%1] (+ %1 1)) {:mclj/sugar true})]
+    (let [form (with-meta '(fn [%1] (+ %1 1)) {:m1clj/sugar true})]
       (is (= "#(+ %1 1)" (fmt-flat/format-clj [form]))
           "#() body must not get extra parens in :clj mode")))
   (testing "multi-arg #() in :clj mode"
-    (let [form (with-meta '(fn [%1 %2] (+ %1 %2)) {:mclj/sugar true})]
+    (let [form (with-meta '(fn [%1 %2] (+ %1 %2)) {:m1clj/sugar true})]
       (is (= "#(+ %1 %2)" (fmt-flat/format-clj [form]))
           "#() with multiple args must not get extra parens")))
-  (testing "#() in :mclj mode is unchanged"
-    (let [form (with-meta '(fn [%1] (+ %1 1)) {:mclj/sugar true})]
+  (testing "#() in :m1clj mode is unchanged"
+    (let [form (with-meta '(fn [%1] (+ %1 1)) {:m1clj/sugar true})]
       (is (= "#(+(%1 1))" (fmt-flat/format-forms [form]))
           "#() in meme mode should use call syntax"))))
 
@@ -434,33 +434,33 @@
 ;; ---------------------------------------------------------------------------
 ;; (fn [] 42) was emitted as #(42) in :clj mode, but in Clojure #(42) means
 ;; (fn [] (42)) — calling 42 as a function. Semantic corruption during
-;; mclj->clj conversion. Fix: reject #() shorthand for non-list bodies in
+;; m1clj->clj conversion. Fix: reject #() shorthand for non-list bodies in
 ;; :clj mode; fall through to (fn ...) form.
 ;; ---------------------------------------------------------------------------
 
 (deftest anon-fn-clj-mode-non-list-body
   (testing "(fn [] 42) must not become #(42) in :clj mode"
-    (let [form (with-meta '(fn [] 42) {:mclj/sugar true})]
+    (let [form (with-meta '(fn [] 42) {:m1clj/sugar true})]
       (is (= "(fn [] 42)" (fmt-flat/format-clj [form])))))
   (testing "(fn [] identity) must not become #(identity) in :clj mode"
-    (let [form (with-meta '(fn [] identity) {:mclj/sugar true})]
+    (let [form (with-meta '(fn [] identity) {:m1clj/sugar true})]
       (is (= "(fn [] identity)" (fmt-flat/format-clj [form])))))
   (testing "(fn [] :foo) must not become #(:foo) in :clj mode"
-    (let [form (with-meta '(fn [] :foo) {:mclj/sugar true})]
+    (let [form (with-meta '(fn [] :foo) {:m1clj/sugar true})]
       (is (= "(fn [] :foo)" (fmt-flat/format-clj [form])))))
   (testing "list body still uses #() shorthand in :clj mode"
-    (let [form (with-meta '(fn [%1] (+ %1 1)) {:mclj/sugar true})]
+    (let [form (with-meta '(fn [%1] (+ %1 1)) {:m1clj/sugar true})]
       (is (= "#(+ %1 1)" (fmt-flat/format-clj [form])))))
-  (testing "mclj->clj roundtrip for #(42)"
-    (is (= "(fn [] 42)" (lang/mclj->clj "#(42)"))))
-  (testing "mclj->clj roundtrip for #(identity)"
-    (is (= "(fn [] identity)" (lang/mclj->clj "#(identity)")))))
+  (testing "m1clj->clj roundtrip for #(42)"
+    (is (= "(fn [] 42)" (lang/m1clj->clj "#(42)"))))
+  (testing "m1clj->clj roundtrip for #(identity)"
+    (is (= "(fn [] identity)" (lang/m1clj->clj "#(identity)")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: metadata stripping loses notation metadata
 ;; ---------------------------------------------------------------------------
 ;; When a form has both user metadata (^:foo) and internal notation metadata
-;; (:mclj/namespace-prefix, :mclj/insertion-order, :mclj/sugar), the printer stripped ALL metadata
+;; (:m1clj/namespace-prefix, :m1clj/insertion-order, :m1clj/sugar), the printer stripped ALL metadata
 ;; via (with-meta form nil). This lost the notation keys, causing #:ns{} maps
 ;; to print with fully-qualified keys, sets to lose insertion order, and
 ;; quote sugar to be lost.
@@ -470,12 +470,12 @@
 (deftest metadata-stripping-preserves-notation
   (testing "^:validated #:user{} preserves namespaced-map notation"
     (let [src "^:validated #:user{:name \"x\"}"
-          printed (lang/forms->mclj (lang/mclj->forms src))]
+          printed (lang/forms->m1clj (lang/m1clj->forms src))]
       (is (str/includes? printed "#:user{")
           "namespaced-map notation must survive metadata stripping")))
   (testing "quote sugar preserved with user metadata"
     (let [src "^:foo 'x"
-          printed (lang/forms->mclj (lang/mclj->forms src))]
+          printed (lang/forms->m1clj (lang/m1clj->forms src))]
       (is (str/includes? printed "'x")
           "quote sugar must survive metadata stripping"))))
 
@@ -483,26 +483,26 @@
 ;; F7: bare % was normalized to %1, losing the user's notation choice.
 ;; Bug: normalize-bare-percent converted % to %1 in the body for eval
 ;; correctness, but the printer always emitted %1 even when the user wrote %.
-;; Fix: reader tags :mclj/bare-percent in metadata; printer restores % from %1.
+;; Fix: reader tags :m1clj/bare-percent in metadata; printer restores % from %1.
 ;; ---------------------------------------------------------------------------
 
 ;; NOTE: The experimental pipeline normalizes bare % to %1 during reading.
-;; The :mclj/bare-percent metadata is not set, so the printer emits %1.
+;; The :m1clj/bare-percent metadata is not set, so the printer emits %1.
 (deftest bare-percent-notation-normalized
   (testing "#(inc(%)) normalizes to #(inc(%1))"
     (let [src "#(inc(%))"
-          forms (lang/mclj->forms src)
-          back (lang/forms->mclj forms)]
+          forms (lang/m1clj->forms src)
+          back (lang/forms->m1clj forms)]
       (is (= "#(inc(%1))" back))))
   (testing "#(+(%1 %2)) roundtrips preserving explicit %1"
     (let [src "#(+(%1 %2))"
-          forms (lang/mclj->forms src)
-          back (lang/forms->mclj forms)]
+          forms (lang/m1clj->forms src)
+          back (lang/forms->m1clj forms)]
       (is (= src back))))
   (testing "#(+(% %2)) normalizes bare % to %1"
     (let [src "#(+(% %2))"
-          forms (lang/mclj->forms src)
-          back (lang/forms->mclj forms)]
+          forms (lang/m1clj->forms src)
+          back (lang/forms->m1clj forms)]
       (is (= "#(+(%1 %2))" back)))))
 
 ;; ---------------------------------------------------------------------------
@@ -513,7 +513,7 @@
 ;; Historical note: this test previously asserted that #(#{%}) round-tripped
 ;; verbatim while maps and syntax-quote bodies degraded to %1. That asymmetry
 ;; was accidental — walk-anon-fn-body's set branch rebuilt the set with stale
-;; :mclj/insertion-order metadata still pointing at the source `%`, which the
+;; :m1clj/insertion-order metadata still pointing at the source `%`, which the
 ;; printer then emitted instead of the normalized `%1`. Once the walker began
 ;; refreshing set order via walk-meme-set, the set case aligned with the
 ;; map/syntax-quote behavior.
@@ -522,18 +522,18 @@
 (deftest bare-percent-in-nested-containers-normalized
   (testing "#({:a %}) normalizes bare % to %1"
     (let [src "#({:a %})"
-          forms (lang/mclj->forms src)
-          back (lang/forms->mclj forms)]
+          forms (lang/m1clj->forms src)
+          back (lang/forms->m1clj forms)]
       (is (= "#({:a %1})" back))))
   (testing "#(#{%}) normalizes bare % to %1"
     (let [src "#(#{%})"
-          forms (lang/mclj->forms src)
-          back (lang/forms->mclj forms)]
+          forms (lang/m1clj->forms src)
+          back (lang/forms->m1clj forms)]
       (is (= "#(#{%1})" back))))
   (testing "#(`~%) normalizes bare % to %1"
     (let [src "#(`~%)"
-          forms (lang/mclj->forms src)
-          back (lang/forms->mclj forms)]
+          forms (lang/m1clj->forms src)
+          back (lang/forms->m1clj forms)]
       (is (= "#(`~%1)" back)))))
 
 ;; ---------------------------------------------------------------------------
@@ -588,7 +588,7 @@
           ;; The outer #() has bare-percent, inner fn has its own %1
           form (with-meta
                  '(fn [%1] (map (fn [x] %1) %1))
-                 {:mclj/sugar true :mclj/bare-percent true})
+                 {:m1clj/sugar true :m1clj/bare-percent true})
           printed (fmt-flat/format-form form)]
       ;; The outer %1 should become %, but the inner fn's %1 should stay as %1
       (is (str/includes? printed "#(map(fn([x] %1) %)")
@@ -621,15 +621,15 @@
        (is (= "\\newline" (values/emit-char-str \newline))))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: forms->mclj must not crash on Var objects.
+;; Scar tissue: forms->m1clj must not crash on Var objects.
 ;; Bug: Vars implement IMeta but not IObj; with-meta threw ClassCastException.
 ;; Fix: changed IMeta check to IObj in printer's metadata branch.
 ;; ---------------------------------------------------------------------------
 
 #?(:clj
    (deftest var-object-does-not-crash-printer
-     (testing "forms->mclj handles Var without crashing"
-       (is (string? (lang/forms->mclj [#'clojure.core/inc]))))))
+     (testing "forms->m1clj handles Var without crashing"
+       (is (string? (lang/forms->m1clj [#'clojure.core/inc]))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: format-clj must preserve trailing comments
@@ -644,8 +644,8 @@
 ;; for both. A full fix requires parser-level notation preservation via CljRaw.
 ;; This test documents the JVM behavior as correct and CLJS as a known limitation.
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: format-mclj drops reader-conditional branches (P0)
-;; format-mclj did not forward opts to mclj->forms, so reader conditionals were
+;; Scar tissue: format-m1clj drops reader-conditional branches (P0)
+;; format-m1clj did not forward opts to m1clj->forms, so reader conditionals were
 ;; evaluated (losing the non-matching branch) during formatting.
 ;; ---------------------------------------------------------------------------
 
@@ -709,7 +709,7 @@
 ;; ---------------------------------------------------------------------------
 ;; RT6-F21: Comment-only files don't get leading newlines
 ;; Bug: formatting ";; comment" produced "\n\n;; comment".
-;; Fix: format-mclj returns source unchanged when forms is empty.
+;; Fix: format-m1clj returns source unchanged when forms is empty.
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
@@ -724,7 +724,7 @@
      (testing "control char U+0001 prints as unicode escape, value preserved"
        (let [form (char 1)
              printed (fmt-flat/format-form form)
-             reparsed (first (lang/mclj->forms printed))]
+             reparsed (first (lang/m1clj->forms printed))]
          (is (= "\\u0001" printed))
          (is (forms/raw? reparsed) "re-parsed control char is CljRaw-wrapped")
          (is (= form (:value reparsed)) "semantic value preserved through roundtrip")))))
@@ -739,7 +739,7 @@
 (deftest unquote-deref-sugar-no-ambiguity
   (testing "~(deref x) with sugar does not print as ~@x"
     (let [form (meme.tools.clj.forms/->CljUnquote
-                 (with-meta (list 'clojure.core/deref 'x) {:mclj/sugar true}))
+                 (with-meta (list 'clojure.core/deref 'x) {:m1clj/sugar true}))
           printed (fmt-flat/format-form form)]
       (is (not (str/starts-with? printed "~@"))
           "must not produce ~@ which re-parses as unquote-splicing")
@@ -747,7 +747,7 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: :ws metadata key collision — user :ws was silently interpreted
-;; as trivia/comments. Fix: renamed internal key to :mclj/leading-trivia.
+;; as trivia/comments. Fix: renamed internal key to :m1clj/leading-trivia.
 ;; ---------------------------------------------------------------------------
 
 (deftest user-ws-metadata-not-silently-consumed
@@ -756,32 +756,32 @@
           printed (fmt-flat/format-form form)]
       ;; :ws is NOT an internal key anymore — it should appear in metadata
       (is (str/includes? printed "^") "user :ws should produce a metadata prefix")))
-  (testing ":mclj/leading-trivia is internal and not emitted as user metadata"
-    (let [form (with-meta '(foo) {:mclj/leading-trivia "; comment\n"})
+  (testing ":m1clj/leading-trivia is internal and not emitted as user metadata"
+    (let [form (with-meta '(foo) {:m1clj/leading-trivia "; comment\n"})
           printed (fmt-flat/format-form form)]
-      (is (not (str/includes? printed "^")) ":mclj/leading-trivia should not produce metadata prefix"))))
+      (is (not (str/includes? printed "^")) ":m1clj/leading-trivia should not produce metadata prefix"))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: stale :mclj/insertion-order on set — printer trusted (:mclj/insertion-order) blindly.
-;; Fix: validate :mclj/insertion-order count matches set size; fall back to (vec form).
+;; Scar tissue: stale :m1clj/insertion-order on set — printer trusted (:m1clj/insertion-order) blindly.
+;; Fix: validate :m1clj/insertion-order count matches set size; fall back to (vec form).
 ;; ---------------------------------------------------------------------------
 
 (deftest stale-meme-order-falls-back
-  (testing "set with stale :mclj/insertion-order (wrong count) falls back to unordered"
-    (let [form (with-meta #{1 2} {:mclj/insertion-order [1 2 3]})
+  (testing "set with stale :m1clj/insertion-order (wrong count) falls back to unordered"
+    (let [form (with-meta #{1 2} {:m1clj/insertion-order [1 2 3]})
           printed (fmt-flat/format-form form)]
       ;; Stale order (3 elements vs 2 in set) → fallback, no phantom element
       (is (not (str/includes? printed "3")) "phantom element 3 should not appear")))
-  (testing "set with correct :mclj/insertion-order preserves order"
-    (let [form (with-meta #{3 1 2} {:mclj/insertion-order [3 1 2]})
+  (testing "set with correct :m1clj/insertion-order preserves order"
+    (let [form (with-meta #{3 1 2} {:m1clj/insertion-order [3 1 2]})
           printed (fmt-flat/format-form form)]
       (is (= "#{3 1 2}" printed)))))
 
 ;; ---------------------------------------------------------------------------
-;; Scar tissue: #?@ splicing into a set left a stale :mclj/insertion-order;
+;; Scar tissue: #?@ splicing into a set left a stale :m1clj/insertion-order;
 ;; printer's size-mismatch guard fired and fell back to hash order, so the
 ;; printed elements were in arbitrary order instead of original source order.
-;; Fix: walk-rc rebuilds :mclj/insertion-order from walked elements.
+;; Fix: walk-rc rebuilds :m1clj/insertion-order from walked elements.
 ;; ---------------------------------------------------------------------------
 
 (deftest rc-splice-into-set-preserves-source-order
@@ -790,57 +790,57 @@
                            (assoc (stages/run "#{:a #?@(:clj [:b :c] :cljs []) :d}"
                                               {:grammar grammar/grammar})
                                   :opts {:platform :clj})))]
-      (is (= [:a :b :c :d] (:mclj/insertion-order (meta form))))
+      (is (= [:a :b :c :d] (:m1clj/insertion-order (meta form))))
       (is (= "#{:a :b :c :d}" (fmt-flat/format-form form)))))
   (testing "#?@ that contributes zero items still keeps source order"
     (let [[form] (:forms (stages/step-evaluate-reader-conditionals
                            (assoc (stages/run "#{:a #?@(:cljs [:x]) :b}"
                                               {:grammar grammar/grammar})
                                   :opts {:platform :clj})))]
-      (is (= [:a :b] (:mclj/insertion-order (meta form))))
+      (is (= [:a :b] (:m1clj/insertion-order (meta form))))
       (is (= "#{:a :b}" (fmt-flat/format-form form))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: outer expand-syntax-quotes walker rebuilt sets without
-;; refreshing :mclj/insertion-order. After walking, set contents and the
+;; refreshing :m1clj/insertion-order. After walking, set contents and the
 ;; stale order vector diverged, and the printer iterated the order vector,
 ;; so a syntax-quote inside a set printed as the unexpanded `\`x` instead
 ;; of the expanded (quote x). Sibling of 5f7d0fb (which fixed walk-rc).
-;; Fix: walk in :mclj/insertion-order when present, then rebuild it from
+;; Fix: walk in :m1clj/insertion-order when present, then rebuild it from
 ;; walked elements so it stays consistent with the new set's contents.
 ;; ---------------------------------------------------------------------------
 
 (deftest sq-inside-set-expands-on-forms->clj
   (testing "syntax-quote inside set expands like syntax-quote inside vector"
-    (is (= "(quote x)" (lang/forms->clj (lang/mclj->forms "`x"))))
-    (is (= "[(quote x) 2]" (lang/forms->clj (lang/mclj->forms "[`x 2]"))))
-    (is (= "#{(quote x) 2}" (lang/forms->clj (lang/mclj->forms "#{`x 2}")))))
+    (is (= "(quote x)" (lang/forms->clj (lang/m1clj->forms "`x"))))
+    (is (= "[(quote x) 2]" (lang/forms->clj (lang/m1clj->forms "[`x 2]"))))
+    (is (= "#{(quote x) 2}" (lang/forms->clj (lang/m1clj->forms "#{`x 2}")))))
   #?(:clj
      (testing "CljRaw inside a set unwraps to its value, matching every other container"
        ;; forms->clj is value semantics: raw notation is unwrapped in vectors,
        ;; lists, and maps. Sets must follow the same rule — the printer used to
        ;; appear to preserve 0xFF only because the stale order vector smuggled
        ;; the CljRaw wrapper past the walker. CLJS rejects hex literals.
-       (is (= "#{255 2 3}" (lang/forms->clj (lang/mclj->forms "#{0xFF 2 3}"))))
-       (is (= "[255 2 3]"  (lang/forms->clj (lang/mclj->forms "[0xFF 2 3]")))))))
+       (is (= "#{255 2 3}" (lang/forms->clj (lang/m1clj->forms "#{0xFF 2 3}"))))
+       (is (= "[255 2 3]"  (lang/forms->clj (lang/m1clj->forms "[0xFF 2 3]")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Scar tissue: inner expand-sq iterated syntax-quoted sets in hash order,
 ;; producing (apply hash-set (concat ...)) with elements in non-source order.
 ;; Runtime semantics fine (sets are unordered), but transpile output and
 ;; reproducible builds want source order.
-;; Fix: walk source in :mclj/insertion-order when present.
+;; Fix: walk source in :m1clj/insertion-order when present.
 ;; ---------------------------------------------------------------------------
 
 (deftest sq-of-set-emits-source-order
   (testing "`#{a b c d} expands with concat args in source order"
-    (let [out (lang/forms->clj (lang/mclj->forms "`#{a b c d}"))]
+    (let [out (lang/forms->clj (lang/m1clj->forms "`#{a b c d}"))]
       (is (re-find #"\(quote a\).*\(quote b\).*\(quote c\).*\(quote d\)" out))))
   (testing "`#{:foo :bar :baz} preserves source keyword order"
-    (let [out (lang/forms->clj (lang/mclj->forms "`#{:foo :bar :baz}"))]
+    (let [out (lang/forms->clj (lang/m1clj->forms "`#{:foo :bar :baz}"))]
       (is (re-find #":foo.*:bar.*:baz" out))))
   (testing "~@ splice in source position survives the order pass"
-    (let [out (lang/forms->clj (lang/mclj->forms "`#{:a ~@xs :b}"))]
+    (let [out (lang/forms->clj (lang/m1clj->forms "`#{:a ~@xs :b}"))]
       (is (re-find #":a.*xs.*:b" out)))))
 
 ;; ---------------------------------------------------------------------------
@@ -856,17 +856,17 @@
 (deftest interior-comments-preserved-in-collections
   (testing "comment inside a map (before a symbol key) survives"
     (let [src "{;; section\n 'a 1}"
-          out (fmt-canon/format-forms (lang/mclj->forms src) {:width 80})]
+          out (fmt-canon/format-forms (lang/m1clj->forms src) {:width 80})]
       (is (re-find #";; section" out)
           (str "expected comment in output, got: " (pr-str out)))))
   (testing "comment inside a set (before a symbol) survives"
     (let [src "#{;; odds\n 'a 'b}"
-          out (fmt-canon/format-forms (lang/mclj->forms src) {:width 80})]
+          out (fmt-canon/format-forms (lang/m1clj->forms src) {:width 80})]
       (is (re-find #";; odds" out)
           (str "expected comment in output, got: " (pr-str out)))))
   (testing "comment inside a call (before an arg) survives"
     (let [src "f(;; head\n 'x)"
-          out (fmt-canon/format-forms (lang/mclj->forms src) {:width 80})]
+          out (fmt-canon/format-forms (lang/m1clj->forms src) {:width 80})]
       (is (re-find #";; head" out)
           (str "expected comment in output, got: " (pr-str out))))))
 
@@ -875,5 +875,5 @@
     ;; Documented limitation — not all interior comments can survive.
     ;; Asserting current behavior so a future fix notices when this changes.
     (let [src "{;; section\n :a 1}"
-          out (fmt-canon/format-forms (lang/mclj->forms src) {:width 80})]
+          out (fmt-canon/format-forms (lang/m1clj->forms src) {:width 80})]
       (is (not (re-find #";; section" out))))))

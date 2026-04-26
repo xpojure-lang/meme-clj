@@ -1,8 +1,8 @@
 {:paths ["src" "resources" "test"]
- :tasks {meme {:doc "meme CLI: run, repl, to-clj, to-mclj, format, inspect, version"
+ :tasks {meme {:doc "meme CLI: run, repl, to-clj, to-m1clj, format, inspect, version"
               :task (do (require '[meme.cli])
                         (apply (resolve 'meme.cli/-main) *command-line-args*))}
-         test-meme {:doc "Run all .mclj tests (eval + fixture)"
+         test-meme {:doc "Run all .m1clj tests (eval + fixture)"
                    :task (do (require '[meme.test-runner])
                              (let [fails ((resolve 'meme.test-runner/run-all-meme-tests))]
                                (System/exit (if (zero? fails) 0 1))))}
@@ -41,7 +41,7 @@
                        (apply shell "java" "-cp" "target/fuzzer.jar"
                               "com.code_intelligence.jazzer.Jazzer"
                               (str "--target_class=" class)
-                              "--instrumentation_includes=mclj_lang.**:meme.tools.**:meme.fuzz.**"
+                              "--instrumentation_includes=m1clj_lang.**:meme.tools.**:meme.fuzz.**"
                               "--disabled_hooks=com.code_intelligence.jazzer.sanitizers.RegexInjection"
                               (str "-dict=fuzz/meme.dict")
                               (str "-fork=" (max 1 (- (.availableProcessors (Runtime/getRuntime)) 2)))
