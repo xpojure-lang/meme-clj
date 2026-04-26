@@ -30,16 +30,24 @@
 ;; ---------------------------------------------------------------------------
 
 (defn form-name
-  "Extract a readable name for a form (for failure messages)."
+  "Extract a readable name for a form (for failure messages). Always
+   returns a non-empty string so failures are actionable: top-level
+   def-likes get their declared name, other seqs show the head, and
+   non-seq forms (bare symbols, literals, reader-conditional records)
+   render as a truncated `pr-str`."
   [form]
-  (when (seq? form)
+  (cond
+    (seq? form)
     (let [head (first form)]
       (cond
         (#{'defn 'defn- 'def 'defmacro 'defmulti 'defmethod
            'defprotocol 'defrecord 'deftype} head)
         (str head " " (second form))
         (= 'ns head) (str "ns " (second form))
-        :else (str head "...")))))
+        :else (str head "...")))
+    :else
+    (let [s (pr-str form)]
+      (if (> (count s) 60) (str (subs s 0 57) "...") s))))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-form roundtrip

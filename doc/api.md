@@ -493,8 +493,8 @@ Unified CLI for meme. JVM/Babashka only.
 |---------|-------------|
 | `meme run <file>` | Run a `.mclj` file |
 | `meme repl` | Start the meme REPL |
-| `meme to-clj <file\|dir>` | Convert `.mclj` files to `.clj` (in-place). Alias: `from-meme`. |
-| `meme to-mclj <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.mclj`. Alias: `from-clj`. |
+| `meme to-clj <file\|dir>` | Convert `.mclj` files to `.clj` (in-place). |
+| `meme to-mclj <file\|dir>` | Convert `.clj`/`.cljc`/`.cljs` files to `.mclj`. |
 | `meme format <file\|dir>` | Format `.mclj` files via canonical formatter (in-place by default, `--stdout` to print, `--check` for CI) |
 | `meme transpile <dir\|file...>` | Transpile `.mclj` to `.clj` in a separate output directory (`--out target/mclj` by default). Output preserves relative paths — add the output dir to `:paths` in deps.edn for standard `require` without runtime patching. Alias: `compile`. |
 | `meme build <dir\|file...>` | Transpile then AOT-compile to JVM bytecode. Staging in `target/mclj` (implementation detail), output `.class` files to `--out target/classes`. Spawns `clojure` with the staging dir on the classpath and runs `clojure.core/compile` per namespace. Stops at bytecode; use your own tools.build for JAR packaging. See `doc/language-reference.md` for `build.clj`-integrated recipes. |

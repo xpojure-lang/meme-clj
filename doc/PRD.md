@@ -146,7 +146,7 @@ the CLI itself is written in `.mclj`.
 
 Note: Requirement IDs are not sequential — gaps (R2–R4, R11–R12, R14,
 P2–P4, P10) are requirements that were merged into other IDs or dropped
-during design iteration (the largest removal was the wlj-lang
+during design iteration (the largest removal was the implojure-lang
 proof-of-concept, which carried its own reader/printer requirements
 before it was retired). IDs are stable references and are not
 renumbered, so git history and this table stay cross-referenceable.

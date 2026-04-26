@@ -74,6 +74,12 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 ### Internal
 
+- **`with-mclj-grammar` triplication lifted into `mclj-lang.grammar/with-grammar`.** The same opts-injection helper was copy-pasted verbatim in `mclj-lang.api`, `mclj-lang.run`, and `mclj-lang.repl`. Single shared definition now lives next to the grammar value it injects; all three call sites delegate to it.
+
+- **`registry_test.clj` flake-prone `Thread/sleep 500`.** `concurrent-register-conflict-detection` waited for two raw `Thread`s by sleeping instead of joining, so worker completion was timing-dependent. Replaced with `future`s plus `(run! deref futures)` so the test waits exactly as long as needed and surfaces worker exceptions.
+
+- **Vendor roundtrip failure messages — non-seq forms.** `test_util/form-name` returned `nil` for non-seq forms (bare symbols, literals, `ReaderConditional` records), so failures rendered as `"  - ?: <message>"`. `form-name` now falls back to a truncated `pr-str`, and the report formatter no longer needs the `(or name "?")` shim.
+
 - **CLI `--out` validation deduplicated.** Extracted `validate-out-dir!` — both `transpile-meme` and `build` now share a single error path for blank `--out` values instead of two copy-pasted inline blocks. Test: `out-dir-validation` in `test/meme/cli_test.clj`.
 
 - **BOM + shebang stripping consolidated in `meme.tools.clj.stages`.** New `strip-bom` and `strip-source-preamble` helpers; `strip-source-preamble` composes BOM-strip followed by shebang-strip (BOM comes first — a UTF-8 file may legally begin with a BOM before any shebang). `clj-run-fn` now calls `strip-source-preamble` instead of re-implementing BOM-strip inline, and the tooling convenience `stages/run` tolerates leading BOMs as well. Tests: `bom-stripping` and `strip-source-preamble-composition` in `test/mclj_lang/stages_test.cljc`.
@@ -90,6 +96,12 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 ### Docs
 
+- **CHANGELOG `[5.0.0]` rename banner.** The 5.0.0 migration entries were written before the post-5.0.0 rename pack landed, so symbol names (`meme->forms`, `MemeReaderConditional`, `meme-lang.stages`, etc.) and the `target/meme` build directory are pre-rename. Added a banner at the top of the section listing the rename mapping so a reader applying 5.0.0 instructions today knows what to translate. Removed the redundant inline `meme-lang.stages → meme.tools.clj.stages` note (now covered by the banner).
+
+- **Docstring drift after the rename.** `mclj-lang.api/clj->mclj` docstring said "Convert Clojure source to meme"; `meme.registry` docstring's `:to-mclj` slot still called the return value "meme-text"; `doc/api.md` listed `from-meme` / `from-clj` aliases without context. Updated in place.
+
+- **PRD.md typo.** "the largest removal was the wlj-lang proof-of-concept" → "implojure-lang" (the actual sibling that was retired).
+
 - **`meme.tools.parser` namespace docstring** rewritten to enumerate the parselet-author API — engine primitives (`peek-char`, `advance!`, `eof?`, `cursor`, etc.), token helpers, sub-parsing (`parse-expr`, `parse-until`, `expect-close!`), CST construction, and the full nud/led factory set. The 4.0.0 CHANGELOG entry described the engine as "exposing only `trivia-pending?` to language grammars", but grammars routinely call the broader surface; the docstring is now aligned with actual usage.
 
 - **Stale references swept from prose docs.** `doc/PRD.md` title `"meme clojure"` → `"mclj"`; `doc/design-decisions.md` `read-meme-string` → `mclj->forms` (function had been renamed; the old name no longer existed anywhere in the codebase); `doc/api.md` now documents `mclj-lang.api/format-mclj` (source-to-source convenience used by `meme format` CLI) and `meme.tools.clj.stages/strip-bom`, both previously public but undocumented.
@@ -98,13 +110,25 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 Reader-conditional handling is now a pipeline stage instead of a reader flag. `meme->forms` and `meme->clj` are lossless by default for `.cljc` sources.
 
+> **Names below are pre-rename.** Post-5.0.0 the project renamed
+> `meme-lang.*` → `mclj-lang.*`,
+> `meme->forms` / `meme->clj` / `clj->meme` / `format-meme` →
+> `mclj->forms` / `mclj->clj` / `clj->mclj` / `format-mclj`,
+> `MemeReaderConditional` / `MemeUnquote` → `CljReaderConditional` / `CljUnquote`,
+> `meme-lang.stages` → `meme.tools.clj.stages`,
+> `:meme/*` metadata → `:mclj/*`,
+> `.meme` extension → `.mclj`,
+> and the build staging directory `target/meme` → `target/mclj`.
+> Apply these renames when following the migration steps below; see the
+> Unreleased section for the full rename pack.
+
 ### Breaking Changes
 
 - **The `:read-cond` option is removed from `meme->forms`, `meme->clj`, and the `step-read` pipeline stage.** Reader conditionals (`#?`, `#?@`) are always returned as `MemeReaderConditional` records. Passing `:read-cond` throws `:meme/deprecated-opt` with migration text.
 
   **Migration:**
   - If you used `{:read-cond :preserve}`: remove it. Records are the default now.
-  - If you relied on the old `:eval` behavior (platform materialization at read time): compose `meme-lang.stages/step-evaluate-reader-conditionals` after `step-read`, or use `run-string`/`run-file`/REPL — all of which do so automatically. *(Post-5.0.0 note: `meme-lang.stages` was subsequently moved to `meme.tools.clj.stages`. See Unreleased ›Breaking Changes› namespace moves.)*
+  - If you relied on the old `:eval` behavior (platform materialization at read time): compose `meme-lang.stages/step-evaluate-reader-conditionals` after `step-read`, or use `run-string`/`run-file`/REPL — all of which do so automatically.
 
 - **`meme->clj` is now lossless by default.** Previously it evaluated `#?` for the current platform, silently dropping off-platform branches. Now both branches are preserved in the emitted Clojure text. Use `run-string` for eval-time behavior.
 

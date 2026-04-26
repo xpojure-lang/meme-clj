@@ -53,7 +53,7 @@
     (when (seq failed)
       (println (format "  ROUNDTRIP-FAIL %s (%d forms)" path (count failed)))
       (doseq [{:keys [name error]} failed]
-        (println (format "    - %s: %s" (or name "?") error))))
+        (println (format "    - %s: %s" name error))))
     (when (seq read-errors)
       (println (format "  READ-ERROR %s (%d forms)" path (count read-errors)))
       (doseq [{:keys [read-error]} read-errors]

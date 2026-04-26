@@ -15,11 +15,6 @@
             #?(:clj [mclj-lang.repl :as repl])
             #?(:clj [meme.registry :as registry])))
 
-(defn- with-mclj-grammar
-  "Inject meme's grammar as :grammar in opts if the caller didn't supply one."
-  [opts]
-  (if (:grammar opts) opts (assoc (or opts {}) :grammar grammar/grammar)))
-
 ;; ---------------------------------------------------------------------------
 ;; Lang API — delegates to composable stages
 ;; ---------------------------------------------------------------------------
@@ -42,7 +37,7 @@
   ([s] (mclj->forms s nil))
   ([s opts]
    {:pre [(string? s)]}
-   (:forms (stages/run s (with-mclj-grammar opts)))))
+   (:forms (stages/run s (grammar/with-grammar opts)))))
 
 (defn forms->mclj
   "Print Clojure forms as meme source string (single-line per form).
@@ -115,7 +110,7 @@
            result)))))
 #?(:clj
    (defn clj->mclj
-     "Convert Clojure source to meme. JVM only."
+     "Convert Clojure source to mclj source string. JVM only."
      [clj-src]
      {:pre [(string? clj-src)]}
      (forms->mclj (clj->forms clj-src))))
