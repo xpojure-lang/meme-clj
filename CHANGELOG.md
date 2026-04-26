@@ -103,7 +103,9 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **`#()` percent-param scoping handles nested user `(fn …)` bodies.** A `%` inside a user-written `(fn …)` that lives inside `#()` belongs to the outer `#()` (Clojure semantics). The form-tier walker `walk-anon-fn-body` couldn't distinguish a user `(fn …)` from an already-lowered nested `#()` and skipped both, leaving the outer's `%` un-replaced. Real-world repro: `#(reduce (fn [_ p] (parser %)) … xs)` (malli core.cljc) — `%` here belongs to the OUTER `#()`. Fix: `lower-anon-fn` now collects %-params, validates invalid `%`-shaped symbols, and rewrites bare `%` → `%1` at the AST tier (with explicit `CljAnonFn` boundaries) before lowering to forms. No internal form metadata required.
 
-- **`resolve-tagged-literal` consults `*data-readers*` and `default-data-readers`.** `#uuid "…"` and `#inst "…"` now resolve to `java.util.UUID` and `java.util.Date` at read time, matching `clojure.core/read-string`. Tags without a registered data-reader still fall back to producing a `TaggedLiteral`. (CLJS branch unchanged: tagged literals are still rejected.)
+- **`resolve-tagged-literal` consults `*data-readers*` and `default-data-readers`.** `#uuid "…"` and `#inst "…"` now resolve to `java.util.UUID` and `java.util.Date` at read time, matching `clojure.core/read-string`. Tags without a registered data-reader still fall back to producing a `TaggedLiteral`.
+
+- **Tagged literals on ClojureScript no longer error.** Previously the CLJS branch unconditionally threw `"Tagged literals (#X) are not supported in ClojureScript meme reader"`. Now `#inst` resolves to `js/Date` and `#uuid` to `cljs.core/UUID` at read time (matching `cljs.tools.reader`'s defaults), and unknown tags fall back to a `TaggedLiteral` — same shape as JVM. cljs.core does not carry a `*data-readers*` analogue, so user-registered CLJS tags are not consulted; that's a deliberate choice (any CLJS consumer that wants custom data-readers can wrap this resolver). The PRD known-limitations entry for tagged literals is dropped.
 
 ### Cross-check status
 

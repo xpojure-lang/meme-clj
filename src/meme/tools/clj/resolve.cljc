@@ -405,8 +405,14 @@
    `default-data-readers`), apply it and return the resolved value.
    Otherwise produce a `TaggedLiteral` so the caller can decide.
 
-   `default-data-readers` covers `#inst` (java.util.Date) and `#uuid`
-   (java.util.UUID); `*data-readers*` picks up user-registered tags."
+   On JVM/Babashka, `default-data-readers` covers `#inst` (java.util.Date)
+   and `#uuid` (java.util.UUID); `*data-readers*` picks up user-registered tags.
+
+   On ClojureScript, the same two tags are recognised at read time:
+   `#inst` → js/Date, `#uuid` → cljs.core/UUID. cljs.core does not
+   carry a `*data-readers*` analogue, so user-registered CLJS tags are
+   not consulted by this resolver; unknown tags fall back to a
+   `TaggedLiteral`."
   [tag data loc]
   #?(:clj (let [reader (or (get *data-readers* tag)
                            (get default-data-readers tag))]
@@ -417,6 +423,28 @@
                        (str "Tagged literal #" tag " reader threw: " (ex-message e))
                        (assoc loc :cause e))))
               (tagged-literal tag data)))
-     :cljs (errors/meme-error
-            (str "Tagged literals (#" tag ") are not supported in ClojureScript meme reader")
-            loc)))
+     :cljs (cond
+             ;; #inst — ISO 8601 string → js/Date
+             (= tag 'inst)
+             (try (let [d (js/Date. data)]
+                    (if (js/isNaN (.getTime d))
+                      (errors/meme-error
+                        (str "Invalid #inst value: " (pr-str data)) loc)
+                      d))
+                  (catch :default e
+                    (errors/meme-error
+                      (str "Tagged literal #inst reader threw: " (.-message e))
+                      (assoc loc :cause e))))
+
+             ;; #uuid — produce cljs.core/UUID via the uuid factory.
+             ;; Matches cljs.core/uuid's permissive behaviour (no strict
+             ;; format check); JVM's UUID/fromString validates strictly.
+             (= tag 'uuid)
+             (try (cljs.core/uuid data)
+                  (catch :default e
+                    (errors/meme-error
+                      (str "Tagged literal #uuid reader threw: " (.-message e))
+                      (assoc loc :cause e))))
+
+             :else
+             (tagged-literal tag data))))

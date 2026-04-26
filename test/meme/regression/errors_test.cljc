@@ -137,10 +137,25 @@
       (is (re-find #"~~~" result)))))
 
 #?(:cljs
-   (deftest tagged-literal-cljs-error
-     (testing "#uuid on CLJS throws meme error, not ReferenceError"
-       (is (thrown-with-msg? js/Error #"not supported in ClojureScript"
-                             (lang/m1clj->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))))))
+   (deftest tagged-literal-cljs-defaults-resolve
+     (testing "#uuid resolves to a cljs.core/UUID on CLJS"
+       (let [v (first (lang/m1clj->forms
+                        "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
+         (is (uuid? v))))
+     (testing "#inst resolves to a js/Date on CLJS"
+       (let [v (first (lang/m1clj->forms "#inst \"2024-01-15T10:30:00.000-00:00\""))]
+         (is (instance? js/Date v))))
+     (testing "unknown tags fall back to a TaggedLiteral"
+       (let [v (first (lang/m1clj->forms "#mytag \"data\""))]
+         (is (tagged-literal? v))
+         (is (= 'mytag (:tag v)))
+         (is (= "data" (:form v)))))
+     (testing "malformed #inst surfaces a meme error with line/col"
+       (let [e (try (lang/m1clj->forms "#inst \"not-a-date\"")
+                    nil
+                    (catch :default e e))]
+         (is (some? e))
+         (is (re-find #"#inst" (.-message e)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; CLJS-only: unsupported number formats must error, not silently truncate.

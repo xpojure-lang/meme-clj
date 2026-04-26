@@ -97,15 +97,37 @@
          (is (= :user/foo kw))))))
 
 ;; ---------------------------------------------------------------------------
-;; Tagged literals (JVM only)
+;; Tagged literals
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
-   (deftest resolve-tagged-literal-basic
-     (let [tl (resolve/resolve-tagged-literal 'mytag "data" {:line 1 :col 1})]
-       (is (tagged-literal? tl))
-       (is (= 'mytag (.-tag tl)))
-       (is (= "data" (.-form tl))))))
+(deftest resolve-tagged-literal-unknown-tag-falls-back
+  ;; Unknown tags (no entry in *data-readers* or default-data-readers) produce
+  ;; a TaggedLiteral on both JVM and CLJS so consumer code can decide.
+  (let [tl (resolve/resolve-tagged-literal 'mytag "data" {:line 1 :col 1})]
+    (is (tagged-literal? tl))
+    (is (= 'mytag (:tag tl)))
+    (is (= "data" (:form tl)))))
+
+(deftest resolve-tagged-literal-inst
+  ;; #inst is recognised by default on both platforms.
+  (let [v (resolve/resolve-tagged-literal 'inst "2024-01-15T10:30:00.000-00:00"
+                                          {:line 1 :col 1})]
+    (is (instance? #?(:clj java.util.Date :cljs js/Date) v))))
+
+(deftest resolve-tagged-literal-inst-invalid
+  ;; Garbage-in-#inst surfaces as a meme error with location preserved.
+  (let [e (try (resolve/resolve-tagged-literal 'inst "not-a-date" {:line 4 :col 9})
+               nil
+               (catch #?(:clj Exception :cljs :default) e e))]
+    (is (some? e))
+    (is (= 4 (:line (ex-data e))))
+    (is (= 9 (:col (ex-data e))))))
+
+(deftest resolve-tagged-literal-uuid
+  ;; #uuid is recognised by default on both platforms.
+  (let [v (resolve/resolve-tagged-literal 'uuid "550e8400-e29b-41d4-a716-446655440000"
+                                          {:line 1 :col 1})]
+    (is (instance? #?(:clj java.util.UUID :cljs cljs.core/UUID) v))))
 
 ;; ---------------------------------------------------------------------------
 ;; Error location wrapping

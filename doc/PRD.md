@@ -197,10 +197,13 @@ meme rules inside. No opaque regions.
 
 ## Known limitations
 
-- **ClojureScript: some value types unsupported.** Tagged literals
-  (`#uuid`, `#inst`), ratio literals (`1/2`), BigInt (`42N`), and
-  BigDecimal (`42M`) are JVM/Babashka only. Char literals read but
-  return JS single-char strings (not chars — platform limitation).
+- **ClojureScript: some value types unsupported.** Ratio literals
+  (`1/2`), BigInt (`42N`), and BigDecimal (`42M`) are JVM/Babashka only.
+  Char literals read but return JS single-char strings (not chars —
+  platform limitation). Tagged literals work on CLJS: `#inst` resolves
+  to `js/Date`, `#uuid` to `cljs.core/UUID`, and unknown tags fall back
+  to a `TaggedLiteral` (cljs.core does not carry a `*data-readers*`
+  analogue, so user-registered tags are not consulted on CLJS).
   Reader conditionals (`#?`/`#?@`) and namespaced maps (`#:ns{}`) parse
   successfully on ClojureScript. The core call rule and all standard
   forms work on ClojureScript.

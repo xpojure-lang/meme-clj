@@ -148,24 +148,29 @@
                           (lang/m1clj->forms "#(#_x)")))))
 
 ;; ---------------------------------------------------------------------------
-;; Tagged literals, namespaced maps, reader conditionals (JVM-only)
+;; Tagged literals, namespaced maps, reader conditionals
 ;; ---------------------------------------------------------------------------
 
-#?(:clj
-   (deftest parse-tagged-literal
-     ;; Use a tag with no registered data-reader so resolve-tagged-literal
-     ;; falls back to producing a TaggedLiteral. (Tags in default-data-readers
-     ;; like #uuid / #inst are now resolved at read time, matching read-string.)
-     (let [result (first (lang/m1clj->forms "#unknown-tag \"foo\""))]
-       (is (instance? clojure.lang.TaggedLiteral result))
-       (is (= 'unknown-tag (.tag ^clojure.lang.TaggedLiteral result))))))
+(deftest parse-tagged-literal
+  ;; Tag with no registered data-reader: falls back to TaggedLiteral on both
+  ;; platforms. (Tags in default-data-readers like #uuid / #inst resolve at
+  ;; read time — see parse-tagged-literal-default-reader-resolves.)
+  (let [result (first (lang/m1clj->forms "#unknown-tag \"foo\""))]
+    (is (tagged-literal? result))
+    (is (= 'unknown-tag (:tag result)))
+    (is (= "foo" (:form result)))))
 
-#?(:clj
-   (deftest parse-tagged-literal-default-reader-resolves
-     ;; Default data-reader for #uuid runs at read time, matching
-     ;; clojure.core/read-string behaviour.
-     (let [result (first (lang/m1clj->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
-       (is (instance? java.util.UUID result)))))
+(deftest parse-tagged-literal-default-reader-resolves
+  ;; Default data-readers for #uuid / #inst run at read time, matching
+  ;; clojure.core/read-string. CLJS recognises the same two tags.
+  (testing "#uuid"
+    (let [result (first (lang/m1clj->forms
+                          "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
+      (is (instance? #?(:clj java.util.UUID :cljs cljs.core/UUID) result))))
+  (testing "#inst"
+    (let [result (first (lang/m1clj->forms
+                          "#inst \"2024-01-15T10:30:00.000-00:00\""))]
+      (is (instance? #?(:clj java.util.Date :cljs js/Date) result)))))
 
 #?(:clj
    (deftest parse-namespaced-map
