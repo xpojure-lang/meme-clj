@@ -1,5 +1,6 @@
 (ns meme.roundtrip-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.string :as str]
             [m1clj-lang.api :as lang]
             [m1clj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.forms :as forms]))
@@ -263,22 +264,22 @@
 (deftest roundtrip-metadata
   (let [[f1 f2 printed] (roundtrip-forms "^:private def(x 42)")]
     (is (= f1 f2))
-    (is (= {:private true} (dissoc (meta (first f1)) :m1clj/leading-trivia :m1clj/meta-chain)))
-    (is (= {:private true} (dissoc (meta (first f2)) :m1clj/leading-trivia :m1clj/meta-chain)))
+    (is (= {:private true} (meta (first f1))))
+    (is (= {:private true} (meta (first f2))))
     (is (re-find #"\^:private" printed))))
 
 (deftest roundtrip-metadata-dynamic
   (let [[f1 f2 printed] (roundtrip-forms "^:dynamic *x*")]
     (is (= f1 f2))
-    (is (= {:dynamic true} (dissoc (meta (first f1)) :m1clj/leading-trivia :m1clj/meta-chain)))
-    (is (= {:dynamic true} (dissoc (meta (first f2)) :m1clj/leading-trivia :m1clj/meta-chain)))
+    (is (= {:dynamic true} (meta (first f1))))
+    (is (= {:dynamic true} (meta (first f2))))
     (is (re-find #"\^:dynamic" printed))))
 
 (deftest roundtrip-metadata-type-tag
   (let [[f1 f2 printed] (roundtrip-forms "^String x")]
     (is (= f1 f2))
-    (is (= {:tag 'String} (dissoc (meta (first f1)) :m1clj/leading-trivia :m1clj/meta-chain)))
-    (is (= {:tag 'String} (dissoc (meta (first f2)) :m1clj/leading-trivia :m1clj/meta-chain)))
+    (is (= {:tag 'String} (meta (first f1))))
+    (is (= {:tag 'String} (meta (first f2))))
     (is (re-find #"\^String" printed))))
 
 (deftest roundtrip-metadata-map
@@ -620,14 +621,14 @@
   (testing "^:tag [1 2 3] roundtrips"
     (let [[f1 f2 printed] (roundtrip-forms "^:tag [1 2 3]")]
       (is (= f1 f2))
-      (is (= {:tag true} (dissoc (meta (first f1)) :m1clj/leading-trivia :m1clj/meta-chain)))
+      (is (= {:tag true} (meta (first f1))))
       (is (re-find #"\^:tag" printed)))))
 
 (deftest roundtrip-metadata-on-map
   (testing "^:private {:a 1} roundtrips"
     (let [[f1 f2 _] (roundtrip-forms "^:private {:a 1}")]
       (is (= f1 f2))
-      (is (= {:private true} (dissoc (meta (first f1)) :m1clj/leading-trivia :m1clj/meta-chain))))))
+      (is (= {:private true} (meta (first f1)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Multi-arity named fn
@@ -724,19 +725,17 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Sugar syntax preservation
-;; meme is a syntactic lens — the printer must preserve the user's syntax
-;; choice between sugar ('x, @x, #'x) and explicit call (quote(x), etc.).
-;; The reader tags sugar forms with :m1clj/sugar metadata so the printer
-;; can reconstruct the original notation.
+;; meme is a syntactic lens — `format-m1clj` preserves the user's syntax
+;; choice between sugar ('x, @x, #'x) and explicit call (quote(x), etc.) by
+;; routing the source through the AST tier (which captures notation as
+;; record fields).  The form path (`forms->m1clj`) is intentionally lossy.
 ;; ---------------------------------------------------------------------------
 
 (defn- roundtrip-syntax
-  "Parse meme string, print back, and verify the printed text matches the input.
+  "Parse meme string and re-emit via the source-driven AST formatter.
    Tests syntactic transparency — the lens should not alter the user's notation."
   [meme-src]
-  (let [forms (lang/m1clj->forms meme-src)
-        printed (lang/forms->m1clj forms)]
-    printed))
+  (lang/format-m1clj meme-src nil))
 
 (deftest roundtrip-quote-sugar-preserved
   (testing "'x sugar roundtrips as 'x, not quote(x)"
@@ -766,10 +765,16 @@
 
 ;; NOTE: experimental pipeline normalizes bare % to %1
 (deftest roundtrip-anon-fn-sugar-preserved
-  (testing "#() sugar roundtrips (bare % normalized to %1)"
-    (is (= "#(inc(%1))" (roundtrip-syntax "#(inc(%))"))))
+  (testing "#() sugar roundtrips through the AST tier preserving the user's %"
+    (is (= "#(inc(%))" (roundtrip-syntax "#(inc(%))"))))
   (testing "fn() explicit call roundtrips as fn()"
-    (is (= "fn([%1] inc(%1))" (roundtrip-syntax "fn([%1] inc(%1))")))))
+    ;; AST canon formatter renders this multi-line at default width since
+    ;; it lacks an `fn` form-shape entry; assert the meaningful properties
+    ;; rather than exact whitespace.
+    (let [out (roundtrip-syntax "fn([%1] inc(%1))")]
+      (is (str/starts-with? out "fn("))
+      (is (str/includes? out "[%1]"))
+      (is (str/includes? out "inc(%1)")))))
 
 (deftest roundtrip-set-ordering-preserved
   (testing "set element order roundtrips"

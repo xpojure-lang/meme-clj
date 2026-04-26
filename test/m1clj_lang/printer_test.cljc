@@ -99,30 +99,26 @@
     (is (= "{:a 1}"  (render-clj '{:a 1}  ##Inf)))))
 
 ;; ---------------------------------------------------------------------------
-;; Reader-sugar metadata — :m1clj/sugar tags
+;; Reader-sugar in the form path
+;;
+;; After the AST cutover, the form printer is structural. `(quote x)` still
+;; collapses to `'x` because that's canonical Clojure pretty-printing, but
+;; `@x`, `#'x`, and `#()` require the AST tier to disambiguate user notation
+;; from explicit calls.  Lossless meme→meme round-trip lives in `format-m1clj`
+;; (source-driven, AST-backed).
 ;; ---------------------------------------------------------------------------
 
-(deftest quote-sugar-on-vs-off
-  (testing "(quote x) WITH :m1clj/sugar renders as 'x"
-    (let [form (with-meta (list 'quote 'x) {:m1clj/sugar true})]
-      (is (= "'x" (render-at form ##Inf)))))
-  (testing "(quote x) WITHOUT sugar metadata renders as a plain call"
-    ;; Without the sugar tag, quote is just another symbol head.
+(deftest quote-renders-as-call-in-form-path
+  (testing "(quote x) prints structurally; ' sugar requires AST"
     (is (= "quote(x)" (render-at (list 'quote 'x) ##Inf)))))
 
-(deftest deref-sugar-on-vs-off
-  (testing "(clojure.core/deref x) WITH sugar renders as @x"
-    (let [form (with-meta (list 'clojure.core/deref 'x) {:m1clj/sugar true})]
-      (is (= "@x" (render-at form ##Inf)))))
-  (testing "(clojure.core/deref x) WITHOUT sugar renders as a plain call"
+(deftest deref-renders-as-call-in-form-path
+  (testing "(clojure.core/deref x) prints structurally; @ requires AST"
     (is (re-find #"deref\(x\)$"
                  (render-at (list 'clojure.core/deref 'x) ##Inf)))))
 
-(deftest var-sugar-on-vs-off
-  (testing "(var x) WITH sugar renders as #'x"
-    (let [form (with-meta (list 'var 'x) {:m1clj/sugar true})]
-      (is (= "#'x" (render-at form ##Inf)))))
-  (testing "(var x) WITHOUT sugar renders as a plain call"
+(deftest var-renders-as-call-in-form-path
+  (testing "(var x) prints structurally; #' requires AST"
     (is (= "var(x)" (render-at (list 'var 'x) ##Inf)))))
 
 ;; ---------------------------------------------------------------------------
@@ -134,38 +130,22 @@
     (let [form (with-meta 'x {:private true})]
       (is (re-find #"\^:private x" (render-at form ##Inf)))))
   (testing "^{:a 1 :b 2} with an explicit map renders the map"
-    ;; Meta-chain reconstruction preserves multi-key user metadata.
-    (let [form (with-meta 'x {:a 1 :b 2 :m1clj/meta-chain [{:a 1 :b 2}]})
+    (let [form (with-meta 'x {:a 1 :b 2})
           out  (render-at form ##Inf)]
       (is (re-find #"\^" out))
       (is (re-find #":a 1" out))
       (is (re-find #":b 2" out)))))
 
 (deftest internal-metadata-does-not-leak
-  (testing "internal keys (:line, :col, :m1clj/leading-trivia) are not emitted"
-    (let [form (with-meta 'x {:line 1 :col 1 :m1clj/leading-trivia " "})]
-      ;; Plain symbol — no caret, no braces, no colons.
+  (testing "position keys (:line, :col, :column, :file) are not emitted"
+    (let [form (with-meta 'x {:line 1 :col 1 :column 1 :file "f.m1clj"})]
       (is (= "x" (render-at form ##Inf))))))
 
 ;; ---------------------------------------------------------------------------
-;; Anonymous-fn shorthand
+;; Anonymous-fn shorthand — AST-only after cutover
 ;; ---------------------------------------------------------------------------
 
-(deftest anon-fn-shorthand-with-sugar-tag
-  (testing "(fn [%1] (body)) WITH :m1clj/sugar renders as #(...)"
-    (let [form (with-meta (list 'fn '[%1] (list 'inc '%1)) {:m1clj/sugar true})]
-      (is (re-find #"^#\(" (render-at form ##Inf))))))
-
-(deftest anon-fn-without-sugar-renders-as-fn
-  (testing "(fn [%1] body) WITHOUT the sugar tag renders as a plain fn call"
+(deftest anon-fn-renders-as-call-in-form-path
+  (testing "(fn [%1] body) in the form path renders as a plain fn call"
     (let [form (list 'fn '[%1] (list 'inc '%1))]
       (is (re-find #"^fn\(" (render-at form ##Inf))))))
-
-(deftest anon-fn-sugar-only-triggers-for-percent-params
-  (testing "sugar tag on non-% params must NOT produce #() — that changes semantics"
-    ;; If the params are not %-style, the printer must ignore the sugar tag
-    ;; and render as fn(...) rather than silently lose argument names.
-    (let [form (with-meta (list 'fn '[x] (list 'inc 'x)) {:m1clj/sugar true})
-          out (render-at form ##Inf)]
-      (is (not (re-find #"^#\(" out)) "must not use shorthand for [x]")
-      (is (re-find #"^fn\(" out) "falls back to fn notation"))))

@@ -197,7 +197,7 @@
                           (:form item)
                           :else
                           (list 'clojure.core/list (expand-sq item opts loc))))
-                      (forms/meme-set-source-seq form))
+                      form)
           expansion (list 'clojure.core/apply 'clojure.core/hash-set
                          (list 'clojure.core/seq (cons 'clojure.core/concat items)))]
       (maybe-with-meta expansion form opts loc))
@@ -276,7 +276,8 @@
        (meta form))
 
      (set? form)
-     (forms/walk-meme-set form #(expand-syntax-quotes % opts))
+     (with-meta (into #{} (map #(expand-syntax-quotes % opts)) form)
+                (meta form))
 
      :else form)))
 

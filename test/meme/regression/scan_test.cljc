@@ -480,8 +480,7 @@
      (testing "#::{:a 1} bare auto-resolve — keys stay unqualified (deferred to eval)"
        (let [result (first (lang/m1clj->forms "#::{:a 1}"))]
          (is (map? result))
-         (is (= 1 (:a result)))
-         (is (= "::" (:m1clj/namespace-prefix (meta result))))))))
+         (is (= 1 (:a result)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-L10: ##foo was silently accepted and produced confusing error.

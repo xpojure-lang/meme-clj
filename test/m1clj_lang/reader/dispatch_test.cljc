@@ -180,13 +180,9 @@
      (testing "#::{:a 1} — bare auto-resolve accepted, keys stay unqualified"
        (let [result (first (lang/m1clj->forms "#::{:a 1}"))]
          (is (map? result))
-         (is (= 1 (:a result)) "keys should stay unqualified (defer to eval)")
-         (is (= "::" (:m1clj/namespace-prefix (meta result))) "metadata signals bare auto-resolve")))
-     (testing "#::{:a 1} roundtrips through printer"
-       (let [forms (lang/m1clj->forms "#::{:a 1}")
-             printed (fmt-flat/format-forms forms)
-             reparsed (lang/m1clj->forms printed)]
-         (is (= forms reparsed))))))
+         (is (= 1 (:a result)) "keys should stay unqualified (defer to eval)")))
+     (testing "#::{:a 1} roundtrips through source-driven canon (AST path)"
+       (is (= "#::{:a 1}" (lang/format-m1clj "#::{:a 1}" nil))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Reader conditionals — m1clj->forms always returns CljReaderConditional

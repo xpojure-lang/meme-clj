@@ -3,9 +3,11 @@
 
   Twenty-five record types representing every Clojure form shape with
   notation, position, and trivia preserved as fields (not metadata).
-  Records replace the older `:m1clj/*` metadata vocabulary and the
-  half-AST `CljRaw` / `CljAutoKeyword` / `CljReaderConditional` records
-  in `meme.tools.clj.forms`.
+  This is the lossless tier: tooling that needs round-trip fidelity,
+  scoped refactoring, or position-attributed warnings consumes AST
+  nodes directly.  The plain-form pipeline (`forms->m1clj`,
+  `forms->clj`) is intentionally lossy — it sees plain Clojure values
+  with no notation data.
 
   Field shapes:
     pos     — {:line :col :end-line :end-col :offset :end-offset :file}
@@ -106,7 +108,7 @@
 ;;
 ;; Each wraps a single inner `form`. The notation (quote, deref, var,
 ;; backtick, tilde, tilde-at, anon-fn, discard) is the node type itself,
-;; replacing the old `:m1clj/sugar` metadata flag.
+;; — sugar form lives on the AST node, not in metadata.
 ;; ---------------------------------------------------------------------------
 
 (defrecord CljQuote [form pos trivia]

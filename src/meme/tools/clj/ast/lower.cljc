@@ -1,9 +1,10 @@
 (ns meme.tools.clj.ast.lower
   "Lower an AST to plain Clojure forms.
 
-   Produces the same forms (with the same `:m1clj/*` metadata) that
-   `meme.tools.clj.cst-reader/read-forms` produces today, so this is a
-   drop-in equivalence: `(ast->forms (cst->ast cst))` ≡ `(read-forms cst)`.
+   Produces eval-ready forms — no notation metadata. Sugar, comments,
+   set source order, and namespaced-map prefixes live only in the AST
+   tier; tooling that needs them should consume the AST directly via
+   `m1clj-lang.api/m1clj->ast`. The form path is intentionally lossy.
 
    Resolution that cst-reader did at read time happens here:
    - `::keyword` resolution via `:resolve-keyword` opt
@@ -33,17 +34,6 @@
   #?(:clj (instance? clojure.lang.IObj v)
      :cljs (satisfies? IWithMeta v)))
 
-(defn- trivia-str [trivia]
-  (when (seq trivia)
-    (apply str (map :raw trivia))))
-
-(defn- attach-trivia
-  [form trivia]
-  (let [ws (trivia-str trivia)]
-    (if (and ws (metadatable? form))
-      (vary-meta form assoc :m1clj/leading-trivia ws)
-      form)))
-
 (defn- canonical-key [k]
   (if (forms/raw? k) (:value k) k))
 
@@ -66,55 +56,39 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- lower-symbol [n]
-  (let [s (if (:ns n) (symbol (:ns n) (:name n)) (symbol (:name n)))]
-    (attach-trivia s (:trivia n))))
+  (if (:ns n) (symbol (:ns n) (:name n)) (symbol (:name n))))
 
 (defn- lower-keyword [n opts]
   (let [{:keys [name ns auto-resolve?]} n]
-    (cond
-      (not auto-resolve?)
-      (attach-trivia (if ns (keyword ns name) (keyword name)) (:trivia n))
-
-      :else
-      (let [raw (str "::" (when ns (str ns "/")) name)
-            v (resolve/resolve-auto-keyword raw (:pos n) (:resolve-keyword opts))]
-        (attach-trivia v (:trivia n))))))
+    (if auto-resolve?
+      (let [raw (str "::" (when ns (str ns "/")) name)]
+        (resolve/resolve-auto-keyword raw (:pos n) (:resolve-keyword opts)))
+      (if ns (keyword ns name) (keyword name)))))
 
 (defn- lower-number [n]
   (let [v (resolve/resolve-number (:raw n) (:pos n))]
-    (if (forms/raw? v)
-      v
-      (attach-trivia (:value n) (:trivia n)))))
+    (if (forms/raw? v) v (:value n))))
 
-(defn- lower-string [n]
-  (attach-trivia (:value n) (:trivia n)))
+(defn- lower-string [n] (:value n))
 
 (defn- lower-char [n]
   (let [v (resolve/resolve-char (:raw n) (:pos n))]
-    (if (forms/raw? v)
-      v
-      (attach-trivia (:value n) (:trivia n)))))
+    (if (forms/raw? v) v (:value n))))
 
 (defn- lower-regex [n]
-  (let [raw (str "#\"" (:pattern n) "\"")
-        v (resolve/resolve-regex raw (:pos n))]
-    (attach-trivia v (:trivia n))))
+  (let [raw (str "#\"" (:pattern n) "\"")]
+    (resolve/resolve-regex raw (:pos n))))
 
-(defn- lower-nil [n]
-  (attach-trivia nil (:trivia n)))
+(defn- lower-nil [_] nil)
 
-(defn- lower-bool [n]
-  (attach-trivia (:value n) (:trivia n)))
+(defn- lower-bool [n] (:value n))
 
 (defn- lower-list [n opts]
   (let [items (lower-children (:children n) opts)]
-    (if (empty? items)
-      (list)
-      (attach-trivia (apply list items) (:trivia n)))))
+    (if (empty? items) (list) (apply list items))))
 
 (defn- lower-vector [n opts]
-  (let [items (lower-children (:children n) opts)]
-    (attach-trivia (vec items) (:trivia n))))
+  (vec (lower-children (:children n) opts)))
 
 (defn- lower-map [n opts]
   (let [items (vec (mapcat (fn [pair] (lower-children pair opts)) (:pairs n)))]
@@ -123,25 +97,19 @@
     (let [ks (take-nth 2 items)]
       (when-let [dup (first-duplicate ks)]
         (errors/meme-error (str "Duplicate key: " (pr-str dup)) (:pos n))))
-    (attach-trivia (apply array-map items) (:trivia n))))
+    (apply array-map items)))
 
 (defn- lower-set [n opts]
   (let [items (lower-children (:children n) opts)]
     (when-let [dup (first-duplicate items)]
       (errors/meme-error (str "Duplicate key: " (pr-str dup)) (:pos n)))
-    (-> (set items)
-        (attach-trivia (:trivia n))
-        (vary-meta assoc :m1clj/insertion-order (vec items)))))
+    (set items)))
 
 (defn- lower-quote [n opts]
-  (-> (list 'quote (ast->form (:form n) opts))
-      (with-meta {:m1clj/sugar true})
-      (attach-trivia (:trivia n))))
+  (list 'quote (ast->form (:form n) opts)))
 
 (defn- lower-deref [n opts]
-  (-> (list 'clojure.core/deref (ast->form (:form n) opts))
-      (with-meta {:m1clj/sugar true})
-      (attach-trivia (:trivia n))))
+  (list 'clojure.core/deref (ast->form (:form n) opts)))
 
 (defn- lower-var [n opts]
   (let [inner (ast->form (:form n) opts)]
@@ -149,30 +117,18 @@
       (errors/meme-error
         (str "#' (var-quote) requires a symbol — got " (pr-str inner))
         (:pos n)))
-    (-> (list 'var inner)
-        (with-meta {:m1clj/sugar true})
-        (attach-trivia (:trivia n)))))
+    (list 'var inner)))
 
 (defn- lower-syntax-quote [n opts]
-  (-> (forms/->CljSyntaxQuote (ast->form (:form n) opts))
-      (attach-trivia (:trivia n))))
-
-(defn- pos+trivia-meta
-  "Combine :pos and :m1clj/leading-trivia (from :trivia) into one map.
-  cst-reader attaches loc as base meta on Unquote*; read-children layers
-  :m1clj/leading-trivia on top when there's leading whitespace."
-  [n]
-  (let [ws (trivia-str (:trivia n))]
-    (cond-> (or (:pos n) {})
-      ws (assoc :m1clj/leading-trivia ws))))
+  (forms/->CljSyntaxQuote (ast->form (:form n) opts)))
 
 (defn- lower-unquote [n opts]
   (with-meta (forms/->CljUnquote (ast->form (:form n) opts))
-    (pos+trivia-meta n)))
+    (or (:pos n) {})))
 
 (defn- lower-unquote-splicing [n opts]
   (with-meta (forms/->CljUnquoteSplicing (ast->form (:form n) opts))
-    (pos+trivia-meta n)))
+    (or (:pos n) {})))
 
 (defn- lower-anon-fn [n opts]
   (let [body-form (ast->form (:body n) opts)
@@ -184,22 +140,16 @@
         normalized (forms/walk-anon-fn-body forms/normalize-bare-percent body-form)
         params (forms/find-percent-params normalized)
         fn-params (forms/build-anon-fn-params params)]
-    (-> (list 'fn fn-params normalized)
-        (with-meta {:m1clj/sugar true})
-        (attach-trivia (:trivia n)))))
+    (list 'fn fn-params normalized)))
 
 (defn- lower-tagged [n opts]
   (let [tag (symbol (:tag n))
         form (ast->form (:form n) opts)]
-    (attach-trivia
-      (resolve/resolve-tagged-literal tag form (:pos n))
-      (:trivia n))))
+    (resolve/resolve-tagged-literal tag form (:pos n))))
 
 (defn- lower-reader-cond [n opts]
   (let [items (vec (mapcat (fn [pair] (lower-children pair opts)) (:pairs n)))]
-    (attach-trivia
-      (forms/make-reader-conditional (apply list items) (:splicing? n))
-      (:trivia n))))
+    (forms/make-reader-conditional (apply list items) (:splicing? n))))
 
 (defn- lower-meta [n opts]
   (let [target (ast->form (:target n) opts)
@@ -220,18 +170,11 @@
                                    (pr-str m))
                               (:pos n))))
                         chain)
-          merged-meta (reduce merge entries)
-          existing-chain (or (:m1clj/meta-chain (meta target)) [])
-          new-chain (into existing-chain entries)]
-      (-> target
-          (vary-meta merge merged-meta {:m1clj/meta-chain new-chain})
-          (attach-trivia (:trivia n))))))
+          merged-meta (reduce merge entries)]
+      (vary-meta target merge merged-meta))))
 
 (defn- lower-namespaced-map [n opts]
-  (let [{:keys [ns auto-resolve? inner]} n
-        ns-str (if auto-resolve?
-                 (if (str/blank? ns) "::" (str "::" ns))
-                 ns)
+  (let [{:keys [ns inner]} n
         qual-ns ns
         items (vec (mapcat (fn [pair] (lower-children pair opts)) (:pairs inner)))
         _ (when (odd? (count items))
@@ -244,12 +187,9 @@
                         k))
         qualified-ks (mapv (comp qualify-key first) pairs)
         _ (when-let [dup (first-duplicate qualified-ks)]
-            (errors/meme-error (str "Duplicate key: " (pr-str dup)) (:pos n)))
-        resolved (into (array-map)
-                       (map (fn [k [_ v]] [k v]) qualified-ks pairs))]
-    (-> resolved
-        (with-meta {:m1clj/namespace-prefix ns-str})
-        (attach-trivia (:trivia n)))))
+            (errors/meme-error (str "Duplicate key: " (pr-str dup)) (:pos n)))]
+    (into (array-map)
+          (map (fn [k [_ v]] [k v]) qualified-ks pairs))))
 
 ;; ---------------------------------------------------------------------------
 ;; Protocol wiring — single extend-protocol form using reader-conditional

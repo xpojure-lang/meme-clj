@@ -19,7 +19,7 @@
 (def reserved-symbols #{'fn 'quote 'var 'clojure.core/deref
                         (symbol "nil") (symbol "true") (symbol "false")})
 
-(def reserved-meta-keywords #{:m1clj/leading-trivia :line :column :file})
+(def reserved-meta-keywords #{:line :col :column :file})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))

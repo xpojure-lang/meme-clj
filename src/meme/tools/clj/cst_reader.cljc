@@ -1,11 +1,10 @@
 (ns meme.tools.clj.cst-reader
-  "CST reader: walks CST nodes from the Pratt parser and produces Clojure forms.
-
-   This is the lowering step: CST → Clojure forms. It mirrors the classic
-   parser's output (same forms, same metadata, same AST node types) but
-   reads from a lossless tree instead of a token stream.
-
-   Pipeline: scanner → trivia-attacher → pratt-parser → **cst-reader**"
+  "CST reader: walks CST nodes from the Pratt parser and produces plain
+   Clojure forms suitable for eval. No notation metadata is attached —
+   sugar (`'x`, `@x`, `#'x`, `#()`), comments, set source order, and
+   namespaced-map prefixes are preserved only by the AST tier
+   (`meme.tools.clj.ast.*`). Stages eval pipeline uses this reader; tooling
+   that needs round-trip fidelity should consume the AST directly."
   (:require [clojure.string :as str]
             [meme.tools.clj.errors :as errors]
             [meme.tools.clj.forms :as forms]
@@ -51,12 +50,6 @@
   [coll]
   (let [freqs (frequencies (map canonical-key coll))]
     (first (filter #(> (get freqs (canonical-key %)) 1) coll))))
-
-(defn- ws-before
-  "Get the whitespace string from trivia/before on a token."
-  [tok]
-  (when-let [trivia (:trivia/before tok)]
-    (apply str (map :raw trivia))))
 
 (defn- check-closed!
   "Throw with :incomplete true if a delimited node has no closing token.
@@ -165,24 +158,14 @@
      :cljs (satisfies? IWithMeta v)))
 
 (defn- read-children
-  "Read a vector of CST child nodes into Clojure forms, preserving
-   :m1clj/leading-trivia metadata on metadatable children so interior
-   comments and whitespace survive for the printer.
-   Non-metadatable atoms (keywords, numbers, strings, booleans) cannot
-   carry metadata — their leading trivia is dropped. Discard nodes
-   already contain their target in :form — skip them. Also splices
-   #?@ results and filters no-match sentinels."
+  "Read a vector of CST child nodes into Clojure forms. Discards are
+  filtered (their target already came through as :form). Splices #?@
+  results and filters no-match sentinels."
   [children opts]
   (splice-and-filter
     (into []
           (comp (remove #(= :discard (:node %)))
-                (map (fn [child]
-                       (let [form (read-node child opts)
-                             first-tok (or (:token child) (:open child) (:ns child))
-                             ws (ws-before first-tok)]
-                         (if (and ws (metadatable? form))
-                           (vary-meta form assoc :m1clj/leading-trivia ws)
-                           form)))))
+                (map #(read-node % opts)))
           children)))
 
 ;; ---------------------------------------------------------------------------
@@ -201,62 +184,45 @@
     (let [tok (:token node)]
       (if (= :shebang (:type tok))
         no-match  ;; shebang lines are informational, produce no form
-        (let [form (read-atom node opts)
-              ws (ws-before tok)]
-          (if (and ws (metadatable? form))
-            (vary-meta form assoc :m1clj/leading-trivia ws)
-            form))))
+        (read-atom node opts)))
 
     :call
     (let [_ (check-closed! node "call")
           head (read-node (:head node) opts)
-          args (read-children (:args node) opts)
-          ws-open (ws-before (:open node))
-          result (apply list head args)]
-      (if ws-open
-        (with-meta result (assoc (meta result) :m1clj/leading-trivia ws-open))
-        result))
+          args (read-children (:args node) opts)]
+      (apply list head args))
 
     :list
     (list)
 
     :vector
     (let [_ (check-closed! node "vector")
-          items (read-children (:children node) opts)
-          ws (ws-before (:open node))]
-      (cond-> (vec items)
-        ws (vary-meta assoc :m1clj/leading-trivia ws)))
+          items (read-children (:children node) opts)]
+      (vec items))
 
     :map
     (let [_ (check-closed! node "map")
-          items (read-children (:children node) opts)
-          ws (ws-before (:open node))]
+          items (read-children (:children node) opts)]
       (when (odd? (count items))
         (errors/meme-error "Map must contain an even number of forms"
                            (node-loc node)))
       (let [ks (take-nth 2 items)]
         (when-let [dup (first-duplicate ks)]
           (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node))))
-      (cond-> (apply array-map items)
-        ws (vary-meta assoc :m1clj/leading-trivia ws)))
+      (apply array-map items))
 
     :set
     (let [_ (check-closed! node "set")
-          items (read-children (:children node) opts)
-          ws (ws-before (:open node))]
+          items (read-children (:children node) opts)]
       (when-let [dup (first-duplicate items)]
         (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
-      (cond-> (set items)
-        ws (vary-meta assoc :m1clj/leading-trivia ws)
-        true (vary-meta assoc :m1clj/insertion-order (vec items))))
+      (set items))
 
     :quote
-    (let [form (read-node (:form node) opts)]
-      (with-meta (list 'quote form) {:m1clj/sugar true}))
+    (list 'quote (read-node (:form node) opts))
 
     :deref
-    (let [form (read-node (:form node) opts)]
-      (with-meta (list 'clojure.core/deref form) {:m1clj/sugar true}))
+    (list 'clojure.core/deref (read-node (:form node) opts))
 
     :syntax-quote
     (let [form (read-node (:form node) opts)]
@@ -288,10 +254,7 @@
         (errors/meme-error
           (str "Metadata cannot be applied to " (pr-str target))
           (node-loc node)))
-      (let [chain (conj (let [existing (:m1clj/meta-chain (meta target))]
-                          (if (vector? existing) existing []))
-                        entry)]
-        (vary-meta target merge entry {:m1clj/meta-chain chain})))
+      (vary-meta target merge entry))
 
     :var-quote
     (let [form (read-node (:form node) opts)]
@@ -299,7 +262,7 @@
         (errors/meme-error
           (str "#' (var-quote) requires a symbol — got " (pr-str form))
           (node-loc node)))
-      (with-meta (list 'var form) {:m1clj/sugar true}))
+      (list 'var form))
 
     :discard
     ;; Discards at top level — read-forms filters them
@@ -329,24 +292,18 @@
             normalized (forms/walk-anon-fn-body forms/normalize-bare-percent body-form)
             params (forms/find-percent-params normalized)
             fn-params (forms/build-anon-fn-params params)]
-        (with-meta (list 'fn fn-params normalized) {:m1clj/sugar true})))
+        (list 'fn fn-params normalized)))
 
     :namespaced-map
     (let [_ (check-closed! node "namespaced map")
           ns-raw (:raw (:ns node))
           auto-resolve? (str/starts-with? ns-raw "#::")
-          ;; #:ns → "ns", #::alias → "::alias" (preserve prefix for roundtrip)
+          ;; #:ns → "ns", #::alias → "alias" (used for key qualification only;
+          ;; the user's prefix choice is captured in the AST, not here).
           ns-name (if auto-resolve? (subs ns-raw 3) (subs ns-raw 2))
           _ (when (and (str/blank? ns-name) (not auto-resolve?))
               (errors/meme-error "Namespaced map must specify a namespace"
                                  (node-loc node)))
-          ;; #::{} (bare auto-resolve) → ns-str "::", qual-ns "" (defer to eval)
-          ;; #::alias{} → ns-str "::alias", qual-ns "alias"
-          ;; #:ns{} → ns-str "ns", qual-ns "ns"
-          ns-str (if auto-resolve?
-                   (if (str/blank? ns-name) "::" (str "::" ns-name))
-                   ns-name)
-          ;; For key qualification, use the bare namespace name (without :: prefix)
           ;; Blank qual-ns (bare #::{}) skips qualification — keys stay unqualified
           qual-ns ns-name
           items (read-children (:children node) opts)
@@ -364,7 +321,7 @@
               (errors/meme-error (str "Duplicate key: " (pr-str dup)) (node-loc node)))
           resolved (into (array-map)
                          (map (fn [k [_ v]] [k v]) qualified-ks pairs))]
-      (with-meta resolved {:m1clj/namespace-prefix ns-str}))
+      resolved)
 
     :reader-cond
     ;; The reader always preserves #?/#?@ as CljReaderConditional records.
