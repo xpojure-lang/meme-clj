@@ -9,6 +9,7 @@
             [meme.tools.lexer :as lexer]
             [m1clj-lang.lexlets :as lex]
             [m1clj-lang.parselets :as mp]
+            [meme.tools.clj.parser.parselets :as cp]
             [meme.tools.clj.forms :as forms]))
 
 (declare grammar)
@@ -36,7 +37,7 @@
     \@  (lexer/single-char-scanlet :deref (pratt/nud-prefix :deref))
     \`  (lexer/single-char-scanlet :syntax-quote (pratt/nud-prefix :syntax-quote))
     \^  (lexer/single-char-scanlet :meta (pratt/nud-prefix-two :meta :meta :target))
-    \~  mp/tilde-scanlet
+    \~  cp/tilde-scanlet
 
     ;; Content atoms
     \\  (lexer/atom-scanlet :char-literal lex/consume-char-literal)
@@ -44,11 +45,11 @@
     \:  (lexer/atom-scanlet :keyword lex/consume-keyword)
 
     ;; Dispatch
-    \#  mp/dispatch-scanlet}
+    \#  cp/dispatch-scanlet}
 
    :nud-pred
    [[(fn [ch _e] (lex/digit? ch))                          (lexer/atom-scanlet :number lex/consume-number)]
-    [(fn [ch e] (mp/sign-followed-by-digit? e ch))          (lexer/atom-scanlet :number lex/consume-number)]
+    [(fn [ch e] (cp/sign-followed-by-digit? e ch))          (lexer/atom-scanlet :number lex/consume-number)]
     [(fn [ch _e] (lex/symbol-start? ch))                    (lexer/atom-scanlet :symbol lex/consume-symbol)]]
 
    :trivia
