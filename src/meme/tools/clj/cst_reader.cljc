@@ -200,6 +200,15 @@
           items (read-children (:children node) opts)]
       (vec items))
 
+    :bare-list
+    ;; m2clj's bare-paren-as-list-literal: (x y z) at no-adjacency reads to
+    ;; this CST node. Lifts to (quote (x y z)) at the form layer — semantically
+    ;; equivalent to '(x y z). The parser only emits :bare-list for non-empty
+    ;; bare parens; empty () still reads as :list (no quote applied).
+    (let [_ (check-closed! node "list")
+          items (read-children (:children node) opts)]
+      (list 'quote (apply list items)))
+
     :map
     (let [_ (check-closed! node "map")
           items (read-children (:children node) opts)]
