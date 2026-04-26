@@ -14,11 +14,14 @@
    files via Clojure's standard mechanisms; meme only needs to handle
    the surface conversions and formatting."
   (:require [meme.tools.clj.parser.api :as clj-parser]
+            [meme.tools.clj.ast.nodes :as nodes
+             #?@(:cljs [:refer [CljDiscard]])]
             [m1clj-lang.formatter.flat :as fmt-flat]
             [m1clj-lang.formatter.canon :as fmt-canon]
             [m1clj-lang.form-shape :as form-shape]
             [m1clj-lang.api :as m1clj-api]
-            #?(:clj [meme.registry :as registry])))
+            #?(:clj [meme.registry :as registry]))
+  #?(:clj (:import [meme.tools.clj.ast.nodes CljDiscard])))
 
 ;; ---------------------------------------------------------------------------
 ;; Bridge helpers — mirror m1clj-lang.api's ast-root → vec shape so the
@@ -30,7 +33,7 @@
   `:trailing-ws` metadata. Matches the shape m1clj-lang.api uses to feed
   the formatter."
   [root]
-  (let [children (filterv #(not (instance? meme.tools.clj.ast.nodes.CljDiscard %))
+  (let [children (filterv #(not (instance? CljDiscard %))
                           (:children root))
         trailing (seq (:trailing-trivia root))]
     (if trailing

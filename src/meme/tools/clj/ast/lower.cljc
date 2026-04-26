@@ -13,10 +13,13 @@
    - namespaced-map key qualification
    - duplicate-key / odd-count map / nested anon-fn validation"
   (:require [clojure.string :as str]
-            [meme.tools.clj.ast.nodes :as nodes]
+            [meme.tools.clj.ast.nodes :as nodes
+             #?@(:cljs [:refer [CljSymbol CljAnonFn CljDiscard]])]
             [meme.tools.clj.errors :as errors]
             [meme.tools.clj.forms :as forms]
-            [meme.tools.clj.resolve :as resolve]))
+            [meme.tools.clj.resolve :as resolve])
+  #?(:clj (:import [meme.tools.clj.ast.nodes
+                    CljSymbol CljAnonFn CljDiscard])))
 
 (defprotocol Lowerable
   (-lower [node opts] "Lower this AST node to a Clojure form."))
@@ -42,8 +45,7 @@
     (first (filter #(> (get freqs (canonical-key %)) 1) coll))))
 
 (defn- discard-node? [n]
-  (instance? #?(:clj meme.tools.clj.ast.nodes.CljDiscard
-                :cljs nodes/CljDiscard) n))
+  (instance? CljDiscard n))
 
 (defn- lower-children
   "Lower a vec of AST children to forms, filtering CljDiscard."
@@ -134,7 +136,7 @@
   "If `node` is a CljSymbol naming a `%` placeholder, return its type
    (:bare, :rest, or the integer N). Otherwise nil."
   [node]
-  (when (instance? meme.tools.clj.ast.nodes.CljSymbol node)
+  (when (instance? CljSymbol node)
     (forms/percent-param-type
       (if (:ns node)
         (symbol (:ns node) (:name node))
@@ -144,7 +146,7 @@
   "If `node` is a CljSymbol whose name looks like a `%` param but isn't
    a valid one (`%-1`, `%foo`, `%1a`, …), return the string. Otherwise nil."
   [node]
-  (when (instance? meme.tools.clj.ast.nodes.CljSymbol node)
+  (when (instance? CljSymbol node)
     (let [s (if (:ns node)
               (symbol (:ns node) (:name node))
               (symbol (:name node)))]
@@ -162,10 +164,10 @@
   [visit body]
   ((fn walk [node]
      (cond
-       (instance? meme.tools.clj.ast.nodes.CljAnonFn node) nil
-       (satisfies? meme.tools.clj.ast.nodes/AstNode node)
+       (instance? CljAnonFn node) nil
+       (satisfies? nodes/AstNode node)
        (do (visit node)
-           (run! walk (meme.tools.clj.ast.nodes/children node)))
+           (run! walk (nodes/children node)))
        :else (visit node)))
    body))
 
@@ -201,17 +203,17 @@
   [body]
   ((fn walk [node]
      (cond
-       (instance? meme.tools.clj.ast.nodes.CljAnonFn node) node
+       (instance? CljAnonFn node) node
 
-       (and (instance? meme.tools.clj.ast.nodes.CljSymbol node)
+       (and (instance? CljSymbol node)
             (= "%" (:name node))
             (nil? (:ns node)))
        (assoc node :name "%1")
 
-       (satisfies? meme.tools.clj.ast.nodes/AstNode node)
-       (let [cs (meme.tools.clj.ast.nodes/children node)]
+       (satisfies? nodes/AstNode node)
+       (let [cs (nodes/children node)]
          (if (seq cs)
-           (meme.tools.clj.ast.nodes/rebuild node (mapv walk cs))
+           (nodes/rebuild node (mapv walk cs))
            node))
 
        :else node))

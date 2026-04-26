@@ -19,7 +19,14 @@
             [meme.tools.render :as render]
             [meme.tools.clj.values :as values]
             [meme.tools.clj.forms :as forms]
-            [meme.tools.clj.ast.nodes :as nodes]
+            [meme.tools.clj.ast.nodes :as nodes
+             #?@(:cljs [:refer [CljSymbol CljKeyword CljNumber CljString
+                                CljChar CljRegex CljNil CljBool
+                                CljList CljVector CljMap CljSet
+                                CljQuote CljDeref CljVar
+                                CljSyntaxQuote CljUnquote CljUnquoteSplicing
+                                CljAnonFn CljDiscard
+                                CljTagged CljReaderCond CljMeta CljNamespacedMap]])]
             [meme.tools.clj.ast.lower :as ast-lower]
             [m1clj-lang.form-shape :as form-shape])
   #?(:clj (:import [meme.tools.clj.ast.nodes
@@ -68,7 +75,7 @@
   [node]
   (when (and (some? node)
              #?(:clj  (instance? meme.tools.clj.ast.nodes.AstNode node)
-                :cljs (satisfies? meme.tools.clj.ast.nodes/AstNode node))
+                :cljs (satisfies? nodes/AstNode node))
              (seq (:trivia node)))
     (let [comments (filterv #(= :comment (:type %)) (:trivia node))]
       (when (seq comments)
@@ -229,7 +236,7 @@
   "Render a :bindings slot value as a columnar pair-per-line binding vector.
   Polymorphic: accepts a plain vector of forms or a CljVector AST node."
   [value ctx]
-  (let [children (if (instance? meme.tools.clj.ast.nodes.CljVector value)
+  (let [children (if (instance? CljVector value)
                    (:children value)
                    value)]
     (binding-vector-doc children ctx)))
@@ -385,7 +392,7 @@
   "Filter CljDiscard nodes from a children vec — discard nodes are notation,
   not data, and don't appear as positional children of their parent."
   [children]
-  (filterv #(not (instance? meme.tools.clj.ast.nodes.CljDiscard %)) children))
+  (filterv #(not (instance? CljDiscard %)) children))
 
 (defn- to-doc-ast-node
   "Build a Doc for a Clj* AST record. Returns nil for non-AST input so the
