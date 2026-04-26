@@ -214,6 +214,15 @@
           (nodes/->CljVector
             (read-children (:children node) opts) pos trivia []))
 
+      :bare-list
+      ;; m2clj's bare-paren-as-list-literal: (x y z) at no-adjacency reads to
+      ;; this CST node. Lifts to (quote (x y z)) at the AST tier — semantically
+      ;; equivalent to '(x y z), distinguished only by the :bare notation.
+      (do (check-closed! node "list")
+          (let [inner (nodes/->CljList
+                        (read-children (:children node) opts) pos trivia [])]
+            (nodes/->CljQuote inner pos trivia :bare)))
+
       :map
       (do (check-closed! node "map")
           (let [items (read-children (:children node) opts)]
@@ -227,7 +236,7 @@
             (read-children (:children node) opts) pos trivia []))
 
       :quote
-      (nodes/->CljQuote (cst->ast-node (:form node) opts) pos trivia)
+      (nodes/->CljQuote (cst->ast-node (:form node) opts) pos trivia :tick)
 
       :deref
       (nodes/->CljDeref (cst->ast-node (:form node) opts) pos trivia)

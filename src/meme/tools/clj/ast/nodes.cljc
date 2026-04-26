@@ -111,7 +111,7 @@
 ;; — sugar form lives on the AST node, not in metadata.
 ;; ---------------------------------------------------------------------------
 
-(defrecord CljQuote [form pos trivia]
+(defrecord CljQuote [form pos trivia notation]
   AstNode
   (-children [_] [form])
   (-rebuild [n [c]] (assoc n :form c)))
@@ -196,8 +196,10 @@
 (def ^:private notation-keys
   "Fields that capture how the source was spelled, not what it means.
   Stripped before `ast=` comparison so that `42` and `0x2A` are equal,
-  identical symbols at different positions are equal, etc."
-  #{:pos :trivia :close-trivia :trailing-trivia :raw})
+  identical symbols at different positions are equal, `'(x y z)` and
+  m2clj's bare-paren `(x y z)` (both CljQuote, differing only in
+  :notation) are equal, etc."
+  #{:pos :trivia :close-trivia :trailing-trivia :raw :notation})
 
 (def ^:private child-bearing-keys
   "Fields holding child AST nodes. Compared recursively via `ast=`

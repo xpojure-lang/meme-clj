@@ -74,7 +74,7 @@
 
 (deftest sugar-node-protocol
   (let [inner (atom-sym "x")
-        cases [(nodes/->CljQuote inner p tr)
+        cases [(nodes/->CljQuote inner p tr :tick)
                (nodes/->CljDeref inner p tr)
                (nodes/->CljVar inner p tr)
                (nodes/->CljSyntaxQuote inner p tr)
