@@ -30,22 +30,35 @@
     'deftype* 'reify* 'letfn* 'case* 'clojure.core/import* '& '.})
 
 (defn default-resolve-symbol
-  "Resolve a symbol for syntax-quote, matching Clojure's SyntaxQuoteReader."
+  "Resolve a symbol for syntax-quote, matching Clojure's SyntaxQuoteReader.
+
+  Constructors `Foo.` resolve to `pkg.Foo.` (the dot is preserved on the
+  fully-qualified result). `.method` interop calls stay unqualified."
   [sym]
-  (cond
-    (namespace sym) sym
-    (contains? sq-special-forms sym) sym
-    (str/starts-with? (name sym) ".") sym
-    (str/ends-with? (name sym) ".") sym
-    :else
-    (if-let [resolved (ns-resolve *ns* sym)]
-      (cond
-        (var? resolved)
-        (symbol (name (ns-name (.-ns ^clojure.lang.Var resolved))) (name sym))
-        (class? resolved)
-        (symbol (.getName ^Class resolved))
-        :else sym)
-      (symbol (name (ns-name *ns*)) (name sym)))))
+  (let [n (name sym)
+        ctor? (and (> (count n) 1)
+                   (str/ends-with? n ".")
+                   (not= n "."))]
+    (cond
+      (namespace sym) sym
+      (contains? sq-special-forms sym) sym
+      (str/starts-with? n ".") sym
+      ctor?
+      (let [base (subs n 0 (dec (count n)))
+            base-sym (symbol base)
+            resolved (ns-resolve *ns* base-sym)]
+        (if (class? resolved)
+          (symbol (str (.getName ^Class resolved) "."))
+          sym))
+      :else
+      (if-let [resolved (ns-resolve *ns* sym)]
+        (cond
+          (var? resolved)
+          (symbol (name (ns-name (.-ns ^clojure.lang.Var resolved))) (name sym))
+          (class? resolved)
+          (symbol (.getName ^Class resolved))
+          :else sym)
+        (symbol (name (ns-name *ns*)) (name sym))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Pipeline

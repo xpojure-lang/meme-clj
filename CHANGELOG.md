@@ -89,6 +89,8 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **`:clj` lang registered (`clj-lang.api`).** `meme format file.clj` now formats native Clojure source via the native parser; `meme to-m1clj file.clj` converts losslessly. The lang exposes `:format`, `:to-clj`, `:to-m1clj` and is registered as a built-in alongside `:m1clj`. `m1clj-lang.formatter.canon/format-form` gained a `:mode` opt (default `:m1clj`) so the canonical formatter renders both surfaces from one implementation. CLI predicate split: `m1clj-file?` (lang-specific, used by `to-clj` / `transpile` / `build`) vs `recognized-file?` (any registered lang, used by `format`).
 
+- **Cross-check parity gate (vendor cross-check tightened).** The `meme.vendor-cross-check-test` ns now compares form vectors structurally between `clojure.core/read-string` and the native parser, after expanding syntax-quote on both sides and applying a small set of cosmetic normalisations (`fn*`/`fn`, `pN__M#`/`%N` → `<arg-N>`, auto-gensym suffixes, regex Pattern → `.pattern` string). Files where read-string can't read everything (auto-resolve keyword without ns context, record literals) are skipped from the parity gate; files where the expander throws are tracked separately. Per-project divergence baselines encode current state and act as a ratchet — lowering one means a bug was fixed, the test fails on regressions that raise the count.
+
 ### Changed
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
