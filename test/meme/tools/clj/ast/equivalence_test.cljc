@@ -71,14 +71,18 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest atoms-equiv
-  (doseq [src ["nil" "true" "false"
-               "42" "0x2A" "1.5e2" "-3" "0"
-               "\\A" "\\u0041" "\\space"
-               "\"hello\"" "\"hi\\nbye\""
-               "#\"foo\\d+\""
-               "foo" "my.ns/foo" "+"
-               ":kw" ":ns/kw" ":/"
-               "::foo"]]
+  (doseq [src (concat
+                ["nil" "true" "false"
+                 "42" "1.5e2" "-3" "0"
+                 "\\A" "\\u0041" "\\space"
+                 "\"hello\"" "\"hi\\nbye\""
+                 "#\"foo\\d+\""
+                 "foo" "my.ns/foo" "+"
+                 ":kw" ":ns/kw" ":/"
+                 "::foo"]
+                ;; Hex / BigInt / BigDecimal / Ratio are JVM-only — see PRD.
+                #?(:clj ["0x2A" "42N" "1.5M" "1/2"]
+                   :cljs []))]
     (testing src
       (check-equiv src))))
 

@@ -28,23 +28,27 @@
      :body         ordinary body expression
 
    Slots are emitted in source order; style maps opine on slot names to
-   choose head-line vs body placement and open-paren spacing.")
+   choose head-line vs body placement and open-paren spacing."
+  (:require [meme.tools.clj.ast.nodes :as nodes
+             #?@(:cljs [:refer [CljSymbol CljString CljVector CljList]])])
+  #?(:clj (:import [meme.tools.clj.ast.nodes
+                    CljSymbol CljString CljVector CljList])))
 
 ;; ---------------------------------------------------------------------------
 ;; Polymorphic predicates: accept both plain Clojure values and Clj* AST nodes.
 ;; ---------------------------------------------------------------------------
 
 (defn- ast-symbol? [x]
-  (instance? meme.tools.clj.ast.nodes.CljSymbol x))
+  (instance? CljSymbol x))
 
 (defn- ast-string? [x]
-  (instance? meme.tools.clj.ast.nodes.CljString x))
+  (instance? CljString x))
 
 (defn- ast-vector? [x]
-  (instance? meme.tools.clj.ast.nodes.CljVector x))
+  (instance? CljVector x))
 
 (defn- ast-list? [x]
-  (instance? meme.tools.clj.ast.nodes.CljList x))
+  (instance? CljList x))
 
 (defn- arg-string?
   "True for plain strings or CljString AST nodes."
