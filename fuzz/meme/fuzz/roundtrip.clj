@@ -214,12 +214,12 @@
           (let [clj-text (api/forms->clj forms)
                 ;; LHS: what forms->clj actually emitted (forms after expand).
                 ;; RHS: what Clojure's reader makes of that text. Should match.
-                expanded (binding [*ns* (the-ns 'user)]
-                           (vec (expander/expand-forms
-                                  forms
-                                  {:resolve-symbol clj-run/default-resolve-symbol})))
-                reparsed (binding [*ns* (the-ns 'user)]
-                           (vec (read-clj-all clj-text)))]
+                ;; expand-forms with no :resolve-symbol mirrors what
+                ;; forms->clj does internally — symbols inside syntax-quote
+                ;; stay unresolved. Read-clj-all then sees the same unresolved
+                ;; text and produces matching forms.
+                expanded (vec (expander/expand-forms forms))
+                reparsed (vec (read-clj-all clj-text))]
             (when-not (forms-equal? expanded reparsed)
               (throw (AssertionError.
                        (str "forms->clj differential mismatch!\n"
