@@ -80,9 +80,8 @@
 ;; strip-internal-meta
 ;; ============================================================
 
-(deftest strip-internal-meta-removes-pipeline-keys
-  (let [m {:line 1 :col 2 :m1clj/leading-trivia " " :m1clj/sugar true :m1clj/insertion-order [1] :m1clj/namespace-prefix "foo"
-           :m1clj/meta-chain [] :user-key "val" :tag 'String}]
+(deftest strip-internal-meta-removes-position-keys
+  (let [m {:line 1 :col 2 :column 3 :file "x.m1clj" :user-key "val" :tag 'String}]
     (is (= {:user-key "val" :tag 'String} (forms/strip-internal-meta m)))))
 
 (deftest strip-internal-meta-preserves-empty
@@ -117,14 +116,6 @@
 
 (deftest build-anon-fn-params-empty
   (is (= [] (forms/build-anon-fn-params #{}))))
-
-;; ============================================================
-;; notation-meta-keys
-;; ============================================================
-
-(deftest notation-meta-keys-subset-of-internal
-  (testing "notation keys are a subset of internal keys"
-    (is (every? forms/internal-meta-keys forms/notation-meta-keys))))
 
 ;; ============================================================
 ;; find-percent-params
@@ -184,54 +175,3 @@
   (testing "nested (fn ...) body is not walked — bare % inside fn is untouched"
     (is (= '(+ %1 (fn [x] %))
            (forms/normalize-bare-percent '(+ % (fn [x] %)))))))
-
-;; ============================================================
-;; restore-bare-percent
-;; ============================================================
-
-(deftest restore-bare-percent-simple
-  (is (= '% (forms/restore-bare-percent '%1))))
-
-(deftest restore-bare-percent-in-list
-  (is (= '(+ % 1) (forms/restore-bare-percent '(+ %1 1)))))
-
-(deftest restore-bare-percent-numbered-stays
-  (testing "%2 is not converted to bare %"
-    (is (= '%2 (forms/restore-bare-percent '%2)))))
-
-(deftest restore-bare-percent-rest-stays
-  (is (= '%& (forms/restore-bare-percent '%&))))
-
-(deftest restore-bare-percent-nested-containers
-  (is (= '[% {% :a}] (forms/restore-bare-percent '[%1 {%1 :a}]))))
-
-(deftest restore-bare-percent-skips-nested-fn
-  (testing "nested (fn ...) body is not walked — %1 inside fn is untouched"
-    (is (= '(+ % (fn [x] %1))
-           (forms/restore-bare-percent '(+ %1 (fn [x] %1)))))))
-
-;; ============================================================
-;; walk-anon-fn-body — set source-order invariant
-;; ============================================================
-
-(deftest walk-anon-fn-body-refreshes-set-insertion-order
-  ;; Scar tissue: walk-anon-fn-body's set branch rebuilt sets via
-  ;; (set (map walker form)) and re-attached the input meta, so when
-  ;; the walker transformed any element (e.g. % → %1) the surviving
-  ;; :m1clj/insertion-order vector still referenced the pre-walk element
-  ;; and lost agreement with the set's actual contents. Fix routes the
-  ;; rebuild through walk-meme-set, the same helper the other walkers
-  ;; (walk-rc, expand-syntax-quotes) already use.
-  (testing "elements transformed by the walker stay in sync with insertion-order meta"
-    (let [s (with-meta #{(symbol "%") :a :b}
-                       {:m1clj/insertion-order [:a (symbol "%") :b]})
-          out (forms/walk-anon-fn-body
-                (fn [f] (if (and (symbol? f) (= "%" (name f))) (symbol "%1") f))
-                s)
-          order (:m1clj/insertion-order (meta out))]
-      (is (contains? out '%1))
-      (is (not (contains? out '%)))
-      (is (= (count order) (count out))
-          ":m1clj/insertion-order must have the same count as the set")
-      (is (every? #(contains? out %) order)
-          "every entry in :m1clj/insertion-order must be a member of the set"))))

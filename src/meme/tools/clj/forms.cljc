@@ -4,10 +4,7 @@
    Contains the deferred-evaluation wrappers (CljSyntaxQuote, CljUnquote,
    CljUnquoteSplicing, CljRaw, CljAutoKeyword, CljReaderConditional)
    that the reader produces for forms that don't round-trip through plain
-   Clojure data, plus anonymous-function helpers and the shared metadata
-   key vocabulary (`:m1clj/leading-trivia`, `:m1clj/sugar`,
-   `:m1clj/insertion-order`, `:m1clj/namespace-prefix`, `:m1clj/meta-chain`,
-   `:m1clj/bare-percent`) used by reader, stages, and printer."
+   Clojure data, plus anonymous-function helpers."
   (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
@@ -133,9 +130,10 @@
 ;; ---------------------------------------------------------------------------
 ;; Shared metadata keys — internal keys used by the meme pipeline
 ;;
-;; Both printer and formatter need to distinguish user-visible metadata
-;; (^:private, ^:tag, ^{:doc "..."}) from internal bookkeeping keys.
-;; Centralizing the set here prevents drift between modules.
+;; The form path doesn't reproduce notation; sugar, comments, set order, and
+;; namespaced-map prefixes live in the AST tier. Only position keys appear
+;; on forms here, and `strip-internal-meta` exists to peel them off when
+;; comparing user-visible metadata (e.g. inside syntax-quote expansion).
 ;; ---------------------------------------------------------------------------
 
 (def ^:const max-parse-depth
@@ -144,66 +142,15 @@
   512)
 
 (def internal-meta-keys
-  "Metadata keys used internally by the meme pipeline.
-   Excluded when checking for user-visible metadata.
-   Both :col (meme tokenizer) and :column (Clojure reader) are included
-   so stripping works regardless of which reader produced the metadata."
-  #{:line :col :column :file :m1clj/leading-trivia :m1clj/sugar :m1clj/insertion-order :m1clj/namespace-prefix :m1clj/meta-chain :m1clj/bare-percent})
-
-(def notation-meta-keys
-  "Internal metadata keys that encode the user's notation choices.
-   Must survive metadata stripping so the printer can reconstruct
-   the original syntax (e.g. #:ns{} maps, set insertion order, quote sugar)."
-  #{:m1clj/namespace-prefix :m1clj/insertion-order :m1clj/sugar :m1clj/bare-percent})
+  "Position metadata keys attached by readers that should be hidden from
+   user-visible metadata views. Includes both `:col` (meme tokenizer) and
+   `:column` (Clojure reader)."
+  #{:line :col :column :file})
 
 (defn strip-internal-meta
-  "Remove internal meme metadata keys, returning only user-visible metadata."
+  "Remove internal position metadata keys, returning only user-visible metadata."
   [m]
   (apply dissoc m internal-meta-keys))
-
-;; ---------------------------------------------------------------------------
-;; Set-with-source-order helpers
-;;
-;; Sets carry source order in :m1clj/insertion-order metadata so the printer
-;; can reproduce the user's written order. Walkers that touch a set must
-;; iterate in source order AND refresh the metadata from the walked elements,
-;; otherwise the order vector and the set's contents diverge silently — the
-;; printer's count-match guard then either renders stale entries (e.g. an
-;; unexpanded form that the walker actually replaced) or falls back to hash
-;; order. Three independent walkers had this exact bug; the helpers below
-;; consolidate the pattern so future walkers can't reinvent the foot-gun.
-;; ---------------------------------------------------------------------------
-
-(defn meme-set-source-seq
-  "Return the elements of set `s` in source order: the :m1clj/insertion-order
-   vector when present and consistent with the set, otherwise the set's own
-   iteration order. Use this anywhere you need to walk a set that came from
-   the meme reader and care about the user's written ordering."
-  [s]
-  (let [order (:m1clj/insertion-order (meta s))]
-    (if (and order (= (count order) (count s))) order s)))
-
-(defn with-refreshed-set-order
-  "Attach a fresh :m1clj/insertion-order to set `s` derived from the
-   `walked-elements` collection (the elements just inserted). Use this when
-   the set you're returning has different contents from the one you started
-   with — e.g. expand-syntax-quotes replacing a CljSyntaxQuote with its
-   expanded form. Distinct-dedups the order vector to match set semantics."
-  [s walked-elements]
-  (vary-meta s assoc :m1clj/insertion-order (vec (distinct walked-elements))))
-
-(defn walk-meme-set
-  "Walk a meme set element-by-element via `f` (one-in, one-out), preserving
-   source order on input and refreshing :m1clj/insertion-order on output so
-   it stays consistent with the new contents. The right helper for a walker
-   that transforms each element to exactly one element. For multi-out walkers
-   (e.g. #?@ splice), use meme-set-source-seq + with-refreshed-set-order
-   directly with mapcat."
-  [s f]
-  (let [walked (mapv f (meme-set-source-seq s))]
-    (-> (set walked)
-        (with-meta (meta s))
-        (with-refreshed-set-order walked))))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared % parameter utilities
@@ -273,7 +220,9 @@
     (map? form) (with-meta
                   (into {} (map (fn [[k v]] [(walk-anon-fn-body f k) (walk-anon-fn-body f v)]) form))
                   (meta form))
-    (set? form) (walk-meme-set form #(walk-anon-fn-body f %))
+    (set? form) (with-meta
+                  (into #{} (map #(walk-anon-fn-body f %)) form)
+                  (meta form))
     ;; Tagged literals (JVM only)
     #?@(:clj [(tagged-literal? form)
               (tagged-literal (.-tag form) (walk-anon-fn-body f (.-form form)))])
@@ -310,16 +259,6 @@
   (walk-anon-fn-body
    (fn [f]
      (if (and (symbol? f) (= "%" (name f))) (symbol "%1") f))
-   form))
-
-(defn restore-bare-percent
-  "Replace %1 with % in a form tree. Used when :m1clj/bare-percent metadata
-   indicates the user wrote bare % (normalized to %1 for eval correctness).
-   Skips nested (fn ...) bodies — matches normalize-bare-percent guard."
-  [form]
-  (walk-anon-fn-body
-   (fn [f]
-     (if (and (symbol? f) (= (name f) "%1") (nil? (namespace f))) (symbol "%") f))
    form))
 
 (defn build-anon-fn-params

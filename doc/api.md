@@ -95,7 +95,7 @@ Read a Clojure source string, return a vector of forms. JVM/Babashka only.
 (m1clj-lang.api/format-m1clj-forms forms opts)
 ```
 
-Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. Preserves comments from `:m1clj/leading-trivia` metadata (attached by the parser during `step-parse`). All platforms.
+Format Clojure forms as canonical (width-aware, multi-line) meme text. Uses indented parenthesized form for calls that exceed the line width. The plain-form path is structural — comments, sugar, set source order, and namespaced-map prefixes only survive the source-driven `format-m1clj` path (which routes through the AST tier). All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -112,7 +112,7 @@ Options:
 (m1clj-lang.api/format-m1clj meme-src opts)
 ```
 
-Source-to-source convenience: parses a meme source string and re-emits it via `format-m1clj-forms` at the requested width. Equivalent to `(format-m1clj-forms (m1clj->forms meme-src) opts)`. Used by the `meme format` CLI command. All platforms.
+Source-to-source convenience: parses a meme source string into the AST tier and re-emits it at the requested width. Lossless — comments, reader sugar (`'`, `@`, `#'`, `#()`), set source order, and namespaced-map prefixes all survive the round-trip. Used by the `meme format` CLI command. All platforms.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -268,7 +268,7 @@ Canonical (width-aware) formatter. Composes printer + render at target width. Us
 (m1clj-lang.formatter.canon/format-form form opts)
 ```
 
-Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Preserves comments from `:m1clj/leading-trivia` metadata.
+Format a single Clojure form as canonical meme text. Width-aware — uses indented multi-line layout for forms that exceed the target width. Plain forms render structurally (no notation metadata); use `m1clj-lang.api/format-m1clj` (source-driven, AST-backed) for lossless round-trip including comments and sugar.
 
 Options:
 - `:width` — target line width (default: 80)
@@ -282,7 +282,7 @@ Options:
 (m1clj-lang.formatter.canon/format-forms forms opts)
 ```
 
-Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Preserves comments from `:m1clj/leading-trivia` metadata, including trailing comments after the last form.
+Format a sequence of Clojure forms as canonical meme text, separated by blank lines. Plain forms render structurally; trailing comments are preserved when the input vec carries `:trailing-ws` metadata (e.g. as produced by the AST-aware bridge in `m1clj-lang.api/format-m1clj`).
 
 
 ## m1clj-lang.repl

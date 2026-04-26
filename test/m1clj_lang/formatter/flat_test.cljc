@@ -151,18 +151,12 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-fn-shorthand
-  (testing "sugar: #() when :m1clj/sugar tagged"
-    (is (= "#(inc(%1))"
-           (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:m1clj/sugar true})))))
-  (testing "call form when not tagged"
+  (testing "plain (fn ...) form prints as a call — #() sugar is AST-only"
     (is (= "fn([%1] inc(%1))"
            (fmt-flat/format-form '(fn [%1] (inc %1)))))))
 
 (deftest print-fn-shorthand-zero-params
-  (testing "sugar: #() when :m1clj/sugar tagged"
-    (is (= "#(rand())"
-           (fmt-flat/format-form (with-meta '(fn [] (rand)) {:m1clj/sugar true})))))
-  (testing "call form when not tagged"
+  (testing "plain (fn ...) zero-param form prints as a call"
     (is (= "fn([] rand())"
            (fmt-flat/format-form '(fn [] (rand)))))))
 
@@ -187,21 +181,15 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-deref
-  (testing "sugar: @x when :m1clj/sugar tagged"
-    (is (= "@state" (fmt-flat/format-form (with-meta '(clojure.core/deref state) {:m1clj/sugar true})))))
-  (testing "call form when not tagged"
+  (testing "plain (clojure.core/deref ...) prints as a call — @ sugar is AST-only"
     (is (= "clojure.core/deref(state)" (fmt-flat/format-form '(clojure.core/deref state))))))
 
 (deftest print-var-quote
-  (testing "sugar: #'x when :m1clj/sugar tagged"
-    (is (= "#'foo" (fmt-flat/format-form (with-meta '(var foo) {:m1clj/sugar true})))))
-  (testing "call form when not tagged"
+  (testing "plain (var ...) prints as a call — #' sugar is AST-only"
     (is (= "var(foo)" (fmt-flat/format-form '(var foo))))))
 
 (deftest print-quote
-  (testing "sugar: 'x when :m1clj/sugar tagged"
-    (is (= "'foo" (fmt-flat/format-form (with-meta '(quote foo) {:m1clj/sugar true})))))
-  (testing "call form when not tagged"
+  (testing "plain (quote ...) prints as a call — ' sugar is AST-only"
     (is (= "quote(foo)" (fmt-flat/format-form '(quote foo))))))
 
 ;; ---------------------------------------------------------------------------
@@ -316,15 +304,11 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest print-anon-fn-shorthand
-  (testing "#() sugar when :m1clj/sugar tagged"
-    (is (= "#(inc(%1))" (fmt-flat/format-form (with-meta '(fn [%1] (inc %1)) {:m1clj/sugar true})))))
-  (testing "#() zero params when tagged"
-    (is (= "#(rand())" (fmt-flat/format-form (with-meta '(fn [] (rand)) {:m1clj/sugar true})))))
-  (testing "fn() when not tagged"
+  (testing "fn() form is the structural rendering — #() sugar only via AST"
     (is (= "fn([%1] inc(%1))" (fmt-flat/format-form '(fn [%1] (inc %1))))))
-  (testing "%& rest param falls through to fn form"
+  (testing "%& rest param prints structurally"
     (is (= "fn([& %&] apply(str %&))" (fmt-flat/format-form '(fn [& %&] (apply str %&))))))
-  (testing "numbered + rest falls through to fn form"
+  (testing "numbered + rest prints structurally"
     (is (= "fn([%1 & %&] +(%1 %&))" (fmt-flat/format-form '(fn [%1 & %&] (+ %1 %&)))))))
 
 #?(:clj

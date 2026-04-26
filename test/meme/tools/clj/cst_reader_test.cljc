@@ -140,34 +140,31 @@
   (let [d (ex-data-of "#{:a :a}")]
     (is (some? d))))
 
-(deftest read-set-preserves-insertion-order-meta
-  (let [s (read1 "#{3 1 2}")]
-    (is (= [3 1 2] (:m1clj/insertion-order (meta s))))))
+(deftest read-set-just-builds-a-set
+  (testing "after the AST cutover the form path is plain — order lives on AST"
+    (let [s (read1 "#{3 1 2}")]
+      (is (= #{1 2 3} s))
+      (is (nil? (:m1clj/insertion-order (meta s)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Reader-sugar forms: quote, deref, var-quote
 ;; ---------------------------------------------------------------------------
 
-(deftest read-quote-produces-sugar-marker
+(deftest read-quote-lowers-to-call
   (let [form (read1 "'x")]
-    (is (= '(quote x) form))
-    (is (true? (:m1clj/sugar (meta form))))))
+    (is (= '(quote x) form))))
 
-(deftest read-quote-call-has-no-sugar-marker
-  (testing "quote(x) reads to the same Clojure form but without :m1clj/sugar"
-    (let [form (read1 "quote(x)")]
-      (is (= '(quote x) form))
-      (is (not (:m1clj/sugar (meta form)))))))
+(deftest read-quote-call-and-sugar-converge-in-form-path
+  (testing "quote(x) and 'x both lower to the same plain (quote x) form"
+    (is (= (read1 "quote(x)") (read1 "'x")))))
 
-(deftest read-deref-sugar
+(deftest read-deref-lowers-to-call
   (let [form (read1 "@x")]
-    (is (= '(clojure.core/deref x) form))
-    (is (true? (:m1clj/sugar (meta form))))))
+    (is (= '(clojure.core/deref x) form))))
 
-(deftest read-var-quote-sugar
+(deftest read-var-quote-lowers-to-call
   (let [form (read1 "#'foo")]
-    (is (= '(var foo) form))
-    (is (true? (:m1clj/sugar (meta form))))))
+    (is (= '(var foo) form))))
 
 (deftest read-var-quote-non-symbol-error
   (let [d (ex-data-of "#'42")]
@@ -192,12 +189,11 @@
     (is (= 'x form))
     (is (= 1 (:a (meta form))))))
 
-(deftest read-meta-chain-stacks
-  (testing "multiple ^ annotations accumulate on :m1clj/meta-chain"
-    (let [form (read1 "^:a ^:b x")
-          chain (:m1clj/meta-chain (meta form))]
-      (is (vector? chain))
-      (is (= 2 (count chain))))))
+(deftest read-meta-chain-merges
+  (testing "multiple ^ annotations merge into the form's metadata map"
+    (let [form (read1 "^:a ^:b x")]
+      (is (true? (:a (meta form))))
+      (is (true? (:b (meta form)))))))
 
 (deftest read-meta-on-non-metadatable-error
   (let [d (ex-data-of "^:private 42")]
@@ -257,8 +253,7 @@
   (let [form (read1 "#(+ %1 %2)")]
     (is (= 'fn (first form)))
     (is (vector? (nth form 1)))
-    (is (= 2 (count (nth form 1))))
-    (is (true? (:m1clj/sugar (meta form))))))
+    (is (= 2 (count (nth form 1))))))
 
 (deftest read-anon-fn-rest-arg
   (let [form (read1 "#(apply + %&)")
@@ -281,14 +276,7 @@
   (let [form (read1 "#:user{:name \"ada\" :age 40}")]
     (is (map? form))
     (is (contains? form :user/name))
-    (is (contains? form :user/age))
-    (is (= "user" (:m1clj/namespace-prefix (meta form))))))
-
-(deftest read-auto-namespaced-map-preserves-prefix
-  (testing "#::alias{...} preserves :: prefix in :m1clj/namespace-prefix meta"
-    (let [form (read1 "#::alias{:k 1}")]
-      (is (map? form))
-      (is (= "::alias" (:m1clj/namespace-prefix (meta form)))))))
+    (is (contains? form :user/age))))
 
 (deftest read-namespaced-map-odd-count-error
   (let [d (ex-data-of "#:user{:a}")]

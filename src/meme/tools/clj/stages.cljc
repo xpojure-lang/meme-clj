@@ -224,12 +224,10 @@
 
     (set? form)
     ;; Multi-out walker (#?@ splice may produce 0-N elements per source
-    ;; element), so use the lower-level helpers rather than walk-meme-set.
-    (let [walked (vec (mapcat #(walk-rc % platform)
-                              (forms/meme-set-source-seq form)))]
-      [(-> (set walked)
-           (with-meta (meta form))
-           (forms/with-refreshed-set-order walked))])
+    ;; element). Iterate the set as-is — sets carry no source-order
+    ;; metadata in the form path; lossless ordering lives on AST nodes.
+    (let [walked (vec (mapcat #(walk-rc % platform) form))]
+      [(with-meta (set walked) (meta form))])
 
     #?@(:clj [(tagged-literal? form)
               [(tagged-literal (.-tag ^clojure.lang.TaggedLiteral form)

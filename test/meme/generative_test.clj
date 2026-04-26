@@ -29,8 +29,8 @@
 (def reserved-symbols #{'fn 'quote 'var 'clojure.core/deref
                         (symbol "nil") (symbol "true") (symbol "false")})
 
-;; Keywords the printer strips from metadata (compiler/reader-added keys)
-(def reserved-meta-keywords #{:m1clj/leading-trivia :line :column :file})
+;; Keywords the printer strips from metadata (position-only keys)
+(def reserved-meta-keywords #{:line :col :column :file})
 
 (def gen-simple-symbol
   (gen/let [first-char (gen/elements (seq safe-symbol-chars))
@@ -374,13 +374,13 @@
       false)))
 
 (defn meta-roundtrip-ok?
-  "Check roundtrip preserving metadata (ignoring :m1clj/leading-trivia added by reader)."
+  "Check roundtrip preserving metadata."
   [form]
   (try
     (let [printed (fmt-flat/format-forms [form])
           read-back (first (lang/m1clj->forms printed))]
       (and (= form read-back)
-           (= (meta form) (dissoc (meta read-back) :m1clj/leading-trivia :m1clj/meta-chain))))
+           (= (meta form) (meta read-back))))
     (catch Exception e
       (println "Meta roundtrip failed for form:" (pr-str form))
       (println "Error:" (.getMessage e))
@@ -905,60 +905,11 @@
       (some? (lang/m1clj->forms text))
       (catch Exception _ false))))
 
-;; ===========================================================================
-;; Property: set walker invariants for :m1clj/insertion-order
-;;
-;; Lesson from bugs #2/#3 (and the earlier 5f7d0fb walk-rc fix): any walker
-;; that rebuilds a set must keep :m1clj/insertion-order consistent with the
-;; new contents. Without this invariant, the printer's "use order vector
-;; when count matches" path renders stale entries (e.g. an unexpanded
-;; CljSyntaxQuote that the walker has actually replaced with (quote x)).
-;;
-;; Invariant: for any set produced by expand-forms, if :m1clj/insertion-order
-;; is present its count equals the set size AND every entry is `=` to a
-;; member of the set. Holds whether or not the source was syntax-quoted —
-;; the outer walker is what bug #2 exercised.
-;; ===========================================================================
-
-(def gen-meme-set-element-text
-  "A meme element suitable for use inside a set literal."
-  (gen/one-of
-   [(gen/fmap str gen-simple-symbol)
-    (gen/fmap str gen-keyword)
-    (gen/fmap str (gen/large-integer* {:min -1000 :max 1000}))
-    (gen/fmap (fn [s] (str "`" (name s))) gen-simple-symbol)]))
-
-(def gen-meme-set-text
-  "Source text of a set literal with 0–6 distinct elements; optionally
-   syntax-quoted to also exercise the inner expand-sq path."
-  (gen/let [n        (gen/choose 0 6)
-            elements (gen/vector-distinct gen-meme-set-element-text
-                                          {:num-elements n :max-tries 50})
-            quoted?  gen/boolean]
-    (str (when quoted? "`") "#{" (str/join " " elements) "}")))
-
-(defn- find-sets
-  "Walk a form tree, return every set encountered (depth-first)."
-  [form]
-  (cond
-    (set? form)  (cons form (mapcat find-sets form))
-    (map? form)  (mapcat (fn [[k v]] (concat (find-sets k) (find-sets v))) form)
-    (coll? form) (mapcat find-sets form)
-    :else        nil))
-
-(defspec prop-expanded-set-meta-consistent 300
-  (prop/for-all [src gen-meme-set-text]
-    (try
-      (let [walked (expander/expand-forms (lang/m1clj->forms src))
-            sets   (mapcat find-sets walked)]
-        (every? (fn [s]
-                  (let [order (:m1clj/insertion-order (meta s))]
-                    (or (nil? order)
-                        (and (= (count order) (count s))
-                             (every? #(contains? s %) order)))))
-                sets))
-      ;; Any parse error is uninteresting — only invariant violations fail.
-      (catch clojure.lang.ExceptionInfo _ true))))
+;; The :m1clj/insertion-order vocabulary was retired in the AST cutover;
+;; sets in the form path carry no source-order metadata.  The AST tier
+;; preserves source order on `CljSet` AST nodes via its `:children` vec
+;; — see m1clj_lang.api/m1clj->ast and the round-trip tests in
+;; meme.regression.emit-test.
 
 ;; ===========================================================================
 ;; Property: forms->clj eval-equivalent to direct meme eval

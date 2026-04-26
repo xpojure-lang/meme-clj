@@ -107,22 +107,25 @@
     (is (re-find #"\}$" result))))
 
 ;; ---------------------------------------------------------------------------
-;; Comments from :m1clj/leading-trivia metadata
+;; Comments from AST :trivia (source-driven)
+;;
+;; After the AST cutover, comments live on AST nodes' :trivia field — the
+;; form path is structural and carries no comment data.  Source-driven
+;; format-m1clj reconstructs comments from the AST.
 ;; ---------------------------------------------------------------------------
 
 (deftest comment-before-form
-  (let [form (with-meta '(foo x) {:m1clj/leading-trivia "; a comment\n"})
-        result (fmt-canon/format-form form)]
+  (let [result (lang/format-m1clj "; a comment\nfoo(x)" nil)]
     (is (re-find #"^; a comment\n" result))
-    (is (re-find #"foo\(x\)" result))))
+    (is (re-find #"foo\(" result))
+    (is (re-find #"\bx\b" result))))
 
 (deftest multiple-comment-lines
-  (let [form (with-meta '(foo) {:m1clj/leading-trivia "; line 1\n; line 2\n"})
-        result (fmt-canon/format-form form)]
+  (let [result (lang/format-m1clj "; line 1\n; line 2\nfoo()" nil)]
     (is (re-find #"; line 1\n; line 2\n" result))))
 
-(deftest no-ws-metadata
-  (testing "form without :m1clj/leading-trivia has no comment prefix"
+(deftest no-comment-no-prefix
+  (testing "form with no preceding comment has no comment prefix"
     (is (= "+(1 2)" (fmt-canon/format-form '(+ 1 2))))))
 
 ;; ---------------------------------------------------------------------------
@@ -208,28 +211,26 @@
 (deftest comment-roundtrip-end-of-line
   (testing "end-of-line comment attached to next form survives"
     (let [src "def(x 1) ; note\ndef(y 2)"
-          formatted (fmt-canon/format-forms (lang/m1clj->forms src) {:width 80})]
+          formatted (lang/format-m1clj src {:width 80})]
       (is (re-find #"; note" formatted)))))
 
 (deftest comment-roundtrip-trailing
   (testing "trailing comment after all forms survives"
     (let [src "def(x 1)\n; end of file"
-          formatted (fmt-canon/format-forms (lang/m1clj->forms src) {:width 80})]
+          formatted (lang/format-m1clj src {:width 80})]
       (is (re-find #"; end of file" formatted)))))
 
 (deftest comment-roundtrip-mid-expression-break
   (testing "comment inside a form appears when format forces multi-line"
     (let [src "defn(foo\n  ; body comment\n  [x]\n  +(x 1))"
-          forms (lang/m1clj->forms src)
-          formatted (fmt-canon/format-form (first forms) {:width 15})]
+          formatted (lang/format-m1clj src {:width 15})]
       (is (re-find #"; body comment" formatted))
       (is (re-find #"defn\( foo" formatted)))))
 
 (deftest comment-roundtrip-mid-expression-wide
   (testing "comment inside a form preserved even at wide width"
     (let [src "defn(foo\n  ; body comment\n  [x]\n  +(x 1))"
-          forms (lang/m1clj->forms src)
-          formatted (fmt-canon/format-form (first forms) {:width 80})]
+          formatted (lang/format-m1clj src {:width 80})]
       (is (re-find #"; body comment" formatted))
       (is (re-find #"defn\( foo" formatted)))))
 
@@ -237,7 +238,7 @@
   (testing "formatted output with comments re-parses to same forms"
     (let [src "; top\ndef(x 42)\n; mid\ndefn(f [x] +(x 1))\n; end"
           forms (lang/m1clj->forms src)
-          formatted (fmt-canon/format-forms forms {:width 80})
+          formatted (lang/format-m1clj src {:width 80})
           re-read (lang/m1clj->forms formatted)]
       (is (= (pr-str forms) (pr-str re-read))))))
 
@@ -252,7 +253,7 @@
    (deftest comment-preservation-fixture
      (let [src (slurp "test/examples/comments_fixture.m1clj")
            forms (lang/m1clj->forms src)
-           formatted (fmt-canon/format-forms forms {:width 80})
+           formatted (lang/format-m1clj src {:width 80})
            expected-comments
            ["; Clojure code in comment: (defn foo [x] (+ x 1))"
             ";; Meme code in comment: defn(foo [x] +(x 1))"
@@ -275,8 +276,7 @@
          (let [re-read (lang/m1clj->forms formatted)]
            (is (= (pr-str forms) (pr-str re-read)))))
        (testing "formatting is idempotent with comments"
-         (let [re-read (lang/m1clj->forms formatted)
-               re-formatted (fmt-canon/format-forms re-read {:width 80})]
+         (let [re-formatted (lang/format-m1clj formatted {:width 80})]
            (is (= formatted re-formatted)))))))
 
 ;; ---------------------------------------------------------------------------

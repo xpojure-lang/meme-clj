@@ -1,10 +1,14 @@
 (ns m1clj-lang.printer
-  "m1clj printer: Clojure forms or Clj* AST → Doc trees.
-   Builds Wadler-Lindig Doc trees, handling m1clj syntax (call notation,
-   sugar, metadata, comments) and Clojure output mode. Accepts either
-   forms-with-`:m1clj/*`-metadata (legacy bridge from `ast->forms`
-   lowering) or AST records directly (post-A4 path that bypasses
-   lowering). Delegates to render for Doc algebra and layout.
+  "m1clj printer: Clj* AST or plain Clojure forms → Doc trees.
+   Builds Wadler-Lindig Doc trees handling m1clj syntax (call notation,
+   sugar, metadata, comments) and Clojure output mode.
+
+   The lossless path is AST: the AST tier captures notation (sugar form,
+   namespace prefix, raw spelling, leading trivia) as record fields, so
+   `format-m1clj` reconstructs the user's original syntax. Plain forms
+   (the `forms->m1clj` / `forms->clj` path) are printed structurally —
+   sugar collapses, comments are dropped, and sets render in hash order.
+   Tooling that wants round-trip fidelity must consume AST.
 
    The printer is parameterized by a *style map* that controls layout
    policy (head-line-args, definition-form spacing, pair grouping,
@@ -16,6 +20,7 @@
             [meme.tools.clj.values :as values]
             [meme.tools.clj.forms :as forms]
             [meme.tools.clj.ast.nodes :as nodes]
+            [meme.tools.clj.ast.lower :as ast-lower]
             [m1clj-lang.form-shape :as form-shape])
   #?(:clj (:import [meme.tools.clj.ast.nodes
                     CljSymbol CljKeyword CljNumber CljString
@@ -27,12 +32,17 @@
                     CljTagged CljReaderCond CljMeta CljNamespacedMap])))
 
 ;; ---------------------------------------------------------------------------
-;; Comment extraction from :m1clj/leading-trivia metadata
+;; Comment extraction
+;;
+;; Comments live on AST node `:trivia` in the lossless path; plain forms
+;; carry no comment information. `join-with-trailing-comments` is reused by
+;; canon for the trailing-comment hand-off from `format-m1clj`, which
+;; threads trailing trivia from the AST root onto the children vec as
+;; `:trailing-ws` metadata.
 ;; ---------------------------------------------------------------------------
 
-(defn- extract-comments
-  "Extract comment lines from a :m1clj/leading-trivia metadata string.
-   Returns a vector of trimmed comment strings, or nil."
+(defn- comment-lines-from-ws
+  "Pull trimmed comment lines out of a raw whitespace/comment string."
   [ws]
   (when ws
     (let [lines (str/split ws #"\r?\n|\r")]
@@ -43,24 +53,14 @@
    from :trailing-ws metadata on the forms sequence."
   [format-fn forms]
   (let [trailing-ws (:trailing-ws (meta forms))
-        trailing-comments (when trailing-ws (extract-comments trailing-ws))
+        trailing-comments (when trailing-ws (comment-lines-from-ws trailing-ws))
         body (str/join "\n\n" (map format-fn forms))]
-    ;; RT6-F16: empty body + trailing comments must not produce leading \n\n
     (if trailing-comments
       (let [comment-str (str/join "\n" trailing-comments)]
         (if (str/blank? body)
           comment-str
           (str body "\n\n" comment-str)))
       body)))
-
-(defn- form-comments
-  "Get comment lines from a form's :m1clj/leading-trivia metadata, or nil."
-  [form]
-  (when (and (some? form)
-             #?(:clj  (instance? clojure.lang.IMeta form)
-                :cljs (satisfies? IMeta form))
-             (meta form))
-    (extract-comments (:m1clj/leading-trivia (meta form)))))
 
 (defn- ast-comments
   "Extract trimmed comment lines from an AST node's :trivia, or nil.
@@ -103,22 +103,6 @@
   "Get the resolved style from a ctx, defaulting nil to an empty map."
   [ctx]
   (or (:style ctx) {}))
-
-(defn- anon-fn-shorthand?
-  "Can (fn [params] body) be printed as #(body)?
-   Only when :m1clj/sugar tagged by reader AND params are %-style."
-  [form]
-  (and (:m1clj/sugar (meta form))
-       (seq? form)
-       (= 'fn (first form))
-       (= 3 (count form))
-       (vector? (second form))
-       ;; RT6-F21: verify params are %-style — programmatic misuse of
-       ;; :m1clj/sugar on non-% fns would silently change semantics
-       (every? #(and (symbol? %) (str/starts-with? (name %) "%"))
-               (second form))))
-
-;; restore-bare-percent moved to meme.tools.clj.forms (co-located with normalize-bare-percent)
 
 ;; ---------------------------------------------------------------------------
 ;; Doc constants — avoid per-form allocation of common Doc nodes (P6)
@@ -456,7 +440,18 @@
       (render/doc-cat doc-backtick (to-doc-inner (:form node) ctx))
 
       (instance? CljUnquote node)
-      (render/doc-cat doc-unquote (to-doc-inner (:form node) ctx))
+      ;; Suppress @-deref sugar inside ~ to prevent ~@ ambiguity:
+      ;; CljUnquote{form: CljDeref{form: x}} would otherwise render as
+      ;; `~@x`, which re-parses as unquote-splicing.  Fall back to the
+      ;; explicit `clojure.core/deref(...)` call form.
+      (let [inner (:form node)]
+        (if (instance? CljDeref inner)
+          (render/doc-cat
+            doc-unquote
+            (call-doc (nodes/->CljSymbol "deref" "clojure.core" nil [])
+                      [(:form inner)]
+                      ctx))
+          (render/doc-cat doc-unquote (to-doc-inner inner ctx))))
 
       (instance? CljUnquoteSplicing node)
       (render/doc-cat doc-unquote-splicing (to-doc-inner (:form node) ctx))
@@ -465,9 +460,22 @@
       ;; AST stores raw body (with `%` or `%1` as written) so no
       ;; bare-percent restoration is needed.
       (let [body (:body node)]
-        (if (and (= mode :clj) (instance? CljList body))
-          ;; :clj mode: unwrap body list to avoid double parens.
+        (cond
+          ;; :clj mode + non-list body: #(42) means (fn [] (42)) in Clojure,
+          ;; which calls 42 — different semantics. Fall through to (fn ...).
+          ;; Compute %-params from the lowered body so the synthetic fn has
+          ;; the right arity.
+          (and (= mode :clj) (not (instance? CljList body)))
+          (let [body-form (ast-lower/ast->form body)
+                params (forms/find-percent-params body-form)
+                fn-params (forms/build-anon-fn-params params)
+                fn-form (list 'fn fn-params body-form)]
+            (to-doc-form fn-form ctx))
+          ;; :clj mode + list body: unwrap to #(body...) to avoid double parens.
+          (and (= mode :clj) (instance? CljList body))
           (collection-doc "#(" ")" (effective-ast-children (:children body)) ctx)
+          ;; :m1clj mode: keep #(body) wrapping intact.
+          :else
           (collection-doc "#(" ")" [body] ctx)))
 
       (instance? CljDiscard node)
@@ -549,170 +557,107 @@
 
 (defn- to-doc-form
   "Convert a Clojure form (or Clj* AST node) to a Doc tree. AST input is
-  dispatched first; falls through to the form-with-metadata path otherwise.
-  ctx is {:mode :m1clj|:clj, :style style-map-or-nil}."
+  dispatched first; falls through to a structural form path otherwise.
+  Plain forms have no notation metadata — sugar collapses, sets render in
+  hash order. ctx is {:mode :m1clj|:clj, :style style-map-or-nil}."
   [form ctx]
   (or (to-doc-ast-node form ctx)
-      (let [mode (:mode ctx)]
-        (cond
-          ;; Metadata prefix — checked first, before structural checks.
-      (and (some? form)
-           #?(:clj (instance? clojure.lang.IObj form)
-              :cljs (satisfies? IWithMeta form))
-           (some? (meta form))
-           (seq (forms/strip-internal-meta (meta form))))
-      (let [chain (:m1clj/meta-chain (meta form))
-            stripped (with-meta form (select-keys (meta form) forms/notation-meta-keys))
-            prefix-docs (if chain
-                          (mapv #(emit-meta-prefix-doc % ctx) (reverse chain))
-                          [(emit-meta-prefix-doc (forms/strip-internal-meta (meta form)) ctx)])
-            ;; L12: compose prefix Docs with spaces, then the form Doc
-            prefix-doc (reduce (fn [acc d] (render/doc-cat acc doc-space d))
-                               (first prefix-docs)
-                               (rest prefix-docs))]
-        (render/doc-cat prefix-doc doc-space (to-doc-form stripped ctx)))
+      (cond
+        ;; Metadata prefix — checked first, before structural checks.
+        (and (some? form)
+             #?(:clj (instance? clojure.lang.IObj form)
+                :cljs (satisfies? IWithMeta form))
+             (some? (meta form))
+             (seq (forms/strip-internal-meta (meta form))))
+        (let [user-meta (forms/strip-internal-meta (meta form))
+              stripped (with-meta form nil)
+              prefix-doc (emit-meta-prefix-doc user-meta ctx)]
+          (render/doc-cat prefix-doc doc-space (to-doc-form stripped ctx)))
 
-      ;; Raw value wrapper — emit original source text
-      (forms/raw? form) (render/text (:raw form))
+        ;; Raw value wrapper — emit original source text
+        (forms/raw? form) (render/text (:raw form))
 
-      ;; nil
-      (nil? form) (render/text "nil")
+        ;; nil
+        (nil? form) (render/text "nil")
 
-      ;; boolean
-      (boolean? form) (render/text (str form))
+        ;; boolean
+        (boolean? form) (render/text (str form))
 
-      ;; Deferred auto-resolve keywords
-      (forms/deferred-auto-keyword? form)
-      (render/text (forms/deferred-auto-keyword-raw form))
+        ;; Deferred auto-resolve keywords
+        (forms/deferred-auto-keyword? form)
+        (render/text (forms/deferred-auto-keyword-raw form))
 
-      ;; Empty list
-      (and (seq? form) (empty? form))
-      (render/text "()")
+        ;; Empty list
+        (and (seq? form) (empty? form))
+        (render/text "()")
 
-      ;; Anon-fn shorthand #()
-      ;; In :clj mode, only use #() when the body is a list (call).
-      ;; #(42) in Clojure means (fn [] (42)) — calling 42 — not (fn [] 42).
-      ;; F7: when :m1clj/bare-percent, restore % from %1 in body before printing.
-      (and (anon-fn-shorthand? form)
-           (or (not= mode :clj) (seq? (nth form 2))))
-      (let [raw-body (nth form 2)
-            body (if (:m1clj/bare-percent (meta form))
-                   (forms/restore-bare-percent raw-body)
-                   raw-body)]
-        (if (and (= mode :clj) (seq? body))
-          ;; :clj mode: unwrap body list to avoid double parens.
-          ;; (fn [%1] (+ %1 1)) → #(+ %1 1), not #((+ %1 1))
-          (collection-doc "#(" ")" (seq body) ctx)
-          (collection-doc "#(" ")" [body] ctx)))
+        ;; Sequences — print as a call.  All sugars (`'`, `@`, `#'`, `#()`)
+        ;; are AST-only: the form path lost the user's notation choice when
+        ;; we dropped the metadata vocabulary, so it falls back to the
+        ;; explicit call form (matching Clojure's own `pr-str` behavior).
+        (seq? form)
+        (let [head (first form)
+              [args truncated?] (bounded-vec (rest form))
+              args (if truncated? (conj args (symbol "...")) args)]
+          (call-doc head args ctx))
 
-      ;; Sequences — check sugar then call
-      (seq? form)
-      (let [head (first form)]
-        (cond
-          ;; @deref sugar
-          (and (= head 'clojure.core/deref) (:m1clj/sugar (meta form)))
-          (render/doc-cat doc-at (to-doc-inner (second form) ctx))
+        ;; Syntax-quote / unquote / unquote-splicing AST nodes
+        ;; Must be before map? (defrecords satisfy map?)
+        (forms/syntax-quote? form)
+        (render/doc-cat doc-backtick (to-doc-inner (:form form) ctx))
 
-          ;; 'quote sugar
-          (and (= head 'quote) (:m1clj/sugar (meta form)))
-          (render/doc-cat doc-quote (to-doc-inner (second form) ctx))
+        (forms/unquote? form)
+        (render/doc-cat doc-unquote (to-doc-inner (:form form) ctx))
 
-          ;; #'var sugar
-          (and (= head 'var) (:m1clj/sugar (meta form)))
-          (render/doc-cat doc-var-quote (to-doc-inner (second form) ctx))
+        (forms/unquote-splicing? form)
+        (render/doc-cat doc-unquote-splicing (to-doc-inner (:form form) ctx))
 
-          ;; Regular call — bounded realization for safety against infinite seqs
-          :else
-          (let [[args truncated?] (bounded-vec (rest form))
-                args (if truncated?
-                       (conj args (symbol "..."))
-                       args)]
-            (call-doc head args ctx))))
+        ;; Reader conditional — must be before map?
+        (forms/clj-reader-conditional? form)
+        (let [prefix (if (forms/rc-splicing? form) "#?@(" "#?(")
+              branches (forms/rc-form form)]
+          (when (odd? (count branches))
+            (throw (ex-info "Reader conditional has odd number of forms (missing value for last platform key)"
+                            {:form form})))
+          (pairs-doc prefix ")" (vec (partition 2 branches)) ctx))
 
-      ;; Syntax-quote / unquote / unquote-splicing AST nodes
-      ;; Must be before map? (defrecords satisfy map?)
-      (forms/syntax-quote? form)
-      (render/doc-cat doc-backtick (to-doc-inner (:form form) ctx))
+        ;; Vector
+        (vector? form)
+        (collection-doc "[" "]" (vec form) ctx true)
 
-      (forms/unquote? form)
-      (let [inner (:form form)
-            ;; Suppress @deref sugar inside ~ to prevent ~@J ambiguity
-            inner (if (and (seq? inner)
-                           (= 'clojure.core/deref (first inner))
-                           (:m1clj/sugar (meta inner)))
-                    (with-meta inner (dissoc (meta inner) :m1clj/sugar))
-                    inner)]
-        (render/doc-cat doc-unquote (to-doc-inner inner ctx)))
+        ;; Map — render structurally; namespaced-map prefixes live on AST.
+        (map? form)
+        (pairs-doc "{" "}" (vec form) ctx)
 
-      (forms/unquote-splicing? form)
-      (render/doc-cat doc-unquote-splicing (to-doc-inner (:form form) ctx))
+        ;; Set — hash order; source order lives on AST.
+        (set? form)
+        (collection-doc "#{" "}" (vec form) ctx true)
 
-      ;; Reader conditional — must be before map?
-      (forms/clj-reader-conditional? form)
-      (let [prefix (if (forms/rc-splicing? form) "#?@(" "#?(")
-            branches (forms/rc-form form)]
-        ;; RT6-F19: guard odd-count — partition 2 silently drops the last element
-        (when (odd? (count branches))
-          (throw (ex-info "Reader conditional has odd number of forms (missing value for last platform key)"
-                          {:form form})))
-        (pairs-doc prefix ")" (vec (partition 2 branches)) ctx))
+        ;; Symbol
+        (symbol? form) (render/text (str form))
 
-      ;; Vector
-      (vector? form)
-      (collection-doc "[" "]" (vec form) ctx true)
+        ;; Keyword
+        (keyword? form)
+        (render/text (if (namespace form)
+                       (str ":" (namespace form) "/" (name form))
+                       (str ":" (name form))))
 
-      ;; Map — reconstruct #:ns{} or #::alias{} when :m1clj/namespace-prefix metadata present
-      (map? form)
-      (if-let [ns-str (:m1clj/namespace-prefix (meta form))]
-        (let [;; ns-str is "foo" for #:foo{}, "::foo" for #::foo{}
-              actual-ns (if (str/starts-with? ns-str "::") (subs ns-str 2) ns-str)
-              prefix (if (str/starts-with? ns-str "::")
-                       (str "#" ns-str "{")    ;; "::foo" → "#::foo{"
-                       (str "#:" ns-str "{"))
-              strip-ns (fn [k]
-                         (if (and (keyword? k)
-                                  (= (namespace k) actual-ns))
-                           (keyword (name k))
-                           k))]
-          (pairs-doc prefix "}" (mapv (fn [[k v]] [(strip-ns k) v]) form) ctx))
-        (pairs-doc "{" "}" (vec form) ctx))
+        ;; Tagged literals need Doc-tree recursion, so handle separately.
+        #?@(:clj [(tagged-literal? form)
+                  (let [^clojure.lang.TaggedLiteral tl form]
+                    (render/doc-cat (render/text (str "#" (.-tag tl) " ")) (to-doc-inner (.-form tl) ctx)))])
 
-      ;; Set — use :m1clj/insertion-order for insertion-order output, validated against actual contents
-      (set? form)
-      (let [order (:m1clj/insertion-order (meta form))
-            ;; Use :m1clj/insertion-order when it matches set size (not stale), otherwise fall back
-            elements (if (and order (= (count order) (count form)))
-                       order
-                       (vec form))]
-        (collection-doc "#{" "}" elements ctx true))
-
-      ;; Symbol
-      (symbol? form) (render/text (str form))
-
-      ;; Keyword
-      (keyword? form)
-      (render/text (if (namespace form)
-                     (str ":" (namespace form) "/" (name form))
-                     (str ":" (name form))))
-
-      ;; String, regex, char, number, tagged literal — shared with rewrite emitter.
-      ;; Tagged literals need Doc-tree recursion, so handle separately.
-      #?@(:clj [(tagged-literal? form)
-                (let [^clojure.lang.TaggedLiteral tl form]
-                  (render/doc-cat (render/text (str "#" (.-tag tl) " ")) (to-doc-inner (.-form tl) ctx)))])
-
-      :else
-      (if-let [s (values/emit-value-str form pr-str)]
-        (render/text s)
-        (render/text (pr-str form)))))))
+        :else
+        (if-let [s (values/emit-value-str form pr-str)]
+          (render/text s)
+          (render/text (pr-str form))))))
 
 (defn- to-doc-inner
   "Internal recursive entry point: form/AST + ctx → Doc with comment attachment.
-  Comments come from AST `:trivia` for AST nodes, from
-  `:m1clj/leading-trivia` metadata for forms."
+  Comments come from AST `:trivia`; plain forms carry no comment information."
   [form ctx]
   (let [doc (to-doc-form form ctx)
-        comments (or (ast-comments form) (form-comments form))]
+        comments (ast-comments form)]
     (if comments
       (render/doc-cat (comment-doc comments) doc)
       doc)))

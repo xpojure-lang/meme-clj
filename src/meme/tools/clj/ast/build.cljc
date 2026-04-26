@@ -1,9 +1,9 @@
 (ns meme.tools.clj.ast.build
   "Build the AST tier from a CST.
 
-   Mirrors `meme.tools.clj.cst-reader/read-node` but produces records
-   from `meme.tools.clj.ast.nodes` rather than plain Clojure forms with
-   `:m1clj/*` metadata. Reuses the existing atomic resolvers
+   Walks the parser's CST and produces records from `meme.tools.clj.ast.nodes`
+   that capture position, trivia, sugar-form, raw spelling, and namespace
+   prefix as record fields. Reuses the existing atomic resolvers
    (`resolve/resolve-number`, `resolve-char`, etc.) and disassembles
    their results into AST node fields.
 

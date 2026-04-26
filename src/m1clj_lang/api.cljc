@@ -104,22 +104,30 @@
    (fmt-canon/format-forms forms opts)))
 
 (defn forms->clj
-  "Print Clojure forms as Clojure source string with reader sugar."
+  "Print Clojure forms as Clojure source string. Plain forms carry no
+  notation — sugar collapses (`(quote x)` still prints as `'x` because
+  that is canonical Clojure), but `@x`, `#'x`, `#()`, set source order,
+  and namespaced-map prefixes are all lost. For lossless meme→clj, use
+  `m1clj->clj` which goes through the AST tier."
   [forms]
   (fmt-flat/format-clj (expander/expand-forms forms)))
 
+(declare ^:private ast-root->children-with-trailing)
+
 (defn m1clj->clj
-  "Convert meme source to Clojure source string (lossless by default).
+  "Convert meme source to Clojure source string (lossless via AST).
 
-   Reader conditionals are preserved as `#?(...)` in the output rather than
-   being evaluated at the current platform — faithful for `.cljc` conversion.
-   For the eval-time value, use `run-string` instead.
+   Reader conditionals are preserved as `#?(...)` rather than evaluated for
+   the current platform — faithful for `.cljc` conversion. For the eval-time
+   value, use `run-string` instead.
 
-   opts: same as `m1clj->forms` (`:resolve-keyword`, `:resolve-symbol`)."
+   opts: same as `m1clj->ast` (`:resolve-keyword`, `:grammar`)."
   ([meme-src] (m1clj->clj meme-src nil))
   ([meme-src opts]
    {:pre [(string? meme-src)]}
-   (forms->clj (m1clj->forms meme-src opts))))
+   (let [ast (m1clj->ast meme-src opts)
+         children (ast-root->children-with-trailing ast)]
+     (fmt-flat/format-clj children))))
 
 #?(:clj
    (do
@@ -166,7 +174,7 @@
 ;; Lang commands (for CLI dispatch)
 ;; ---------------------------------------------------------------------------
 
-(defn- ast-root->children-with-trailing
+(defn- ^:no-doc ast-root->children-with-trailing
   "Bridge: extract CljRoot's children as a vec, with its :trailing-trivia
   threaded as `:trailing-ws` metadata on the vec — matching the shape
   the formatter's join-with-trailing-comments expects from

@@ -321,7 +321,7 @@
 (deftest form-snapshot-metadata
   (let [form (first (forms-for "^:private x"))]
     (is (= 'x form))
-    (is (= {:private true} (dissoc (meta form) :m1clj/leading-trivia :m1clj/meta-chain)))))
+    (is (= {:private true} (meta form)))))
 
 (deftest form-snapshot-anon-fn
   (is (= '[(fn [%1] (inc %1))] (forms-for "#(inc(%))")))
