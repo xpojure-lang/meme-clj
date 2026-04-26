@@ -46,6 +46,15 @@
 
 (declare ^:private expand-sq)
 
+(defn- expand-unquoted-form
+  "Process the form inside `~`/`~@` (which lives in NORMAL evaluation
+  context, not surrounded by ` `).  Calls back to `expand-syntax-quotes`
+  so any nested ``` ` ``` AST nodes inside it get their own expansion —
+  without this recursion, a nested syntax-quote stays as a record and
+  later trips `check-no-leftover-unquotes!`."
+  [form opts]
+  (expand-syntax-quotes form opts))
+
 (defn- expand-sq-meta
   "If a form has user-visible metadata, expand it into a map literal suitable
    for (with-meta expansion meta-map). Mirrors Clojure's SyntaxQuoteReader
@@ -106,9 +115,10 @@
       (let [items (mapv (fn [item]
                           (cond
                             (forms/unquote-splicing? item)
-                            (:form item)
+                            (expand-unquoted-form (:form item) opts)
                             (forms/unquote? item)
-                            (list 'clojure.core/list (:form item))
+                            (list 'clojure.core/list
+                                  (expand-unquoted-form (:form item) opts))
                             :else
                             (list 'clojure.core/list (expand-sq item opts loc))))
                         form)
@@ -121,9 +131,10 @@
     (let [items (mapv (fn [item]
                         (cond
                           (forms/unquote-splicing? item)
-                          (:form item)
+                          (expand-unquoted-form (:form item) opts)
                           (forms/unquote? item)
-                          (list 'clojure.core/list (:form item))
+                          (list 'clojure.core/list
+                                (expand-unquoted-form (:form item) opts))
                           :else
                           (list 'clojure.core/list (expand-sq item opts loc))))
                       form)
@@ -172,12 +183,13 @@
                                      ;; Both key and value are ~@ spliced
                                      (and (forms/unquote-splicing? k)
                                           (forms/unquote-splicing? v))
-                                     [(:form k) (:form v)]
+                                     [(expand-unquoted-form (:form k) opts)
+                                      (expand-unquoted-form (:form v) opts)]
                                      (forms/unquote-splicing? v)
                                      [(list 'clojure.core/list (expand-sq k opts loc))
-                                      (:form v)]
+                                      (expand-unquoted-form (:form v) opts)]
                                      (forms/unquote-splicing? k)
-                                     [(:form k)
+                                     [(expand-unquoted-form (:form k) opts)
                                       (list 'clojure.core/list (expand-sq v opts loc))]
                                      :else
                                      [(list 'clojure.core/list (expand-sq k opts loc))
@@ -194,7 +206,7 @@
     (let [items (mapv (fn [item]
                         (cond
                           (forms/unquote-splicing? item)
-                          (:form item)
+                          (expand-unquoted-form (:form item) opts)
                           :else
                           (list 'clojure.core/list (expand-sq item opts loc))))
                       form)

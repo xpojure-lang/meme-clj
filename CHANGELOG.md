@@ -91,6 +91,12 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **Cross-check parity gate (vendor cross-check tightened).** The `meme.vendor-cross-check-test` ns now compares form vectors structurally between `clojure.core/read-string` and the native parser, after expanding syntax-quote on both sides and applying a small set of cosmetic normalisations (`fn*`/`fn`, `pN__M#`/`%N` → `<arg-N>`, auto-gensym suffixes, regex Pattern → `.pattern` string). Files where read-string can't read everything (auto-resolve keyword without ns context, record literals) are skipped from the parity gate; files where the expander throws are tracked separately. Per-project divergence baselines encode current state and act as a ratchet — lowering one means a bug was fixed, the test fails on regressions that raise the count.
 
+### Fixed
+
+- **`expand-sq` collection branches recurse into the unquoted form.** The list / vector / map / set cases inside `meme.tools.clj.expander` returned `(:form item)` raw for `~`/`~@` items — meaning a nested `` ` `` AST node inside the unquoted form stayed as a record and later tripped `check-no-leftover-unquotes!`. The classic case is `\`(let [x 1] ~@(map (fn [y] \`(do ~y)) xs))` — the inner `\`(do ~y)` lives in normal-eval context (we exited the outer `\`` via `~@`) and must be expanded as its own scope. Fix: collection branches now call `expand-syntax-quotes` on the unquoted form. Cleared 14 of 14 expander-error files across the vendor cross-check (hiccup compiler, core.async ioc-macros, malli util/cljs, etc.).
+
+- **`default-resolve-symbol` handles static-method and constructor symbols.** `Foo.` now resolves to `pkg.Foo.` (constructor — class lookup, dot preserved) and `Class/member` resolves to `pkg.Class/member` (static call — namespace component rewritten to fully-qualified class name). Previously both passed through unchanged, which diverged from Clojure's `SyntaxQuoteReader` and surfaced as parity failures across every macro that emitted `\`(StringBuilder.)` or `\`(java.lang.String/valueOf …)`. Cleared roughly 50 vendor-cross-check divergences (most of ring's 36 baseline plus residual cases in hiccup, core.async, specter).
+
 ### Changed
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.

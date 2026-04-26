@@ -32,17 +32,24 @@
 (defn default-resolve-symbol
   "Resolve a symbol for syntax-quote, matching Clojure's SyntaxQuoteReader.
 
-  Constructors `Foo.` resolve to `pkg.Foo.` (the dot is preserved on the
-  fully-qualified result). `.method` interop calls stay unqualified."
+  Cases (in order):
+    `.method`        →  passthrough (interop call)
+    `Foo.`           →  `pkg.Foo.`     (constructor — resolve class, keep dot)
+    `Class/member`   →  `pkg.Class/member` (static call — resolve namespace
+                                            as class)
+    `ns/var`         →  passthrough    (already namespace-qualified)
+    special form    →  passthrough    (compiler primitives)
+    `name`           →  resolve via `*ns*`'s mappings (var → defining ns,
+                       class → fully-qualified, otherwise current ns)"
   [sym]
   (let [n (name sym)
+        ns-str (namespace sym)
         ctor? (and (> (count n) 1)
                    (str/ends-with? n ".")
                    (not= n "."))]
     (cond
-      (namespace sym) sym
-      (contains? sq-special-forms sym) sym
       (str/starts-with? n ".") sym
+
       ctor?
       (let [base (subs n 0 (dec (count n)))
             base-sym (symbol base)
@@ -50,6 +57,20 @@
         (if (class? resolved)
           (symbol (str (.getName ^Class resolved) "."))
           sym))
+
+      ;; Namespace-prefixed: if the namespace component itself resolves to
+      ;; a class in *ns*, this is a Class/member static reference and the
+      ;; namespace is rewritten to the fully-qualified class name.
+      ns-str
+      (if-let [resolved (try (ns-resolve *ns* (symbol ns-str))
+                             (catch Exception _ nil))]
+        (if (class? resolved)
+          (symbol (.getName ^Class resolved) n)
+          sym)
+        sym)
+
+      (contains? sq-special-forms sym) sym
+
       :else
       (if-let [resolved (ns-resolve *ns* sym)]
         (cond

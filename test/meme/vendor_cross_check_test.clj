@@ -37,13 +37,13 @@
 ;; (count exceeds baseline) and reminds you to lower the constant
 ;; when count drops below it (so future regressions are caught).
 (def ^:private parity-baselines
-  {"core.async"  10  ; expander quirks on nested ~/~@ in macros
-   "specter"     5   ; syntax-quote symbol resolution edge cases
-   "malli"       4   ; mostly expander-error on macro-heavy files
-   "ring"        36  ; hundreds of files; mostly resolver edge cases
-   "clj-http"    1   ; one trailing-dot constructor edge case
-   "medley"      1   ; one syntax-quote auto-gensym scope subtlety
-   "hiccup"      2}) ; one expander quirk + one syntax-quote subtlety
+  {"core.async"  5  ; remaining: macro-heavy go-blocks with deep ~/~@
+   "specter"     1  ; one symbol-resolution edge case in macros
+   "malli"       2  ; remaining macro-heavy core.cljc cases
+   "ring"        0  ; full parity
+   "clj-http"    1  ; one resolver edge case
+   "medley"      1  ; one syntax-quote auto-gensym scope subtlety
+   "hiccup"      1}) ; one resolver edge case in compiler.clj
 
 (defn- cross-check-project
   [project-dir]
