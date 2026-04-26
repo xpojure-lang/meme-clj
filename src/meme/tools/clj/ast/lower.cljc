@@ -134,12 +134,14 @@
         (vary-meta assoc :m1clj/insertion-order (vec items)))))
 
 (defn- lower-quote [n opts]
-  (with-meta (list 'quote (ast->form (:form n) opts))
-    {:m1clj/sugar true}))
+  (-> (list 'quote (ast->form (:form n) opts))
+      (with-meta {:m1clj/sugar true})
+      (attach-trivia (:trivia n))))
 
 (defn- lower-deref [n opts]
-  (with-meta (list 'clojure.core/deref (ast->form (:form n) opts))
-    {:m1clj/sugar true}))
+  (-> (list 'clojure.core/deref (ast->form (:form n) opts))
+      (with-meta {:m1clj/sugar true})
+      (attach-trivia (:trivia n))))
 
 (defn- lower-var [n opts]
   (let [inner (ast->form (:form n) opts)]
@@ -147,10 +149,13 @@
       (errors/meme-error
         (str "#' (var-quote) requires a symbol — got " (pr-str inner))
         (:pos n)))
-    (with-meta (list 'var inner) {:m1clj/sugar true})))
+    (-> (list 'var inner)
+        (with-meta {:m1clj/sugar true})
+        (attach-trivia (:trivia n)))))
 
 (defn- lower-syntax-quote [n opts]
-  (forms/->CljSyntaxQuote (ast->form (:form n) opts)))
+  (-> (forms/->CljSyntaxQuote (ast->form (:form n) opts))
+      (attach-trivia (:trivia n))))
 
 (defn- pos+trivia-meta
   "Combine :pos and :m1clj/leading-trivia (from :trivia) into one map.
@@ -179,16 +184,22 @@
         normalized (forms/walk-anon-fn-body forms/normalize-bare-percent body-form)
         params (forms/find-percent-params normalized)
         fn-params (forms/build-anon-fn-params params)]
-    (with-meta (list 'fn fn-params normalized) {:m1clj/sugar true})))
+    (-> (list 'fn fn-params normalized)
+        (with-meta {:m1clj/sugar true})
+        (attach-trivia (:trivia n)))))
 
 (defn- lower-tagged [n opts]
   (let [tag (symbol (:tag n))
         form (ast->form (:form n) opts)]
-    (resolve/resolve-tagged-literal tag form (:pos n))))
+    (attach-trivia
+      (resolve/resolve-tagged-literal tag form (:pos n))
+      (:trivia n))))
 
 (defn- lower-reader-cond [n opts]
   (let [items (vec (mapcat (fn [pair] (lower-children pair opts)) (:pairs n)))]
-    (forms/make-reader-conditional (apply list items) (:splicing? n))))
+    (attach-trivia
+      (forms/make-reader-conditional (apply list items) (:splicing? n))
+      (:trivia n))))
 
 (defn- lower-meta [n opts]
   (let [target (ast->form (:target n) opts)
@@ -212,7 +223,9 @@
           merged-meta (reduce merge entries)
           existing-chain (or (:m1clj/meta-chain (meta target)) [])
           new-chain (into existing-chain entries)]
-      (vary-meta target merge merged-meta {:m1clj/meta-chain new-chain}))))
+      (-> target
+          (vary-meta merge merged-meta {:m1clj/meta-chain new-chain})
+          (attach-trivia (:trivia n))))))
 
 (defn- lower-namespaced-map [n opts]
   (let [{:keys [ns auto-resolve? inner]} n
@@ -234,7 +247,9 @@
             (errors/meme-error (str "Duplicate key: " (pr-str dup)) (:pos n)))
         resolved (into (array-map)
                        (map (fn [k [_ v]] [k v]) qualified-ks pairs))]
-    (with-meta resolved {:m1clj/namespace-prefix ns-str})))
+    (-> resolved
+        (with-meta {:m1clj/namespace-prefix ns-str})
+        (attach-trivia (:trivia n)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Protocol wiring — single extend-protocol form using reader-conditional
