@@ -58,14 +58,16 @@
 (defn- expand-sq-meta
   "If a form has user-visible metadata, expand it into a map literal suitable
    for (with-meta expansion meta-map). Mirrors Clojure's SyntaxQuoteReader
-   which emits (with-meta ...) for metadata-annotated collections."
+   which emits (with-meta ...) for metadata-annotated collections — the
+   `(seq (concat ...))` shape matches RS exactly so cross-check parity holds."
   [form opts loc]
   (when-let [m (not-empty (forms/strip-internal-meta (meta form)))]
     (let [items (into [] (mapcat (fn [[k v]]
                                    [(list 'clojure.core/list (expand-sq k opts loc))
                                     (list 'clojure.core/list (expand-sq v opts loc))]))
                       m)]
-      (list 'clojure.core/apply 'clojure.core/hash-map (cons 'clojure.core/concat items)))))
+      (list 'clojure.core/apply 'clojure.core/hash-map
+            (list 'clojure.core/seq (cons 'clojure.core/concat items))))))
 
 (defn- maybe-with-meta
   "Wrap expansion in (with-meta expansion meta-expansion) when user metadata is present."
@@ -162,10 +164,12 @@
                   (expand-sq (:form form) opts loc))]
       (expand-sq inner opts loc))
 
-    ;; CljReaderConditional — pass through in syntax-quote context.
+    ;; CljReaderConditional — under `:read-cond :preserve` the value at
+    ;; runtime is the record itself, so syntax-quote treats it as a
+    ;; literal: emit `(quote <rc>)` (matches Clojure's SyntaxQuoteReader).
     ;; Must be before map? since CLJS defrecords satisfy map?.
     (forms/clj-reader-conditional? form)
-    form
+    (list 'quote form)
 
     ;; UnquoteSplicing outside a collection — error.
     ;; Must be before map? since defrecords (like CljUnquoteSplicing) satisfy map?.

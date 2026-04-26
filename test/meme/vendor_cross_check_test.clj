@@ -37,13 +37,16 @@
 ;; (count exceeds baseline) and reminds you to lower the constant
 ;; when count drops below it (so future regressions are caught).
 (def ^:private parity-baselines
-  {"core.async"  5  ; remaining: macro-heavy go-blocks with deep ~/~@
-   "specter"     1  ; one symbol-resolution edge case in macros
-   "malli"       2  ; remaining macro-heavy core.cljc cases
-   "ring"        0  ; full parity
-   "clj-http"    1  ; one resolver edge case
-   "medley"      1  ; one syntax-quote auto-gensym scope subtlety
-   "hiccup"      1}) ; one resolver edge case in compiler.clj
+  ;; All seven vendor projects parse identically to clojure.core/read-string
+  ;; modulo the cosmetic normalisations in `normalize-form`. A zero baseline
+  ;; means: any new divergence is a regression.
+  {"core.async"  0
+   "specter"     0
+   "malli"       0
+   "ring"        0
+   "clj-http"    0
+   "medley"      0
+   "hiccup"      0})
 
 (defn- cross-check-project
   [project-dir]
