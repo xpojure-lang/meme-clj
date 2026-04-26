@@ -107,6 +107,13 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **Tagged literals on ClojureScript no longer error.** Previously the CLJS branch unconditionally threw `"Tagged literals (#X) are not supported in ClojureScript meme reader"`. Now `#inst` resolves to `js/Date` and `#uuid` to `cljs.core/UUID` at read time (matching `cljs.tools.reader`'s defaults), and unknown tags fall back to a `TaggedLiteral` — same shape as JVM. cljs.core does not carry a `*data-readers*` analogue, so user-registered CLJS tags are not consulted; that's a deliberate choice (any CLJS consumer that wants custom data-readers can wrap this resolver). The PRD known-limitations entry for tagged literals is dropped.
 
+- **Fuzzer expanded — three new targets covering the native Clojure surface.** The post-Stream-B work (`meme.tools.clj.parser.*`, `clj-lang.api`, AST-tier roundtrip) had zero coverage-guided exploration; only fixed-corpus vendor cross-check stood between regressions and a green build. New targets:
+  - **`NativeCljTarget`** — `(clj->forms s) → forms->clj → (clj->forms text)` equivalence under `expand-forms`. The native-Clojure parallel of `RoundtripTarget`.
+  - **`CrossCheckTarget`** — for any input `clojure.core/read-string` accepts cleanly, the native parser must produce equal forms post-expansion under `meme.test-util/normalize-form`. Promotes the vendor-cross-check ratchet (fixed corpus) into a real property. Reuses `tu/normalize-form` and `tu/cross-check-resolve-keyword` (made public for this consumer; the fuzz alias now also has `test/` on its classpath).
+  - **`CljModeIdempotentTarget`** — `format-clj(format-clj(s)) == format-clj(s)`. The `:clj`-mode parallel of `IdempotentTarget`.
+  - **`forms-to-clj` reader fix.** The differential `read-clj-all` helper now binds `*default-data-reader-fn* tagged-literal` so unknown tags become `TaggedLiteral` instead of throwing — matches what meme produces and what `clojure.core/read-string` does under the same binding. The previous shape produced a false positive on `#my/tag …` inputs.
+  - **`bb fuzz-quick` now runs all 7 targets** (~7 min total at 50K runs each); `bb fuzz <target>` dispatches to `native-clj` / `cross-check` / `clj-idempotent` alongside the original four.
+
 ### Cross-check status
 
 After the above fixes the vendor cross-check sits at **full parity**: every `.clj`/`.cljc` file across all 7 vendor projects (core.async, specter, malli, ring, clj-http, medley, hiccup) parses identically to `clojure.core/read-string` modulo the cosmetic normalisations in `meme.test-util/normalize-form`. The per-project parity-baselines are all 0 — any new divergence is a regression.
