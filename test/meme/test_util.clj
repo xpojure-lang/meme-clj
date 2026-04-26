@@ -123,12 +123,22 @@
 
 (def ^:private auto-gensym-pattern
   ;; Auto-gensym inside `: prefix__<gensym-id>__auto__.
-  #"(.+)__\d+__auto__")
+  ;; Native passes through `(gensym)` which prepends G__, so the prefix
+  ;; may carry a trailing __G that read-string never emits — strip it
+  ;; into the same placeholder.
+  #"(.+?)(?:__G)?__\d+__auto__")
 
 (defn- normalize-symbol [sym]
   (let [n (name sym)]
     (cond
-      (= sym 'fn*) 'fn
+      ;; #() lowers via fn* in read-string and via fn in the native AST tier.
+      ;; Inside syntax-quote, native's `fn` further resolves to clojure.core/fn
+      ;; (sq-special-forms only excludes `fn*`); read-string never emits the
+      ;; resolved form because its #() expansion is already fn* (a special).
+      ;; Collapse all three to a single canonical token.
+      (or (= sym 'fn*)
+          (= sym 'clojure.core/fn))
+      'fn
 
       (re-matches gensym-arg-rs-pattern n)
       (let [[_ idx] (re-matches gensym-arg-rs-pattern n)]
