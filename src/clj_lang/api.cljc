@@ -52,7 +52,7 @@
    opts: {:width 80 :style \"flat\"|\"clj\"|\"m1clj\"}
      :width   target line width (default 80)
      :style   \"flat\"  — single-line per form, native Clojure syntax
-              \"m1clj\" — single-line per form, meme syntax
+              \"m1clj\" — single-line per form, m1clj syntax
               other    — canonical width-aware Clojure formatting (default)"
   [source opts]
   (let [ast (clj-parser/clj->ast source opts)

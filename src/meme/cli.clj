@@ -46,7 +46,7 @@
 (defn- m1clj-file?
   "True if `path`'s extension is one of m1clj's. Used by lang-specific
    commands (`to-clj`, `transpile`, `build`) that operate only on
-   meme source — not by `format`, which works on any registered lang."
+   m1clj source — not by `format`, which works on any registered lang."
   [path]
   (let [m1clj-lang (registry/resolve-lang :m1clj)]
     (boolean (some #(str/ends-with? path %) (:extensions m1clj-lang)))))
@@ -159,7 +159,7 @@
          :verb      verb}))))
 
 (defn run
-  "Run a meme source file. Requires :file in opts.
+  "Run an m1clj source file (or any registered guest). Requires :file in opts.
    Binds *command-line-args* to the user's args (excluding the command verb and filename).
    The lang's :run installs the loader by default."
   [{:keys [file lang rest-args] :as opts}]
@@ -182,14 +182,14 @@
            (cli-exit! 1)))))
 
 (defn repl
-  "Start an interactive meme REPL."
+  "Start an interactive REPL (m1clj by default; selectable via --lang)."
   [{:keys [lang] :as opts}]
   (let [[lang-name l] (get-lang lang nil)]
     (registry/check-support l lang-name :repl)
     ((:repl l) (lang-opts opts))))
 
 (defn to-clj
-  "Convert meme files to Clojure and print to stdout or write to .clj files."
+  "Convert m1clj files to Clojure and print to stdout or write to .clj files."
   [opts]
   (file-command opts
     {:cmd :to-clj, :pred m1clj-file?, :output-fn #(swap-ext % "m1clj" "clj")
@@ -203,7 +203,7 @@
      :verb "converted", :usage "Usage: meme to-m1clj <file|dir> [--lang name] [--stdout]"}))
 
 (defn format-files
-  "Format meme source files in canonical style. Pass --width, --style,
+  "Format source files in canonical style (any registered guest). Pass --width, --style,
    --stdout, --check as needed."
   [opts]
   (file-command opts
@@ -355,7 +355,7 @@
   [_]
   (let [l (registry/resolve-lang registry/default-lang)
         has? #(registry/supports? l %)]
-    (println "meme — M-expressions for Clojure")
+    (println "meme-clj — syntax-experimentation toolkit (m1clj is the first language)")
     (println)
     (println "Commands:")
     (when (has? :run)     (println "  meme run <file> [--lang name]"))

@@ -87,14 +87,14 @@
    (ast-lower/ast->forms (m1clj->ast s opts) opts)))
 
 (defn forms->m1clj
-  "Print Clojure forms as meme source string (single-line per form).
+  "Print Clojure forms as m1clj source string (single-line per form).
    Takes a SEQUENCE of forms (vector or seq), not a single form."
   [forms]
   {:pre [(sequential? forms)]}
   (fmt-flat/format-forms forms))
 
 (defn format-m1clj-forms
-  "Format Clojure forms as canonical meme source string (multi-line, indented).
+  "Format Clojure forms as canonical m1clj source string (multi-line, indented).
 
    opts keys:
      :width  — target line width (int, default 80)"
@@ -107,7 +107,7 @@
   "Print Clojure forms as Clojure source string. Plain forms carry no
   notation — sugar collapses (`(quote x)` still prints as `'x` because
   that is canonical Clojure), but `@x`, `#'x`, `#()`, set source order,
-  and namespaced-map prefixes are all lost. For lossless meme→clj, use
+  and namespaced-map prefixes are all lost. For lossless m1clj→clj, use
   `m1clj->clj` which goes through the AST tier."
   [forms]
   (fmt-flat/format-clj (expander/expand-forms forms)))
@@ -115,7 +115,7 @@
 (declare ^:private ast-root->children-with-trailing)
 
 (defn m1clj->clj
-  "Convert meme source to Clojure source string (lossless via AST).
+  "Convert m1clj source to Clojure source string (lossless via AST).
 
    Reader conditionals are preserved as `#?(...)` rather than evaluated for
    the current platform — faithful for `.cljc` conversion. For the eval-time
@@ -216,14 +216,14 @@
         (fmt-canon/format-forms children opts)))))
 
 (defn ^:no-doc to-clj
-  "CLI-dispatch adapter: meme source → Clojure text. Library callers should
+  "CLI-dispatch adapter: m1clj source → Clojure text. Library callers should
    use `m1clj->clj` directly — it has the same lossless behavior."
   ([source] (m1clj->clj source))
   ([source opts] (m1clj->clj source opts)))
 
 #?(:clj
    (defn ^:no-doc to-m1clj
-     "CLI-dispatch adapter: Clojure source → meme. JVM only.
+     "CLI-dispatch adapter: Clojure source → m1clj. JVM only.
       Library callers should use `clj->m1clj` directly."
      ([source] (clj->m1clj source))
      ([source _opts] (to-m1clj source))))

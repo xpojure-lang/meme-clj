@@ -1,6 +1,9 @@
-# meme Language Reference
+# m1clj Language Reference
 
 Complete syntax reference for writing `.m1clj` code.
+
+> **Naming.** "m1clj" is the language; "meme-clj" is the toolkit it
+> runs on. The CLI binary is `meme`. See `doc/glossary.md`.
 
 
 ## The Rule
@@ -151,7 +154,7 @@ defn-(helper [x] +(x 1))
 ### defmacro
 
 Macros work in `.m1clj` files. Syntax-quote (`` ` ``) is parsed natively —
-meme call syntax applies inside backtick. `~` (unquote) and `~@` (unquote-splicing)
+m1clj call syntax applies inside backtick. `~` (unquote) and `~@` (unquote-splicing)
 work as prefix operators.
 
 ```
@@ -365,48 +368,49 @@ All of these work exactly as in Clojure:
 
 - Data literals: `[1 2 3]`, `{:a 1}`, `#{1 2 3}`, `:keyword`, `"string"`
 - Reader macros: `@deref`, `^metadata`, `#'var`, `#_discard`, `'quote`
-- Anonymous functions: `#(inc(%))` → `(fn [%1] (inc %1))`, `#(rand())` → `(fn [] (rand))`. Body must be a single expression. Uses meme syntax inside.
+- Anonymous functions: `#(inc(%))` → `(fn [%1] (inc %1))`, `#(rand())` → `(fn [] (rand))`. Body must be a single expression. Uses m1clj syntax inside.
 - Regex: `#"pattern"`
 - Character literals: `\a`, `\newline`, `\space`
 - Tagged literals: `#inst`, `#uuid`
 - Auto-resolve keywords: `::foo` — in the file runner, deferred to eval time so `::foo` resolves in the file's declared namespace (not the caller's). In the REPL, resolved at read time (like Clojure). When using `m1clj->forms` directly without `:resolve-keyword`, deferred to eval time via `(read-string "::foo")`. On CLJS, `:resolve-keyword` is required (errors without it)
-- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`m1clj->forms`, `m1clj->clj`, `format-m1clj-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. Meme call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
+- Reader conditionals: `#?(:clj x :cljs y)` and splicing `#?@(:clj [x y] :cljs [z])` — parsed natively. Tooling paths (`m1clj->forms`, `m1clj->clj`, `format-m1clj-forms`) preserve them as opaque `CljReaderConditional` records so `.cljc` sources roundtrip losslessly. Eval paths (`run-string`, `run-file`, REPL) materialize the matching platform branch automatically via the `step-evaluate-reader-conditionals` stage before eval. m1clj call syntax applies inside: `#?(:clj println("jvm") :cljs js/console.log("browser"))`
 - Namespaced maps: `#:ns{}`
 - Destructuring in all binding positions
 - Commas are whitespace
 - Line comments: `; comment`
-- Quote: `'x` quotes the next meme form. `'f(x y)` produces `(quote (f x y))`. `'()` is `(quote ())`. `'nil(1 2)` produces `(quote (nil 1 2))`. Note: `'(1 2)` is an error — bare parentheses need a head
+- Quote: `'x` quotes the next m1clj form. `'f(x y)` produces `(quote (f x y))`. `'()` is `(quote ())`. `'nil(1 2)` produces `(quote (nil 1 2))`. Note: `'(1 2)` is an error — bare parentheses need a head
 
 
 ## What's Different from Clojure
 
-| Clojure | meme | Notes |
+| Clojure | m1clj | Notes |
 |---------|-----|-------|
 | `(f x y)` | `f(x y)` | Parens follow the callable |
-| `'(f x)` | `'f(x)` | Quote applies to the next meme form |
+| `'(f x)` | `'f(x)` | Quote applies to the next m1clj form |
 
 
 ## Design Boundaries
 
-- **Quote applies to the next meme form.** `'f(x)` produces `(quote (f x))`.
+- **Quote applies to the next m1clj form.** `'f(x)` produces `(quote (f x))`.
   `'foo`, `'42`, `':kw`, `'()` all work. Any value can be a head inside quote:
   `'nil(1 2)` produces `(quote (nil 1 2))`. Bare parentheses without a head
   remain an error: `'(1 2)` fails — write `'list(1 2)` or `list(1 2)` instead.
 
-- **Backtick uses meme syntax inside.** Syntax-quote (`` ` ``) is parsed natively.
+- **Backtick uses m1clj syntax inside.** Syntax-quote (`` ` ``) is parsed natively.
   `~` (unquote) and `~@` (unquote-splicing) work as prefix operators.
   Example: `` `if(~test do(~@body)) ``
 
-- **`#()` uses meme syntax inside.** `#(inc(%))` is `(fn [%1] (inc %1))`.
+- **`#()` uses m1clj syntax inside.** `#(inc(%))` is `(fn [%1] (inc %1))`.
   The call rule applies normally within `#()`. Use `%`, `%1`, `%2` for
   params.
 
 
 ## Guest Languages
 
-meme serves as a platform for guest languages. A guest language can define:
+meme-clj serves as a platform for guest languages — m1clj is the first
+guest, `clj-lang` is the second. A guest language can define:
 1. **A prelude** — forms eval'd before user code (standard library)
-2. **A custom parser** — optionally replacing the meme parser entirely
+2. **A custom parser** — optionally replacing the m1clj parser entirely
 
 Guest languages are defined as EDN files and registered via `meme.registry`.
 They are dispatched by file extension.
@@ -432,7 +436,7 @@ The CLI auto-detects the lang from file extension: `meme run app.ml` resolves to
 After `install!` (called automatically by `run-string`, `run-file`, the REPL, and the CLI), `require` and `load-file` handle `.m1clj` files transparently:
 
 ```
-;; In the meme REPL or a running .m1clj file:
+;; In the m1clj REPL or a running .m1clj file:
 require('[my-lib.core :as lib])   ; finds my_lib/core.m1clj on classpath (JVM only)
 load-file("examples/demo.m1clj")   ; loads by filesystem path (JVM + Babashka)
 ```
@@ -466,21 +470,21 @@ bb meme build src/ --out out/classes       # custom output
 
 For more control (different staging layout, no intermediate `.clj`, integration with an existing `build.clj`), skip the CLI and compose directly:
 
-**Via transpile + tools.build** (zero meme runtime dep in your build.clj):
+**Via transpile + tools.build** (zero meme-clj runtime dep in your build.clj):
 
 ```clojure
 ;; build.clj
 (require '[clojure.tools.build.api :as b])
 
 (defn compile-clj [_]
-  ;; Shell out to meme transpile, then AOT the result.
+  ;; Shell out to `meme transpile`, then AOT the result.
   (b/process {:command-args ["bb" "meme" "transpile" "src"]})
   (b/compile-clj {:basis     (b/create-basis {:project "deps.edn"})
                   :src-dirs  ["target/m1clj"]
                   :class-dir "target/classes"}))
 ```
 
-**Directly via the meme loader** (no intermediate `.clj` files on disk):
+**Directly via the toolkit loader** (no intermediate `.clj` files on disk):
 
 ```clojure
 ;; build.clj
@@ -495,4 +499,4 @@ For more control (different staging layout, no intermediate `.clj`, integration 
                   :ns-compile '[my.ns]}))  ; list .m1clj namespaces explicitly
 ```
 
-Both produce identical bytecode. The first leaves a readable `.clj` staging dir (useful for debugging); the second skips it and requires meme on the build classpath. Pick whichever fits your pipeline.
+Both produce identical bytecode. The first leaves a readable `.clj` staging dir (useful for debugging); the second skips it and requires meme-clj on the build classpath. Pick whichever fits your pipeline.
