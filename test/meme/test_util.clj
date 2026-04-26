@@ -5,6 +5,8 @@
   (:require [m1clj-lang.api :as lang]
             [m1clj-lang.formatter.flat :as fmt-flat]
             [meme.tools.clj.parser.api :as clj-parser]
+            [meme.tools.clj.expander :as expander]
+            [meme.tools.clj.run :as clj-run]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -85,51 +87,165 @@
        (:include-path opts) (assoc :path (str path))))))
 
 ;; ---------------------------------------------------------------------------
-;; Native-parser cross-check — the native parser must not crash on
-;; any source that clojure.core/read-string accepts. This is a parser
-;; robustness net: real-world Clojure exercises corners (deep nesting,
-;; multi-arity defs, exotic numerics, reader-conditional splicing)
-;; that smoke tests miss.
+;; Native-parser cross-check — the native parser is compared against
+;; clojure.core/read-string on every vendor file. Two-tier gate:
 ;;
-;; We deliberately do NOT do byte-level form equality. The two readers
-;; produce the same SHAPE but differ in cosmetic ways (`fn*` vs `fn`,
-;; gensym names vs `%1`, syntax-quote-in-record vs expanded form). A
-;; deeper parity gate is future work.
+;;   1. CRASH: if the native parser throws on input read-string accepts,
+;;      that is a regression — fail loud.
+;;
+;;   2. PARITY: post-expansion (syntax-quote + auto-resolve resolved on
+;;      both sides), the form vectors should be `=` modulo a small set of
+;;      cosmetic normalisations. Real-world syntactic divergences (a
+;;      mis-tokenised number, a dropped form, a wrong dispatch case)
+;;      surface here.
+;;
+;; Cosmetic normalisations applied (see `normalize-form`):
+;;   • `fn*`               → `fn`            (#() expands via fn* in read-
+;;                                            string, fn in native)
+;;   • `pN__M#`            → `<arg-N>`       (#() arg names — read-string)
+;;   • `%N`                → `<arg-N>`       (#() arg names — native)
+;;   • `prefix__N__auto__` → `prefix__<g>__auto__`  (auto-gensyms in `~)
+;;   • #regex Pattern      → `"#regex \"...\""` string  (Pattern equality
+;;                                                      checks identity)
+;;
+;; Files where read-string itself errors (auto-resolve keywords without
+;; ns context, record literals needing *read-eval*) are reported but
+;; not counted against the gate.
 ;; ---------------------------------------------------------------------------
 
+(def ^:private gensym-arg-rs-pattern
+  ;; read-string emits #() args as p<N>__<gensym-id>(#).
+  #"p(\d+)__\d+#?")
+
+(def ^:private gensym-arg-native-pattern
+  ;; Native lowering emits #() args as %<N>.
+  #"%(\d+)")
+
+(def ^:private auto-gensym-pattern
+  ;; Auto-gensym inside `: prefix__<gensym-id>__auto__.
+  #"(.+)__\d+__auto__")
+
+(defn- normalize-symbol [sym]
+  (let [n (name sym)]
+    (cond
+      (= sym 'fn*) 'fn
+
+      (re-matches gensym-arg-rs-pattern n)
+      (let [[_ idx] (re-matches gensym-arg-rs-pattern n)]
+        (symbol (str "<arg-" idx ">")))
+
+      (re-matches gensym-arg-native-pattern n)
+      (let [[_ idx] (re-matches gensym-arg-native-pattern n)]
+        (symbol (str "<arg-" idx ">")))
+
+      (re-matches auto-gensym-pattern n)
+      (let [[_ base] (re-matches auto-gensym-pattern n)]
+        (symbol (str base "__<g>__auto__")))
+
+      :else sym)))
+
+(defn- normalize-form
+  "Recursively normalise away surface differences between read-string
+  and the native parser. See namespace comment above for the rules."
+  [form]
+  (cond
+    (symbol? form) (normalize-symbol form)
+
+    ;; java.util.regex.Pattern equality is identity; collapse to a
+    ;; pattern-string token instead.
+    (instance? java.util.regex.Pattern form)
+    (str "#regex \"" (.pattern ^java.util.regex.Pattern form) "\"")
+
+    (instance? clojure.lang.ReaderConditional form)
+    (clojure.lang.ReaderConditional/create
+      (normalize-form (.form ^clojure.lang.ReaderConditional form))
+      (.splicing ^clojure.lang.ReaderConditional form))
+
+    ;; Records other than ReaderConditional: leave intact (the type tag
+    ;; is the semantic identity).
+    (record? form) form
+
+    (map? form)
+    (into (empty form)
+          (map (fn [[k v]] [(normalize-form k) (normalize-form v)]))
+          form)
+
+    (set? form) (into (empty form) (map normalize-form) form)
+    (vector? form) (mapv normalize-form form)
+    (seq? form) (apply list (map normalize-form form))
+    :else form))
+
+(defn- cross-check-resolve-keyword
+  "Mimic clojure.core/read-string's auto-resolve-keyword behaviour with
+  *ns* defaulting to user. Plain ::foo → :user/foo. ::alias/foo keeps
+  the alias as-is (we don't know read-string's ns aliases here)."
+  [raw]
+  (let [body (subs raw 2)
+        slash (str/index-of body "/")]
+    (if slash
+      (keyword (subs body 0 slash) (subs body (inc slash)))
+      (keyword "user" body))))
+
 (defn cross-check-file
-  "Run the native parser on `path` and report whether it succeeds.
-   Returns a status map with one of:
-     :ok                — native parser ran cleanly (read-string status irrelevant here)
-     :native-crash      — native parser threw on input read-string accepted
-     :read-string-also-failed — both parsers errored (skipped)
-     :native-only       — native parsed; read-string failed (informational)"
+  "Compare a file's parse output via clojure.core/read-string and the
+   native parser. Returns a status map with one of:
+
+     :ok                       — both parsers produced equal forms (post-
+                                  normalisation)
+     :native-crash             — native threw on input read-string accepted
+     :diverged                 — both parsed cleanly but normalised forms
+                                 differ (semantic divergence — bug or
+                                 missing feature)
+     :expander-error           — expander threw while expanding native
+                                 output (known expander limitation)
+     :read-string-incomplete   — read-string couldn't read every form
+                                 (auto-resolve keyword without ns context,
+                                 record literal needing *read-eval*).
+                                 Not counted against the parity gate.
+
+   Status maps for divergent / crashed cases include `:first-divergence`
+   or `:native-error` for diagnostics."
   [path]
   (let [read-results (read-clj-forms path)
-        read-errors (filterv :read-error read-results)
-        rs-failed? (boolean (seq read-errors))
-        native-result (try
-                        (clj-parser/clj->forms (slurp path))
-                        :ok
-                        (catch Exception e
-                          {:error (.getMessage e)}))
-        native-failed? (and (map? native-result) (:error native-result))]
+        had-rs-error? (boolean (some :read-error read-results))]
     (cond
-      (and rs-failed? native-failed?)
-      {:status :read-string-also-failed
-       :read-error (first (map :read-error read-errors))
-       :native-error (:error native-result)}
-
-      (and (not rs-failed?) native-failed?)
-      {:status :native-crash
-       :native-error (:error native-result)}
-
-      (and rs-failed? (not native-failed?))
-      {:status :native-only
-       :read-error (first (map :read-error read-errors))}
+      had-rs-error?
+      {:status :read-string-incomplete
+       :read-error (first (keep :read-error read-results))}
 
       :else
-      {:status :ok})))
+      (let [native-raw (try
+                        (clj-parser/clj->forms
+                          (slurp path)
+                          {:resolve-keyword cross-check-resolve-keyword})
+                        (catch Exception e {:error (.getMessage e)}))
+            crashed? (and (map? native-raw) (:error native-raw))]
+        (cond
+          crashed?
+          {:status :native-crash :native-error (:error native-raw)}
+
+          :else
+          (let [expanded (try
+                           (binding [*ns* (the-ns 'user)]
+                             (expander/expand-forms
+                               native-raw
+                               {:resolve-symbol clj-run/default-resolve-symbol}))
+                           (catch Exception e {:error (.getMessage e)}))]
+            (if (and (map? expanded) (:error expanded))
+              {:status :expander-error :expander-error (:error expanded)}
+              (let [rs (mapv normalize-form (mapv :form read-results))
+                    native (mapv normalize-form expanded)]
+                (if (and (= (count rs) (count native))
+                         (every? identity (map = rs native)))
+                  {:status :ok}
+                  {:status :diverged
+                   :rs-count (count rs)
+                   :native-count (count native)
+                   :first-divergence
+                   (first (keep-indexed
+                            (fn [i [a b]]
+                              (when (not= a b) {:index i :rs a :native b}))
+                            (map vector rs native)))})))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; File discovery

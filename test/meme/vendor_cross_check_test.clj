@@ -1,28 +1,49 @@
 (ns meme.vendor-cross-check-test
-  "Native parser robustness net.
+  "Native parser parity gate.
 
-   For each .clj/.cljc file in the vendor submodules we parse the
-   source via `meme.tools.clj.parser.api/clj->forms` and require that
-   the parser does not crash on any file that `clojure.core/read-string`
-   accepts cleanly. This catches real parser bugs: missing dispatch
-   cases, unhandled grammar shapes, lowering crashes on real-world
-   Clojure that smoke tests miss.
+   Two-tier check, run per .clj/.cljc file under each vendor submodule:
 
-   Form-level equality between the two readers is deliberately NOT
-   asserted. They produce the same SHAPE but differ in cosmetic ways:
-   `fn*` vs `fn` for `#()`, gensym-named params vs source-preserved
-   `%1`, syntax-quote-as-record vs expanded `(seq (concat ...))`. A
-   tighter parity gate (with a normalising comparator) is future work.
+     1. CRASH gate — the native parser must not throw on any input that
+        clojure.core/read-string accepts cleanly. Crashes are real bugs.
 
-   Once stable, the gate is: native parser must succeed on every file
-   read-string parses. Files where read-string itself errors (auto-
-   resolve keywords needing ns context, record literals requiring
-   `*read-eval*`) are reported but don't fail."
+     2. PARITY gate — post-expansion (syntax-quote + auto-resolve resolved
+        on both sides), the form vectors must be `=` modulo a small set
+        of cosmetic normalisations: `fn*` → `fn`, `pN__M#` and `%N` both
+        → `<arg-N>`, auto-gensym suffixes collapsed, regex patterns
+        compared by `.pattern` string. See `meme.test-util/normalize-form`
+        for the full list.
+
+   Files where read-string cannot read everything (auto-resolve keywords
+   without ns context, record literals needing `*read-eval*`) are
+   reported but do NOT count against the parity gate. Files where
+   `expand-forms` throws are tracked separately as `:expander-error` —
+   known expander limitations on nested syntax-quote / unquote that
+   pre-date this work; tracked, not gated.
+
+   Per-project divergence baselines are encoded below. The gate is a
+   ratchet: lowering a baseline is good (means you fixed something),
+   raising it requires explicit acknowledgment of a regression."
   (:require [clojure.test :refer [deftest is]]
             [meme.test-util :as tu]
             [clojure.java.io :as io]))
 
 (def ^:private vendor-dir "test/vendor")
+
+;; Per-project baselines. The number is the maximum allowed
+;; (:diverged + :expander-error) count. Setting a baseline to 0
+;; means full parity; non-zero baselines admit known limitations.
+;;
+;; To tighten: drive a baseline down. The test fails on REGRESSIONS
+;; (count exceeds baseline) and reminds you to lower the constant
+;; when count drops below it (so future regressions are caught).
+(def ^:private parity-baselines
+  {"core.async"  10  ; expander quirks on nested ~/~@ in macros
+   "specter"     5   ; syntax-quote symbol resolution edge cases
+   "malli"       4   ; mostly expander-error on macro-heavy files
+   "ring"        36  ; hundreds of files; mostly resolver edge cases
+   "clj-http"    1   ; one trailing-dot constructor edge case
+   "medley"      1   ; one syntax-quote auto-gensym scope subtlety
+   "hiccup"      2}) ; one expander quirk + one syntax-quote subtlety
 
 (defn- cross-check-project
   [project-dir]
@@ -35,40 +56,66 @@
     {:project project-name
      :total-files (count results)
      :ok-count (count (:ok by-status))
+     :diverged-count (count (:diverged by-status))
+     :diverged (:diverged by-status)
      :native-crash-count (count (:native-crash by-status))
      :native-crashes (:native-crash by-status)
-     :native-only-count (count (:native-only by-status))
-     :read-string-also-failed-count (count (:read-string-also-failed by-status))}))
+     :expander-error-count (count (:expander-error by-status))
+     :read-string-incomplete-count (count (:read-string-incomplete by-status))}))
+
+(defn- shorten [v]
+  (let [s (pr-str v)]
+    (if (> (count s) 240) (str (subs s 0 237) "...") s)))
 
 (defn- report-cross-check
-  [{:keys [project total-files ok-count native-crash-count native-crashes
-           native-only-count read-string-also-failed-count]}]
-  (println (format "\n=== %s native-parser check === %d/%d ok%s%s%s"
-                   project ok-count total-files
-                   (if (pos? native-crash-count)
-                     (format "  CRASHES: %d" native-crash-count) "")
-                   (if (pos? native-only-count)
-                     (format "  native-only: %d" native-only-count) "")
-                   (if (pos? read-string-also-failed-count)
-                     (format "  both-failed: %d" read-string-also-failed-count) "")))
-  (doseq [{:keys [path native-error]} (take 10 native-crashes)]
-    (println (format "  CRASH %s\n      %s" path native-error))))
+  [{:keys [project total-files ok-count diverged-count native-crash-count
+           expander-error-count read-string-incomplete-count
+           native-crashes diverged]}
+   baseline]
+  (let [parity-fail (+ diverged-count expander-error-count)]
+    (println (format "\n=== %s parity === %d/%d ok  diverged=%d  expander-err=%d  rs-incomplete=%d  baseline=%d%s"
+                     project ok-count total-files
+                     diverged-count expander-error-count read-string-incomplete-count
+                     baseline
+                     (if (pos? native-crash-count)
+                       (format "  CRASHES=%d" native-crash-count) "")))
+    (doseq [{:keys [path native-error]} (take 5 native-crashes)]
+      (println (format "  CRASH %s\n    %s" path native-error)))
+    (when (and (pos? diverged-count) (> parity-fail baseline))
+      (doseq [{:keys [path first-divergence]} (take 3 diverged)]
+        (println (format "  DIVERGE %s" path))
+        (when first-divergence
+          (let [{:keys [index rs native]} first-divergence]
+            (println (format "    form %d:" index))
+            (println (format "      rs:     %s" (shorten rs)))
+            (println (format "      native: %s" (shorten native)))))))))
 
 (defmacro ^:private defcrosscheck
   [project-name]
-  (let [test-sym (symbol (str "vendor-native-parser-" project-name))
+  (let [test-sym (symbol (str "vendor-parity-" project-name))
         dir-path (str vendor-dir "/" project-name)]
     `(deftest ~test-sym
        (let [dir# (io/file ~dir-path)]
          (when (.isDirectory dir#)
-           (let [result# (cross-check-project dir#)]
-             (report-cross-check result#)
-             ;; Hard gate: the native parser must not crash on any file
-             ;; that read-string accepts cleanly. Crashes are real bugs.
+           (let [result# (cross-check-project dir#)
+                 baseline# (get parity-baselines ~project-name 0)
+                 parity-fail# (+ (:diverged-count result#)
+                                 (:expander-error-count result#))]
+             (report-cross-check result# baseline#)
+             ;; Crash gate — never tolerate.
              (is (zero? (:native-crash-count result#))
                  (str ~project-name " — native parser crashed on "
-                      (:native-crash-count result#)
-                      " files that read-string parsed cleanly"))))))))
+                      (:native-crash-count result#) " files"))
+             ;; Parity gate — must not exceed baseline.
+             (is (<= parity-fail# baseline#)
+                 (str ~project-name " — " parity-fail#
+                      " files diverged or hit expander errors; baseline is "
+                      baseline# ". A REGRESSION raised the count; either fix "
+                      "the cause or update parity-baselines if intentional."))
+             ;; Reminder when the count drops — keeps baselines tight.
+             (when (< parity-fail# baseline#)
+               (println (format "  NOTE: %s parity-fail (%d) is below baseline (%d) — lower the baseline in vendor_cross_check_test.clj."
+                                ~project-name parity-fail# baseline#)))))))))
 
 (defcrosscheck "core.async")
 (defcrosscheck "specter")
