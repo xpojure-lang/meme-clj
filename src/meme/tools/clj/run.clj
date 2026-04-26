@@ -79,7 +79,15 @@
           (class? resolved)
           (symbol (.getName ^Class resolved))
           :else sym)
-        (symbol (name (ns-name *ns*)) (name sym))))))
+        ;; Unresolved unqualified symbol. Two cases:
+        ;;   • Contains a `.` — treat as already-qualified class name
+        ;;     (e.g. `cljs.core.async.impl.protocols.Channel`). RS does
+        ;;     the same — adding *ns*/ would mis-attribute it.
+        ;;   • Otherwise — assume it's a var defined later or in a
+        ;;     CLJS-only branch; qualify with *ns*.
+        (if (str/includes? n ".")
+          sym
+          (symbol (name (ns-name *ns*)) n))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Pipeline

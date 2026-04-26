@@ -115,7 +115,10 @@
 
 (def ^:private gensym-arg-rs-pattern
   ;; read-string emits #() args as p<N>__<gensym-id>(#).
-  #"p(\d+)__\d+#?")
+  ;; Inside syntax-quote, the trailing # triggers auto-gensym, layering
+  ;; another gensym suffix and __auto__ on top: p<N>__<id>__<id2>__auto__.
+  ;; Both shapes collapse to <arg-N>.
+  #"p(\d+)__\d+(?:__\d+)?(?:#|__auto__)?")
 
 (def ^:private gensym-arg-native-pattern
   ;; Native lowering emits #() args as %<N>.

@@ -378,8 +378,12 @@
 
 #?(:clj
    (deftest form-snapshot-tagged-literal
-     (let [form (first (forms-for "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
-       (is (tagged-literal? form)))))
+     ;; Tags without a registered data-reader produce a TaggedLiteral.
+     ;; #uuid / #inst now resolve via default-data-readers (matching
+     ;; clojure.core/read-string), so use a custom tag here.
+     (let [form (first (forms-for "#unknown-tag \"foo\""))]
+       (is (tagged-literal? form))
+       (is (= 'unknown-tag (.tag ^clojure.lang.TaggedLiteral form))))))
 
 (deftest form-snapshot-reader-conditional
   (testing "m1clj->forms preserves the record; eval-rc yields platform value"

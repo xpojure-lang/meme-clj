@@ -95,7 +95,19 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **`expand-sq` collection branches recurse into the unquoted form.** The list / vector / map / set cases inside `meme.tools.clj.expander` returned `(:form item)` raw for `~`/`~@` items — meaning a nested `` ` `` AST node inside the unquoted form stayed as a record and later tripped `check-no-leftover-unquotes!`. The classic case is `\`(let [x 1] ~@(map (fn [y] \`(do ~y)) xs))` — the inner `\`(do ~y)` lives in normal-eval context (we exited the outer `\`` via `~@`) and must be expanded as its own scope. Fix: collection branches now call `expand-syntax-quotes` on the unquoted form. Cleared 14 of 14 expander-error files across the vendor cross-check (hiccup compiler, core.async ioc-macros, malli util/cljs, etc.).
 
-- **`default-resolve-symbol` handles static-method and constructor symbols.** `Foo.` now resolves to `pkg.Foo.` (constructor — class lookup, dot preserved) and `Class/member` resolves to `pkg.Class/member` (static call — namespace component rewritten to fully-qualified class name). Previously both passed through unchanged, which diverged from Clojure's `SyntaxQuoteReader` and surfaced as parity failures across every macro that emitted `\`(StringBuilder.)` or `\`(java.lang.String/valueOf …)`. Cleared roughly 50 vendor-cross-check divergences (most of ring's 36 baseline plus residual cases in hiccup, core.async, specter).
+- **`expand-sq-meta` wraps `concat` in `seq`.** Metadata expansion emitted `(apply hash-map (concat …))`, while Clojure's `SyntaxQuoteReader` emits `(apply hash-map (seq (concat …)))`. The forms are equivalent at runtime but compared unequal under cross-check parity. Now matches read-string exactly.
+
+- **`expand-sq` quotes ReaderConditional records.** `\`#?(:clj a :cljs b)` under `:read-cond :preserve` should expand to `(quote <rc-record>)` (the runtime value is the literal record), but the expander passed it through bare. Matches Clojure's reader.
+
+- **`default-resolve-symbol` handles static-method, constructor, and FQN-class symbols.** `Foo.` now resolves to `pkg.Foo.` (constructor — class lookup, dot preserved); `Class/member` resolves to `pkg.Class/member` (static call — namespace component rewritten to fully-qualified class); and an unresolved symbol whose name contains `.` (e.g. `cljs.core.async.impl.protocols.Channel`) is treated as an already-qualified class FQN rather than incorrectly being prefixed with `*ns*/`. All three matched Clojure's `SyntaxQuoteReader` but were missing from our resolver.
+
+- **`#()` percent-param scoping handles nested user `(fn …)` bodies.** A `%` inside a user-written `(fn …)` that lives inside `#()` belongs to the outer `#()` (Clojure semantics). The form-tier walker `walk-anon-fn-body` couldn't distinguish a user `(fn …)` from an already-lowered nested `#()` and skipped both, leaving the outer's `%` un-replaced. Real-world repro: `#(reduce (fn [_ p] (parser %)) … xs)` (malli core.cljc) — `%` here belongs to the OUTER `#()`. Fix: `lower-anon-fn` now collects %-params, validates invalid `%`-shaped symbols, and rewrites bare `%` → `%1` at the AST tier (with explicit `CljAnonFn` boundaries) before lowering to forms. No internal form metadata required.
+
+- **`resolve-tagged-literal` consults `*data-readers*` and `default-data-readers`.** `#uuid "…"` and `#inst "…"` now resolve to `java.util.UUID` and `java.util.Date` at read time, matching `clojure.core/read-string`. Tags without a registered data-reader still fall back to producing a `TaggedLiteral`. (CLJS branch unchanged: tagged literals are still rejected.)
+
+### Cross-check status
+
+After the above fixes the vendor cross-check sits at **full parity**: every `.clj`/`.cljc` file across all 7 vendor projects (core.async, specter, malli, ring, clj-http, medley, hiccup) parses identically to `clojure.core/read-string` modulo the cosmetic normalisations in `meme.test-util/normalize-form`. The per-project parity-baselines are all 0 — any new divergence is a regression.
 
 ### Changed
 

@@ -400,9 +400,23 @@
 ;; ---------------------------------------------------------------------------
 
 (defn resolve-tagged-literal
-  "Resolve a tagged literal. JVM: produces TaggedLiteral. CLJS: error."
+  "Resolve a tagged literal, mirroring `clojure.core/read-string`:
+   if the tag has a registered data-reader (via `*data-readers*` or
+   `default-data-readers`), apply it and return the resolved value.
+   Otherwise produce a `TaggedLiteral` so the caller can decide.
+
+   `default-data-readers` covers `#inst` (java.util.Date) and `#uuid`
+   (java.util.UUID); `*data-readers*` picks up user-registered tags."
   [tag data loc]
-  #?(:clj (tagged-literal tag data)
+  #?(:clj (let [reader (or (get *data-readers* tag)
+                           (get default-data-readers tag))]
+            (if reader
+              (try (reader data)
+                   (catch Exception e
+                     (errors/meme-error
+                       (str "Tagged literal #" tag " reader threw: " (ex-message e))
+                       (assoc loc :cause e))))
+              (tagged-literal tag data)))
      :cljs (errors/meme-error
             (str "Tagged literals (#" tag ") are not supported in ClojureScript meme reader")
             loc)))

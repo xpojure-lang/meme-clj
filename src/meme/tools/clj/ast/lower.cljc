@@ -130,17 +130,101 @@
   (with-meta (forms/->CljUnquoteSplicing (ast->form (:form n) opts))
     (or (:pos n) {})))
 
+(defn- ast-symbol-type
+  "If `node` is a CljSymbol naming a `%` placeholder, return its type
+   (:bare, :rest, or the integer N). Otherwise nil."
+  [node]
+  (when (instance? meme.tools.clj.ast.nodes.CljSymbol node)
+    (forms/percent-param-type
+      (if (:ns node)
+        (symbol (:ns node) (:name node))
+        (symbol (:name node))))))
+
+(defn- ast-invalid-percent
+  "If `node` is a CljSymbol whose name looks like a `%` param but isn't
+   a valid one (`%-1`, `%foo`, `%1a`, …), return the string. Otherwise nil."
+  [node]
+  (when (instance? meme.tools.clj.ast.nodes.CljSymbol node)
+    (let [s (if (:ns node)
+              (symbol (:ns node) (:name node))
+              (symbol (:name node)))]
+      (when (forms/invalid-percent-symbol? s) (:name node)))))
+
+(defn- walk-anon-fn-body-ast
+  "Recurse through the AST under an `#()` body, calling `visit` on every
+   non-collection node. Stops at nested `CljAnonFn` boundaries — those
+   percent params and bare `%`s belong to the inner `#()`, not us.
+
+   `visit` is called for its side effects only; this helper does not
+   rebuild the tree. Use the AST tier when scoping matters: the form
+   tier (`walk-anon-fn-body`) uses `(fn …)` as a boundary, which can't
+   distinguish a user-written `(fn …)` from a nested `#()` lowering."
+  [visit body]
+  ((fn walk [node]
+     (cond
+       (instance? meme.tools.clj.ast.nodes.CljAnonFn node) nil
+       (satisfies? meme.tools.clj.ast.nodes/AstNode node)
+       (do (visit node)
+           (run! walk (meme.tools.clj.ast.nodes/children node)))
+       :else (visit node)))
+   body))
+
+(defn- collect-ast-percent-params
+  "Collect `%` types from an AST body — see `walk-anon-fn-body-ast` for
+   scoping. Real-world repro of why the AST tier is needed:
+   `#(reduce (fn [_ p] (parser %)) … xs)` (malli core.cljc) — the inner
+   user-written `(fn …)`'s body's `%` belongs to the OUTER `#()`."
+  [body]
+  (let [result (volatile! #{})]
+    (walk-anon-fn-body-ast
+      (fn [node]
+        (when-let [p (ast-symbol-type node)] (vswap! result conj p)))
+      body)
+    @result))
+
+(defn- find-invalid-ast-percent
+  "First invalid `%`-shaped symbol encountered in `body` (within the
+   outer `#()`'s scope). Returns the string name or nil."
+  [body]
+  (let [result (volatile! nil)]
+    (walk-anon-fn-body-ast
+      (fn [node]
+        (when (and (nil? @result) (ast-invalid-percent node))
+          (vreset! result (ast-invalid-percent node))))
+      body)
+    @result))
+
+(defn- normalize-bare-percent-ast
+  "Rewrite the AST so every CljSymbol named `%` (in this `#()`'s scope)
+   becomes `%1`. Returns a new AST with the same shape. Stops at nested
+   `CljAnonFn` boundaries."
+  [body]
+  ((fn walk [node]
+     (cond
+       (instance? meme.tools.clj.ast.nodes.CljAnonFn node) node
+
+       (and (instance? meme.tools.clj.ast.nodes.CljSymbol node)
+            (= "%" (:name node))
+            (nil? (:ns node)))
+       (assoc node :name "%1")
+
+       (satisfies? meme.tools.clj.ast.nodes/AstNode node)
+       (let [cs (meme.tools.clj.ast.nodes/children node)]
+         (if (seq cs)
+           (meme.tools.clj.ast.nodes/rebuild node (mapv walk cs))
+           node))
+
+       :else node))
+   body))
+
 (defn- lower-anon-fn [n opts]
-  (let [body-form (ast->form (:body n) opts)
-        invalid (forms/find-invalid-percent-symbols body-form)
-        _ (when (some? invalid)
-            (errors/meme-error
-              (str "Invalid % parameter: " invalid)
-              (:pos n)))
-        normalized (forms/walk-anon-fn-body forms/normalize-bare-percent body-form)
-        params (forms/find-percent-params normalized)
-        fn-params (forms/build-anon-fn-params params)]
-    (list 'fn fn-params normalized)))
+  (when-let [bad (find-invalid-ast-percent (:body n))]
+    (errors/meme-error (str "Invalid % parameter: " bad) (:pos n)))
+  (let [normalized-body (normalize-bare-percent-ast (:body n))
+        params (collect-ast-percent-params normalized-body)
+        fn-params (forms/build-anon-fn-params params)
+        body-form (ast->form normalized-body opts)]
+    (list 'fn fn-params body-form)))
 
 (defn- lower-tagged [n opts]
   (let [tag (symbol (:tag n))

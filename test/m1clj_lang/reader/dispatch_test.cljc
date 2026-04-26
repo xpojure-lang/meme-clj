@@ -153,8 +153,19 @@
 
 #?(:clj
    (deftest parse-tagged-literal
+     ;; Use a tag with no registered data-reader so resolve-tagged-literal
+     ;; falls back to producing a TaggedLiteral. (Tags in default-data-readers
+     ;; like #uuid / #inst are now resolved at read time, matching read-string.)
+     (let [result (first (lang/m1clj->forms "#unknown-tag \"foo\""))]
+       (is (instance? clojure.lang.TaggedLiteral result))
+       (is (= 'unknown-tag (.tag ^clojure.lang.TaggedLiteral result))))))
+
+#?(:clj
+   (deftest parse-tagged-literal-default-reader-resolves
+     ;; Default data-reader for #uuid runs at read time, matching
+     ;; clojure.core/read-string behaviour.
      (let [result (first (lang/m1clj->forms "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
-       (is (instance? clojure.lang.TaggedLiteral result)))))
+       (is (instance? java.util.UUID result)))))
 
 #?(:clj
    (deftest parse-namespaced-map
