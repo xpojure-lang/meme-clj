@@ -166,16 +166,34 @@
 ;; Lang commands (for CLI dispatch)
 ;; ---------------------------------------------------------------------------
 
+(defn- ast-root->children-with-trailing
+  "Bridge: extract CljRoot's children as a vec, with its :trailing-trivia
+  threaded as `:trailing-ws` metadata on the vec — matching the shape
+  the formatter's join-with-trailing-comments expects from
+  cst-reader/read-forms."
+  [root]
+  (let [children (filterv #(not (instance? meme.tools.clj.ast.nodes.CljDiscard %))
+                          (:children root))
+        trailing (seq (:trailing-trivia root))]
+    (if trailing
+      (with-meta children
+        {:trailing-ws (apply str (map :raw trailing))})
+      children)))
+
 (defn format-m1clj
-  "Format meme source text. Reads source, formats via canonical formatter."
+  "Format m1clj source text. Reads source, formats via canonical formatter.
+  Source-driven path goes through AST without intermediate lowering — the
+  printer dispatches on AST nodes directly, preserving notation that
+  forms-with-metadata would have collapsed."
   [source opts]
-  (let [forms (m1clj->forms source opts)]
-    (if (empty? forms)
+  (let [ast (m1clj->ast source opts)
+        children (ast-root->children-with-trailing ast)]
+    (if (empty? children)
       source
       (case (:style opts)
-        "flat" (fmt-flat/format-forms forms)
-        "clj"  (fmt-flat/format-clj forms)
-        (fmt-canon/format-forms forms opts)))))
+        "flat" (fmt-flat/format-forms children)
+        "clj"  (fmt-flat/format-clj children)
+        (fmt-canon/format-forms children opts)))))
 
 (defn ^:no-doc to-clj
   "CLI-dispatch adapter: meme source → Clojure text. Library callers should

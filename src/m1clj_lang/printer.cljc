@@ -1,18 +1,30 @@
 (ns m1clj-lang.printer
-  "Meme printer: Clojure forms → Doc trees.
-   Builds Wadler-Lindig Doc trees from Clojure forms, handling meme syntax
-   (call notation, sugar, metadata, comments) and Clojure output mode.
-   Delegates to render for Doc algebra and layout.
+  "m1clj printer: Clojure forms or Clj* AST → Doc trees.
+   Builds Wadler-Lindig Doc trees, handling m1clj syntax (call notation,
+   sugar, metadata, comments) and Clojure output mode. Accepts either
+   forms-with-`:m1clj/*`-metadata (legacy bridge from `ast->forms`
+   lowering) or AST records directly (post-A4 path that bypasses
+   lowering). Delegates to render for Doc algebra and layout.
 
-   The printer is parameterized by a *style map* that controls layout policy
-   (head-line-args, definition-form spacing, pair grouping, binding layout).
-   Formatters own style: canon passes a full style, flat passes nil for
-   true pass-through.  See `to-doc` for the public entry point."
+   The printer is parameterized by a *style map* that controls layout
+   policy (head-line-args, definition-form spacing, pair grouping,
+   binding layout). Formatters own style: canon passes a full style,
+   flat passes nil for true pass-through. See `to-doc` for the public
+   entry point."
   (:require [clojure.string :as str]
             [meme.tools.render :as render]
             [meme.tools.clj.values :as values]
             [meme.tools.clj.forms :as forms]
-            [m1clj-lang.form-shape :as form-shape]))
+            [meme.tools.clj.ast.nodes :as nodes]
+            [m1clj-lang.form-shape :as form-shape])
+  #?(:clj (:import [meme.tools.clj.ast.nodes
+                    CljSymbol CljKeyword CljNumber CljString
+                    CljChar CljRegex CljNil CljBool
+                    CljList CljVector CljMap CljSet
+                    CljQuote CljDeref CljVar
+                    CljSyntaxQuote CljUnquote CljUnquoteSplicing
+                    CljAnonFn CljDiscard
+                    CljTagged CljReaderCond CljMeta CljNamespacedMap])))
 
 ;; ---------------------------------------------------------------------------
 ;; Comment extraction from :m1clj/leading-trivia metadata
@@ -49,6 +61,18 @@
                 :cljs (satisfies? IMeta form))
              (meta form))
     (extract-comments (:m1clj/leading-trivia (meta form)))))
+
+(defn- ast-comments
+  "Extract trimmed comment lines from an AST node's :trivia, or nil.
+  Returns nil for non-AST values."
+  [node]
+  (when (and (some? node)
+             #?(:clj  (instance? meme.tools.clj.ast.nodes.AstNode node)
+                :cljs (satisfies? meme.tools.clj.ast.nodes/AstNode node))
+             (seq (:trivia node)))
+    (let [comments (filterv #(= :comment (:type %)) (:trivia node))]
+      (when (seq comments)
+        (mapv (fn [t] (str/triml (str/trim-newline (:raw t)))) comments)))))
 
 (defn- comment-doc
   "Build a Doc that emits comment lines followed by a hardline.
@@ -218,9 +242,13 @@
 ;; over these defaults, so partial overrides compose.
 
 (defn- bindings-slot-renderer
-  "Render a :bindings slot value as a columnar pair-per-line binding vector."
+  "Render a :bindings slot value as a columnar pair-per-line binding vector.
+  Polymorphic: accepts a plain vector of forms or a CljVector AST node."
   [value ctx]
-  (binding-vector-doc value ctx))
+  (let [children (if (instance? meme.tools.clj.ast.nodes.CljVector value)
+                   (:children value)
+                   value)]
+    (binding-vector-doc children ctx)))
 
 (defn- clause-slot-renderer
   "Render a :clause slot value (a [test value] pair) as `test value`
@@ -369,13 +397,165 @@
         (render/nest (count open) (render/doc-cat (intersperse render/line pair-docs)))
         (render/text close))))))
 
-(defn- to-doc-form
-  "Convert a Clojure form to a Doc tree. Handles metadata wrapping.
-   ctx is {:mode :m1clj|:clj, :style style-map-or-nil}."
-  [form ctx]
+(defn- effective-ast-children
+  "Filter CljDiscard nodes from a children vec — discard nodes are notation,
+  not data, and don't appear as positional children of their parent."
+  [children]
+  (filterv #(not (instance? meme.tools.clj.ast.nodes.CljDiscard %)) children))
+
+(defn- to-doc-ast-node
+  "Build a Doc for a Clj* AST record. Returns nil for non-AST input so the
+  caller can fall through to the form-with-metadata branch."
+  [node ctx]
   (let [mode (:mode ctx)]
     (cond
-      ;; Metadata prefix — checked first, before structural checks.
+      ;; --- Atomic literals -------------------------------------------------
+
+      (instance? CljSymbol node)
+      (render/text (if (:ns node)
+                     (str (:ns node) "/" (:name node))
+                     (:name node)))
+
+      (instance? CljKeyword node)
+      (let [{:keys [name ns auto-resolve?]} node
+            prefix (if auto-resolve? "::" ":")]
+        (render/text (cond
+                       (and ns name) (str prefix ns "/" name)
+                       ns            (str prefix ns)
+                       :else         (str prefix name))))
+
+      (instance? CljNumber node)
+      (render/text (:raw node))
+
+      (instance? CljString node)
+      ;; AST may not always carry :raw (programmatic construction); fall back
+      ;; to pr-str to produce a valid string literal.
+      (render/text (or (:raw node) (pr-str (:value node))))
+
+      (instance? CljChar node)
+      (render/text (:raw node))
+
+      (instance? CljRegex node)
+      (render/text (str "#\"" (:pattern node) "\""))
+
+      (instance? CljNil node)  (render/text "nil")
+      (instance? CljBool node) (render/text (str (:value node)))
+
+      ;; --- Reader-macro / sugar nodes --------------------------------------
+
+      (instance? CljQuote node)
+      (render/doc-cat doc-quote (to-doc-inner (:form node) ctx))
+
+      (instance? CljDeref node)
+      (render/doc-cat doc-at (to-doc-inner (:form node) ctx))
+
+      (instance? CljVar node)
+      (render/doc-cat doc-var-quote (to-doc-inner (:form node) ctx))
+
+      (instance? CljSyntaxQuote node)
+      (render/doc-cat doc-backtick (to-doc-inner (:form node) ctx))
+
+      (instance? CljUnquote node)
+      (render/doc-cat doc-unquote (to-doc-inner (:form node) ctx))
+
+      (instance? CljUnquoteSplicing node)
+      (render/doc-cat doc-unquote-splicing (to-doc-inner (:form node) ctx))
+
+      (instance? CljAnonFn node)
+      ;; AST stores raw body (with `%` or `%1` as written) so no
+      ;; bare-percent restoration is needed.
+      (let [body (:body node)]
+        (if (and (= mode :clj) (instance? CljList body))
+          ;; :clj mode: unwrap body list to avoid double parens.
+          (collection-doc "#(" ")" (effective-ast-children (:children body)) ctx)
+          (collection-doc "#(" ")" [body] ctx)))
+
+      (instance? CljDiscard node)
+      ;; #_ form — emit `#_` prefix + recurse. (Top-level discards filtered
+      ;; by the parent collection / formatter; this branch handles cases
+      ;; where a discard was deliberately preserved in the tree.)
+      (render/doc-cat (render/text "#_") (to-doc-inner (:form node) ctx))
+
+      ;; --- Compound nodes --------------------------------------------------
+
+      (instance? CljMeta node)
+      (let [chain (:chain node)
+            target (:target node)
+            prefix-docs (mapv (fn [m]
+                                (let [m-form (cond
+                                               (instance? CljKeyword m)
+                                               {(if-let [n (:ns m)]
+                                                  (keyword n (:name m))
+                                                  (keyword (:name m))) true}
+                                               (instance? CljSymbol m)
+                                               {:tag (if (:ns m)
+                                                       (symbol (:ns m) (:name m))
+                                                       (symbol (:name m)))}
+                                               (instance? CljString m)
+                                               {:tag (:value m)}
+                                               (instance? CljMap m)
+                                               ;; Render the map's pairs as a meta map directly.
+                                               m
+                                               :else m)]
+                                  (emit-meta-prefix-doc m-form ctx)))
+                              (reverse chain))
+            prefix-doc (reduce (fn [acc d] (render/doc-cat acc doc-space d))
+                               (first prefix-docs)
+                               (rest prefix-docs))]
+        (render/doc-cat prefix-doc doc-space (to-doc-inner target ctx)))
+
+      (instance? CljTagged node)
+      (render/doc-cat (render/text (str "#" (:tag node) " "))
+                      (to-doc-inner (:form node) ctx))
+
+      (instance? CljReaderCond node)
+      (let [prefix (if (:splicing? node) "#?@(" "#?(")
+            pairs (:pairs node)]
+        (pairs-doc prefix ")" (mapv vec pairs) ctx))
+
+      (instance? CljNamespacedMap node)
+      (let [{:keys [ns auto-resolve? inner]} node
+            open (if auto-resolve?
+                   (if (str/blank? ns) "#::{" (str "#::" ns "{"))
+                   (str "#:" ns "{"))]
+        (pairs-doc open "}" (mapv vec (:pairs inner)) ctx))
+
+      ;; --- Collections -----------------------------------------------------
+
+      (instance? CljList node)
+      (let [children (effective-ast-children (:children node))]
+        (cond
+          (empty? children)
+          (render/text "()")
+
+          ;; Treat as a call: head = first child, args = rest.
+          :else
+          (let [head (first children)
+                args (vec (rest children))]
+            (call-doc head args ctx))))
+
+      (instance? CljVector node)
+      (collection-doc "[" "]" (effective-ast-children (:children node)) ctx true)
+
+      (instance? CljMap node)
+      (pairs-doc "{" "}" (mapv vec (:pairs node)) ctx)
+
+      (instance? CljSet node)
+      ;; CljSet `:children` is already source-ordered — no :insertion-order
+      ;; metadata lookup needed.
+      (collection-doc "#{" "}" (effective-ast-children (:children node)) ctx true)
+
+      :else nil)))
+
+(defn- to-doc-form
+  "Convert a Clojure form (or Clj* AST node) to a Doc tree. AST input is
+  dispatched first; falls through to the form-with-metadata path otherwise.
+  ctx is {:mode :m1clj|:clj, :style style-map-or-nil}."
+  [form ctx]
+  (or (to-doc-ast-node form ctx)
+      (let [mode (:mode ctx)]
+        (cond
+          ;; Metadata prefix — checked first, before structural checks.
       (and (some? form)
            #?(:clj (instance? clojure.lang.IObj form)
               :cljs (satisfies? IWithMeta form))
@@ -524,13 +704,15 @@
       :else
       (if-let [s (values/emit-value-str form pr-str)]
         (render/text s)
-        (render/text (pr-str form))))))
+        (render/text (pr-str form)))))))
 
 (defn- to-doc-inner
-  "Internal recursive entry point: form + ctx → Doc with comment attachment."
+  "Internal recursive entry point: form/AST + ctx → Doc with comment attachment.
+  Comments come from AST `:trivia` for AST nodes, from
+  `:m1clj/leading-trivia` metadata for forms."
   [form ctx]
   (let [doc (to-doc-form form ctx)
-        comments (form-comments form)]
+        comments (or (ast-comments form) (form-comments form))]
     (if comments
       (render/doc-cat (comment-doc comments) doc)
       doc)))

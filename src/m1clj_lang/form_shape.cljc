@@ -6,6 +6,11 @@
    the form has no special structure — the printer falls back to plain-call
    rendering.
 
+   Polymorphic over both inputs: args may be plain Clojure values
+   (forms-with-metadata path) or `meme.tools.clj.ast.nodes/Clj*` records
+   (AST tier path). The predicate helpers below abstract type checks so
+   decomposers don't care which kind of value they receive.
+
    Slot vocabulary (the contract between form-shape and printer/style):
 
      :name         identifier being defined (defn, def, deftest, catch-binding)
@@ -23,13 +28,62 @@
      :body         ordinary body expression
 
    Slots are emitted in source order; style maps opine on slot names to
-   choose head-line vs body placement and open-paren spacing.
+   choose head-line vs body placement and open-paren spacing.")
 
-   Each `decompose-*` helper below takes the call's args and returns a
-   vector `[[slot-name value] ...]` in the shape described in its
-   docstring. Returning nil from a decomposer signals the args do not
-   match — `decompose` then falls through to structural inference (if
-   enabled) or to plain-call rendering.")
+;; ---------------------------------------------------------------------------
+;; Polymorphic predicates: accept both plain Clojure values and Clj* AST nodes.
+;; ---------------------------------------------------------------------------
+
+(defn- ast-symbol? [x]
+  (instance? meme.tools.clj.ast.nodes.CljSymbol x))
+
+(defn- ast-string? [x]
+  (instance? meme.tools.clj.ast.nodes.CljString x))
+
+(defn- ast-vector? [x]
+  (instance? meme.tools.clj.ast.nodes.CljVector x))
+
+(defn- ast-list? [x]
+  (instance? meme.tools.clj.ast.nodes.CljList x))
+
+(defn- arg-string?
+  "True for plain strings or CljString AST nodes."
+  [x]
+  (or (string? x) (ast-string? x)))
+
+(defn- arg-vector?
+  "True for plain vectors or CljVector AST nodes."
+  [x]
+  (or (vector? x) (ast-vector? x)))
+
+(defn- arg-symbol?
+  "True for plain symbols or CljSymbol AST nodes."
+  [x]
+  (or (symbol? x) (ast-symbol? x)))
+
+(defn- arg-list-with-vector-head?
+  "True for an arity form like `([x] body+)`. Handles both
+   (seq? x) + (vector? (first x)) and CljList with CljVector first child."
+  [x]
+  (cond
+    (ast-list? x)
+    (boolean (some-> x :children first ast-vector?))
+
+    (seq? x)
+    (vector? (first x))
+
+    :else false))
+
+(defn- head-symbol-name
+  "Extract the head symbol name as a Clojure symbol. Returns nil if the
+   head isn't a symbol-typed AST or value."
+  [head]
+  (cond
+    (symbol? head) head
+    (ast-symbol? head) (if (:ns head)
+                         (symbol (:ns head) (:name head))
+                         (symbol (:name head)))
+    :else nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
@@ -37,16 +91,16 @@
 
 (defn- split-doc
   "If the first arg is a docstring followed by more args, return [doc rest].
-   Otherwise [nil args]."
+   Otherwise [nil args]. Polymorphic: handles plain strings or CljString AST."
   [args]
-  (if (and (string? (first args)) (seq (rest args)))
+  (if (and (arg-string? (first args)) (seq (rest args)))
     [(first args) (rest args)]
     [nil args]))
 
 (defn- multi-arity?
   "True if x looks like an arity form: a list/seq starting with a params vector."
   [x]
-  (and (seq? x) (vector? (first x))))
+  (arg-list-with-vector-head? x))
 
 ;; ---------------------------------------------------------------------------
 ;; Decomposers — one per special-form shape
@@ -64,7 +118,7 @@
         (and (seq r) (multi-arity? (first r)))
         (into head (map (fn [a] [:arity a])) r)
 
-        (and (seq r) (vector? (first r)))
+        (and (seq r) (arg-vector? (first r)))
         (into (conj head [:params (first r)])
               (map (fn [b] [:body b]))
               (rest r))
@@ -79,7 +133,7 @@
     (let [[name dispatch & r] args
           head [[:name name] [:dispatch-val dispatch]]]
       (cond
-        (and (seq r) (vector? (first r)))
+        (and (seq r) (arg-vector? (first r)))
         (into (conj head [:params (first r)])
               (map (fn [b] [:body b]))
               (rest r))
@@ -118,7 +172,7 @@
   (when (seq args)
     (let [[name & r] args
           head [[:name name]]]
-      (if (and (seq r) (vector? (first r)))
+      (if (and (seq r) (arg-vector? (first r)))
         (into (conj head [:params (first r)])
               (map (fn [b] [:body b]))
               (rest r))
@@ -144,7 +198,7 @@
   [args]
   (when (seq args)
     (let [[bindings & body] args]
-      (when (vector? bindings)
+      (when (arg-vector? bindings)
         (into [[:bindings bindings]] (map (fn [b] [:body b])) body)))))
 
 (defn- decompose-if-when
@@ -263,8 +317,9 @@
    registered.  See `with-structural-fallback`."
   [registry head args]
   (when (and registry (some? head))
-    (let [args-vec (vec args)]
-      (or (when-let [f (get registry head)]
+    (let [head-sym (head-symbol-name head)
+          args-vec (vec args)]
+      (or (when-let [f (and head-sym (get registry head-sym))]
             (f args-vec))
           (when-let [fallback (::fallback-fn (meta registry))]
             (fallback head args-vec))))))
@@ -289,12 +344,12 @@
   [_head args]
   (cond
     (and (>= (count args) 2)
-         (symbol? (first args))
-         (vector? (second args)))
+         (arg-symbol? (first args))
+         (arg-vector? (second args)))
     (decompose-defn-like args)
 
     (and (seq args)
-         (vector? (first args)))
+         (arg-vector? (first args)))
     (decompose-bindings-body args)
 
     :else nil))
