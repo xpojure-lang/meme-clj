@@ -362,6 +362,25 @@
       (is (some? expanded)))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: a bare ~/~@ nested inside a CljReaderConditional must NOT
+;; pass silently through expand-forms. expand-syntax-quotes recurses into
+;; RC interiors (see clj-reader-conditional? branch in expand-sq), and the
+;; expand-time unquote check fires for any ~ that isn't inside a `.
+;; ---------------------------------------------------------------------------
+
+(deftest unquote-inside-rc-detected-during-expansion
+  (testing "bare ~ inside a reader-conditional branch is caught at expand time"
+    (let [unq (forms/->CljUnquote 'x)
+          rc  (forms/make-reader-conditional (list :clj unq) false)]
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Unquote .~."
+            (expander/expand-forms [rc])))))
+  (testing "bare ~@ inside a reader-conditional branch is caught at expand time"
+    (let [unq (forms/->CljUnquoteSplicing 'xs)
+          rc  (forms/make-reader-conditional (list :clj unq) false)]
+      (is (thrown-with-msg? #?(:clj Exception :cljs js/Error) #"Unquote-splicing .~@."
+            (expander/expand-forms [rc]))))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: syntax-quote preserves metadata on collections (RT3-F3)
 ;; Previously: `^:foo [1 2] lost metadata — no with-meta emitted.
 ;; ---------------------------------------------------------------------------

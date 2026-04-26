@@ -155,7 +155,12 @@
     (binding [*out* *err*] (println "Usage: meme run <file> [--lang name] [-- args...]"))
     (cli-exit! 1))
   (let [[lang-name l] (get-lang lang file)
-        source (slurp file)]
+        source (try (slurp file)
+                    (catch Exception e
+                      (binding [*out* *err*]
+                        (println (str "Cannot read file: " file
+                                      (when-let [m (ex-message e)] (str " — " m)))))
+                      (cli-exit! 1)))]
     (registry/check-support l lang-name :run)
     (try (binding [*command-line-args* (or rest-args [])]
            ((:run l) source (lang-opts opts)))

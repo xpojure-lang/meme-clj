@@ -476,7 +476,7 @@ Predicates follow: `meme-reader-conditional?` → `clj-reader-conditional?`. The
 
 ## `:mclj/*` metadata reserved for toolkit emissions
 
-The internal metadata keys the toolkit attaches (`:mclj/leading-trivia`, `:mclj/sugar`, `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`, `:mclj/bare-percent`, `:mclj/splice`) live in the bare `:mclj/` namespace — not `:mclj-lang/`.
+The internal metadata keys the toolkit attaches (`:mclj/leading-trivia`, `:mclj/sugar`, `:mclj/insertion-order`, `:mclj/namespace-prefix`, `:mclj/meta-chain`, `:mclj/bare-percent`) live in the bare `:mclj/` namespace — not `:mclj-lang/`.
 
 These keys are emitted by the generic toolkit (`meme.tools.clj.cst-reader`, printer, etc.), not by the meme language per se. A user's `.mcj` lang using the same toolkit would produce the same trivia and sugar metadata. The keys describe toolkit artefacts, so their namespace matches the toolkit, not any one frontend.
 
