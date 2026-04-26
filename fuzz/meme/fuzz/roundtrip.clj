@@ -206,13 +206,20 @@
   [^FuzzedDataProvider data]
   (let [s (.consumeRemainingAsString data)]
     (try
-      (let [forms (api/m1clj->forms s)]
+      ;; Pass `:resolve-keyword` so deferred `CljAutoKeyword` records resolve at
+      ;; lowering time — Clojure's reader resolves `::foo` eagerly under `*ns*
+      ;; user`, so we must mirror that for the differential to make sense.
+      (let [forms (api/m1clj->forms s {:resolve-keyword tu/cross-check-resolve-keyword})]
         (when (seq forms)
           (let [clj-text (api/forms->clj forms)
                 ;; LHS: what forms->clj actually emitted (forms after expand).
                 ;; RHS: what Clojure's reader makes of that text. Should match.
-                expanded (vec (expander/expand-forms forms))
-                reparsed (vec (read-clj-all clj-text))]
+                expanded (binding [*ns* (the-ns 'user)]
+                           (vec (expander/expand-forms
+                                  forms
+                                  {:resolve-symbol clj-run/default-resolve-symbol})))
+                reparsed (binding [*ns* (the-ns 'user)]
+                           (vec (read-clj-all clj-text)))]
             (when-not (forms-equal? expanded reparsed)
               (throw (AssertionError.
                        (str "forms->clj differential mismatch!\n"
