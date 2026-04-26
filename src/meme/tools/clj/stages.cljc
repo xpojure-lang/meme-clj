@@ -109,9 +109,9 @@
   (check-contract! :step-read ctx)
   (when (contains? (:opts ctx) :read-cond)
     (throw (ex-info
-             (str "The :read-cond option is no longer supported. The meme reader "
-                  "always preserves reader conditionals as CljReaderConditional "
-                  "records. To evaluate them for a platform, compose "
+             (str "The :read-cond option is no longer supported. The toolkit "
+                  "reader always preserves reader conditionals as "
+                  "CljReaderConditional records. To evaluate them for a platform, compose "
                   "meme.tools.clj.stages/step-evaluate-reader-conditionals after "
                   "step-read, or use m1clj-lang.run/run-string / run-file.")
              {:type    :m1clj/deprecated-opt

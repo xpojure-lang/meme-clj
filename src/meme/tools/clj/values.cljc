@@ -40,7 +40,7 @@
     (if (pos? (double form)) "##Inf" "##-Inf")
     ;; NOTE: On CLJS, (str 1.0) → "1" — float/integer distinction is lost because
     ;; JS has only one number type. CljRaw preserves the raw notation for values
-    ;; read by the meme reader. Programmatically-constructed floats may lose .0.
+    ;; read by the toolkit. Programmatically-constructed floats may lose .0.
     ;; Documented in doc/PRD.md known limitations.
     :else (str form)))
 

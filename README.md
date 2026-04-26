@@ -1,19 +1,25 @@
-# meme-clj — M-Expressions with Macro Expansion
+# meme-clj — a syntax-experimentation toolkit for Clojure
 
 [![CI](https://github.com/xpojure-lang/meme-clj/actions/workflows/ci.yml/badge.svg)](https://github.com/xpojure-lang/meme-clj/actions/workflows/ci.yml)
 [![Clojure](https://img.shields.io/badge/Clojure-JVM%20%7C%20Babashka%20%7C%20ClojureScript-blue?logo=clojure&logoColor=white)](https://clojure.org)
 [![License](https://img.shields.io/github/license/xpojure-lang/meme-clj)](LICENSE)
 
-M-expressions were McCarthy's original intended syntax for Lisp (1960).
-S-expressions were meant to be internal representation only — but they stuck.
-meme picks up where McCarthy left off: one rule that makes nesting self-evident,
-while preserving Clojure's semantics exactly.
+**meme-clj** is a research programme exploring alternative surface syntaxes
+for Clojure. The toolkit — parser engine, AST, stages, printer, formatter,
+loader, registry, CLI — is reusable across guest languages. Specific
+languages register on top of it.
 
-**The rule** — head outside the parens: `f(x y)` => `(f x y)`
+**m1clj** is the first language built on the toolkit. M-expressions for
+Clojure, in the spirit of McCarthy (1960). One rule:
 
-**Quote and backtick** — `'` quotes the next meme form: `'f(x)` is `(quote (f x))`. `` ` `` uses meme syntax inside for macro templates: `` `if(~test do(~@body)) ``
+`f(x y)` => `(f x y)` — head outside the parens, adjacent to `(`.
 
-Everything else is Clojure.
+Everything else is Clojure: data literals, reader macros, destructuring,
+metadata, syntax-quote — all preserved exactly. Programs run on Babashka,
+Clojure JVM, or ClojureScript without modification.
+
+`'` quotes the next m1clj form: `'f(x)` is `(quote (f x))`. `` ` `` uses
+m1clj syntax inside for macro templates: `` `if(~test do(~@body)) ``.
 
 ```clojure
 ;; examples/stars.m1clj — bb meme run examples/stars.m1clj
@@ -30,6 +36,14 @@ defn( stars [owner repo]
 
 stars("xpojure-lang" "meme-clj")
 ```
+
+A second guest, `clj-lang`, registers the native S-expression Clojure surface
+on the same toolkit — proving the parser, AST, and printer are
+language-agnostic. More guests are expected; the plural is the point.
+
+> **Naming.** `meme-clj` is the toolkit; `m1clj` is the language. The
+> `meme` binary belongs to the toolkit. See [doc/glossary.md](doc/glossary.md)
+> for the full vocabulary.
 
 ## Installation
 
@@ -67,7 +81,7 @@ user=> map(inc [1 2 3])
 (2 3 4)
 ```
 
-Convert between meme and Clojure:
+Convert between m1clj and Clojure:
 
 ```bash
 $ bb meme to-clj hello.m1clj                             # .m1clj → Clojure
@@ -82,7 +96,7 @@ $ bb meme format hello.m1clj                             # in-place
 $ bb meme format src/                                   # directory, recursive
 ```
 
-Macros work naturally — backtick uses meme syntax inside:
+Macros work naturally — backtick uses m1clj syntax inside:
 
 ```clojure
 ;; define a macro
@@ -104,7 +118,7 @@ require('[myapp.core :as core])
 core/greet("world")
 ```
 
-The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JVM + Babashka), so any `.m1clj` file under a registered extension is found and run on first reference. When both `myapp/core.m1clj` and `myapp/core.clj` exist, `.m1clj` wins.
+The loader intercepts `clojure.core/load` (JVM) and `clojure.core/load-file` (JVM + Babashka), so any file under a registered extension is found and run on first reference. When both `myapp/core.m1clj` and `myapp/core.clj` exist, `.m1clj` wins.
 
 **Auto-installed.** `m1clj-lang.run/run-string`, `run-file`, and the REPL install the loader before evaluating user code — programmatic embeddings get `.m1clj` `require` for free, not just the CLI. Hosts that own their own `clojure.core/load` interception opt out with `:install-loader? false`.
 
@@ -130,14 +144,20 @@ Requires [Babashka](https://babashka.org) or [Clojure](https://clojure.org).
 
 Tree-sitter grammar: [tree-sitter-meme](https://github.com/xpojure-lang/tree-sitter-meme)
 
+(The editor packages target `.m1clj`; their names follow the toolkit, not the
+language.)
+
 ## Documentation
 
 Grouped by who the doc is for:
 
-**Writing `.m1clj` code**
-- [Language Reference](doc/language-reference.md) — complete syntax guide
+**Orientation**
+- [Glossary](doc/glossary.md) — programme / language / toolkit vocabulary
 
-**Embedding meme in a Clojure project**
+**Writing `.m1clj` code**
+- [Language Reference](doc/language-reference.md) — complete m1clj syntax guide
+
+**Embedding meme-clj in a Clojure project**
 - [API Reference](doc/api.md) — public functions (`m1clj->forms`, `forms->m1clj`, `format-m1clj-forms`, run/repl helpers, registry)
 
 **Extending the formatter or building a sibling lang**
@@ -145,8 +165,8 @@ Grouped by who the doc is for:
 - [Design Decisions](doc/design-decisions.md) — rationale behind each choice
 
 **Project tracking**
-- [Product Requirements](doc/PRD.md) — requirement table and known limitations
-- [Changelog](CHANGELOG.md) — release history
+- [Product Requirements](doc/PRD.md) — programme + m1clj requirements, known limitations
+- [Changelog](CHANGELOG.md) — release history (pre-5.0 entries archived)
 
 **Contributing**
 - [Development](CLAUDE.md) — testing, architecture, conventions

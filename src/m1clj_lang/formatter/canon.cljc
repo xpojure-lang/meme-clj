@@ -1,5 +1,5 @@
 (ns m1clj-lang.formatter.canon
-  "Canonical formatter: width-aware meme output.
+  "Canonical formatter: width-aware m1clj output.
    Composes printer (form → Doc) with render (layout @ target width).
    Used by `meme format` CLI command.
 
@@ -28,7 +28,7 @@
                           (applies to both modes)
    :force-open-space-for  slots whose presence forces `head( ` (open-paren
                           followed by space even when the call is flat).
-                          Meme-only — silently ignored under `:mode :clj`,
+                          m1clj-only — silently ignored under `:mode :clj`,
                           which has no `head( ` convention."
   {:head-line-slots
    #{:name :doc :params
@@ -54,7 +54,7 @@
      :style       slot-keyed style map (default this namespace's `style`).
                   Useful for project-level tweaks like custom slot renderers
                   or a narrower :head-line-slots set.
-     :mode        :m1clj (default) — emit M-expression / meme syntax
+     :mode        :m1clj (default) — emit M-expression syntax
                   :clj             — emit native Clojure surface"
   ([form] (format-form form nil))
   ([form opts]

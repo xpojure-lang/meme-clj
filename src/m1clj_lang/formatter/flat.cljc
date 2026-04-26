@@ -11,12 +11,12 @@
             [meme.tools.render :as render]))
 
 (defn format-form
-  "Format a single Clojure form as flat meme text (single-line, no style)."
+  "Format a single Clojure form as flat m1clj text (single-line, no style)."
   [form]
   (render/layout (printer/to-doc form :m1clj nil form-shape/registry) ##Inf))
 
 (defn format-forms
-  "Format Clojure forms as flat meme text, separated by blank lines.
+  "Format Clojure forms as flat m1clj text, separated by blank lines.
    L13: preserves trailing comments from :trailing-ws metadata, matching canon formatter."
   [forms]
   (printer/validate-format-input forms)
@@ -25,7 +25,7 @@
 (defn format-clj
   "Format Clojure forms as Clojure text with reader sugar ('quote, @deref, #'var).
    Always produces flat (single-line per form) output — no width-aware breaking.
-   For width-aware meme formatting, use canon/format-forms."
+   For width-aware m1clj formatting, use canon/format-forms."
   [forms]
   (printer/validate-format-input forms)
   (printer/join-with-trailing-comments

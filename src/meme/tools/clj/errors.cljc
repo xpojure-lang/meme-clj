@@ -22,7 +22,7 @@
         (nth lines idx)))))
 
 (defn meme-error
-  "Throw a meme reader/tokenizer error with consistent structure.
+  "Throw a toolkit reader/tokenizer error with consistent structure.
    data may contain :line, :col (1-indexed), :cause, and :source.
    :source-context is added to ex-data when both :source and :line
    are present. :source and :cause are always excluded from ex-data."

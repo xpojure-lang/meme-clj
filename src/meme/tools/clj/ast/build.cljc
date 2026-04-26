@@ -201,7 +201,7 @@
 
       :list
       ;; Two parser-engine shapes feed this branch:
-      ;;   • meme grammar's `()` empty case — no :children field, no head extraction
+      ;;   • m1clj grammar's `()` empty case — no :children field, no head extraction
       ;;   • native-Clojure grammar's `(f x y)` — :children holds head + args
       ;; Both lower to a CljList. check-closed! tolerates the empty-paren node
       ;; from m1clj's nud-empty-or-error (which always emits :close).

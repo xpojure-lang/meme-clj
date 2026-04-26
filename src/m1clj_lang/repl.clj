@@ -16,19 +16,19 @@
   ([s opts run-fn]
    (clj-repl/input-state s opts run-fn)))
 
-(defn- meme-banner []
+(defn- m1clj-banner []
   (let [version (try (some-> (io/resource "meme/version.txt") slurp str/trim)
                      (catch Exception _ nil))]
     (if version
-      (str "meme " version " REPL. Type meme expressions, balanced input to eval. Ctrl-D to exit.")
-      "meme REPL. Type meme expressions, balanced input to eval. Ctrl-D to exit.")))
+      (str "m1clj " version " REPL. Type m1clj expressions, balanced input to eval. Ctrl-D to exit.")
+      "m1clj REPL. Type m1clj expressions, balanced input to eval. Ctrl-D to exit.")))
 
 (defn start
-  "Start the meme REPL.
+  "Start the m1clj REPL.
 
    Optional opts:
      :install-loader? — default true; pass false to skip installing
                         `meme.loader`."
   ([] (start {}))
   ([opts]
-   (clj-repl/start (assoc (grammar/with-grammar opts) :banner (meme-banner)))))
+   (clj-repl/start (assoc (grammar/with-grammar opts) :banner (m1clj-banner)))))

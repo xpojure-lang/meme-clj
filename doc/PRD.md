@@ -1,4 +1,9 @@
-# m1clj — Product Requirements Document
+# meme-clj — Product Requirements Document
+
+> **Scope.** This PRD describes both the **meme-clj toolkit** (the
+> programme-level platform for hosting alternative Clojure surfaces) and
+> the **m1clj language** (the first guest built on it). Section headers
+> indicate which scope a requirement belongs to.
 
 ## Problem
 
@@ -8,45 +13,72 @@ deeply nested forms is error-prone: mismatched parentheses, wrong bracket
 types, incorrect nesting depth. These are bookkeeping errors, not
 semantic ones — imposed by syntax that demands manual bracket management.
 
+The wider question — *can a Clojure host carry alternative surface
+syntaxes without losing macros, semantics, or ecosystem?* — has not had a
+concrete platform to test it on. **meme-clj** is that platform; **m1clj**
+is the first answer.
+
 
 ## Solution
 
-meme is a complete Clojure frontend. One rule replaces S-expression
-nesting with readable, familiar syntax:
+**meme-clj** is a syntax-experimentation toolkit: parser engine, AST
+tier, composable pipeline stages, printer, formatter, namespace loader,
+lang registry, and CLI. Guest languages register against the toolkit and
+share its Clojure-surface backbone.
+
+**m1clj** is the first language. One rule replaces S-expression nesting:
 
 `f(x y)` — call. Head of a list written outside the parens, adjacent to `(` (spacing significant).
 
 Everything else is unchanged from Clojure. Programs run on Babashka,
-Clojure JVM, or ClojureScript without modification. The platform
-includes a reader, printer, formatter, REPL, file runner, and CLI —
-the CLI itself is written in `.m1clj`.
+Clojure JVM, or ClojureScript without modification. The CLI is
+self-hosted in `.m1clj`.
+
+A second guest, `clj-lang`, registers the native S-expression Clojure
+surface on the same toolkit — the parser, AST, stages, and printer are
+language-agnostic; only the grammar and a few syntax-specific parselets
+differ between guests.
 
 
 ## Goals
 
+### Programme (meme-clj toolkit)
+
+- **Reusable backbone.** Parser engine, lex layer, AST tier, stages,
+  printer, render are language-agnostic. New guests need a grammar and a
+  handful of parselets, not a fresh pipeline.
+
+- **Lossless tier.** The AST captures position, trivia, and notation as
+  record fields, so tooling (formatters, refactorers, transpilers) can
+  round-trip user syntax without metadata gymnastics.
+
+- **Multi-platform.** Core toolkit runs on Clojure JVM, ClojureScript,
+  and Babashka. Single codebase, `.cljc` files.
+
+- **Open registry.** Guest languages register at namespace load time;
+  the toolkit imports no language directly.
+
+### Language (m1clj)
+
 - **Human-readable Clojure.** The syntax should be immediately legible to
   anyone who knows Clojure, Python, Ruby, or JavaScript.
 
-- **Full Clojure compatibility.** Every valid Clojure program has a meme
-  equivalent. Every meme program produces valid Clojure forms. Data literals,
-  destructuring, reader macros, macros, metadata — all work unchanged.
+- **Full Clojure compatibility.** Every valid Clojure program has an
+  m1clj equivalent. Every m1clj program produces valid Clojure forms.
+  Data literals, destructuring, reader macros, macros, metadata — all
+  work unchanged.
 
-- **Self-hosting.** meme code should be able to build meme itself. The CLI
-  is the first component written in `.m1clj`.
+- **Self-hosting.** m1clj code should be able to build m1clj itself. The
+  CLI is the first component written in `.m1clj`.
 
-- **Roundtrippable.** meme text → Clojure forms → meme text should produce
-  equivalent output. This enables tooling: formatters, linters, editors.
-
-- **Portable.** Core pipeline runs on Clojure JVM, ClojureScript, and
-  Babashka. Single codebase, `.cljc` files.
-
-- **Platform for guest languages.** The parser engine, pipeline, and FullForm
-  representation are designed as a foundation for languages beyond Clojure.
+- **Roundtrippable.** m1clj text → Clojure forms → m1clj text should
+  produce equivalent output. Lossless via the AST tier; structural via
+  the form path.
 
 
 ## Non-goals
 
-- **Replacing Clojure syntax.** meme is an alternative surface syntax.
+- **Replacing Clojure syntax.** m1clj is an alternative surface syntax.
   Developers who prefer S-expressions should keep using them.
 
 - **Error recovery.** The reader fails fast on invalid input. Partial
@@ -56,14 +88,17 @@ the CLI itself is written in `.m1clj`.
 ## Target users
 
 1. **Developers writing Clojure without paredit.** Terminal, basic text
-   editors, web forms, notebooks. meme syntax eliminates the bookkeeping
+   editors, web forms, notebooks. m1clj syntax eliminates the bookkeeping
    that structural editors normally handle.
 
-2. **Anyone reading Clojure code.** meme is easier to scan than
+2. **Anyone reading Clojure code.** m1clj is easier to scan than
    S-expressions — code review, diffs, logs, documentation.
 
 3. **Agents generating Clojure.** What is good for humans is good for
-   agents. meme reduces syntax errors on the structural dimension.
+   agents. m1clj reduces syntax errors on the structural dimension.
+
+4. **Researchers / authors of alternative Clojure surfaces.** The
+   toolkit is the platform; m1clj is one experiment built on it.
 
 
 ## Requirements
@@ -90,11 +125,11 @@ the CLI itself is written in `.m1clj`.
 | R22 | Portable `.cljc` — core reader/printer run on JVM, ClojureScript, Babashka | Done |
 | R23 | Signed numbers: `-1` is number, `-(1 2)` is call to `-` | Done |
 | R24 | `#:ns{...}` namespaced maps parsed natively (no read-string) | Done |
-| R25 | `#()` uses meme syntax inside, `%` params → `fn` form | Done |
+| R25 | `#()` uses m1clj syntax inside, `%` params → `fn` form | Done |
 | R26 | `stages/run` exposes intermediate stage state for tooling | Done |
 | R28 | `()` is the empty list (no head required) | Done |
-| R29 | No S-expression escape hatch — `'(...)` uses meme syntax inside | Done |
-| R30 | Syntax-quote parsed natively — meme syntax inside `` ` `` | Done |
+| R29 | No S-expression escape hatch — `'(...)` uses m1clj syntax inside | Done |
+| R30 | Syntax-quote parsed natively — m1clj syntax inside `` ` `` | Done |
 | R31 | Zero `read-string` delegation — all values resolved natively | Done |
 
 ### Printer
@@ -105,7 +140,7 @@ the CLI itself is written in `.m1clj`.
 | P5 | Print `(def x 42)` as `def(x 42)` | Done |
 | P6 | Print `(let [x 1] ...)` as `let([x 1] ...)` | Done |
 | P7 | Print `(for [x xs] ...)` as `for([x xs] ...)` | Done |
-| P8 | Print `defn` with proper meme syntax | Done |
+| P8 | Print `defn` with proper m1clj syntax | Done |
 | P9 | Print `if` as call form | Done |
 | P11 | Print all Clojure data literals | Done |
 | P12 | Proper indentation | Done |
@@ -126,7 +161,7 @@ the CLI itself is written in `.m1clj`.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| RE1 | Read meme input, eval as Clojure, print result | Done |
+| RE1 | Read m1clj input, eval as Clojure, print result | Done |
 | RE2 | Multi-line input: wait for balanced brackets and parens | Done |
 | RE3 | Run via `bb meme` | Done |
 
@@ -141,7 +176,7 @@ the CLI itself is written in `.m1clj`.
 | C4 | `meme format <file\|dir>` — normalize .m1clj files via canonical formatter (in-place or stdout) | Done |
 | C5 | `meme transpile <dir\|file...> [--out dir]` — transpile .m1clj to .clj in a separate output directory for classpath use. Alias: `compile`. | Done |
 | C8 | `meme build <dir\|file...> [--out dir]` — transpile + AOT compile to JVM bytecode. Stops at `.class` files; JAR packaging stays in user's tools.build layer. | Done |
-| C6 | `load-file` interception — `(load-file "path.m1clj")` runs through the meme pipeline (JVM + Babashka) | Done |
+| C6 | `load-file` interception — `(load-file "path.m1clj")` runs through the toolkit pipeline (JVM + Babashka) | Done |
 | C7 | `require` interception — `(require 'my.ns)` finds `.m1clj` files on the classpath (JVM only; Babashka's SCI bypasses `clojure.core/load`) | Done |
 
 Note: Requirement IDs are not sequential — gaps (R2–R4, R11–R12, R14,
@@ -154,19 +189,21 @@ renumbered, so git history and this table stay cross-referenceable.
 ## Architecture
 
 ```
-.m1clj file ──→ unified-pratt-parser ──→ cst-reader ──→ Clojure forms
-                  (step-parse)          (step-read)         │
-                                                            ▼
-                                                      expander ──→ eval
-                                                            │
-                                                       printer ──→ .m1clj text
-                                                     formatter ──→ .m1clj text
+.m1clj source ──► parser ──► CST ──► AST ──► forms ──► eval
+                (step-parse)  (cst→ast)  (ast→form)
+                                  │
+                                  ├──► printer ──► .m1clj text   (m1clj formatter)
+                                  └──► printer ──► .clj text     (clj-mode print)
 ```
+
+The AST is the lossless tier — trivia, position, and notation live on
+record fields, surviving any walker. The form path is structural and
+intentionally lossy.
 
 The codebase has four layers:
 - **`meme.tools.{parser, lexer, render}`** — Generic, language-agnostic infrastructure: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
-- **`meme.tools.clj.*`** — Clojure-surface commons shared across any Clojure-flavored frontend: lexical conventions, atom resolution, CST reader, stages, syntax-quote expander, the `Clj*` AST records, value serialization, run/repl harnesses.
-- **`m1clj-lang.*`** — Meme language: grammar, parselets, lexlets shim, form-shape, printer, formatters; plus thin `run`/`repl` shims that inject meme's grammar and delegate to `meme.tools.clj.{run,repl}`.
+- **`meme.tools.clj.*`** — Clojure-surface commons shared across any Clojure-flavored frontend: lexical conventions, atom resolution, CST reader, AST nodes/build/lower, stages, syntax-quote expander, value serialization, run/repl harnesses, native-Clojure parser.
+- **`m1clj-lang.*`** — m1clj language: grammar, parselets, lexlets shim, form-shape, printer, formatters; plus thin `run`/`repl` shims that inject m1clj's grammar and delegate to `meme.tools.clj.{run,repl}`. **`clj-lang.*`** is the sibling guest registering the native Clojure surface.
 - **`meme.*`** — Shared runtime infrastructure (`meme.registry`, `meme.loader`) and app tier (`meme.cli`).
 
 The pipeline has composable stages (composed by `meme.tools.clj.stages`), each a `ctx → ctx` function with a `step-` prefix:
@@ -188,11 +225,11 @@ The pipeline has composable stages (composed by `meme.tools.clj.stages`), each a
    nodes for tooling access.
 
 The printer pattern-matches on form structure to reverse the transformation.
-It detects special forms and produces their meme syntax equivalents.
+It detects special forms and produces their m1clj syntax equivalents.
 
 All `#` dispatch forms (`#?`, `#?@`, `#:ns{}`, `#{}`, `#""`, `#'`, `#_`,
 `#()`, tagged literals) and syntax-quote (`` ` ``) are parsed natively with
-meme rules inside. No opaque regions.
+m1clj rules inside. No opaque regions.
 
 
 ## Known limitations
@@ -228,14 +265,15 @@ meme rules inside. No opaque regions.
   512 levels. Exceeding this produces a clear error. This prevents stack
   overflow on recursive descent.
 
-- **Interior comments before non-metadatable atoms are dropped.** Comments
-  and whitespace preceding a child form are preserved on the form's
-  metadata (`:m1clj/leading-trivia`) so the formatter can emit them.
-  Clojure's atom values — keywords, numbers, strings, booleans, chars —
-  cannot carry metadata, so a comment that sits immediately before such
-  an atom (e.g. a comment above a keyword map key) is lost when the form
-  is re-emitted. Comments above metadatable values (symbols, lists,
-  vectors, maps, sets) survive.
+- **Plain-form path: interior comments before non-metadatable atoms are
+  dropped.** This applies to the structural form path (`m1clj->forms`,
+  `forms->m1clj`). Comments above metadatable values (symbols, lists,
+  vectors, maps, sets) survive on metadata; comments immediately above
+  atom values (keywords, numbers, strings, booleans, chars) are lost
+  because Clojure atoms cannot carry metadata. **The AST tier
+  (`m1clj->ast`, `format-m1clj`) preserves these comments on
+  `:leading-trivia` record fields and is lossless.** Tooling that
+  needs comment fidelity should consume the AST.
 
 
 ## Completed work (post-initial release)
@@ -251,6 +289,20 @@ meme rules inside. No opaque regions.
     does the same when a `:resolve-lang-for-path` resolver is injected.
   - **Pipeline integration** — pluggable `:parser` in
     `step-parse`, `:prelude` option in `run-string`.
+  - **Sibling guest shipped:** `clj-lang` registers the native Clojure
+    surface, sharing the toolkit's parser engine, AST tier, and printer.
+
+- **AST tier.** A lossless intermediate representation between CST and
+  Clojure forms. Twenty-five record types (`Clj*`) capture position,
+  trivia, and notation as fields; round-trip via the tier preserves
+  comments, reader sugar, set source order, and namespaced-map prefixes
+  that the structural form path drops. Public API:
+  `m1clj-lang.api/m1clj->ast`, `clj->ast`, plus `meme.tools.clj.ast.*`.
+
+- **Native Clojure parser.** `meme.tools.clj.parser.*` parses native
+  S-expression Clojure source through the same engine as m1clj. Powers
+  `clj-lang` and the `clj→m1clj` direction with no `read-string`
+  delegation.
 
 - **Three-layer formatter architecture.** The printer, form-shape, and
   style concerns are now separate namespaces with independent extension
@@ -297,9 +349,13 @@ meme rules inside. No opaque regions.
 - nREPL middleware
 - **meme-lsp**: Language Server Protocol implementation for `.m1clj` files.
   Diagnostics, go-to-definition, symbol navigation, completions, hover,
-  and formatting via the existing lossless CST pipeline. Could extend
-  clojure-lsp or be a standalone server using the meme parser directly.
-- **meme-mcp**: Model Context Protocol server exposing meme's pipeline
-  (parse, read, format, to-clj, to-m1clj) as MCP tools for AI agents.
-  Enables LLMs to read, write, and transform `.m1clj` code natively
-  without converting through Clojure first.
+  and formatting via the existing lossless AST pipeline. Could extend
+  clojure-lsp or be a standalone server using the toolkit parser directly.
+- **meme-mcp**: Model Context Protocol server exposing the toolkit
+  pipeline (parse, read, format, to-clj, to-m1clj) as MCP tools for AI
+  agents. Enables LLMs to read, write, and transform `.m1clj` code
+  natively without converting through Clojure first.
+- **Additional guests.** The toolkit's plural-language story is its main
+  thesis; `clj-lang` is one demonstration. More guests (rewrite-rule
+  surfaces, term-rewriting frontends, paredit-friendly bracket variants)
+  are the natural follow-ons.
