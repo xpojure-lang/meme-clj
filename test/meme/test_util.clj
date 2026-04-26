@@ -157,9 +157,12 @@
 
       :else sym)))
 
-(defn- normalize-form
+(defn normalize-form
   "Recursively normalise away surface differences between read-string
-  and the native parser. See namespace comment above for the rules."
+  and the native parser. See namespace comment above for the rules.
+
+  Public so the fuzz cross-check property target (`fuzz/meme/fuzz/roundtrip.clj`)
+  can reuse the same normalisation rules as `vendor_cross_check_test`."
   [form]
   (cond
     (symbol? form) (normalize-symbol form)
@@ -188,10 +191,12 @@
     (seq? form) (apply list (map normalize-form form))
     :else form))
 
-(defn- cross-check-resolve-keyword
+(defn cross-check-resolve-keyword
   "Mimic clojure.core/read-string's auto-resolve-keyword behaviour with
   *ns* defaulting to user. Plain ::foo → :user/foo. ::alias/foo keeps
-  the alias as-is (we don't know read-string's ns aliases here)."
+  the alias as-is (we don't know read-string's ns aliases here).
+
+  Public — the fuzz cross-check property target consumes this."
   [raw]
   (let [body (subs raw 2)
         slash (str/index-of body "/")]
