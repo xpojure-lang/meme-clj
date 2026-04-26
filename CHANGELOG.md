@@ -79,6 +79,12 @@ Post-5.0.0: platform / lang separation, Clojure-surface extraction (`meme.tools.
 
 - **Native Clojure parser (`meme.tools.clj.parser.*`).** A sibling to `m1clj-lang.grammar` that parses native Clojure surface (`(f x y)` with the head inside the parens, no M-expression call adjacency). Reuses the same parser engine, lex layer, AST builder, and lowering pipeline — only the call rule and `#(...)` body shape differ. `meme.tools.clj.parser.parselets` houses dispatch-scanlet (now a factory: `make-dispatch-scanlet {:anon-fn-body :expressions|:list}`), tilde-scanlet, and `sign-followed-by-digit?` — all extracted from `m1clj-lang.parselets`, so both grammars share one source of truth for Clojure-surface dispatch. `m1clj-lang.parselets` shrinks to the meme-specific bits: adjacency detection and the M-expression call-scanlet. Lower-tier infrastructure: lives in `meme.tools.clj.*`, not as a peer lang. Built so `.clj` source can round-trip losslessly through the AST tier without depending on `clojure.core/read-string`.
 
+- **Public Clojure parser API (`meme.tools.clj.parser.api`).** Three entry points: `parse-string` (CST), `clj->ast` (CljRoot AST — lossless), `clj->forms` (vector of plain forms — lossy). Same `Clj*` AST taxonomy as `m1clj->ast`; consumer code that walks AST nodes works unchanged on either source surface.
+
+- **`m1clj-lang.api/clj->ast` + cross-platform `clj->forms` + lossless `clj->m1clj`.** `clj->forms` no longer requires JVM/Babashka — it routes through the native parser and works on ClojureScript too. `clj->m1clj` is now lossless via the AST tier: reader sugar (`'`, `@`, `#'`, `#()`), comments, namespaced-map prefixes, set source order, and metadata chains all survive the conversion. Reader conditionals are preserved as `#?(...)` rather than evaluated.
+
+- **`#=` read-eval explicitly rejected.** The dispatch-scanlet now emits an error CST node for `#=` instead of treating it as a tagged literal. m1clj's grammar caught this incidentally via the bare-parens rule; the native Clojure grammar needs an explicit reject so `#=(+ 1 2)` doesn't quietly become a `#=`-tagged form. Matches the prior `read-string`-with-`*read-eval* false` behavior of `clj->forms`.
+
 ### Changed
 
 - **`register!` atomicity** — validation moved out of the `swap!` updater into a `compare-and-set!` retry loop. Previous shape threw from inside the updater; new shape validates against the current snapshot on each CAS attempt and commits only if the CAS wins. Concurrent conflicting registrations now consistently detect the conflict.
