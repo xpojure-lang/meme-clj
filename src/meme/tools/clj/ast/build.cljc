@@ -127,13 +127,14 @@
     (nodes/->CljChar value src pos trivia)))
 
 (defn- regex-atom [tok pos trivia]
-  ;; resolve-regex returns a compiled Pattern (JVM) or RegExp (CLJS).
-  ;; The AST stores the source string (between the #" and ") so the tier
-  ;; stays portable; lowering re-compiles via resolve-regex.
-  (let [raw (:raw tok)
-        ;; raw is the full source token, e.g. #"foo\d" — strip wrapper
-        pattern (subs raw 2 (dec (count raw)))]
-    (nodes/->CljRegex pattern pos trivia)))
+  ;; The AST stores the pattern source (between #" and ") so the tier
+  ;; stays portable. We still call resolve-regex at build time to validate
+  ;; — it throws on unterminated / malformed regex (the parser produces
+  ;; the token regardless of whether the closing " is present).
+  (let [raw (:raw tok)]
+    (resolve/resolve-regex raw (tok-pos tok))
+    (let [pattern (subs raw 2 (dec (count raw)))]
+      (nodes/->CljRegex pattern pos trivia))))
 
 (defn- atom-node [node]
   (let [tok (:token node)
@@ -225,10 +226,10 @@
       (nodes/->CljDeref (cst->ast-node (:form node) opts) pos trivia)
 
       :var-quote
-      (let [inner (cst->ast-node (:form node) opts)]
-        (when-not (instance? meme.tools.clj.ast.nodes.CljSymbol inner)
-          (errors/meme-error "#' (var-quote) requires a symbol" pos))
-        (nodes/->CljVar inner pos trivia))
+      ;; The "requires a symbol" check happens at lowering time:
+      ;; #'^:foo bar has a CljMeta inner whose lowered form IS a symbol.
+      ;; Checking at AST level would over-reject the metadata wrapping.
+      (nodes/->CljVar (cst->ast-node (:form node) opts) pos trivia)
 
       :syntax-quote
       (nodes/->CljSyntaxQuote (cst->ast-node (:form node) opts) pos trivia)
@@ -263,16 +264,20 @@
           (when (::in-anon-fn opts)
             (errors/meme-error "Nested #() are not allowed" pos))
           (let [body-children (read-children (:children node)
-                                             (assoc opts ::in-anon-fn true))]
-            (when (empty? body-children)
+                                             (assoc opts ::in-anon-fn true))
+                ;; Discards inside `#()` are eliminated for the body
+                ;; computation (matches cst-reader). Keeping them would
+                ;; let `#(#_x)` parse as a no-op body, which Clojure rejects.
+                effective (filterv #(not (instance?
+                                           meme.tools.clj.ast.nodes.CljDiscard %))
+                                   body-children)]
+            (when (empty? effective)
               (errors/meme-error "#() requires a body" pos))
-            (let [body (if (= 1 (count body-children))
-                         (first body-children)
+            (let [body (if (= 1 (count effective))
+                         (first effective)
                          ;; Multi-form body — wrap in an implicit do-list.
-                         ;; Note: AST represents this as CljList(do, ...)
-                         ;; rather than a sentinel, so tooling sees the wrapping.
                          (nodes/->CljList
-                           (into [(nodes/->CljSymbol "do" nil pos [])] body-children)
+                           (into [(nodes/->CljSymbol "do" nil pos [])] effective)
                            pos [] []))
                   ;; Arity is computed from %-symbols in the body during
                   ;; ast→form lowering. AST stores raw body for fidelity;

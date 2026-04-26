@@ -1,11 +1,15 @@
 (ns m1clj-lang.api
-  "Meme lang composition: lossless pipeline with Pratt parser.
+  "m1clj lang composition: lossless pipeline with Pratt parser and AST tier.
 
-   Pipeline: scanner → trivia-attacher → pratt-parser → cst-reader
-   The Pratt parser produces a lossless CST; the CST reader lowers it
-   to Clojure forms."
+   Pipeline: source → strip-preamble → parser → cst→ast → ast→form
+   The parser produces a lossless CST; cst→ast lifts it into the Clj* AST
+   tier (position, trivia, and notation as fields); ast→form lowers AST
+   to plain Clojure values for eval. Tooling consumers stop at the AST."
   (:require [meme.tools.clj.stages :as stages]
             [meme.tools.clj.forms :as forms]
+            [meme.tools.clj.ast.build :as ast-build]
+            [meme.tools.clj.ast.lower :as ast-lower]
+            [meme.tools.parser :as parser]
             [m1clj-lang.grammar :as grammar]
             [m1clj-lang.form-shape :as form-shape]
             [m1clj-lang.formatter.flat :as fmt-flat]
@@ -19,9 +23,52 @@
 ;; Lang API — delegates to composable stages
 ;; ---------------------------------------------------------------------------
 
+(defn- guard-deprecated-opts!
+  "Reject opts that were valid in pre-AST stages but no longer apply.
+  Mirrors the guard previously living in `meme.tools.clj.stages/step-read`."
+  [opts]
+  (when (contains? opts :read-cond)
+    (throw (ex-info
+             (str "The :read-cond option is no longer supported. The m1clj "
+                  "reader always preserves reader conditionals as "
+                  "CljReaderConditional records. To evaluate them for a "
+                  "platform, compose "
+                  "meme.tools.clj.stages/step-evaluate-reader-conditionals "
+                  "after reading, or use m1clj-lang.run/run-string / run-file.")
+             {:type    :m1clj/deprecated-opt
+              :opt     :read-cond
+              :value   (:read-cond opts)}))))
+
+(defn m1clj->ast
+  "Read m1clj source string. Returns a `CljRoot` AST node whose `:children`
+  vec contains one AST node per top-level form.
+
+  The AST tier captures position, leading/close trivia, and notation
+  (sugar form, namespace prefix, raw spelling) as record fields rather
+  than metadata — survives any walker, even ones that don't know about
+  m1clj's metadata vocabulary. See `meme.tools.clj.ast.nodes` for the
+  25 node types.
+
+  Tooling that needs round-trip fidelity, scoped refactoring, or
+  position-attributed warnings should consume the AST directly.
+  Callers that just want eval-ready Clojure forms should use
+  `m1clj->forms`, which composes lowering on top.
+
+  opts keys:
+    :resolve-keyword  — fn applied at lowering for `::kw`; not used at
+                        AST build time (the AST captures source structure)
+    :grammar          — custom Pratt grammar spec (advanced)"
+  ([s] (m1clj->ast s nil))
+  ([s opts]
+   {:pre [(string? s)]}
+   (guard-deprecated-opts! opts)
+   (let [src (stages/strip-source-preamble s)
+         cst (parser/parse src (or (:grammar opts) grammar/grammar))]
+     (ast-build/cst->ast cst opts))))
+
 (defn m1clj->forms
-  "Read meme source string. Returns a vector of Clojure forms.
-   step-parse → step-read
+  "Read m1clj source string. Returns a vector of Clojure forms.
+   Composes `m1clj->ast` followed by AST → form lowering.
 
    Reader conditionals (`#?`, `#?@`) are always returned as
    `CljReaderConditional` records. To evaluate them for the current
@@ -37,7 +84,7 @@
   ([s] (m1clj->forms s nil))
   ([s opts]
    {:pre [(string? s)]}
-   (:forms (stages/run s (grammar/with-grammar opts)))))
+   (ast-lower/ast->forms (m1clj->ast s opts) opts)))
 
 (defn forms->m1clj
   "Print Clojure forms as meme source string (single-line per form).
