@@ -37,7 +37,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-test-runner
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "test/meme/test_runner.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "cli/test/meme/test_runner.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
@@ -154,14 +154,14 @@
 
 (deftest dogfood-semantic-equivalence
   (doseq [path ["m1clj-lang/src/m1clj_lang/api.cljc" "m1clj-lang/src/m1clj_lang/run.clj"
-                "m1clj-lang/src/m1clj_lang/repl.clj" "test/meme/test_runner.clj"
+                "m1clj-lang/src/m1clj_lang/repl.clj" "cli/test/meme/test_runner.clj"
                 "toolkit/src/meme/tools/clj/cst_reader.cljc"
                 "m1clj-lang/src/m1clj_lang/printer.cljc"
                 "toolkit/src/meme/tools/clj/resolve.cljc"
                 "toolkit/src/meme/tools/clj/stages.cljc"
                 "toolkit/src/meme/tools/clj/errors.cljc"
                 "toolkit/src/meme/registry.clj"
-                "src/meme/cli.clj"
+                "cli/src/meme/cli.clj"
                 "toolkit/src/meme/tools/parser.cljc"
                 "toolkit/src/meme/tools/render.cljc"
                 "m1clj-lang/src/m1clj_lang/grammar.cljc"
