@@ -20,6 +20,8 @@ clj-lang carries no parser, no printer, no formatter of its own. Every layer is 
 
 The `:run` slot is intentionally absent — `meme.cli` already eval-loads `.clj` files via Clojure's standard mechanisms. clj-lang only handles surface conversions and formatting.
 
+> **Coupling note.** `clj-lang.api` requires four `m1clj-lang.*` namespaces — `formatter.canon`, `formatter.flat`, `form-shape`, and `api`. This is intentional reuse, not a layering violation, but it does mean clj-lang is not Clojars-independent: when guests are eventually split into separate artifacts, clj-lang will need m1clj-lang as a dependency (or its own copy of the printer).
+
 ## Files
 
 ```

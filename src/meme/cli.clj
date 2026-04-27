@@ -412,6 +412,10 @@
 (defn -main
   "CLI entry point. Parses args and dispatches to subcommands."
   [& args]
+  ;; babashka.cli is loaded lazily here rather than via `ns :require` so
+  ;; non-CLI consumers of meme.cli (programmatic embedders) don't pay
+  ;; the dep cost. Babashka bundles it; on JVM it comes via the :meme
+  ;; alias's classpath at invocation time.
   (require 'babashka.cli)
   (let [dispatch (resolve 'babashka.cli/dispatch)
         file-cmd (fn [f] (fn [m] (f (collect-file-args m))))]
