@@ -407,13 +407,28 @@ All of these work exactly as in Clojure:
 
 ## Guest Languages
 
-meme-clj serves as a platform for guest languages — m1clj is the first
-guest, `clj-lang` is the second. A guest language can define:
-1. **A prelude** — forms eval'd before user code (standard library)
-2. **A custom parser** — optionally replacing the m1clj parser entirely
+meme-clj is a syntax-experimentation toolkit hosting a family of guest
+languages on a shared Clojure-surface backbone. Three guests ship as
+built-ins:
 
-Guest languages are defined as EDN files and registered via `meme.registry`.
-They are dispatched by file extension.
+- **`m1clj`** — M-expressions for Clojure (the dominant surface; CLI default).
+- **`m2clj`** — m1clj plus bare-paren-as-list-literal.
+- **`clj`** — native S-expression Clojure surface, registered as a
+  sibling guest to demonstrate the toolkit is language-agnostic.
+
+A guest provides:
+1. **A grammar spec** — character dispatch, scanlets, parselets — fed
+   to the shared Pratt parser engine in `meme.tools.parser`.
+2. Optionally a **prelude** — forms eval'd before user code.
+3. Optionally a **format / printer / form-shape** — for tooling
+   support; clj-lang reuses m1clj's printer in `:clj` mode rather
+   than carrying its own.
+
+Built-in guests register themselves at namespace-load time via
+`meme.registry/register-builtin!` (each lang's `api` ns calls it; the
+registry imports no langs). User langs register at runtime via
+`meme.registry/register!` with EDN-style config maps. The CLI
+dispatches on file extension.
 
 ### Extension registration
 

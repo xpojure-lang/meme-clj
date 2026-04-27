@@ -282,8 +282,8 @@ The codebase is split into four platform tiers:
 
 - **Generic tools** (`meme.tools.{parser, lexer, render}`) — portable `.cljc`, runs on JVM, Babashka, and ClojureScript. Language-agnostic library surface: Pratt parser engine, scanlet builders, Wadler-Lindig Doc layout.
 - **Clojure-surface commons** (`meme.tools.clj.{lex, errors, forms, resolve, expander, cst-reader, stages, values}`) — portable `.cljc`. Shared across any Clojure-flavored frontend: lexical conventions, Clojure atom resolution, CST reader, stages, the `Clj*` AST records.
-- **Core translation** (`m1clj-lang.{api, grammar, lexlets, parselets, form-shape, printer, formatter.flat, formatter.canon}`) — portable `.cljc`. m1clj's syntactic identity: grammar spec, scanlet/parselet glue, semantic decomposition, Doc-tree builder, formatters. Pure functions with no eval or I/O dependency.
-- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `m1clj-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
+- **Core translation** (`m1clj-lang.{api, grammar, lexlets, parselets, form-shape, printer, formatter.flat, formatter.canon}`, `m2clj-lang.{api, grammar, parselets, lexlets, form-shape, printer, formatter.flat, formatter.canon}`, `clj-lang.api`) — portable `.cljc`. Each guest's syntactic identity: grammar spec, scanlet/parselet glue, semantic decomposition, Doc-tree builder, formatters. Pure functions with no eval or I/O dependency. clj-lang is a thin shim that reuses the toolkit's native Clojure parser and m1clj's printer in `:clj` mode.
+- **Runtime** (`meme.tools.{repl, run}`, `meme.tools.clj.{repl, run}`, `m1clj-lang.{repl, run}`, `m2clj-lang.{repl, run}`, `meme.{registry, loader, cli}`) — `.clj`, JVM/Babashka only. Require `eval` and `read-line`/`slurp`. The lang-level `run`/`repl` files are thin shims that inject grammar and delegate to `meme.tools.clj.{run, repl}`.
 - **Test infrastructure** (test-runner, dogfood-test, vendor-roundtrip-test) — `.clj`, JVM only.
   These use `java.io`, `PushbackReader`, `System/exit`.
 
@@ -294,15 +294,25 @@ code.
 
 ## `#()` printer shorthand
 
-The printer emits `#(body)` when the form has `:m1clj/sugar true` metadata —
-set by the reader when it parses `#(...)` source syntax. A user-written
-`fn([%1] body)` lacks this metadata and prints back as `fn(...)`.
+The printer emits `#(body)` when it sees a `CljAnonFn` AST node, and
+`fn([params] body)` when it sees a `CljList` whose head is the symbol
+`fn`. The notation choice rides on the AST node type itself, not on
+form metadata — pre-AST drafts threaded a `:m1clj/sugar` form-metadata
+key for this distinction; the AST cutover (phase A5) moved that
+information onto record fields so it survives arbitrary form walkers.
 
-This is an instance of the syntactic transparency principle: the reader
-tags the notation, the printer reconstructs it. No body inspection or
-surplus-param heuristic is needed — the reader's `build-anon-fn-params`
-already builds the correct parameter vector at read time from the `%`
-params found in the body.
+This is an instance of the syntactic transparency principle: the parser
+selects the AST node kind from the source surface, the printer
+reconstructs the surface from the node kind. No body inspection or
+surplus-param heuristic is needed — the AST builder's
+`build-anon-fn-params` already records the parameter vector at parse
+time from the `%` params found in the body.
+
+The plain-form path (`m1clj->forms` followed by `forms->m1clj`) is
+intentionally lossy here: a `CljAnonFn` lowers to `(fn* [...] body)`,
+which prints back as `fn(...)`. Tooling that needs the original
+notation must consume the AST tier directly via `m1clj->ast` or
+`format-m1clj`.
 
 
 ## `maybe-call` on all forms

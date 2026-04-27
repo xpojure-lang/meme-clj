@@ -747,7 +747,7 @@ A sibling lang with different string conventions can install its own handler —
 (meme.registry/resolve-by-extension path)
 ```
 
-Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Meme ships with `.m1clj`, `.m1cljc`, `.m1cljj`, `.m1cljs`.
+Given a file path, find the lang whose `:extensions` (plural, normalized) include a match for the file's suffix. Returns `[lang-name lang-map]` or `nil`. Covers both built-in and user-registered langs. Built-in coverage: `.m1clj` / `.m1cljc` / `.m1cljj` / `.m1cljs` (plus soft-deprecated `.meme*` variants), `.m2clj` / `.m2cljc` / `.m2cljj` / `.m2cljs`, and `.clj` / `.cljc`.
 
 ### registered-langs
 
@@ -755,7 +755,7 @@ Given a file path, find the lang whose `:extensions` (plural, normalized) includ
 (meme.registry/registered-langs)
 ```
 
-List all registered **user** lang names (keywords). Excludes built-ins (m1clj-lang).
+List all registered **user** lang names (keywords). Excludes built-ins (`:m1clj`, `:m2clj`, `:clj`).
 
 ### available-langs
 
