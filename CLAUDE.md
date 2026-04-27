@@ -35,14 +35,15 @@ Two more guests are bundled today:
 > `m2clj-lang.*`, `clj-lang.*`). See `doc/glossary.md` for the full
 > vocabulary.
 
-> **Direction.** Each guest is sovereign. The intended split is a monorepo
-> where each lang is its own directory and its own Clojars artifact, with
-> the CLI bundling the default set as ordinary deps. Today the layout is
-> still flat (`src/m1clj_lang/`, `src/m2clj_lang/`, `src/clj_lang/` under
-> one `deps.edn`); treat that as transitional. Don't dedupe across
-> `<lang>-lang.*` directories — temporal similarity between sovereign langs
-> is fine; shared code belongs in `meme.tools.*` / `meme.tools.clj.*`
-> only when it's genuinely toolkit-level.
+> **Direction.** Each guest is sovereign and lives in its own top-level
+> directory: `m1clj-lang/`, `m2clj-lang/`, `clj-lang/`. The meme-clj
+> substrate (toolkit + CLI as one artifact) lives at `src/meme/`. Today
+> everything still resolves through one `deps.edn` with multiple `:paths`
+> roots; the eventual move to one Clojars artifact per directory is
+> additive from here. Don't dedupe across `<lang>-lang.*` directories —
+> temporal similarity between sovereign langs is fine; shared code belongs
+> in `meme.tools.*` / `meme.tools.clj.*` only when it's genuinely
+> toolkit-level.
 
 ## Build & Test
 
@@ -182,9 +183,9 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 
 **Per-guest documentation** — each lang owns its own contract, file map, and divergence notes:
 
-- `src/m1clj_lang/CLAUDE.md` — m1clj (M-expressions for Clojure). Includes the syntax quick reference for writing `.m1clj` code.
-- `src/m2clj_lang/CLAUDE.md` — m2clj (m1clj plus bare-paren-as-list-literal). The surgical diff from m1clj is concentrated in three files; do not lift the rest into shared modules.
-- `src/clj_lang/CLAUDE.md` — clj-lang (native S-expression Clojure surface as a sibling guest, ~100 lines, mostly a registration shim).
+- `m1clj-lang/CLAUDE.md` — m1clj (M-expressions for Clojure). Includes the syntax quick reference for writing `.m1clj` code.
+- `m2clj-lang/CLAUDE.md` — m2clj (m1clj plus bare-paren-as-list-literal). The surgical diff from m1clj is concentrated in three files; do not lift the rest into shared modules.
+- `clj-lang/CLAUDE.md` — clj-lang (native S-expression Clojure surface as a sibling guest, ~100 lines, mostly a registration shim).
 
 When working in a single lang's tree, treat that lang's `CLAUDE.md` as the local source of truth — it covers the per-guest invariants and divergence points without dragging the others into context.
 
@@ -308,8 +309,8 @@ clojure-lsp is configured via the `.claude-plugin/` directory for Claude Code in
 
 Each guest's syntax cheatsheet lives next to its source:
 
-- `src/m1clj_lang/CLAUDE.md` — m1clj M-expression syntax (the dominant surface; CLI default).
-- `src/m2clj_lang/CLAUDE.md` — m2clj's surgical diff from m1clj (bare-paren-as-list).
-- `src/clj_lang/CLAUDE.md` — clj-lang (native Clojure, no surface changes).
+- `m1clj-lang/CLAUDE.md` — m1clj M-expression syntax (the dominant surface; CLI default).
+- `m2clj-lang/CLAUDE.md` — m2clj's surgical diff from m1clj (bare-paren-as-list).
+- `clj-lang/CLAUDE.md` — clj-lang (native Clojure, no surface changes).
 
 For the full m1clj language spec, see `doc/language-reference.md`.

@@ -739,7 +739,7 @@ The registry itself is lang-agnostic: it does not know how to interpret a string
       (run/run-string source opts))))
 ```
 
-A sibling lang with different string conventions would install its own handler (later registrations override earlier ones). Without a handler, string values for that command throw with a clear error.
+A sibling lang with different string conventions can install its own handler — but registration is **first-wins**: subsequent calls for the same command are no-ops. Whichever lang's api ns loads first owns the convention. Today all bundled Clojure-surface langs install structurally identical `:run` handlers (slurp prelude, run before user source), so the choice is benign. Once a lang needs a genuinely divergent string convention, scope handlers per-lang here. Without a handler, string values for that command throw with a clear error.
 
 ### resolve-by-extension
 

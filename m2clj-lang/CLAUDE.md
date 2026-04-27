@@ -39,7 +39,7 @@ The bare-paren rule is encoded across two layers:
 ## Files
 
 ```
-src/m2clj_lang/
+m2clj-lang/src/m2clj_lang/
 ├── api.cljc            Public API + lang-map composition. Self-registers as :m2clj.
 ├── grammar.cljc        Pratt grammar — routes `(` to bare-paren-nud.
 ├── parselets.cljc      bare-paren-nud + the inherited call-adjacency rule.
@@ -59,7 +59,7 @@ The `register-string-handler! :run` slot is registered first-wins, so when bundl
 
 ## Tests
 
-Per-lang tests live under `test/m2clj_lang/`:
+Per-lang tests live under `m2clj-lang/test/m2clj_lang/`:
 
 - `reader/bare_paren_test.cljc` — the distinguishing rule. Covers empty `()`, non-empty `(x y z)`, nesting, mixed call+bare-paren forms.
 - `printer_test.cljc` — bare-paren rendering of `CljQuote{:notation :bare}` and `(quote …)` canonicalization.
