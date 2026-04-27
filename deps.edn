@@ -1,7 +1,7 @@
-{:paths ["src" "toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "resources"]
+{:paths ["src" "toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "resources"]
  :deps {}
  :aliases
- {:test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "test/resources"]
+ {:test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "test/resources"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}
                       clj-kondo/clj-kondo
@@ -10,17 +10,17 @@
                       {:mvn/version "1.1.1"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test
-         :exec-args {:dirs ["test" "m1clj-lang/test" "m2clj-lang/test"]
+         :exec-args {:dirs ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test"]
                      :patterns ["meme\\..*-test"
                                 "m1clj-lang\\..*-test"
                                 "m2clj-lang\\..*-test"]}}
   ;; Alias name kept as :meme — it tracks the CLI binary name, not the
   ;; lang registry key (which is :m1clj). Renaming would break downstream
   ;; `clojure -T:meme ...` invocations in scripts and CI.
-  :meme {:replace-paths ["src" "toolkit/src" "m1clj-lang/src" "m2clj-lang/src"]
+  :meme {:replace-paths ["src" "toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src"]
          :replace-deps {}
          :ns-default meme.cli}
-  :cljs-test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test"]
+  :cljs-test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test"]
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}
                            org.clojure/test.check {:mvn/version "1.1.1"}}
