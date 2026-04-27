@@ -3,8 +3,12 @@
 
 require('[m1clj-lang.api :as m])
 
-;; Helper: roundtrip meme source through read→print
-defn(rt [src] m/forms->m1clj(m/m1clj->forms(src)))
+;; Helper: roundtrip meme source through the AST tier — that is the
+;; lossless path. The plain-form path (forms->m1clj ∘ m1clj->forms)
+;; is intentionally lossy (sugar collapses), so this test routes
+;; through format-m1clj which threads source through m1clj->ast +
+;; printer in :m1clj mode.
+defn(rt [src] m/format-m1clj(src {}))
 
 ;; ---------------------------------------------------------------
 ;; Quote: 'x sugar vs quote(x) call — both must roundtrip exactly
@@ -92,8 +96,8 @@ assert(=(rt("\"hello\\nworld\"") "\"hello\\nworld\""))
 ;; #() vs fn() — sugar preserved
 ;; ---------------------------------------------------------------
 
-;; NOTE: The experimental pipeline normalizes bare % to %1
-assert(=(rt("#(inc(%))") "#(inc(%1))"))
+;; AST tier preserves bare % (does not normalize to %1).
+assert(=(rt("#(inc(%))") "#(inc(%))"))
 assert(=(rt("fn([%1] inc(%1))") "fn([%1] inc(%1))"))
 
 ;; ---------------------------------------------------------------
