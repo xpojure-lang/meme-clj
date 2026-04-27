@@ -180,35 +180,13 @@ All four extension axes compose via `assoc`/`merge` on plain maps: swap a style,
 - `meme.tools.clj.run` (.clj) — Clojure-surface eval pipeline: source → shebang/BOM strip → stages → eval. Grammar-agnostic (caller passes `:grammar`). `default-resolve-symbol` matches Clojure's `SyntaxQuoteReader`. Installs `meme.loader` unless `:install-loader? false`. JVM/Babashka only.
 - `meme.tools.clj.repl` (.clj) — Clojure-surface REPL harness: `input-state` (complete/incomplete/invalid detection), `start`. Default `::kw` resolver via `*ns*` aliases. Grammar-agnostic. JVM/Babashka only.
 
-**m1clj language** (`m1clj-lang.*`) — the first language built on the toolkit:
+**Per-guest documentation** — each lang owns its own contract, file map, and divergence notes:
 
-- `m1clj-lang.api` (.cljc) — Public API and lang composition. Provides `m1clj->forms`, `forms->m1clj`, `forms->clj`, `clj->forms`, `m1clj->clj`, `clj->m1clj`, `m1clj->ast`, `clj->ast`, `format-m1clj-forms`. Also lang commands: `format-m1clj`, `to-clj`, `to-m1clj`, `lang-map`. Injects m1clj's grammar into the commons pipeline. `clj->forms` and `clj->m1clj` are JVM only. Portable.
-- `m1clj-lang.grammar` (.cljc) — m1clj grammar spec: maps characters to scanlets and parselets. The complete syntactic specification of M-expression syntax as data. Portable.
-- `m1clj-lang.parselets` (.cljc) — m1clj-specific compound parselets: call adjacency detection and the M-expression call rule. The shared dispatch (`#` sub-routing, tilde) lives in `meme.tools.clj.parser.parselets`. Portable.
-- `m1clj-lang.lexlets` (.cljc) — Thin shim forwarding to `meme.tools.clj.lex`. m1clj inherits all Clojure lexical conventions; this namespace keeps m1clj-lang's lexical identity and is the place where any future m1clj-specific lexical rule would live. Portable.
-- `m1clj-lang.form-shape` (.cljc) — Semantic decomposition of special forms into named slots (`:name`, `:params`, `:bindings`, `:clause`, `:body`, etc.). The middle layer between notation (printer) and style (formatter). Owns the stable slot vocabulary. See `doc/form-shape.md`. Portable.
-- `m1clj-lang.printer` (.cljc) — Wadler-Lindig Doc tree builder: `to-doc` (form → Doc tree). Single source of truth for `:m1clj` and `:clj` output modes. Delegates layout to `meme.tools.render`. Dispatches on form-shape slots and applies style's slot-keyed opinions. Portable.
-- `m1clj-lang.formatter.flat` (.cljc) — Flat formatter: composes printer + render at infinite width. `format-form`, `format-forms`, `format-clj`. Single-line output. Portable.
-- `m1clj-lang.formatter.canon` (.cljc) — Canonical formatter: composes printer + render at target width. `format-form`, `format-forms`. Width-aware multi-line output. Used by `meme format` CLI. Portable.
-- `m1clj-lang.run` (.clj) — Thin shim: injects m1clj's grammar and delegates to `meme.tools.clj.run`. Re-exports `default-resolve-symbol` for backwards compat. JVM/Babashka only.
-- `m1clj-lang.repl` (.clj) — Thin shim: injects m1clj's grammar and banner and delegates to `meme.tools.clj.repl`. JVM/Babashka only.
+- `src/m1clj_lang/CLAUDE.md` — m1clj (M-expressions for Clojure). Includes the syntax quick reference for writing `.m1clj` code.
+- `src/m2clj_lang/CLAUDE.md` — m2clj (m1clj plus bare-paren-as-list-literal). The surgical diff from m1clj is concentrated in three files; do not lift the rest into shared modules.
+- `src/clj_lang/CLAUDE.md` — clj-lang (native S-expression Clojure surface as a sibling guest, ~100 lines, mostly a registration shim).
 
-**m2clj language** (`m2clj-lang.*`) — sovereign guest; m1clj plus bare-paren-as-list-literal:
-
-- `m2clj-lang.api` (.cljc) — Public API and lang composition. Mirrors m1clj's surface: `m2clj->ast`, `m2clj->forms`, `forms->m2clj`, `m2clj->clj`, `clj->m2clj`, `format-m2clj-forms`, etc. Lang commands: `format-m2clj`, `to-clj`, `to-m2clj`, `lang-map`. Self-registers as `:m2clj` builtin. Portable.
-- `m2clj-lang.grammar` (.cljc) — m2clj grammar spec. Differs from m1clj in the `(` parselet: a paren without head adjacency lowers to a `:bare-list` CST node (which the AST builder lifts to `CljQuote{form: CljList, notation: :bare}`). Portable.
-- `m2clj-lang.parselets` (.cljc) — m2clj-specific parselets — call adjacency detection plus the bare-paren-as-list rule. Reuses the shared `#` and tilde dispatch from `meme.tools.clj.parser.parselets`. Portable.
-- `m2clj-lang.lexlets` (.cljc) — Thin shim forwarding to `meme.tools.clj.lex` (m2clj inherits Clojure lexical conventions). Portable.
-- `m2clj-lang.form-shape` (.cljc) — Semantic decomposition of special forms into named slots. Today mirrors m1clj's registry; sovereign by design (langs may diverge). Portable.
-- `m2clj-lang.printer` (.cljc) — Wadler-Lindig Doc tree builder for m2clj. Adds bare-paren rendering for `CljQuote{notation: :bare}` and canonicalizes `(quote …)` AST calls to bare-paren in `:m2clj` mode. Portable.
-- `m2clj-lang.formatter.flat` (.cljc) — Flat formatter (single-line). Portable.
-- `m2clj-lang.formatter.canon` (.cljc) — Canonical formatter (width-aware multi-line). Portable.
-- `m2clj-lang.run` (.clj) — Thin shim: injects m2clj's grammar and delegates to `meme.tools.clj.run`. JVM/Babashka only.
-- `m2clj-lang.repl` (.clj) — Thin shim: injects m2clj's grammar and banner and delegates to `meme.tools.clj.repl`. JVM/Babashka only.
-
-**Sibling guest** (`clj-lang.*`):
-
-- `clj-lang.api` (.cljc) — Registers `:clj` with the registry. Parses through `meme.tools.clj.parser.api`, prints through `m1clj-lang.formatter.*` in `:clj` mode. Demonstrates the toolkit hosting more than one language.
+When working in a single lang's tree, treat that lang's `CLAUDE.md` as the local source of truth — it covers the per-guest invariants and divergence points without dragging the others into context.
 
 **Shared infrastructure** (`meme.*`, peer to `meme.tools.*`):
 
@@ -320,25 +298,12 @@ clojure-lsp (with clj-kondo) provides useful static analysis for development, te
 
 clojure-lsp is configured via the `.claude-plugin/` directory for Claude Code integration. Requires `clojure-lsp` on PATH (`brew install clojure-lsp/brew/clojure-lsp`).
 
-## m1clj Syntax Quick Reference (for writing .m1clj code)
+## Per-lang syntax quick references
 
-- `symbol(args)` is a call — the head is written outside the parens, adjacent to `(`
-- `f (x)` is NOT a call — spacing is significant; `f(x)` is a call, `f ()` is two forms
-- Vectors can also be heads: `[x](body)` → `([x] body)` (used for multi-arity clauses)
-- Everything uses call syntax: `def(x 42)`, `let([x 1] body)`, `if(cond then else)`
-- `defn(name [args] body)` — single arity function definition
-- `defn(name [args](body) [args](body))` — multi-arity (vector-as-head)
-- `fn([x] expr)` — anonymous function
-- `try(body catch(Exception e handler))` — error handling
-- `when(cond body)`, `cond(pairs...)`, `case(expr pairs...)` — control flow
-- `for([x xs] body)`, `doseq([x items] body)` — comprehensions
-- `ns(my.ns :require([...]))` — namespace declaration
-- `defprotocol(Name method-sigs...)`, `defrecord(Name [fields])` — protocols and records
-- `defmulti(name dispatch-fn)`, `defmethod(name dispatch-val [args] body)` — multimethods
-- `::keyword` — auto-resolve keywords resolved natively
-- Threading macros (`->`, `->>`) are just calls
-- `()` is the empty list
-- `'x` quotes the next form; `'f(x)` → `(quote (f x))` — m1clj syntax inside, no S-expression escape
-- `` `if(~test ~body) `` — syntax-quote uses m1clj syntax inside
-- `[]` is always data; use `list(1 2 3)` for list literals
-- No opaque regions — everything parsed natively
+Each guest's syntax cheatsheet lives next to its source:
+
+- `src/m1clj_lang/CLAUDE.md` — m1clj M-expression syntax (the dominant surface; CLI default).
+- `src/m2clj_lang/CLAUDE.md` — m2clj's surgical diff from m1clj (bare-paren-as-list).
+- `src/clj_lang/CLAUDE.md` — clj-lang (native Clojure, no surface changes).
+
+For the full m1clj language spec, see `doc/language-reference.md`.
