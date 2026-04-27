@@ -19,19 +19,19 @@
   ;; lang-map uses #?@(:clj [...]) inside a map literal which Clojure's reader
   ;; cannot read with :read-cond :preserve (always the meme default now) —
   ;; tolerate 1 read error for that form.
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/api.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/api.cljc")]
     (is (= (- total (count read-errors)) (count succeeded)) "readable forms roundtrip")
     (is (zero? (count failed)))
     (is (<= (count read-errors) 1) "at most 1 read error (lang-map #?@ splice)")))
 
 (deftest dogfood-per-form-run
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/run.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/run.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-repl
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/repl.clj")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/repl.clj")]
     (is (= total (count succeeded)) "all forms roundtrip")
     (is (zero? (count failed)))
     (is (zero? (count read-errors)) "no read errors in own source")))
@@ -56,7 +56,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-printer
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/printer.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/printer.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -104,7 +104,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-grammar
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/grammar.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/grammar.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -112,7 +112,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-form-shape
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/form_shape.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/form_shape.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -120,7 +120,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-formatter-canon
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/m1clj_lang/formatter/canon.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "m1clj-lang/src/m1clj_lang/formatter/canon.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -153,10 +153,10 @@
     tmp))
 
 (deftest dogfood-semantic-equivalence
-  (doseq [path ["src/m1clj_lang/api.cljc" "src/m1clj_lang/run.clj"
-                "src/m1clj_lang/repl.clj" "test/meme/test_runner.clj"
+  (doseq [path ["m1clj-lang/src/m1clj_lang/api.cljc" "m1clj-lang/src/m1clj_lang/run.clj"
+                "m1clj-lang/src/m1clj_lang/repl.clj" "test/meme/test_runner.clj"
                 "toolkit/src/meme/tools/clj/cst_reader.cljc"
-                "src/m1clj_lang/printer.cljc"
+                "m1clj-lang/src/m1clj_lang/printer.cljc"
                 "toolkit/src/meme/tools/clj/resolve.cljc"
                 "toolkit/src/meme/tools/clj/stages.cljc"
                 "toolkit/src/meme/tools/clj/errors.cljc"
@@ -164,9 +164,9 @@
                 "src/meme/cli.clj"
                 "toolkit/src/meme/tools/parser.cljc"
                 "toolkit/src/meme/tools/render.cljc"
-                "src/m1clj_lang/grammar.cljc"
-                "src/m1clj_lang/form_shape.cljc"
-                "src/m1clj_lang/formatter/canon.cljc"]]
+                "m1clj-lang/src/m1clj_lang/grammar.cljc"
+                "m1clj-lang/src/m1clj_lang/form_shape.cljc"
+                "m1clj-lang/src/m1clj_lang/formatter/canon.cljc"]]
     (testing (str path " roundtripped vars match original")
       (let [original (kondo-var-defs path)
             tmp (roundtrip-to-tmp path)
