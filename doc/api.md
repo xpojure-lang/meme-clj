@@ -87,7 +87,7 @@ Print Clojure forms as a Clojure source string. All platforms.
 (m1clj-lang.api/clj->forms clj-src)
 ```
 
-Read a Clojure source string, return a vector of forms. JVM/Babashka only.
+Read a Clojure source string, return a vector of forms. All platforms — routes through the toolkit's native parser, no `read-string` dependency.
 
 ```clojure
 (clj->forms "(defn f [x] (+ x 1))")
@@ -151,7 +151,7 @@ Options: same as `m1clj->forms` (`:resolve-keyword`, `:resolve-symbol`).
 (m1clj-lang.api/clj->m1clj clj-src)
 ```
 
-Convert a Clojure source string to m1clj source string. JVM/Babashka only. Routes through the AST tier (`clj->ast` then printer in `:m1clj` mode), so reader sugar, namespaced-map prefixes, and set source order are preserved.
+Convert a Clojure source string to m1clj source string. All platforms — routes through the AST tier (`clj->ast` then printer in `:m1clj` mode), so reader sugar, namespaced-map prefixes, and set source order are preserved.
 
 ```clojure
 (clj->m1clj "(defn f [x] (+ x 1))")
@@ -191,10 +191,10 @@ Parse an m1clj source string into a `CljRoot` AST. All platforms.
 (m1clj-lang.api/clj->ast source opts)
 ```
 
-Parse a native Clojure source string into a `CljRoot` AST. JVM/Babashka
-only — uses `meme.tools.clj.parser.api/clj->ast` under the hood. The AST
-type is the same as `m1clj->ast`; consumers do not need to know which
-surface a tree came from.
+Parse a native Clojure source string into a `CljRoot` AST. All platforms —
+uses `meme.tools.clj.parser.api/clj->ast` under the hood. The AST type is
+the same as `m1clj->ast`; consumers do not need to know which surface a
+tree came from.
 
 ### lang-map
 
