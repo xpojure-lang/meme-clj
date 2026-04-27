@@ -1,4 +1,4 @@
-{:paths ["src" "resources" "test"]
+{:paths ["src" "toolkit/src" "resources" "test"]
  :tasks {meme {:doc "meme CLI: run, repl, to-clj, to-m1clj, format, inspect, version"
               :task (do (require '[meme.cli])
                         (apply (resolve 'meme.cli/-main) *command-line-args*))}

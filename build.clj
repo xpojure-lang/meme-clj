@@ -4,7 +4,7 @@
             [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'io.github.xpojure-lang/meme-clj)
-(def version (str/trim (slurp "src/meme/version.txt")))
+(def version (str/trim (slurp "toolkit/src/meme/version.txt")))
 (def class-dir "target/classes")
 (def jar-file (format "target/%s-%s.jar" (name lib) version))
 (def basis (delay (b/create-basis {:project "deps.edn"})))
@@ -19,7 +19,7 @@
                   :lib lib
                   :version version
                   :basis basis
-                  :src-dirs ["src"]
+                  :src-dirs ["src" "toolkit/src"]
                   :scm {:url "https://github.com/xpojure-lang/meme-clj"
                         :connection "scm:git:git://github.com/xpojure-lang/meme-clj.git"
                         :developerConnection "scm:git:ssh://git@github.com/xpojure-lang/meme-clj.git"
@@ -28,7 +28,7 @@
                               [:license
                                [:name "MIT License"]
                                [:url "https://opensource.org/licenses/MIT"]]]]})
-    (b/copy-dir {:src-dirs ["src" "resources"]
+    (b/copy-dir {:src-dirs ["src" "toolkit/src" "resources"]
                  :target-dir class-dir})
     (b/jar {:class-dir class-dir
             :jar-file jar-file})))
@@ -48,10 +48,10 @@
   (b/delete {:path "target"})
   (let [basis (b/create-basis {:project "deps.edn" :aliases [:fuzzer]})]
     (b/compile-clj {:basis basis
-                    :src-dirs ["src" "fuzz"]
+                    :src-dirs ["src" "toolkit/src" "fuzz"]
                     :class-dir fuzzer-class-dir
                     :ns-compile ['meme.fuzz.roundtrip]})
-    (b/copy-dir {:src-dirs ["src" "fuzz" "resources"]
+    (b/copy-dir {:src-dirs ["src" "toolkit/src" "fuzz" "resources"]
                  :target-dir fuzzer-class-dir})
     (b/uber {:basis basis
              :class-dir fuzzer-class-dir
