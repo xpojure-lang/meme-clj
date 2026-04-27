@@ -13,7 +13,7 @@ Everything else (data literals, reader syntax, destructuring, commas-as-whitespa
 ## Files
 
 ```
-src/m1clj_lang/
+m1clj-lang/src/m1clj_lang/
 ├── api.cljc            Public API + lang-map composition. Self-registers as :m1clj.
 ├── grammar.cljc        Pratt grammar spec — char dispatch, scanlets, parselets.
 ├── parselets.cljc      m1clj-specific compound parselets: call adjacency + M-expr call rule.
@@ -47,7 +47,7 @@ The `m1clj→clj` and `clj→m1clj` paths are **lossless** (route through the AS
 
 ## Tests
 
-Per-lang tests live under `test/m1clj_lang/`:
+Per-lang tests live under `m1clj-lang/test/m1clj_lang/`:
 
 - `reader/call_syntax_test.cljc` — head type × spacing × arity matrix
 - `reader/calls_test.cljc` — every Clojure form rendered as a call (def, defn, fn, let, …)

@@ -27,7 +27,7 @@ guest language `m2clj`** seeded as a sovereign sibling to `m1clj`.
   is a list literal that lowers to `(quote (x y z))` instead of being a
   parse error. Calls still require head adjacency, so call-vs-data
   remains structural at the reader layer. Full lang implementation under
-  `src/m2clj_lang/*` (api, grammar, parselets, lexlets, form-shape,
+  `m2clj-lang/src/m2clj_lang/*` (api, grammar, parselets, lexlets, form-shape,
   printer, formatter.flat, formatter.canon, run, repl) — sovereign tree,
   not a refactor of m1clj. Self-registers as `:m2clj` builtin via
   `meme.cli` (built-in alongside `:m1clj` and `:clj`). File extension:

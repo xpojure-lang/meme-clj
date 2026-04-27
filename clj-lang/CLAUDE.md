@@ -23,7 +23,7 @@ The `:run` slot is intentionally absent — `meme.cli` already eval-loads `.clj`
 ## Files
 
 ```
-src/clj_lang/
+clj-lang/src/clj_lang/
 └── api.cljc            Lang-map composition + self-registration as :clj.
 ```
 
@@ -37,6 +37,6 @@ The vendor cross-check parity gate (see `test/meme/vendor_cross_check_test.clj`)
 
 ## Tests
 
-`test/clj_lang/api_test.cljc` — surface tests for the lang's public API.
+`clj-lang/test/clj_lang/api_test.cljc` — surface tests for the lang's public API.
 
-The bulk of clj-lang's correctness is covered by tests against the layers it reuses: `meme/tools/clj/parser/*`, `meme/tools/clj/ast/*`, the m1clj formatter in `:clj` mode, and the vendor cross-check suite.
+The bulk of clj-lang's correctness is covered by tests against the layers it reuses: `test/meme/tools/clj/parser/*`, `test/meme/tools/clj/ast/*`, the m1clj formatter in `:clj` mode, and the vendor cross-check suite.

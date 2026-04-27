@@ -70,7 +70,7 @@ name belongs to the programme.
 |---|---|
 | `m1clj-lang.*` | The m1clj language: grammar, parselets, printer, formatter, form-shape |
 | `m2clj-lang.*` | The m2clj language: same shape as m1clj-lang, sovereign tree |
-| `src/clj_lang/api.cljc` | The clj language registration shim (parser comes from `meme.tools.clj.parser.*`) |
+| `clj-lang/src/clj_lang/api.cljc` | The clj language registration shim (parser comes from `meme.tools.clj.parser.*`) |
 
 Each `<lang>-lang.*` tree is the language's home and its public name in the
 source. The lang-specific parselets, printer, and form-shape live there; the

@@ -160,4 +160,4 @@ The slot vocabulary is the shared contract these would sit on. Keeping it stable
 
 - [`api.md`](api.md) — full reference for `m1clj-lang.form-shape` functions
 - [`design-decisions.md`](design-decisions.md) — rationale for the three-layer split
-- Source: [`src/m1clj_lang/form_shape.cljc`](../src/m1clj_lang/form_shape.cljc)
+- Source: [`m1clj-lang/src/m1clj_lang/form_shape.cljc`](../m1clj-lang/src/m1clj_lang/form_shape.cljc)
