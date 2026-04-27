@@ -1,7 +1,7 @@
 {:paths ["toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "cli/src" "resources"]
  :deps {}
  :aliases
- {:test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test" "test/resources"]
+ {:test {:extra-paths ["test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test" "test/resources"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}
                       clj-kondo/clj-kondo
@@ -10,7 +10,7 @@
                       {:mvn/version "1.1.1"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test
-         :exec-args {:dirs ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
+         :exec-args {:dirs ["test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
                      :patterns ["meme\\..*-test"
                                 "m1clj-lang\\..*-test"
                                 "m2clj-lang\\..*-test"]}}
@@ -20,12 +20,13 @@
   :meme {:replace-paths ["toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "cli/src"]
          :replace-deps {}
          :ns-default meme.cli}
-  :cljs-test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
+  :cljs-test {:extra-paths ["test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}
                            org.clojure/test.check {:mvn/version "1.1.1"}}
               :main-opts ["-m" "cljs-test-runner.main"
-                          "-d" "test/meme" "-d" "m1clj-lang/test/m1clj_lang"
+                          "-d" "test/meme" "-d" "toolkit/test/meme"
+                          "-d" "m1clj-lang/test/m1clj_lang"
                           "-r" ".*-test$"
                           "-x" "node"]}
   :e2e {:extra-paths ["test" "cli/test"]
