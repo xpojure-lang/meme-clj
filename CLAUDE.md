@@ -227,7 +227,14 @@ When working in a single lang's tree, treat that lang's `CLAUDE.md` as the local
 
 ### Test file placement
 
-Tests are split across `test/<lang>_lang/` (language-specific, one tree per guest) and `test/meme/` (infrastructure, integration, regression). Each guest owns its own subtree; do not put cross-lang tests under a single guest's directory.
+Tests follow the directory split. Each tree owns its own tests:
+
+- `toolkit/test/` — toolkit unit tests (`meme.tools.*`, `meme.registry`, `meme.loader`).
+- `<lang>-lang/test/` — language-specific tests (one tree per guest: `m1clj-lang/test/m1clj_lang/`, `m2clj-lang/test/m2clj_lang/`, `clj-lang/test/clj_lang/`).
+- `cli/test/` — CLI unit tests, end-to-end CLI tests under `cli/test/e2e/`, and the `meme.test-runner` (which executes `.m1clj` example tests).
+- `test/meme/` — cross-lang integration and regression: dogfood, vendor roundtrip, examples, snapshot, generative, regression scars, plus `test_util` shared by all of the above.
+
+Do not put cross-lang tests under a single guest's directory.
 
 | File | What belongs here |
 |------|-------------------|
