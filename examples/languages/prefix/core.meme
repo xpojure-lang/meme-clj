@@ -1,0 +1,18 @@
+; prefix — a language with utility functions pre-loaded.
+; Prelude: common helpers available in every .pfx file.
+
+defn(trace [name f]
+  fn([& args]
+    println(str(">> " name " " args))
+    let([result apply(f args)]
+      println(str("<< " name " => " result))
+      result)))
+
+defn(pp [x] println(pr-str(x)) x)
+
+defn(check [label expected actual]
+  if(=(expected actual)
+    println(str("  OK  " label))
+    do(println(str("  FAIL " label))
+       println(str("    expected: " expected))
+       println(str("    actual:   " actual)))))

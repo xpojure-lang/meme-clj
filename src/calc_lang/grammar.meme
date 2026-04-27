@@ -1,0 +1,161 @@
+ns( calc-lang.grammar
+  "Grammar spec and custom parselets for calc-lang."
+  :require(
+    [meme.tools.parser :as pratt]
+    [meme.tools.lexer :as lexer]
+    [calc-lang.lexlets :as lex]
+  )
+)
+
+defn-( adjacent?
+  "True when no trivia separates head from opening paren."
+  [engine]
+  not(pratt/trivia-pending?(engine))
+)
+
+def( ^:private next-is-eq? pratt/next-char-is?(\=))
+def( ^:private lt-or-lte pratt/led-comparison-or-equal(:lt :lte 50))
+def( ^:private gt-or-gte pratt/led-comparison-or-equal(:gt :gte 50))
+
+defn-( ternary-scanlet
+  "Led scanlet for ? : ternary operator."
+  [engine lhs question-tok]
+  let( [then-expr pratt/parse-expr(engine 0)]
+    pratt/skip-trivia!(engine)
+    if( and(not(pratt/eof?(engine)) =(pratt/peek-char(engine) \:))
+      let( [start pratt/cursor(engine)]
+        pratt/advance!(engine 1)
+        let( [_colon-tok pratt/make-token!(engine :colon start)
+           else-expr  pratt/parse-expr(engine 29)]
+          pratt/cst(
+            :ternary
+            {:cond lhs :token question-tok :then then-expr :else else-expr}
+          )
+        )
+      )
+      pratt/cst(
+        :error
+        {:message "Expected ':' in ternary expression" :token question-tok}
+      )
+    )
+  )
+)
+
+defn-( call-scanlet
+  "Led scanlet for function calls f(args)."
+  [engine lhs open-tok]
+  let( [[args close-tok] pratt/parse-until(engine \) :close-paren)]
+    pratt/cst(:call {:head lhs :open open-tok :args args :close close-tok})
+  )
+)
+
+defn-( identifier-scanlet
+  "Nud scanlet for identifiers. Handles let keyword specially."
+  [engine]
+  let( [start  pratt/cursor(engine)
+     source pratt/source-str(engine)
+     len    pratt/source-len(engine)
+     end    lex/consume-identifier(source len start)]
+    pratt/set-pos!(engine end)
+    let( [tok pratt/make-token!(engine :identifier start)]
+      case( :raw(tok)
+        "let" do(
+          pratt/skip-trivia!(engine)
+          let( [name-start pratt/cursor(engine)
+             name-end   lex/consume-identifier(source len name-start)]
+            pratt/set-pos!(engine name-end)
+            let( [name-tok pratt/make-token!(engine :identifier name-start)]
+              pratt/skip-trivia!(engine)
+              if( and(
+                  not(pratt/eof?(engine))
+                  =(pratt/peek-char(engine) \=)
+                  let( [p inc(pratt/cursor(engine))]
+                    or(>=(p len) not=(.charAt(source p) \=))
+                  )
+                )
+                let( [eq-start pratt/cursor(engine)]
+                  pratt/advance!(engine 1)
+                  let( [_eq-tok pratt/make-token!(engine :equals eq-start)
+                     value   pratt/parse-expr(engine 0)]
+                    pratt/cst(
+                      :let-binding
+                      {:token tok :name name-tok :value value}
+                    )
+                  )
+                )
+                pratt/cst(
+                  :error
+                  {:message "Expected '=' after let binding name" :token tok}
+                )
+              )
+            )
+          )
+        )
+        pratt/cst(:atom {:token tok})
+      )
+    )
+  )
+)
+
+defn-( slash-trivia-consumer
+  "If current pos is //, consume as comment. Otherwise return nil (not trivia)."
+  [engine]
+  let( [pos pratt/cursor(engine)]
+    when( and(
+        <(inc(pos) pratt/source-len(engine))
+        =(.charAt(^String pratt/source-str(engine) inc(pos)) \/)
+      )
+      lex/comment-consumer(engine)
+    )
+  )
+)
+
+def( grammar
+  {:nud       {\( lexer/single-char-scanlet(
+                    :open-paren
+                    pratt/nud-delimited(:group \) :close-paren)
+                  )
+               \- lexer/single-char-scanlet(
+                    :minus
+                    pratt/nud-prefix(:unary-minus 80)
+                  )
+               \! lexer/single-char-scanlet(
+                    :bang
+                    pratt/nud-prefix(:unary-not 80)
+                  )
+               \" lexer/atom-scanlet(:string lex/consume-string)}
+   :nud-pred  [[fn([ch _e] lex/digit?(ch))
+                lexer/atom-scanlet(:number lex/consume-number)]
+               [fn([ch _e] lex/ident-start?(ch)) identifier-scanlet]]
+   :trivia    {\space   lex/ws-consumer
+               \tab     lex/ws-consumer
+               \,       lex/ws-consumer
+               \newline lex/newline-consumer
+               \return  lex/newline-consumer
+               \/       slash-trivia-consumer}
+   :led       [{:char \+ :bp 60 :open-type :plus :fn pratt/led-infix(:add 60)}
+               {:char \- :bp 60 :open-type :minus :fn pratt/led-infix(:sub 60)}
+               {:char \* :bp 70 :open-type :star :fn pratt/led-infix(:mul 70)}
+               {:char \/ :bp 70 :open-type :slash :fn pratt/led-infix(:div 70)}
+               {:char \% :bp 70 :open-type :pct :fn pratt/led-infix(:mod 70)}
+               {:char \^ :bp 90 :open-type :caret :fn pratt/led-infix(:pow 89)}
+               {:char      \=
+                :bp        40
+                :open-type :eq-eq
+                :fn        pratt/led-infix-2char(:eq 40)
+                :when      next-is-eq?}
+               {:char      \!
+                :bp        40
+                :open-type :bang-eq
+                :fn        pratt/led-infix-2char(:neq 40)
+                :when      next-is-eq?}
+               {:char \< :bp 50 :open-type :lt :fn lt-or-lte}
+               {:char \> :bp 50 :open-type :gt :fn gt-or-gte}
+               {:char \? :bp 30 :open-type :question :fn ternary-scanlet}
+               {:char      \(
+                :bp        100
+                :open-type :open-paren
+                :when      adjacent?
+                :fn        call-scanlet}]
+   :max-depth 512}
+)
