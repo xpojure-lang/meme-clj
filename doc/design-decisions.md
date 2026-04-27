@@ -4,7 +4,7 @@ Decisions made during the toolkit's and m1clj's design and
 implementation, with rationale.
 
 > **Naming.** "meme-clj" is the toolkit / programme; "m1clj" is the
-> first language built on it. See `doc/glossary.md`.
+> first language built on it. See the Glossary section in `CLAUDE.md`.
 
 
 ## M-expressions: continuing McCarthy's original idea
@@ -432,7 +432,7 @@ All four extension points compose via `assoc`/`merge`:
 - **Enable inference** — `(with-structural-fallback registry)`.
 - **Override one slot's rendering** — `{:slot-renderers {:clause my-fn}}` in style; merges over printer defaults.
 
-See `doc/form-shape.md` for the full vocabulary and consumer sketches (LSP, lint, refactor).
+See `m1clj-lang/CLAUDE.md` for the full vocabulary and consumer sketches (LSP, lint, refactor).
 
 ## Registry as pure infrastructure — inverted control for built-in langs
 

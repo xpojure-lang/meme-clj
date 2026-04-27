@@ -32,8 +32,8 @@ Two more guests are bundled today:
 > the toolkit's CLI. Toolkit namespaces (`meme.tools.*`, `meme.registry`,
 > `meme.loader`, `meme.cli`) keep the historic `meme` prefix. Each guest
 > lives under its own `<lang>-lang.*` namespace tree (`m1clj-lang.*`,
-> `m2clj-lang.*`, `clj-lang.*`). See `doc/glossary.md` for the full
-> vocabulary.
+> `m2clj-lang.*`, `clj-lang.*`). See the **Glossary** section at the end
+> of this file for the full vocabulary.
 
 > **Direction.** Each guest is sovereign and lives in its own top-level
 > directory: `m1clj-lang/`, `m2clj-lang/`, `clj-lang/`. The meme-clj
@@ -140,7 +140,7 @@ The generic parser engine, scanlet builders, and render engine live in `meme.too
 The printer/formatter split follows a three-layer model. Each layer owns one concern; they compose via plain data:
 
 1. **Notation** (`m1clj-lang.printer`) — how a call renders (parens, delimiter placement, `:m1clj` vs `:clj` output mode). Knows nothing about form names or slot semantics beyond the fallback recursion.
-2. **Form-shape** (`m1clj-lang.form-shape`) — what the parts of a special form *mean*. A registry maps head symbols to decomposers; each decomposer produces `[[slot-name value] ...]`. Lang-owned: each lang carries its own registry. See `doc/form-shape.md` for the slot vocabulary.
+2. **Form-shape** (`m1clj-lang.form-shape`) — what the parts of a special form *mean*. A registry maps head symbols to decomposers; each decomposer produces `[[slot-name value] ...]`. Lang-owned: each lang carries its own registry. See `m1clj-lang/CLAUDE.md` for the slot vocabulary.
 3. **Style** (`m1clj-lang.formatter.canon/style` and alternatives) — opinions *per slot name*, not per form. `:head-line-slots` keeps named slots with the call head on break; `:force-open-space-for` controls the `head( ` convention; `:slot-renderers` overrides the printer defaults for `:bindings`/`:clause`/custom slots.
 
 All four extension axes compose via `assoc`/`merge` on plain maps: swap a style, extend a registry, opt into structural fallback (`with-structural-fallback`), override one slot's rendering. No printer changes required for any of them.
@@ -216,7 +216,7 @@ When working in a single lang's tree, treat that lang's `CLAUDE.md` as the local
 - `doc/language-reference.md` — Complete syntax reference for writing .m1clj code.
 - `doc/design-decisions.md` — Rationale for each design choice.
 - `doc/api.md` — Public API reference.
-- `doc/form-shape.md` — Slot vocabulary, three-layer formatter architecture, and extension patterns (custom decomposers, structural fallback, slot renderers).
+- `m1clj-lang/CLAUDE.md` — Slot vocabulary, three-layer formatter architecture, and extension patterns (custom decomposers, structural fallback, slot renderers).
 
 ## Testing conventions
 
@@ -314,3 +314,57 @@ Each guest's syntax cheatsheet lives next to its source:
 - `clj-lang/CLAUDE.md` — clj-lang (native Clojure, no surface changes).
 
 For the full m1clj language spec, see `doc/language-reference.md`.
+
+## Glossary
+
+Source of truth for the names this project uses. Every doc, docstring, and prose line should mean exactly what this section says — no drift, no aliases.
+
+The point is to fix the **programme / language / toolkit** distinction so the prose stops conflating them.
+
+### The programme
+
+**meme-clj** — a syntax-experimentation toolkit and research programme for Clojure. The repo, the Clojars artifact, the GitHub project. *Not* a language. The programme's claim is that a Clojure host can carry alternative surface syntaxes without giving up macros, semantics, or ecosystem. The toolkit is the durable artifact; specific languages are experiments built on top of it.
+
+### The languages
+
+- **m1clj** — the **first** language of the programme. M-expressions for Clojure, in the spirit of McCarthy (1960). One rule: `f(x y)` → `(f x y)`. File extension: `.m1clj`. Registry key: `:m1clj`.
+- **m2clj** — m1clj plus one rule: a paren without head adjacency (`(x y z)`) is a list literal that lowers to `(quote (x y z))` instead of being a parse error. Calls still require head adjacency (`f(x y)`), so call-vs-data remains structural at the reader layer. File extension: `.m2clj`. Registry key: `:m2clj`.
+- **clj** (lang) — native Clojure surface (S-expressions) registered with the toolkit as a sibling guest. Proves the toolkit is genuinely language-agnostic. Registry key: `:clj`. File extensions: `.clj` / `.cljc` / `.cljs`.
+
+Future guests are expected. The plural is the whole point. Each guest is **sovereign**: even when two langs look temporally similar (m1clj and m2clj share most of their printer and form-shape today), the duplication is intentional — langs may diverge, and the architectural direction is one Clojars artifact per lang.
+
+### The toolkit (`meme.*`)
+
+These are programme-level names — they refer to the toolkit, never to a specific language.
+
+| Name | What it is |
+|---|---|
+| `meme-clj` | The repo / Clojars artifact / programme |
+| `meme` (binary) | The CLI of the toolkit (`bb meme …`) |
+| `meme.tools.*` | Generic, lang-agnostic toolkit: Pratt engine, render, lex builders |
+| `meme.tools.clj.*` | Clojure-surface commons: AST, stages, expander, resolver — shared by every Clojure-flavored guest |
+| `meme.registry` | Lang registry: registration, resolution, EDN loading |
+| `meme.loader` | Namespace loader: intercepts `load` / `load-file` for guest extensions |
+| `meme.cli` | App tier — the CLI dispatch |
+| `meme.fuzz.*` | Fuzz targets (Jazzer) |
+| `meme.test-runner` | Babashka eval-test driver for `.m1clj` examples |
+
+The CLI binary is called `meme` because it dispatches on behalf of the toolkit to whichever lang is registered for the input. `bb meme run foo.m1clj` runs through the m1clj lang; `bb meme run foo.clj` runs through clj. The binary name belongs to the programme.
+
+### The languages' implementations
+
+| Name | What it is |
+|---|---|
+| `m1clj-lang.*` | The m1clj language: grammar, parselets, printer, formatter, form-shape |
+| `m2clj-lang.*` | The m2clj language: same shape as m1clj-lang, sovereign tree |
+| `clj-lang/src/clj_lang/api.cljc` | The clj language registration shim (parser comes from `meme.tools.clj.parser.*`) |
+
+Each `<lang>-lang.*` tree is the language's home and its public name in the source. The lang-specific parselets, printer, and form-shape live there; the shared backbone they sit on lives in `meme.tools.clj.*`.
+
+### Editor packages
+
+These predate the language rename. They target `.m1clj` files; their names follow the toolkit, not the language they highlight.
+
+- `tree-sitter-meme` — Tree-sitter grammar for `.m1clj`
+- `vscode-meme` — VS Code extension
+- `zed-meme` — Zed extension
