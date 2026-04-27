@@ -187,6 +187,10 @@
 ;; User lang registration
 ;; ---------------------------------------------------------------------------
 
+(defn- builtin-extensions [snapshot]
+  (into #{} (mapcat (fn [[_ v]] (when (:builtin? (meta v)) (:extensions v))))
+        snapshot))
+
 (defn- validate-registration!
   "Throws if adding `resolved` as `lang-name` would conflict with `snapshot`."
   [lang-name resolved snapshot]
@@ -195,23 +199,24 @@
       (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
                            " — choose a different name")
                       {:lang lang-name}))))
-  (doseq [ext (:extensions resolved)]
-    (when (str/blank? ext)
-      (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                           " — extension must be a non-empty string")
-                      {:lang lang-name})))
-    (when (#{".m1clj" ".meme"} ext)
-      (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                           " — extension " ext " is reserved for built-in langs")
-                      {:lang lang-name :extension ext})))
-    (doseq [[existing-name existing-lang] snapshot]
-      (when (and (not= existing-name lang-name)
-                 (some #{ext} (:extensions existing-lang)))
+  (let [reserved (builtin-extensions snapshot)]
+    (doseq [ext (:extensions resolved)]
+      (when (str/blank? ext)
         (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                             " — extension " ext " already claimed by "
-                             (pr-str existing-name))
-                        {:lang lang-name :extension ext
-                         :existing existing-name}))))))
+                             " — extension must be a non-empty string")
+                        {:lang lang-name})))
+      (when (reserved ext)
+        (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                             " — extension " ext " is reserved for built-in langs")
+                        {:lang lang-name :extension ext})))
+      (doseq [[existing-name existing-lang] snapshot]
+        (when (and (not= existing-name lang-name)
+                   (some #{ext} (:extensions existing-lang)))
+          (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                               " — extension " ext " already claimed by "
+                               (pr-str existing-name))
+                          {:lang lang-name :extension ext
+                           :existing existing-name})))))))
 
 (defn register!
   "Register a user lang at runtime. config is an EDN-style map — symbols
