@@ -1,12 +1,12 @@
 # Form-shape
 
-Form-shape is the middle layer in m1clj's three-layer formatter architecture:
+Form-shape is the middle layer in meme's three-layer formatter architecture:
 
 | Layer | Owns | Module |
 |---|---|---|
-| **Notation** | Call-syntax rendering, delimiter placement, mode (m1clj vs clj) | `m1clj-lang.printer` |
-| **Form-shape** | Decomposing special forms into named semantic slots | `m1clj-lang.form-shape` |
-| **Style** | Opinions on layout *per slot name* | `m1clj-lang.formatter.canon/style` and any user/lang-provided alternative |
+| **Notation** | Call-syntax rendering, delimiter placement, mode (meme vs clj) | `meme-lang.printer` |
+| **Form-shape** | Decomposing special forms into named semantic slots | `meme-lang.form-shape` |
+| **Style** | Opinions on layout *per slot name* | `meme-lang.formatter.canon/style` and any user/lang-provided alternative |
 
 Form-shape is the **language-level semantic vocabulary**: it answers *what the parts of a form mean*, independent of how they're laid out. A lang owns its registry (decision: [lang sovereignty](design-decisions.md)); formatters consume it.
 
@@ -42,7 +42,7 @@ A single form generally emits a mix of these — e.g.
 ### Querying a decomposition
 
 ```clojure
-(require '[m1clj-lang.form-shape :as fs])
+(require '[meme-lang.form-shape :as fs])
 
 (fs/decompose fs/registry 'defn '[foo [x] (+ x 1)])
 ;=> [[:name foo] [:params [x]] [:body (+ x 1)]]
@@ -88,19 +88,19 @@ Only these two patterns are inferred because they're unambiguous — narrower ru
 ### Passing a registry to the formatter
 
 ```clojure
-(require '[m1clj-lang.formatter.canon :as canon])
+(require '[meme-lang.formatter.canon :as canon])
 
 (canon/format-form '(my-defn foo [x] body)
                    {:width 20
                     :form-shape (fs/with-structural-fallback fs/registry)})
 ;=> "my-defn( foo [x]
-;  body
-;)"
+;     body
+;   )"
 ```
 
 ## The style map
 
-A style opines on layout over *slot names*, not form names. The canonical style ships in `m1clj-lang.formatter.canon/style` and is minimal:
+A style opines on layout over *slot names*, not form names. The canonical style (`meme-lang.formatter.canon/style`) is minimal:
 
 ```clojure
 {:head-line-slots
@@ -110,11 +110,11 @@ A style opines on layout over *slot names*, not form names. The canonical style 
  #{:name}}
 ```
 
-Keys the formatter understands:
+Keys:
 
-- **`:head-line-slots`** — slot names that stay on the head line with the call head when the form breaks. Other slots go into the indented body. Mode-independent: the same set drives both `:m1clj` and `:clj` output.
-- **`:force-open-space-for`** — slot names whose presence triggers `head( ` (space after open paren) even on flat output. For m1clj, this is the classic "`defn(` becomes `defn( `" rule; any form carrying a `:name` slot gets the treatment. **m1clj-only** — silently ignored under `:mode :clj`, which has no `head( ` convention (Clojure writes `(head ...)` with the head inside the parens).
-- **`:slot-renderers`** *(optional; not in the shipped `canon/style`)* — a map `{slot-name → (fn [value ctx] → Doc)}` supplied by callers to override printer defaults. Useful when a project wants a slot rendered differently, or a new custom slot needs display logic. Pass it via the formatter opts or merge it into a style copy.
+- **`:head-line-slots`** — slot names that stay on the head line with the call head when the form breaks. Other slots go into the indented body.
+- **`:force-open-space-for`** — slot names whose presence triggers `head( ` (space after open paren) even on flat output. For meme, this is the classic "`defn(` becomes `defn( `" rule; any form carrying a `:name` slot gets the treatment.
+- **`:slot-renderers`** *(optional)* — a map `{slot-name → (fn [value ctx] → Doc)}` that overrides printer defaults. Useful when a project wants a slot rendered differently, or a new custom slot needs display logic.
 
 ### Slot renderers and defaults
 
@@ -125,11 +125,11 @@ The printer ships defaults for structural slots whose values aren't plain forms:
 | `:bindings` | Columnar `[k v\n k v]` layout via `binding-vector-doc` |
 | `:clause` | `[test value]` rendered as `test value` joined by a space |
 
-A style's `:slot-renderers` is layered **on top of** `m1clj-lang.printer/default-slot-renderers` via map merge, not replacing it wholesale — a style overriding only `:clause` still inherits the `:bindings` default. See the defaults map for the full built-in list.
+Overrides compose over defaults via map merge — a style may replace one renderer without affecting the others. See `meme-lang.printer/default-slot-renderers` for the built-ins.
 
 ## Built-in decomposers
 
-The default `m1clj-lang.form-shape/registry` registers these Clojure forms:
+The default `meme-lang.form-shape/registry` registers these Clojure forms:
 
 | Family | Members |
 |---|---|
@@ -145,6 +145,43 @@ The default `m1clj-lang.form-shape/registry` registers these Clojure forms:
 | `let` family | `let`, `loop`, `for`, `doseq`, `binding`, `with-open`, `with-local-vars`, `with-redefs`, `if-let`, `when-let`, `if-some`, `when-some` |
 | `if` family | `if`, `if-not`, `when`, `when-not` |
 
+## Project-local configuration (`.meme-format.edn`)
+
+`meme format` discovers a `.meme-format.edn` file by walking up from the current working directory. If present, its settings become defaults under CLI flags.
+
+Schema:
+
+```clojure
+{:width                 80
+ :structural-fallback?  true
+ :form-shape            {my-defn defn
+                         my-let  let
+                         deftask defn}
+ :style                 {:head-line-slots #{:name :params :bindings}}}
+```
+
+| Key | Meaning |
+|---|---|
+| `:width` | Target line width (positive integer). |
+| `:structural-fallback?` | Enable shape inference for unregistered heads that look like `defn` or `let`. |
+| `:form-shape` | Map `{user-sym → built-in-sym}`. Each entry aliases a user macro to an existing registry entry. The target must be a registered head (e.g. `defn`, `let`, `defmethod`). |
+| `:style` | Partial override of `canon/style`, merged on top of the defaults. Supports `:head-line-slots` and `:force-open-space-for`. `:slot-renderers` isn't supported from EDN (renderers are functions). |
+
+Unknown keys are ignored with a warning so configs remain forward-compatible.
+
+Example — teach the formatter about a project DSL:
+
+```clojure
+;; project-root/.meme-format.edn
+{:width 100
+ :structural-fallback? true
+ :form-shape {my-defn     defn
+              defendpoint defn
+              do-tx       let}}
+```
+
+After this, `my-defn`/`defendpoint` render with defn-like layout, `do-tx` renders with let-like layout, and any other user macro that looks structurally like `defn` or `let` (thanks to `:structural-fallback?`) also gets layout for free.
+
 ## Future consumers
 
 Form-shape is designed to serve tools beyond the canonical formatter. Some directions not yet built:
@@ -158,6 +195,6 @@ The slot vocabulary is the shared contract these would sit on. Keeping it stable
 
 ## See also
 
-- [`api.md`](api.md) — full reference for `m1clj-lang.form-shape` functions
+- [`api.md`](api.md) — full reference for `meme-lang.form-shape` functions
 - [`design-decisions.md`](design-decisions.md) — rationale for the three-layer split
-- Source: [`m1clj-lang/src/m1clj_lang/form_shape.cljc`](../m1clj-lang/src/m1clj_lang/form_shape.cljc)
+- Source: [`src/meme_lang/form_shape.cljc`](../src/meme_lang/form_shape.cljc)

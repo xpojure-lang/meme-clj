@@ -3,16 +3,8 @@
    Scar tissue: these tests were expanded after discovering four loader bugs
    that the original suite missed due to test-ordering dependencies and
    missing platform coverage. See commit history for details."
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing use-fixtures]]
-            [meme.loader :as loader]
-            ;; Required so m1clj-lang registers itself with the registry.
-            ;; Without this, the loader installs but finds no `.m1clj` extension,
-            ;; so require/load-file of `.m1clj` files falls through to Clojure's
-            ;; original load and fails. This made the tests implicitly depend
-            ;; on test-ordering (passing only if some earlier test happened
-            ;; to have loaded m1clj-lang.api first).
-            [m1clj-lang.api])
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [meme.loader :as loader])
   (:import (java.util.concurrent CountDownLatch TimeUnit)))
 
 (use-fixtures :each
@@ -41,8 +33,8 @@
     ;; reinstall for rest of test
     (loader/install!)))
 
-(deftest require-m1clj-namespace
-  (testing "require loads .m1clj/.meme file from classpath"
+(deftest require-meme-namespace
+  (testing "require loads .meme file from classpath"
     (require 'test-meme-ns.greeter)
     (let [hello (ns-resolve 'test-meme-ns.greeter 'hello)
           add (ns-resolve 'test-meme-ns.greeter 'add)]
@@ -56,17 +48,30 @@
     (require 'clojure.string)
     (is (some? (ns-resolve 'clojure.string 'join)))))
 
-(deftest m1clj-takes-precedence-over-clj
-  (testing ".m1clj file is loaded when both .m1clj and .clj exist"
+(deftest meme-takes-precedence-over-clj
+  (testing ".meme file is loaded when both .meme and .clj exist"
     (require 'test-meme-ns.shadow :reload)
     (let [source-var (ns-resolve 'test-meme-ns.shadow 'source)]
       (is (some? source-var) "source should be defined")
-      (is (= :m1clj @source-var) ".m1clj file should take precedence over .clj"))))
+      (is (= :meme @source-var) ".meme file should take precedence over .clj"))))
 
-(deftest m1clj-parse-error-propagates
-  (testing "require of a .m1clj file with syntax error throws"
+(deftest meme-parse-error-propagates
+  (testing "require of a .meme file with syntax error throws"
     (is (thrown? Exception
                 (require 'test-meme-ns.broken :reload)))))
+
+;; ---------------------------------------------------------------------------
+;; C3: Namespace denylist — core infrastructure cannot be shadowed
+;; ---------------------------------------------------------------------------
+
+(deftest denied-namespaces-not-intercepted
+  (testing "clojure.* namespaces are not intercepted by the loader"
+    ;; If the denylist works, find-lang-resource returns nil for clojure/* paths
+    (let [find-fn @(resolve 'meme.loader/find-lang-resource)]
+      (is (nil? (find-fn "/clojure/string")) "clojure/string should be denied")
+      (is (nil? (find-fn "/clojure/core")) "clojure/core should be denied")
+      (is (nil? (find-fn "/java/lang")) "java/lang should be denied")
+      (is (nil? (find-fn "/nrepl/core")) "nrepl/core should be denied"))))
 
 ;; ---------------------------------------------------------------------------
 ;; C4: Cannot uninstall loader while a lang-load is in flight on any thread.
@@ -125,77 +130,6 @@
       (loader/uninstall!)
       (loader/install!))))
 
-;; ---------------------------------------------------------------------------
-;; Scar tissue: the dispatch-to-increment gap.
-;;
-;; A thread that has dispatched into `lang-load` via the var override but has
-;; not yet incremented `load-counter` was previously unprotected. uninstall!
-;; could acquire install-lock, observe counter=0, and tear down the var
-;; overrides — including resetting the captured originals to nil — leaving the
-;; first thread to resume into NPE on `@original-load`.
-;;
-;; Two fixes cover this:
-;;  (a) `with-load-tracking` now performs the `swap! inc` under install-lock,
-;;      so the tracked region opens atomically w.r.t. uninstall's observation.
-;;  (b) `uninstall!` no longer nils the captured originals, so even a stale
-;;      in-flight reference remains safe to deref.
-;;
-;; This test simulates the dispatch gap deterministically: we hold
-;; install-lock ourselves (standing in for a thread paused between dispatch
-;; and the swap!-inc), kick off uninstall! on another thread, and assert it
-;; cannot tear down until we release the lock. Before fix (a) uninstall!
-;; would have raced through; with the fix it blocks on the monitor.
-;; ---------------------------------------------------------------------------
-
-(deftest uninstall-blocks-on-install-lock-during-dispatch-gap
-  (testing "uninstall! cannot proceed while install-lock is held by a pre-increment dispatch"
-    (let [install-lock @(resolve 'meme.loader/install-lock)
-          counter @(resolve 'meme.loader/load-counter)
-          holding (CountDownLatch. 1)
-          release (CountDownLatch. 1)
-          uninstall-done (CountDownLatch. 1)
-          uninstall-result (atom ::pending)
-          lock-holder
-          (future
-            (locking install-lock
-              (.countDown holding)
-              (.await release 5 TimeUnit/SECONDS)
-              ;; Simulate the thread reaching its tracked-section increment
-              ;; while still holding the lock. Under the fix this is the
-              ;; invariant that keeps uninstall out: counter becomes pos?
-              ;; before the lock is released.
-              (swap! counter inc)))]
-      (try
-        (is (.await holding 5 TimeUnit/SECONDS)
-            "lock holder should have acquired install-lock")
-        (let [_uninstall-thread
-              (future
-                (try (loader/uninstall!)
-                     (reset! uninstall-result ::succeeded)
-                     (catch Exception e
-                       (reset! uninstall-result (ex-data e)))
-                     (finally (.countDown uninstall-done))))]
-          ;; Give uninstall! a moment to attempt to acquire the lock.
-          ;; It must not proceed while we still hold it.
-          (is (not (.await uninstall-done 200 TimeUnit/MILLISECONDS))
-              "uninstall! must block while install-lock is held")
-          (is (= ::pending @uninstall-result)
-              "uninstall! must not have torn down while lock was held")
-          ;; Release; lock-holder runs swap! inc and releases. uninstall!
-          ;; then acquires, observes counter>0, and throws :active-load.
-          (.countDown release)
-          @lock-holder
-          (is (.await uninstall-done 5 TimeUnit/SECONDS)
-              "uninstall! should proceed after lock released")
-          (is (map? @uninstall-result)
-              "uninstall! must see in-flight counter and throw")
-          (is (= :active-load (:reason @uninstall-result))))
-        (finally
-          ;; Drain counter and restore install state for the fixture.
-          (swap! counter dec)
-          (when (false? @@(resolve 'meme.loader/installed?))
-            (loader/install!)))))))
-
 (deftest concurrent-installs-are-idempotent
   (testing "10 threads calling install! in parallel leave loader in install state"
     (let [n         10
@@ -226,16 +160,10 @@
   (testing "extensions-fn is populated after install"
     (is (fn? @@#'meme.loader/extensions-fn)
         "extensions-fn atom should hold a function after install!"))
-  (testing "uninstall! restores var overrides; installed? flag flips"
+  (testing "extensions-fn is nil after uninstall"
     (loader/uninstall!)
-    (is (false? @@#'meme.loader/installed?)
-        "installed? flag must be false after uninstall!")
-    ;; extensions-fn (and the captured originals) intentionally retain
-    ;; their values — in-flight callers dereference them, and nilling would
-    ;; open an NPE window between dispatch and the tracked-section
-    ;; increment. See `with-load-tracking` for the race this closes.
-    (is (fn? @@#'meme.loader/extensions-fn)
-        "extensions-fn atom intentionally retains its function after uninstall!")
+    (is (nil? @@#'meme.loader/extensions-fn)
+        "extensions-fn atom should be nil after uninstall!")
     ;; reinstall for remaining tests
     (loader/install!)))
 
@@ -255,6 +183,23 @@
               "find-lang-resource must not call requiring-resolve"))))))
 
 ;; ---------------------------------------------------------------------------
+;; Scar tissue: Bug #2 — own infrastructure not in denylist
+;; meme/* and meme_lang/* namespaces were not denied, so the loader would
+;; try to intercept its own infrastructure (e.g. meme.registry), enabling
+;; the infinite recursion in bug #1. Defense in depth.
+;; ---------------------------------------------------------------------------
+
+(deftest own-infrastructure-not-intercepted
+  (testing "meme.* and meme_lang.* namespaces are denied by the denylist"
+    (let [find-fn @(resolve 'meme.loader/find-lang-resource)]
+      (is (nil? (find-fn "/meme/registry")) "meme/registry should be denied")
+      (is (nil? (find-fn "/meme/loader")) "meme/loader should be denied")
+      (is (nil? (find-fn "/meme/cli")) "meme/cli should be denied")
+      (is (nil? (find-fn "/meme_lang/api")) "meme_lang/api should be denied")
+      (is (nil? (find-fn "/meme_lang/stages")) "meme_lang/stages should be denied")
+      (is (nil? (find-fn "/meme_lang/run")) "meme_lang/run should be denied"))))
+
+;; ---------------------------------------------------------------------------
 ;; Scar tissue: Bug #3 — Babashka detection
 ;; alter-var-root on clojure.core/load is silently ineffective on Babashka
 ;; because SCI's require doesn't dispatch through that var. The loader now
@@ -267,24 +212,22 @@
         "Should not detect Babashka on JVM")))
 
 ;; ---------------------------------------------------------------------------
-;; Cross-require: .m1clj file that requires another m1clj-flavored file
-;; (greeter is intentionally still a .meme file — exercises mixed-extension
-;; loading and the deprecated-extension back-compat path together.)
+;; Cross-require: .meme file that requires another .meme file
 ;; ---------------------------------------------------------------------------
 
-(deftest require-m1clj-that-requires-m1clj
-  (testing ".m1clj file requiring another m1clj-lang namespace works"
+(deftest require-meme-that-requires-meme
+  (testing ".meme file requiring another .meme namespace works"
     (require 'test-meme-ns.caller :reload)
     (let [greet-world (ns-resolve 'test-meme-ns.caller 'greet-world)]
       (is (some? greet-world) "greet-world should be defined")
       (is (= "Hello, World!" (greet-world))))))
 
 ;; ---------------------------------------------------------------------------
-;; load-file: .m1clj/.meme and .clj files by filesystem path
+;; load-file: .meme and .clj files by filesystem path
 ;; ---------------------------------------------------------------------------
 
-(deftest load-file-m1clj-by-deprecated-extension
-  (testing "load-file handles .meme files via the back-compat path"
+(deftest load-file-meme
+  (testing "load-file handles .meme files"
     (load-file "test/resources/test_meme_ns/greeter.meme")
     (let [hello (ns-resolve 'test-meme-ns.greeter 'hello)]
       (is (some? hello) "hello should be defined after load-file")
@@ -297,70 +240,14 @@
       (is (some? source-var) "source should be defined")
       (is (= :clj @source-var) ".clj file should load normally"))))
 
-(deftest load-file-m1clj-preserves-caller-ns
+(deftest load-file-meme-preserves-caller-ns
   (testing "load-file does not clobber the caller's *ns*"
     (let [ns-before *ns*]
       (load-file "test/resources/test_meme_ns/greeter.meme")
       (is (= ns-before *ns*) "*ns* should be restored after load-file"))))
 
 ;; ---------------------------------------------------------------------------
-;; (Below) Scar tissue: lang-load called the original Clojure load once per non-lang
-;; path inside a doseq. Clojure's load batches *loaded-libs* updates across
-;; paths in a single call; per-path delegation defeated that tracking.
-;; Fix: collect consecutive non-lang paths and flush them in one call,
-;; preserving order around interleaved lang paths.
-;; ---------------------------------------------------------------------------
-
-(deftest lang-load-batches-non-lang-paths
-  (let [lang-load (resolve 'meme.loader/lang-load)
-        original-load-atom @(resolve 'meme.loader/original-load)]
-    (testing "all-non-lang paths delegate to original-load in a single call"
-      (let [calls (atom [])
-            stub  (fn [& paths] (swap! calls conj (vec paths)))
-            saved @original-load-atom]
-        (try
-          (reset! original-load-atom stub)
-          (with-redefs [meme.loader/find-lang-resource (constantly nil)]
-            (lang-load "/some/clj/a" "/some/clj/b" "/some/clj/c"))
-          (is (= [["/some/clj/a" "/some/clj/b" "/some/clj/c"]] @calls)
-              "all three paths should be delegated in one batched call")
-          (finally (reset! original-load-atom saved)))))
-    (testing "lang and non-lang paths are flushed in source order"
-      ;; "/test_meme_ns/greeter" exists as a .meme classpath resource.
-      ;; Mix it with non-lang paths and assert original-load batching boundaries.
-      (let [calls (atom [])
-            lang-runs (atom [])
-            stub-load (fn [& paths] (swap! calls conj (vec paths)))
-            stub-run-fn (fn [_src _opts] (swap! lang-runs conj :ran))
-            saved @original-load-atom]
-        (try
-          (reset! original-load-atom stub-load)
-          (with-redefs [meme.loader/find-lang-resource
-                        (fn [path]
-                          (when (= path "/test_meme_ns/greeter")
-                            ;; Return a stub resource + run-fn so we don't
-                            ;; actually slurp from the classpath.
-                            [(java.io.StringReader. "") stub-run-fn]))
-                        ;; slurp accepts a Reader, so the stub Reader works.
-                        ]
-            (lang-load "/a" "/b" "/test_meme_ns/greeter" "/c"))
-          (is (= [["/a" "/b"] ["/c"]] @calls)
-              "non-lang paths before and after the lang file should be batched separately, in order")
-          (is (= 1 (count @lang-runs)) "lang file should be loaded once")
-          (finally (reset! original-load-atom saved)))))
-    (testing "a single non-lang path still delegates correctly"
-      (let [calls (atom [])
-            stub  (fn [& paths] (swap! calls conj (vec paths)))
-            saved @original-load-atom]
-        (try
-          (reset! original-load-atom stub)
-          (with-redefs [meme.loader/find-lang-resource (constantly nil)]
-            (lang-load "/single/path"))
-          (is (= [["/single/path"]] @calls))
-          (finally (reset! original-load-atom saved)))))))
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: a .m1clj file with an `ns` form must produce a fully-interned
+;; Scar tissue: a .meme file with an `ns` form must produce a fully-interned
 ;; namespace (find-ns returns it), its vars carry correct :ns metadata, and
 ;; the caller's *ns* is unchanged after require. The code review flagged
 ;; that (binding [*ns* *ns*] ...) alone doesn't guarantee this when the
@@ -385,76 +272,3 @@
       (require 'test-meme-ns.greeter :reload)
       (is (= ns-before *ns*)
           "require must not leak *ns* changes from the .meme ns form"))))
-
-;; ---------------------------------------------------------------------------
-;; Scar tissue: with-load-tracking must not decrement the counter if the
-;; increment itself never succeeded. Previously both swap! calls lived inside
-;; the try, so a throw on the inc path still fired the finally's dec — leaving
-;; the counter at N-1 and breaking quiescence checks.
-;; ---------------------------------------------------------------------------
-
-;; ---------------------------------------------------------------------------
-;; Deprecation warning for .meme/.memec/.memej/.memejs (one-time per process)
-;; ---------------------------------------------------------------------------
-
-(deftest deprecated-extension-emits-once-per-process
-  (testing "first .meme path emits warning to *err*; subsequent paths are silent"
-    (let [warned-atom @(resolve 'meme.loader/deprecation-warned?)
-          saved       @warned-atom]
-      (try
-        (reset! warned-atom false)
-        (let [err1 (java.io.StringWriter.)]
-          (binding [*err* err1]
-            (loader/warn-deprecated-extension! "/path/to/foo.meme"))
-          (is (str/includes? (str err1) "deprecated"))
-          (is (str/includes? (str err1) ".m1clj"))
-          (is (str/includes? (str err1) "foo.meme")))
-        (let [err2 (java.io.StringWriter.)]
-          (binding [*err* err2]
-            (loader/warn-deprecated-extension! "/path/to/bar.memec"))
-          (is (str/blank? (str err2))
-              "second deprecated path should be silent (once-per-process)"))
-        (finally (reset! warned-atom saved))))))
-
-(deftest deprecated-extension-non-deprecated-paths-do-not-warn
-  (testing ".m1clj path does not emit a warning"
-    (let [warned-atom @(resolve 'meme.loader/deprecation-warned?)
-          saved       @warned-atom]
-      (try
-        (reset! warned-atom false)
-        (let [err (java.io.StringWriter.)]
-          (binding [*err* err]
-            (loader/warn-deprecated-extension! "/path/to/foo.m1clj")
-            (loader/warn-deprecated-extension! "/path/to/bar.clj")
-            (loader/warn-deprecated-extension! nil))
-          (is (str/blank? (str err)))
-          (is (false? @warned-atom)
-              "warning state must remain unset after non-deprecated calls"))
-        (finally (reset! warned-atom saved))))))
-
-(deftest with-load-tracking-counter-balance
-  (let [counter-atom @(resolve 'meme.loader/load-counter)
-        track        @(resolve 'meme.loader/with-load-tracking)]
-    (testing "counter unchanged after a successful body"
-      (let [before @counter-atom]
-        (track (fn [] :ok))
-        (is (= before @counter-atom))))
-    (testing "counter unchanged after a throwing body"
-      (let [before @counter-atom]
-        (try (track (fn [] (throw (ex-info "boom" {}))))
-             (catch Exception _ nil))
-        (is (= before @counter-atom))))
-    (testing "counter unchanged if swap! inc itself throws (no erroneous dec)"
-      (let [before @counter-atom
-            orig-swap! swap!
-            calls (volatile! 0)]
-        (with-redefs [swap! (fn
-                              ([a f]
-                               (if (and (identical? a counter-atom) (= 0 @calls))
-                                 (do (vswap! calls inc)
-                                     (throw (ex-info "inc failed" {})))
-                                 (orig-swap! a f)))
-                              ([a f & args] (apply orig-swap! a f args)))]
-          (try (track (fn [] :unreached))
-               (catch Exception _ nil)))
-        (is (= before @counter-atom))))))

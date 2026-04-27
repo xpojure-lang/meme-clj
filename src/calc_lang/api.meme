@@ -1,0 +1,34 @@
+ns( calc-lang.api
+  "Public API and lang-map for calc-lang."
+  :require(
+    [clojure.string :as str]
+    [calc-lang.stages :as stages]
+    [calc-lang.run :as run]
+    [calc-lang.repl :as repl]
+  )
+)
+
+defn( calc->forms
+  "Parse calc source string into Clojure forms."
+  [s](calc->forms(s nil))
+  [s opts](:forms(stages/run(s opts)))
+)
+
+defn( calc->clj
+  "Convert calc source to Clojure source string."
+  [s](calc->clj(s nil))
+  [s opts](let([forms calc->forms(s opts)] str/join("\n" map(pr-str forms))))
+)
+
+defn( to-clj
+  "CLI command: convert calc source to Clojure."
+  [source](calc->clj(source))
+  [source _opts](calc->clj(source))
+)
+
+def( lang-map
+  {:extension ".calc"
+   :to-clj    to-clj
+   :run       fn([source opts] run/run-string(source opts))
+   :repl      fn([opts] repl/start(opts))}
+)

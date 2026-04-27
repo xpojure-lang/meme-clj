@@ -11,54 +11,13 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Synthetic grammar
-;;
-;; The toolkit exports factories + primitives only. Lexical conventions
-;; (identifier shapes, whitespace/newline handling) belong in the lang —
-;; so this test defines its own.
 ;; ---------------------------------------------------------------------------
 
-(defn- digits-consume
-  [^String source ^long len ^long pos]
-  (loop [i pos]
-    (if (and (< i len) (lex/digit? (.charAt source i))) (recur (inc i)) i)))
-
-(defn- ascii-ident-start? [ch]
-  (and ch (let [c (lex/char-code ch)]
-            (or (and (>= c 0x61) (<= c 0x7A))
-                (and (>= c 0x41) (<= c 0x5A))
-                (= c 0x5F)))))
-
-(defn- ascii-ident-consume
-  [^String source ^long len ^long pos]
-  (loop [i (inc pos)]
-    (if (and (< i len)
-             (let [ch (.charAt source i)]
-               (or (ascii-ident-start? ch) (lex/digit? ch))))
-      (recur (inc i)) i)))
-
-(defn- space-or-tab-ws
-  [engine]
-  (let [start (p/cursor engine)
-        src   (p/source-str engine)
-        len   (p/source-len engine)]
-    (loop [i start]
-      (if (and (< i len)
-               (let [c (.charAt src i)] (or (= c \space) (= c \tab))))
-        (recur (inc i))
-        (do (p/set-pos! engine i)
-            (p/make-trivia-token! engine :whitespace start))))))
-
-(defn- lf-newline
-  [engine]
-  (let [start (p/cursor engine)]
-    (p/advance! engine 1)
-    (p/make-trivia-token! engine :newline start)))
-
 (def ^:private number-scanlet
-  (lex/atom-scanlet :number digits-consume))
+  (lex/atom-scanlet :number lex/consume-number))
 
 (def ^:private ident-scanlet
-  (lex/atom-scanlet :ident ascii-ident-consume))
+  (lex/atom-scanlet :ident lex/consume-identifier))
 
 (def ^:private paren-scanlet
   (lex/delimited-scanlet :group :lparen \) :rparen))
@@ -66,16 +25,19 @@
 (def ^:private bang-scanlet
   (lex/single-char-scanlet :bang (p/nud-prefix :not 40)))
 
+(def ^:private ws-trivia
+  (fn [engine] (lex/ws-consumer engine (fn [c] (or (= c \space) (= c \tab))))))
+
 (def calc-grammar
   "Minimal calculator grammar used by these tests."
   {:max-depth 16
    :nud       {\( paren-scanlet
                \! bang-scanlet}
-   :nud-pred  [[(fn [ch _e] (lex/digit? ch))     number-scanlet]
-               [(fn [ch _e] (ascii-ident-start? ch)) ident-scanlet]]
-   :trivia    {\space space-or-tab-ws
-               \tab   space-or-tab-ws
-               \newline lf-newline}
+   :nud-pred  [[(fn [ch _e] (lex/digit? ch))       number-scanlet]
+               [(fn [ch _e] (lex/ident-start? ch)) ident-scanlet]]
+   :trivia    {\space ws-trivia
+               \tab   ws-trivia
+               \newline lex/newline-consumer}
    :led       [{:char \+ :bp 10 :open-type :plus  :fn (p/led-infix :binop 10)}
                {:char \- :bp 10 :open-type :minus :fn (p/led-infix :binop 10)}
                {:char \* :bp 20 :open-type :times :fn (p/led-infix :binop 20)}

@@ -3,16 +3,15 @@
    for a broad set of inputs. Regression net for tokenizer and reader
    output — if any of these break, something changed observable behavior."
   (:require [clojure.test :refer [deftest is testing]]
-            [m1clj-lang.api :as lang]
-            [meme.tools.clj.forms :as forms]
-            [meme.tools.clj.stages :as stages]
-            [m1clj-lang.grammar :as grammar]
-            [m1clj-lang.test-util :as tokenizer]))
+            [meme-lang.api :as lang]
+            [meme-lang.forms :as forms]
+            [meme-lang.stages :as stages]
+            [meme-lang.test-util :as tokenizer]))
 
 (defn- eval-rc-forms
   "Read src and run step-evaluate-reader-conditionals; return :forms."
   [src]
-  (:forms (-> {:source src :opts {:grammar grammar/grammar}}
+  (:forms (-> {:source src :opts nil}
               stages/step-parse
               stages/step-read
               stages/step-evaluate-reader-conditionals)))
@@ -32,7 +31,7 @@
         (tokenizer/tokenize s)))
 
 (defn- forms-for [s]
-  (lang/m1clj->forms s))
+  (lang/meme->forms s))
 
 ;; ---------------------------------------------------------------------------
 ;; Token snapshots — exact type/value/line/col for representative inputs
@@ -321,7 +320,7 @@
 (deftest form-snapshot-metadata
   (let [form (first (forms-for "^:private x"))]
     (is (= 'x form))
-    (is (= {:private true} (meta form)))))
+    (is (= {:private true} (dissoc (meta form) :meme-lang/leading-trivia :meme-lang/meta-chain)))))
 
 (deftest form-snapshot-anon-fn
   (is (= '[(fn [%1] (inc %1))] (forms-for "#(inc(%))")))
@@ -378,16 +377,12 @@
 
 #?(:clj
    (deftest form-snapshot-tagged-literal
-     ;; Tags without a registered data-reader produce a TaggedLiteral.
-     ;; #uuid / #inst now resolve via default-data-readers (matching
-     ;; clojure.core/read-string), so use a custom tag here.
-     (let [form (first (forms-for "#unknown-tag \"foo\""))]
-       (is (tagged-literal? form))
-       (is (= 'unknown-tag (.tag ^clojure.lang.TaggedLiteral form))))))
+     (let [form (first (forms-for "#uuid \"550e8400-e29b-41d4-a716-446655440000\""))]
+       (is (tagged-literal? form)))))
 
 (deftest form-snapshot-reader-conditional
-  (testing "m1clj->forms preserves the record; eval-rc yields platform value"
-    (is (forms/clj-reader-conditional? (first (forms-for "#?(:clj 1 :cljs 2)"))))
+  (testing "meme->forms preserves the record; eval-rc yields platform value"
+    (is (forms/meme-reader-conditional? (first (forms-for "#?(:clj 1 :cljs 2)"))))
     (is (= #?(:clj 1 :cljs 2) (first (eval-rc-forms "#?(:clj 1 :cljs 2)"))))))
 
 #?(:clj
