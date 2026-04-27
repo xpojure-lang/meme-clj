@@ -155,6 +155,18 @@ guest language `m2clj`** seeded as a sovereign sibling to `m1clj`.
   `m1clj-lang.form-shape`, `meme.tools.clj.ast.lower`, and
   `clj-lang.api` by `:refer`-ing the record types on CLJS and using
   bare names at every call site.
+- **Test discovery covered all guest langs.** `clojure -X:test`
+  patterns omitted `clj-lang\..*-test`, so `clj-lang.api-test` (5
+  tests) silently never ran. `bb test-cljs` `-d` args omitted
+  `m2clj-lang/test/m2clj_lang` and `clj-lang/test/clj_lang`, so
+  three CLJS test namespaces were also skipped. Both fixed in
+  `deps.edn`. (#4)
+- **Reserved-extension guard covers every built-in.** The
+  `register!` validator hard-coded `#{".m1clj" ".meme"}` as
+  reserved; `.m2clj` and `.clj` were unprotected against a user
+  registration racing the built-in load. The reserved set is now
+  derived from the snapshot's built-in langs, so adding a new
+  built-in lang automatically reserves its extensions. (#5)
 
 ### Internal
 
@@ -190,6 +202,24 @@ guest language `m2clj`** seeded as a sovereign sibling to `m1clj`.
 - **Vendor roundtrip failure messages** show truncated `pr-str` for
   non-seq forms instead of `?`.
 - **CLI `--out` validation deduplicated** behind `validate-out-dir!`.
+- **Meta-test for deps.edn test-discovery drift.**
+  `test/meme/meta_test.clj` asserts that every `*_test.{clj,cljc}`
+  file under a configured test directory has a namespace name
+  matched by at least one `:patterns` regex (for `:test`/`:e2e`)
+  and sits under at least one `-d` arg (for `:cljs-test`). Vendored
+  submodules under `test/vendor/` are excluded. Catches both
+  bug classes that shipped before fix.
+- **`doc/api.md` platform tags corrected.** `clj->forms`,
+  `clj->m1clj`, and `clj->ast` route through the portable
+  `meme.tools.clj.parser.api` and AST printer; updated from
+  "JVM/Babashka only" to "All platforms". (#6)
+- **`clj-lang/CLAUDE.md` coupling note.** Explicit reminder that
+  `clj-lang.api` requires four `m1clj-lang.*` namespaces — relevant
+  for the eventual Clojars split. (#6)
+- **`meme.cli/-main` lazy-load comment.** Documents why
+  `babashka.cli` is loaded via runtime `require` + `resolve` rather
+  than `ns :require` (so programmatic embedders don't pay the dep
+  cost). (#6)
 
 ## [5.0.0] — 2026-04-19
 
