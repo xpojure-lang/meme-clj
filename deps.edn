@@ -13,7 +13,8 @@
          :exec-args {:dirs ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test"]
                      :patterns ["meme\\..*-test"
                                 "m1clj-lang\\..*-test"
-                                "m2clj-lang\\..*-test"]}}
+                                "m2clj-lang\\..*-test"
+                                "clj-lang\\..*-test"]}}
   ;; Alias name kept as :meme — it tracks the CLI binary name, not the
   ;; lang registry key (which is :m1clj). Renaming would break downstream
   ;; `clojure -T:meme ...` invocations in scripts and CI.
@@ -25,7 +26,10 @@
                            olical/cljs-test-runner {:mvn/version "3.8.1"}
                            org.clojure/test.check {:mvn/version "1.1.1"}}
               :main-opts ["-m" "cljs-test-runner.main"
-                          "-d" "test/meme" "-d" "m1clj-lang/test/m1clj_lang"
+                          "-d" "test/meme"
+                          "-d" "m1clj-lang/test/m1clj_lang"
+                          "-d" "m2clj-lang/test/m2clj_lang"
+                          "-d" "clj-lang/test/clj_lang"
                           "-r" ".*-test$"
                           "-x" "node"]}
   :e2e {:extra-paths ["test"]
