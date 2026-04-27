@@ -67,9 +67,34 @@ jobs:
           restore-keys: cljs-
       - run: clojure -M:cljs-test
 
+  test-e2e:
+    name: E2E CLI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      # E2E tests shell out to both `bb meme` (Babashka path) and
+      # `clojure -T:meme run` (JVM require path), so both must be on PATH.
+      - uses: DeLaGuardo/setup-clojure@13.3
+        with:
+          cli: '1.12.4.1618'
+          bb: '1.12.217'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.clojure/.cpcache
+          key: clj-${{ hashFiles('deps.edn') }}
+          restore-keys: clj-
+      - run: clojure -X:e2e
+
   deploy:
     name: Deploy to Clojars
-    needs: [test-jvm, test-babashka, test-cljs]
+    needs: [test-jvm, test-babashka, test-cljs, test-e2e]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
