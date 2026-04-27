@@ -9,14 +9,39 @@
    source string using engine primitives and produces a CST node.
 
    Grammar spec shape:
-     {:nud        {char → scanlet-fn}
-      :nud-pred   [[pred scanlet-fn] ...]
-      :trivia     {char → trivia-consumer-fn}
-      :trivia-pred [[pred trivia-consumer-fn] ...]
-      :led        [{:char c :bp n :when pred :fn scanlet-fn} ...]}
+     {:nud         {char → nud-parselet}
+      :nud-pred    [[pred nud-parselet] ...]
+      :trivia      {char → trivia-consumer}
+      :trivia-pred [[pred trivia-consumer] ...]
+      :led         [{:char c :bp n :when pred :open-type kw :fn led-parselet} ...]
+      :max-depth   int or nil}
 
-   Parselet factories (nud-atom, nud-prefix, nud-delimited, etc.) generate
-   common patterns. Custom parselets are plain functions."
+   Parselet-author API — functions grammars may call from their scanlets,
+   parselets, and `:when` predicates. Staying inside this surface keeps
+   grammars decoupled from engine internals (:pos, :depth, :trivia-acc,
+   :line-starts, :spec on the engine map) that are not part of the contract.
+
+     Engine state:       peek-char, cursor, advance!, set-pos!, eof?,
+                         source-str, source-len, trivia-pending?
+     Token production:   make-token!, make-trivia-token!
+     Trivia:             skip-trivia!
+     Sub-parsing:        parse-expr, parse-until, expect-close!
+     CST construction:   cst
+     Nud factories:      nud-atom, nud-prefix, nud-prefix-two, nud-delimited,
+                         nud-empty-or-error, nud-prefixed-delimited
+     Led factories:      led-call, led-infix, led-infix-2char,
+                         led-comparison-or-equal, led-compound
+     :when predicates:   next-char-is?, next-char-is-not?
+
+   Custom parselets are plain functions (they don't have to use the factories)
+   but must call into the API above rather than reaching into the engine map.
+
+   Private — not part of the parselet-author contract:
+     build-line-starts, binary-search-line, nud-pred-match, matching-led,
+     trivia-pred-match. Use the public API instead.
+
+   Driver entry point is `parse`; custom drivers may call `make-engine` +
+   `parse-expr` directly."
 )
 
 ;; ---------------------------------------------------------------------------

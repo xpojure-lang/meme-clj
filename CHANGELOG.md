@@ -1,280 +1,282 @@
 # Changelog
 
-All notable changes to meme-clj will be documented in this file.
+All notable changes to **meme-clj** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [5.0.0] — 2026-04-19
+> **Pre-5.0 history is archived in [CHANGELOG-archive.md](CHANGELOG-archive.md).**
+> The language identifier was renamed twice during 5.0 development
+> (`meme` → `mclj` → `m1clj`); the codebase now uses **m1clj** for the
+> language and keeps **meme** / **meme-clj** for the toolkit, the CLI
+> binary, and the project. Pre-5.0 entries describe an earlier shape of
+> the codebase and are kept for historical reference only. See
+> [doc/glossary.md](doc/glossary.md) for the current vocabulary.
 
-Reader-conditional handling is now a pipeline stage instead of a reader flag. `meme->forms` and `meme->clj` are lossless by default for `.cljc` sources.
+## [Unreleased]
 
-### Breaking Changes
-
-- **The `:read-cond` option is removed from `meme->forms`, `meme->clj`, and the `step-read` pipeline stage.** Reader conditionals (`#?`, `#?@`) are always returned as `MemeReaderConditional` records. Passing `:read-cond` throws `:meme-lang/deprecated-opt` with migration text.
-
-  **Migration:**
-  - If you used `{:read-cond :preserve}`: remove it. Records are the default now.
-  - If you relied on the old `:eval` behavior (platform materialization at read time): compose `meme-lang.stages/step-evaluate-reader-conditionals` after `step-read`, or use `run-string`/`run-file`/REPL — all of which do so automatically.
-
-- **`meme->clj` is now lossless by default.** Previously it evaluated `#?` for the current platform, silently dropping off-platform branches. Now both branches are preserved in the emitted Clojure text. Use `run-string` for eval-time behavior.
-
-- **`meme compile` renamed to `meme transpile`.** The command is a same-level surface-syntax transform (`.meme` → `.clj`), not a lowering to bytecode — `transpile` is the accurate term. `compile` still works as an alias; no script changes required, but new docs and help text use `transpile`.
-
-- **Default `--out` is now `target/meme`** (was `target/classes`). Avoids collision with `tools.build`/AOT output in the same directory tree. Projects that relied on the old default should either pass `--out target/classes` explicitly or update `:paths` in `deps.edn` to point at `target/meme`.
-
-- **Scanner / reader strictness.** Several malformed inputs that previously read silently now error at read time, matching Clojure's reader:
-  - `//`, `//a`, `/foo` — rejected. `/`, `ns//`, `foo/bar/baz` stay valid.
-  - `\uNNNN` followed by any alphanumeric (e.g. `\u00410`, `\u0041G`) — rejected.
-  - Bare `` `~~x `` (two unquotes with only one enclosing ``` ` ```) — errors at expander time. Balanced `` ``~~x `` still expands to `x`.
-  - Variation selectors U+FE00-U+FE0F inside symbols — rejected (stricter than Clojure; blocks look-alike-symbol attacks).
-  - U+2028 / U+2029 now count as line terminators in error-position reporting.
+Post-5.0.0 work, in four threads: an **AST tier** (lossless intermediate
+between CST and Clojure forms), a **native-Clojure parser** registered as
+a sibling guest (`clj-lang`), a **fuzzing + cross-check parity gate** that
+drove both to convergence with `clojure.core/read-string`, and a **third
+guest language `m2clj`** seeded as a sovereign sibling to `m1clj`.
 
 ### Added
 
-- **`meme-lang.stages/step-evaluate-reader-conditionals`** — pipeline stage that evaluates `#?`/`#?@` records in `:forms` for a target platform. Supports `:platform` opt (default: compile-time platform). Handles `#?` (branch pick), `#?@` (splice into parent collection), `:default` fallback, and validates even-count branch lists. Recurses into `` ` `` / `~` / `~@` interiors, matching native Clojure's reader-time evaluation order. Does not fire for tooling paths — `meme->forms`, `meme->clj`, `format-meme`, and `to-clj` skip the stage and preserve records.
+- **`m2clj` language.** A sovereign sibling to `m1clj`: same M-expression
+  call rule, plus one extra — a paren without head adjacency (`(x y z)`)
+  is a list literal that lowers to `(quote (x y z))` instead of being a
+  parse error. Calls still require head adjacency, so call-vs-data
+  remains structural at the reader layer. Full lang implementation under
+  `m2clj-lang/src/m2clj_lang/*` (api, grammar, parselets, lexlets, form-shape,
+  printer, formatter.flat, formatter.canon, run, repl) — sovereign tree,
+  not a refactor of m1clj. Self-registers as `:m2clj` builtin via
+  `meme.cli` (built-in alongside `:m1clj` and `:clj`). File extension:
+  `.m2clj`.
 
-- **`:default` fallback in reader conditionals.** Previously only matched named platform keys; `#?(:cljs 1 :default 99)` on JVM returned nothing. Now returns `99`.
+- **`CljQuote{notation}` field.** The AST tier's `CljQuote` record gained
+  a `:notation` field (`:tick` for `'x` sugar, `:bare` for m2clj's
+  bare-paren list literal, `:call` for `(quote x)`). The printer
+  dispatches on notation to reconstruct the original surface, preserving
+  syntactic transparency across all three guests.
 
-- **`meme from-meme` / `meme from-clj` CLI aliases** for users who prefer to name the source rather than the destination. `from-meme` ≡ `to-clj`; `from-clj` ≡ `to-meme`.
+- **`:bare-list` CST node + form-layer cst-reader handling.** The
+  parser's bare-paren branch produces a `:bare-list` CST node which the
+  cst-reader and AST builder both lower to `(quote (…))`. New bare-paren
+  branch in `meme.tools.clj.cst-reader`.
 
-- **`meme build` CLI command** — transpile + AOT compile `.meme` sources to JVM bytecode in a single step. Staging lives under `target/meme` (implementation detail); bytecode goes to `--out target/classes`. Meme stops at bytecode; JAR packaging stays in the user's tools.build layer. The `Building to JVM bytecode` section in `doc/language-reference.md` documents alternate `build.clj`-integrated recipes for projects that want tighter control.
+- **AST tier (`meme.tools.clj.ast.*`).** A lossless representation between
+  CST and plain Clojure forms. Notation, position, and trivia live on
+  record fields rather than form metadata, so they survive arbitrary
+  walkers. 25 record types covering atoms (`CljSymbol`, `CljKeyword`,
+  `CljNumber`, `CljString`, `CljChar`, `CljRegex`, `CljNil`, `CljBool`),
+  collections (`CljList`, `CljVector`, `CljMap`, `CljSet`), reader-macro
+  nodes (`CljQuote`, `CljDeref`, `CljVar`, `CljSyntaxQuote`,
+  `CljUnquote`, `CljUnquoteSplicing`, `CljAnonFn`, `CljDiscard`),
+  compound forms (`CljTagged`, `CljReaderCond`, `CljMeta`,
+  `CljNamespacedMap`), and a top-level `CljRoot`. Each implements the
+  `AstNode` protocol with `children` / `rebuild`. `ast=` is structural
+  equality without notation; `defrecord =` stays strict.
 
-### Changed
+- **`m1clj-lang.api/m1clj->ast` and `clj->ast`** — public entry points
+  for the AST tier. Tooling that needs round-trip fidelity (formatters,
+  refactorers, transpilers) consumes these directly. `m1clj->forms` is
+  now a thin shim over `m1clj->ast` followed by `ast->forms`.
 
-- **`run-string`, `run-file`, REPL** — `step-evaluate-reader-conditionals` inserted automatically between `step-read` and `step-expand-syntax-quotes`.
-- **`meme->forms`, `format-meme`, `to-clj`** — internal `:read-cond :preserve` wiring removed. Records are the default; no opt required.
-- **Pipeline contract map** (`meme-lang.stages/stage-contracts`) gains an entry for the new stage; now has four entries instead of three.
+- **Native Clojure parser (`meme.tools.clj.parser.*`).** Parses native
+  S-expression Clojure source through the same engine as m1clj —
+  `parse-string` (CST), `clj->ast` (lossless AST), `clj->forms` (lossy
+  forms). Reuses the parser engine, lex layer, AST builder, and
+  lowering pipeline; only the call rule and `#(...)` body shape differ
+  from m1clj's grammar.
+
+- **`:clj` lang registered (`clj-lang.api`).** `meme format file.clj`
+  now formats native Clojure source via the native parser; `meme
+  to-m1clj file.clj` converts losslessly. The lang exposes `:format`,
+  `:to-clj`, `:to-m1clj` and is registered as a built-in alongside
+  `:m1clj`. `m1clj-lang.formatter.canon/format-form` gained a `:mode`
+  opt (default `:m1clj`) so the canonical formatter renders both
+  surfaces from one implementation.
+
+- **`m1clj->clj` and `clj->m1clj` are lossless.** Both route through the
+  AST tier. Reader sugar (`'`, `@`, `#'`, `#()`), namespaced-map
+  prefixes, set source order, multi-tier metadata chains, and bare `%`
+  notation all survive cross-surface conversion. `clj->forms` and
+  `clj->m1clj` now also work on ClojureScript (no `read-string`
+  dependency).
+
+- **Vendor cross-check parity gate.** `test/meme/vendor_cross_check_test.clj`
+  compares native parser output to `clojure.core/read-string` on each
+  `.clj`/`.cljc` file across all 7 vendor projects (core.async, specter,
+  malli, ring, clj-http, medley, hiccup), normalising cosmetic
+  differences (`fn*`/`fn`, gensym suffixes, regex `Pattern` vs string,
+  `##NaN` sentinel, `%&` → `<rest>`). Per-project parity baselines
+  encode current state and act as a ratchet. **All seven projects sit
+  at baseline 0** — full parity, any new divergence is a regression.
+
+- **Fuzzer expanded to 7 targets.** Coverage-guided exploration of the
+  toolkit, including the AST tier and native parser:
+  - `RoundtripTarget` — m1clj parse → print → re-parse identity.
+  - `FormatTarget` — formatter exception safety.
+  - `IdempotentTarget` — `format(format(s)) == format(s)`.
+  - `FormsToCljTarget` — m1clj→Clojure boundary differential.
+  - `NativeCljTarget` — `clj->forms` round-trip.
+  - `CrossCheckTarget` — promotes vendor cross-check to a property.
+  - `CljModeIdempotentTarget` — `:clj`-mode formatter idempotence.
+  Seed corpus of 18 hand-curated files (1140 lines), 92-entry
+  `meme.dict`, 377 coverage-guided cases. `bb fuzz-quick` runs all
+  seven at 50K runs each (~7 min).
 
 ### Fixed
 
-- **`meme->clj` silently dropped off-platform branches of `#?` on `.cljc` sources.** The asymmetry between library `meme->clj` (evaluated) and CLI `to-clj` (preserved) is eliminated — both now preserve faithfully. Scar-tissue regression: `meme->clj-reader-conditional-lossless` in `test/meme/regression/reader_test.cljc`.
-
-- **`clj->forms` depth guard off-by-one.** The sibling fix in `cst_reader.cljc` (4.0.0) tightened `>` to `>=`, but `meme-lang.api/clj->forms/check-depth` retained `>`, so Clojure source at exactly `max-parse-depth` levels parsed successfully while meme source at the same depth was rejected. Both entry points now reject at exactly `max-parse-depth`, matching the 4.0.0 CHANGELOG intent. Scar-tissue regression: `clj-forms-depth-boundary-matches-meme-forms` in `test/meme/regression/reader_test.cljc`.
-
-- **`meme.loader/uninstall!` thread-safety.** The in-flight-load guard used a `^:dynamic *loading*` thread-local binding, which only blocked same-thread uninstall. A second thread could call `uninstall!` and restore `clojure.core/load` while the first thread was still inside a `lang-load`, leaving the in-flight load executing against a torn-down override. Replaced with a shared `load-counter` atom and an `install-lock` monitor. `install!`/`uninstall!` now serialize safely across threads; `uninstall!` throws `{:reason :active-load, :in-flight N}` if any thread is still inside a load. Scar-tissue regressions: `uninstall-during-load-rejected`, `uninstall-from-other-thread-blocked-while-loading`, and `concurrent-installs-are-idempotent` in `test/meme/loader_test.clj`.
-
-- **Bare `:/` now reads as `(keyword "/")`** instead of erroring with "Invalid token". Matches Clojure.
-
-- **Bare `~~x` leaked a `MemeUnquote` record to eval** instead of erroring. Added a post-expansion sweep that rejects leftover unquote records. Balanced `` ``~~x `` still works.
-
-- **`meme compile` Windows path bug** — `getCanonicalPath` returns `\`-separated paths on Windows, but the root-prefix match hardcoded `/`. Files collapsed into the flat output directory with their relative paths lost. Uses `java.io.File/separator` now.
-
-- **`meme compile --out ""`** now fails fast with a clear error instead of silently writing to the filesystem root.
+- **`expand-sq` collection branches recurse into the unquoted form** —
+  nested syntax-quotes inside `~`/`~@` items in lists/vectors/maps/sets
+  no longer leak `CljSyntaxQuote` records past the expander. Cleared
+  14 of 14 expander-error files in vendor cross-check (hiccup compiler,
+  core.async ioc-macros, malli util/cljs).
+- **`expand-sq-meta` wraps `concat` in `seq`** to match Clojure's
+  `SyntaxQuoteReader` exactly under cross-check parity.
+- **`expand-sq` quotes `ReaderConditional` records** when expanding
+  `` `#?(:clj a :cljs b) `` under `:read-cond :preserve`.
+- **`default-resolve-symbol` handles static methods, constructors, and
+  fully-qualified class symbols** the way Clojure's `SyntaxQuoteReader`
+  does. `Foo.` → `pkg.Foo.`; `Class/member` → `pkg.Class/member`;
+  dotted FQN class names left unprefixed.
+- **`#()` percent-param scoping handles nested user `(fn …)` bodies.**
+  A `%` inside a user-written `(fn …)` that lives inside `#()` now
+  correctly belongs to the outer `#()` (Clojure semantics). The form
+  walker had been confusing user `fn` with already-lowered nested
+  `#()`. Fixed at the AST tier (`CljAnonFn`) before lowering.
+- **`resolve-tagged-literal` consults `*data-readers*` and
+  `default-data-readers`.** `#uuid "…"` and `#inst "…"` resolve to
+  `java.util.UUID` and `java.util.Date` at read time, matching
+  `clojure.core/read-string`.
+- **Tagged literals on ClojureScript no longer error.** `#inst`
+  resolves to `js/Date`, `#uuid` to `cljs.core/UUID`; unknown tags fall
+  back to a `TaggedLiteral` matching the JVM shape.
+- **Duplicate-key detection across notations.** `{0xFF 1 255 2}` and
+  `{A 1 \A 2}` no longer accept two keys that resolve to the same
+  value — `CljRaw` is unwrapped before duplicate detection.
+- **`cli/run` double-slurp** — file is now read once and reused.
+- **`with-load-tracking` counter imbalance** when `swap! inc` throws.
+- **Leftover unquote errors carry source location** through expansion.
+- **`loader/uninstall!` dispatch-gap race** — concurrent
+  install/uninstall during in-flight loads is now serialised under
+  `install-lock`; stale references remain safe to deref.
+- **`cli` bad-flag error matched structurally** via `(:type (ex-data e))`
+  instead of regex on the message.
+- **`columnar-pairs-doc` empty-input crash** — falls back to width 0
+  when there are no key widths.
+- **`registry/resolve-symbol` non-invocable result** rejects at
+  resolution time with a clear message.
+- **CLJS test suite is now green** (was 313 errors). Root cause:
+  `(instance? meme.tools.clj.ast.nodes.CljSymbol x)` (dotted JVM FQN)
+  doesn't resolve on ClojureScript — defrecord types are JS exports
+  referenced by namespace path. Fixed across `m1clj-lang.printer`,
+  `m1clj-lang.form-shape`, `meme.tools.clj.ast.lower`, and
+  `clj-lang.api` by `:refer`-ing the record types on CLJS and using
+  bare names at every call site.
 
 ### Internal
 
-- **`cst-reader.cljc`** — `:reader-cond` case simplified to a single always-preserve path. `:eval` branch, `::no-match` sentinel for reader conditionals, and `:meme-lang/splice` metadata machinery are gone. `splice-and-filter` now only filters the shebang sentinel.
-- **`meme-lang.run`** and **`meme-lang.repl`** compose the new stage in their run-fn pipelines.
+- **`registry/register-string-handler!` is now first-wins.** Previously
+  later registrations silently overrode earlier ones — once `m2clj-lang`
+  registered an identical `:run` string handler, load order across guests
+  determined which won. The slot is now idempotent: the first lang to
+  register wins, subsequent calls for the same command are no-ops.
+  `m1clj-lang` loads first in `meme.cli`, so its handler is authoritative;
+  `m2clj-lang`'s call is a no-op when bundled, but kept so the lang is
+  self-sufficient when loaded standalone. Once a lang needs a genuinely
+  divergent string convention, scope handlers per-lang (post-split
+  shape: `{lang-name {command handler}}`).
+- **`with-m1clj-grammar` triplication lifted into
+  `m1clj-lang.grammar/with-grammar`** — single shared definition; all
+  three call sites delegate.
+- **BOM + shebang stripping consolidated** in `meme.tools.clj.stages`
+  (`strip-bom`, `strip-source-preamble`).
+- **`clear-user-langs!` moved out of production** to
+  `test/meme/test_registry.clj`.
+- **Tombstoned scar comments** in `test/meme/regression/reader_test.cljc`
+  inlined as real `deftest` assertions so the regression net is
+  locally guaranteed.
+- **Dogfood roundtrip expanded** to include `meme.tools.parser`,
+  `meme.tools.render`, `m1clj-lang.grammar`, `m1clj-lang.form-shape`,
+  and `m1clj-lang.formatter.canon`.
+- **Direct unit tests for `meme.tools.clj.lex`** —
+  `consume-char-literal`, `consume-symbol`, `consume-keyword`,
+  `consume-number`, `consume-string`, plus the `whitespace-char?` /
+  `symbol-start?` predicates.
+- **`registry_test.clj` flake-prone `Thread/sleep`** replaced with
+  `future`s + `(run! deref futures)`.
+- **Vendor roundtrip failure messages** show truncated `pr-str` for
+  non-seq forms instead of `?`.
+- **CLI `--out` validation deduplicated** behind `validate-out-dir!`.
+
+## [5.0.0] — 2026-04-19
+
+Reader-conditional handling becomes a pipeline stage instead of a reader
+flag. Tooling-path APIs (`m1clj->forms`, `m1clj->clj`) are lossless by
+default for `.cljc` sources.
+
+### Breaking Changes
+
+- **The `:read-cond` option is removed** from the read API and the
+  `step-read` pipeline stage. Reader conditionals (`#?`, `#?@`) are
+  always returned as `CljReaderConditional` records. Passing
+  `:read-cond` throws `:m1clj/deprecated-opt` with migration text.
+
+  **Migration:**
+  - If you used `{:read-cond :preserve}`: remove it. Records are the default now.
+  - If you relied on `:eval` (platform materialization at read time):
+    compose `meme.tools.clj.stages/step-evaluate-reader-conditionals`
+    after `step-read`, or use `run-string`/`run-file`/REPL — all of
+    which do so automatically.
+
+- **`m1clj->clj` is lossless by default.** Previously it evaluated `#?`
+  for the current platform, silently dropping off-platform branches.
+  Both branches are now preserved in the emitted Clojure text. Use
+  `run-string` for eval-time behavior.
+
+- **`meme compile` renamed to `meme transpile`.** The command is a
+  same-level surface-syntax transform, not a lowering to bytecode —
+  `transpile` is the accurate term. `compile` still works as an alias.
+
+- **Default `--out` directory** for `transpile` changed to `target/m1clj`
+  (was `target/classes`). Avoids collision with `tools.build` / AOT
+  output. Either pass `--out target/classes` explicitly or update
+  `:paths` in `deps.edn`.
+
+- **Scanner / reader strictness.** Several malformed inputs that
+  previously read silently now error at read time, matching Clojure's
+  reader:
+  - `//`, `//a`, `/foo` rejected (`/`, `ns//`, `foo/bar/baz` stay valid).
+  - `\uNNNN` followed by any alphanumeric rejected.
+  - Bare `` `~~x `` errors at expander time.
+  - Variation selectors U+FE00–U+FE0F inside symbols rejected
+    (stricter than Clojure; blocks look-alike-symbol attacks).
+  - U+2028 / U+2029 count as line terminators in error positions.
+
+### Added
+
+- **`step-evaluate-reader-conditionals`** — pipeline stage in
+  `meme.tools.clj.stages` that evaluates `#?`/`#?@` records for a
+  target platform. Supports `:platform` opt (default: compile-time
+  platform), `:default` fallback, and recurses into syntax-quote
+  interiors matching native Clojure's reader-time evaluation order.
+  Tooling paths skip the stage and preserve records.
+
+- **`:default` fallback in reader conditionals.**
+  `#?(:cljs 1 :default 99)` on JVM now returns `99`.
+
+- **`from-clj` CLI alias** for users who prefer source-based naming.
+
+- **`meme build` CLI command** — transpile + AOT-compile to JVM
+  bytecode in one step. Stops at `.class` files; JAR packaging stays
+  in the user's tools.build layer.
+
+### Changed
+
+- **`run-string`, `run-file`, REPL** — `step-evaluate-reader-conditionals`
+  inserted automatically between `step-read` and
+  `step-expand-syntax-quotes`.
+- **Pipeline contract map** gains an entry for the new stage; four
+  entries instead of three.
+
+### Fixed
+
+- **`m1clj->clj` silently dropped off-platform branches** of `#?` on
+  `.cljc` sources. The asymmetry between library and CLI conversion
+  paths is gone — both preserve faithfully.
+- **`clj->forms` depth guard off-by-one** — both entry points now
+  reject at exactly `max-parse-depth`.
+- **`meme.loader/uninstall!` thread-safety** — replaced thread-local
+  `*loading*` with a `load-counter` atom and `install-lock` monitor.
+- **Bare `:/` reads as `(keyword "/")`** instead of erroring.
+- **Bare `~~x` no longer leaks** an unquote record to eval.
+- **`meme transpile` Windows path bug** — uses
+  `java.io.File/separator` instead of hardcoded `/`.
+- **`meme transpile --out ""`** fails fast.
 
 ### Known Limitation
 
-- **`#?@` inside a map literal fails at read time** (odd-count children). Matches Clojure's own `:read-cond :preserve` behavior. Use a collection other than map, or construct the map at runtime.
-
-## [4.0.0] — 2026-04-19
-
-A reorganization release. No breaking changes to `.meme` syntax or runtime behavior; most of the work is in documentation, API hygiene, and internal boundaries.
-
-### Architecture
-
-- **Registry inversion** — `meme.registry` imports no concrete langs. Each lang's api namespace calls `register-builtin!` at its own load time, and the CLI triggers registration by explicitly requiring each lang it ships with. Dissolves the old registry↔lang cycle and four `requiring-resolve` workarounds.
-- **Shared infrastructure reclassification** — `meme.registry` and `meme.loader` are now documented as shared infrastructure peer to `meme.tools.*`, not as a strict "above" tier over `meme-lang.*`. `meme-lang.api` requiring `meme.registry` (for self-registration) and `meme-lang.run` requiring `meme.loader` (for auto-install) are intentional; the CLAUDE.md tier table has been updated to match.
-- **Pipeline contract validation** — stages declare required ctx keys via `stage-contracts`; `check-contract!` runs at entry and throws `:meme-lang/pipeline-error` with the missing key(s) when pipelines are miscomposed, instead of deep NPEs.
-- **Engine seal** — `meme.tools.parser` exposes only `trivia-pending?` to language grammars; other engine internals are no longer part of the grammar-author contract.
-- **`char-code` consolidated into `meme.tools.lexer`** — duplicate helper in `meme-lang.lexlets` removed.
-
-### Added
-
-- **`meme.registry/register-string-handler!`** — lang-agnostic hook for resolving string values (e.g. `:run "prelude.meme"`) in lang-map slots. Meme installs its own `:run` handler at load time. Replaces the previous hardcoded `requiring-resolve` of `meme-lang.run/run-string` inside the registry.
-- **`meme-lang.run/run-file` opts** — `:install-loader?` (default `true`; pass `false` to skip auto-install of `meme.loader`) and `:resolve-lang-for-path` (extension-based lang dispatch hook, injected by the CLI).
-- **`meme-lang.repl/start` opt** — `:install-loader?` mirrors the above.
-- **Direct unit tests for `meme.tools.parser` and `meme.tools.lexer`** using a minimal synthetic calculator grammar, covering precedence (left/right-assoc), EOF recovery, max-depth, trivia attachment, `:when` predicate gating, and all scanlet/parselet factories.
-- **Scar-tissue tests** for regex roundtrip and empty splice expansion.
-
-### Changed
-
-- **`run-string`, `run-file`, and `repl/start` auto-install `meme.loader`.** `require`/`load-file` of `.meme` namespaces work in the common programmatic case, not just via the CLI. Hosts that own their own `clojure.core/load` interception opt out via `:install-loader? false`.
-- **Babashka loader warning suppressed** when SCI bypasses `clojure.core/load` — no cosmetic noise on REPL start.
-
-### Fixed
-
-- **Off-by-one in CST reader's depth guard** (`src/meme_lang/cst_reader.cljc`). Reader allowed one more level of recursion than the parser's limit (`>` → `>=`). Behavior now matches the parser at exactly `max-parse-depth` levels.
-- **`meme.tools.lexer` cross-platform bug** — `digit?`/`ident-start?`/`ident-char?` claimed portability but returned wrong results on CLJS because `(int ch)` on a single-char string returns `NaN|0 = 0` rather than the code point. Fixed with a `char-code` helper that uses `.charCodeAt` on CLJS. Meme's grammar was unaffected (its own `meme-lang.lexlets` had the same pattern); `calc-lang` relied on the generic helpers and would have silently failed on CLJS.
-
-### Internal / API hygiene
-
-- **`meme-lang.api/to-clj` and `to-meme`** marked `^:no-doc`. These are CLI-dispatch adapters (they always apply `:read-cond :preserve`); library callers should use `meme->clj` / `clj->meme` directly.
-- **`meme.registry/clear-user-langs!`** and **`registered-extensions`** marked `^:no-doc` — internal plumbing used by tests and the loader respectively.
-- **`meme-lang.parselets/reader-cond-extra`** made private (used only within the file).
-- **Missing docstrings** added: `meme.tools.parser/make-engine`, `meme.tools.lexer/{digit?, ident-char?, newline-consumer}`, `meme.config/config-filename`.
-
-## [3.3.3] — 2026-04-12
-
-### Fixed
-
-- **Red team findings** — reader-cond validation, registry TOCTOU around extension conflicts, CLI testability improvements.
-- **Deterministic depth guard in `clj->forms`** — no longer relies on catching `StackOverflowError` at CI JVM sizes; walks the returned forms against `max-parse-depth` instead.
-- **Fuzzer state consolidated under `fuzz/`** — corpus and crash artifacts moved out of the project root.
-
-### Documentation
-
-- Added namespace-loading and `compile` sections to the README.
-- Updated installation version pin.
-
-## [3.3.0] — 2026-04-09
-
-### Added
-
-- **`load-file` interception** — `(load-file "path/to/file.meme")` runs through the meme pipeline on both JVM and Babashka.
-- **`meme compile` CLI command** — compiles `.meme` to `.clj` into a separate output directory (`--out target/classes` by default) so `.meme` namespaces work via standard `require` without runtime patching. Primary use: Babashka projects that need `require` (SCI bypasses `clojure.core/load`, so runtime interception isn't enough).
-- **Project-local `.meme-format.edn` config** — `meme format` discovers config by walking up from CWD. Schema: `:width`, `:structural-fallback?`, `:form-shape` (symbol→built-in alias), `:style` (partial canon override). Strict EDN, unknown tags rejected, unknown keys warn.
-
-### Changed — Formatter (three-layer architecture)
-
-- **Style policy extracted from the printer into the formatters.** The printer is now notation-only; `meme-lang.formatter.canon/style` carries the slot-keyed opinions.
-- **Form-shape layer** (`meme-lang.form-shape`) — semantic decomposition of special forms into named slots (`:name`, `:doc`, `:params`, `:bindings`, `:clause`, `:body`, `:dispatch-val`, etc.). Lang-owned: each lang carries its own registry. The printer dispatches on slots, not form names. Documented as a public contract in `doc/form-shape.md`.
-- **Opt-in structural fallback** — `with-structural-fallback` wraps a registry so user macros shaped like `defn` (name + params vector) or `let` (leading bindings vector) inherit canonical layout.
-- **Slot renderers as override-able defaults** — style's `:slot-renderers` composes over `printer/default-slot-renderers` via plain map merge; formatters accept `:style` override in opts for project-level tweaks. The canon style collapsed from ~60 form-keyed entries to 11 slot-keyed entries.
-- **Canon layout refinements:**
-  - Inline vector/map/set layout — first element right after the open delimiter.
-  - Binding vectors keep their head form (`let`/`loop`/`for`/`doseq`/...) on the head line; bindings render as pairs per line with columnar alignment.
-  - Definition forms (`defn`/`defn-`/`defmacro`) keep name + params on the head line; always space after `(` for definition forms.
-  - `case`, `cond`, `condp` render their bodies as paired clauses.
-  - Multi-line values in paired layouts nest at the key column.
-  - Closing paren moves to its own line for multi-line calls.
-
-### Fixed
-
-- **Four loader bugs** found during the loader work.
-
-## [3.0.0] — 2026-04-05
-
-### Added
-- **Namespace loader** (`meme.loader`): intercepts `clojure.core/load` to find `.meme` files on the classpath. Auto-installed by `run-file` and REPL start. `install!`/`uninstall!` for manual control. `require` in `.meme` code finds both `.meme` and `.clj` namespaces; `.meme` takes precedence when both exist.
-- **Multi-extension support**: `register!` accepts both `:extension` (string) and `:extensions` (vector); both are normalized to `:extensions [...]`. Built-in meme lang registers `.meme`, `.memec`, `.memej`, `.memejs`.
-- **Namespace denylist in loader**: `clojure.*`, `java.*`, `javax.*`, `cljs.*`, `nrepl.*`, `cider.*` namespaces cannot be shadowed by `.meme` files on the classpath.
-- **Loader uninstall guard**: `uninstall!` throws when called from within a lang-load (prevents `.meme` code from disabling the loader mid-execution).
-- **`#::{}` bare auto-resolve**: namespaced maps with empty alias (`#::{:a 1}`) are now accepted, matching Clojure's behavior. Keys stay unqualified; qualification deferred to eval time.
-- **Red team report**: `doc/red-team/report.md` — 71 adversarial hypotheses tested across parser, value resolution, expansion, printer, loader, registry, and CLI.
-- **Design documentation**: "The call/data tension" section in `doc/design-decisions.md` — analysis of lists, homoiconicity, and M-expressions.
-
-### Changed
-- **Architecture**: three-layer reorganization — `meme.tools.*` (generic parser/render), `meme-lang.*` (meme language), `meme.*` (CLI/registry/loader). The Pratt parser is fully data-driven via grammar spec.
-- **Metadata namespace hygiene**: all internal metadata keys moved from `:meme/*` to `:meme-lang/*`, with descriptive names. `:meme/ws` → `:meme-lang/leading-trivia`, `:meme/sugar` → `:meme-lang/sugar`, `:meme/order` → `:meme-lang/insertion-order`, `:meme/ns` → `:meme-lang/namespace-prefix`, `:meme/meta-chain` → `:meme-lang/meta-chain`, `:meme/bare-percent` → `:meme-lang/bare-percent`, `:meme/splice` → `:meme-lang/splice`. This separates meme-lang metadata from the generic `meme.tools` namespace, preventing collision with both user metadata and future languages built on `meme.tools.*`.
-- **`register!` conflict check is atomic**: extension validation moved inside `swap!` callback, preventing TOCTOU race on concurrent registrations.
-- **CLI reads file once**: `process-files` reads source via `slurp` once and passes content to transform, eliminating TOCTOU between read and write.
-- **`meme-file?` and `swap-ext`** consult the registry for all registered extensions, not just hard-coded `.meme`.
-- **`strip-shebang`** correctly handles CRLF (`\r\n`) line endings.
-- **`clj->forms`** catches `StackOverflowError` on deeply nested Clojure input and rethrows as `ex-info`.
-
-### Fixed
-- **`%N` param OOM**: anonymous function params capped at `%20` (was ~10^11 → instant heap exhaustion). Matches Clojure's LispReader limit.
-- **`:/foo` keyword accepted**: leading-slash keywords now rejected, matching Clojure's reader.
-- **`:shebang` atom in CST reader**: double-shebang files no longer produce "Unknown atom type" error.
-- **Empty hex literal `0x`**: produces "Empty hex literal" instead of leaking Java's "Zero length BigInteger" message.
-- **`:meme/order` stale metadata**: printer validates order vector count against set size; falls back to unordered when stale.
-- **U+2007 FIGURE SPACE**: classified as whitespace on all platforms, preventing invisible characters in symbol names.
-- **UTF-16 surrogate pairs**: consumed as single `:invalid` token instead of two confusing errors per surrogate half.
-- **Intermediate `#_` discard tokens**: capture start position before advance, producing correct non-zero-length spans.
-- **Scar tissue triage**: ~15 comment-only regression blocks in `reader_test.cljc` converted to active tests or documented design decisions. Two stale comments corrected (duplicate keys and `%0` ARE rejected by the current pipeline).
-
-### Removed
-- **All `:meme/*` internal metadata keys**: replaced by `:meme-lang/*` namespaced equivalents with descriptive names. The `:meme/` namespace is now reserved for generic tooling.
-
-## [1.0.0] — 2026-04-01
-
-### Changed
-- **Graduated to 1.0.0**: all namespaces are `meme.*` (no more `meme.alpha.*`)
-- **JAR packaging**: resources directory now included in JAR (lang EDN files were missing)
-- **CLI `get-lang`**: fixed variable shadowing that broke "Available langs" display
-- **CLJS unicode escapes**: `\uNNNN` with invalid hex digits now throws instead of silently producing wrong values
-- **Error messages**: `load-resource-edn` gives clear message when resource not found on classpath; `clj->forms` preserves source context in error ex-data; removed inconsistent trailing period in CLJS tagged-literal error
-- **Reflection warnings**: eliminated in `meme.emit.printer` (tagged literal field access)
-- **CLI load failure**: shows friendly error without extra stack trace
-- **Docstrings**: added missing docstrings to public vars in `meme.lang`, `meme.forms`, `meme.emit.render`; fixed `run-stages` "full pipeline" misrepresentation; fixed indentation on `clj->` function docstrings
-- **Documentation**: fixed stale `pipeline` namespace references in api.md, PRD.md, design-decisions.md; fixed wrong REPL launch command in api.md; removed phantom `lang.util` from platform tiers; corrected convert lang count in PRD.md
-- **CLI rewrite**: replaced `.clj` shim + `.meme` bootstrap with plain Clojure; generic dispatcher delegates to lang map functions; CLI opts (e.g. `--width`) pass through to langs
-- **CI**: pinned Babashka and Clojure CLI versions for reproducibility
-
-### Removed
-- **`meme.convert` module**: removed in favor of `:to-clj` / `:to-meme` commands on lang maps. Use `((:to-clj (meme.lang/resolve-lang :meme-rewrite)) src)` for multi-lang conversion, or `meme.core/meme->clj` for the classic path.
-
-### Added
-- **`meme.core/version`**: runtime version access — `@meme.core/version` returns `"1.0.0"`
-
-### Deprecated
-- **Legacy lang aliases**: `:classic`, `:rewrite`, `:ts-trs` in `meme.lang/resolve-lang` now emit a deprecation warning. Use `:meme-classic`, `:meme-rewrite`, `:meme-trs` instead.
-
-## [0.13.0] — 2026-04-01
-
-### Added
-- **Map/set pattern matching**: rewrite engine `match-pattern` now matches map patterns by key (`{:k ?x}` matches `{:k 42}`) and set patterns by element presence
-- **Map/set traversal**: `rewrite-once` descends into maps (excluding records) and sets, so rules match subexpressions inside map values/keys and set elements
-- **TRS chained calls**: `f(x)(y)` → `((f x) y)` — fixed left-to-right scan in `rewrite-level` with re-check after match
-- **Comment preservation**: formatter never silently drops comments — forms with comments always break to multi-line
-- **CLJS generative parity**: 5 property-based tests (matrix roundtrip, mixed forms, error locations, unclosed-is-incomplete, formatter idempotency) now run on ClojureScript
-- **Formatter idempotency tests**: deterministic + property-based (300 trials) asserting `format(format(x)) == format(x)`
-- **Comment preservation fixture**: comprehensive `.meme` fixture covering Clojure/meme code in comments, multiple semicolons, commented-out code, mid-expression and trailing comments
-- **Three-lang benchmark**: `benchmark_test` now exercises classic, rewrite, and ts-trs across 11 fixtures and 7,526 vendor forms
-
-### Fixed
-- **Tokenizer EOF-after-backslash**: `"hello\` now reports "Incomplete escape sequence" instead of misleading "Unterminated string"
-- **Rewrite emitter regex escaping**: `"` inside regex now escaped in output, matching `printer.cljc` behavior
-- **Prelude spec**: `:meme.opts/prelude` corrected from `string?` to `(s/coll-of any?)` matching runtime type (vector of forms)
-- **Generative set duplicates**: `gen-meme-text` set generator now deduplicates elements, fixing intermittent `prop-meme-text-roundtrip` failure
-
-## [0.12.0] — 2026-04-01
-
-### Added
-- **Unified convert CLI**: `meme convert --lang meme-classic|meme-rewrite` selects the conversion lang; `meme inspect --lang` shows lang info
-- **Unified convert module** (`meme.convert`): single dispatch point for all three langs
-- **Comparative benchmark** (`benchmark_test.clj`): benchmarks all three langs across 11 meme fixtures and 7,526 vendor forms from 7 real-world Clojure libraries
-- **Language platform**: `register!` API for guest languages with custom preludes, rewrite rules, and parsers (`meme.lang`)
-- **Term rewriter**: bottom-up rewrite engine with `?x`/`??x` pattern variables, cycle detection, and fixed-point iteration (`meme.rewrite`)
-- **Rewrite-based parser**: alternative token→form path via tagged trees and rewrite rules (`meme.rewrite.tree`)
-- **Stage contracts**: opt-in spec validation at stage boundaries (`meme.stages.contract`)
-- **LANGBOOK.md**: language maker cookbook — patterns for building guest languages on the meme platform
-- **Superficie example**: surface-syntax renderer reimplemented as a guest language (212 lines vs ~2000 original)
-
-### Fixed
-- **nil/true/false as call heads**: the M-expression rule is purely syntactic — `nil(1 2)` → `(nil 1 2)`. Any value can be a head. Previously these were rejected artificially.
-- **Tokenizer ns// symbols**: `clojure.core//` now reads as one symbol (namespace `clojure.core`, name `/`). Previously split into two tokens.
-- **Rewrite emitter type gaps**: BigDecimal `M` suffix, BigInt `N` suffix, `##NaN`/`##Inf`/`##-Inf`, tagged literals, named chars (`\newline` etc.), `pr-str` fallback for UUID/Date
-- **Reader conditional preservation**: all three langs now pass `:read-cond :preserve` during conversion, preserving `#?(:clj ...)` branches in output
-- **Prelude expansion**: prelude forms are now expanded through `step-expand-syntax-quotes` before eval, matching the user-code path
-- **build-tree delimiter validation**: `build-tree` now validates expected delimiters after `#?` and `#:ns` prefixes
-- **load-prelude docstring**: corrected to reflect actual behavior (parse-only, not eval)
-- **README.md**: fixed dead link to `doc/development.md`
-
-## [0.6.0-alpha] — 2026-03-30
-
-### Fixed
-- **defrecord-as-map bugs**: `MemeRaw`, `MemeSyntaxQuote`, and other AST node defrecords satisfy `(map? x)`, causing silent mishandling in `expand-sq`, `normalize-bare-percent`, `find-percent-params`, `pp`, and `max-percent-n`. All dispatch sites now guard with `forms/raw?`, `forms/syntax-quote?`, etc. before the `(map? form)` branch.
-- **#?@ splicing**: `#?@(:clj [2 3])` inside a collection now correctly splices elements (`[1 #?@(:clj [2 3]) 4]` produces `[1 2 3 4]`, not `[1 [2 3] 4]`). Non-sequential splice values produce a clear error.
-- **Positive-sign BigInt/Ratio**: `+42N` and `+3/4` now parse correctly. `BigInteger` constructor rejects leading `+`; sign is now stripped before construction (matching hex/octal/radix branches).
-- **Literal head syntax**: `nil(x)`, `true(x)`, `false(x)` are now valid meme syntax, producing the lists `(nil x)`, `(true x)`, `(false x)`. The syntactic rule `f(args)` → `(f args)` applies uniformly regardless of head type.
-- **Nested syntax-quote semantics**: `` ``x `` now correctly produces double-quoting (code that generates the inner expansion), matching Clojure's behavior. Previously the inner expansion was returned directly, losing one nesting level.
-
-### Changed
-- **Expander extracted**: Syntax-quote expansion (`expand-sq`, `expand-syntax-quotes`, `expand-forms`) moved from `meme.parse.reader` to new `meme.parse.expander` namespace.
-- **Shared utilities**: Metadata exclusion key set (`strip-internal-meta`) and `percent-param-type` extracted to `meme.forms` to prevent drift between reader and printer.
-- **CI deploy gate**: ClojureScript tests now required before deployment (added `test-cljs` to deploy job dependencies).
-
-## [0.5.0-alpha] — 2025-03-30
-
-Initial public alpha release.
-
-### Added
-- Three-stage reader: scan (tokenizer) -> group -> parse (reader)
-- Printer and pretty-printer (width-aware, comment-preserving)
-- Full Clojure syntax support: all special forms, reader macros, dispatch forms
-- Syntactic transparency via `:meme/sugar` metadata preservation
-- Syntax-quote preserved as AST node (`MemeSyntaxQuote`), expanded before eval
-- Raw value wrapper (`MemeRaw`) for numbers/chars/strings with alternate notation
-- `:read-cond :preserve` option for lossless reader conditional roundtrips
-- REPL with multi-line input and `:incomplete` continuation protocol
-- CLI (run, repl, convert, format) — self-hosted in `.meme`
-- Cross-platform support: JVM, Babashka, ClojureScript
-- Generative property-based tests (14 properties, 200-300 samples each)
-- Vendor roundtrip tests against 7 real-world Clojure libraries
-- Dogfood tests with clj-kondo semantic equivalence verification
-- Clojars deployment via CI on version tags
+- **`#?@` inside a map literal fails at read time** (odd-count children).
+  Matches Clojure's `:read-cond :preserve` behavior.

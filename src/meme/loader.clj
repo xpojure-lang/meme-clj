@@ -9,10 +9,6 @@
 
    Installed implicitly by run-file and the REPL — no manual setup.
 
-   Security: a denylist prevents interception of core infrastructure
-   namespaces (clojure.*, java.*, etc.). Only user/library namespaces
-   are eligible for lang-based loading.
-
    Concurrency: install!/uninstall! serialize on a shared monitor. A
    load counter tracks in-flight lang-loads across threads so that
    uninstall! cannot tear down the var overrides while another thread
@@ -25,6 +21,30 @@
 (defonce ^:private original-load-file (atom nil))
 (defonce ^:private installed? (atom false))
 (defonce ^:private extensions-fn (atom nil))
+
+;; ---------------------------------------------------------------------------
+;; Deprecated-extension warning (one-time per process)
+;; ---------------------------------------------------------------------------
+;; .meme / .memec / .memej / .memejs are still recognized for one release but
+;; emit a single warning on first use. Removal is planned in the next major.
+
+(def ^:private deprecated-extensions
+  #{".meme" ".memec" ".memej" ".memejs"})
+
+(defonce ^:private deprecation-warned?
+  (atom false))
+
+(defn warn-deprecated-extension!
+  "Emit a one-time deprecation warning to *err* if path uses a deprecated
+   extension. Idempotent across the process."
+  [path]
+  (when (and path (string? path))
+    (when (some #(str/ends-with? path %) deprecated-extensions)
+      (when (compare-and-set! deprecation-warned? false true)
+        (binding [*out* *err*]
+          (println (str "warning: file extension is deprecated; rename to .m1clj. "
+                        "Recognition will be removed in the next major release. "
+                        "(first seen: " path ")")))))))
 
 ;; Number of lang-load / lang-load-file invocations currently executing on
 ;; any thread. Incremented on entry, decremented in finally. uninstall!
@@ -39,39 +59,22 @@
 (defonce ^:private install-lock (Object.))
 
 ;; ---------------------------------------------------------------------------
-;; Namespace denylist — core infrastructure that must never be shadowed
-;; ---------------------------------------------------------------------------
-
-(def ^:private denied-prefixes
-  "Namespace path prefixes that the loader must never intercept.
-   These are core JVM/Clojure/tooling namespaces."
-  ["clojure/" "java/" "javax/" "cljs/" "nrepl/" "cider/"
-   "cognitect/" "clj_kondo/" "clj-kondo/" "meme/" "meme_lang/"])
-
-(defn- denied-namespace?
-  "Return true if the load path is for a denied namespace."
-  [path]
-  (let [base (if (str/starts-with? path "/") (subs path 1) path)]
-    (some #(str/starts-with? base %) denied-prefixes)))
-
-;; ---------------------------------------------------------------------------
 ;; Resource lookup
 ;; ---------------------------------------------------------------------------
 
 (defn- find-lang-resource
   "Search the classpath for a file matching any registered lang extension.
-   Returns [resource run-fn] or nil. Denies core infrastructure namespaces.
-   Uses the eagerly-resolved extensions-fn (set at install! time) to avoid
-   calling requiring-resolve during load interception, which would cause
-   infinite recursion through load → lang-load → find-lang-resource."
+   Returns [resource run-fn] or nil. Uses the eagerly-resolved extensions-fn
+   (set at install! time) to avoid calling requiring-resolve during load
+   interception, which would cause infinite recursion through
+   load → lang-load → find-lang-resource."
   [path]
   (when-let [ext-fn @extensions-fn]
-    (when-not (denied-namespace? path)
-      (let [base (if (str/starts-with? path "/") (subs path 1) path)]
-        (some (fn [[ext run-fn]]
-                (let [resource (io/resource (str base ext))]
-                  (when resource [resource run-fn])))
-              (ext-fn))))))
+    (let [base (if (str/starts-with? path "/") (subs path 1) path)]
+      (some (fn [[ext run-fn]]
+              (let [resource (io/resource (str base ext))]
+                (when resource [resource run-fn])))
+            (ext-fn)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Load interception
@@ -81,30 +84,54 @@
   "Run body-fn while this thread is considered mid-load. Increments the
    shared load-counter on entry and decrements it in finally. uninstall!
    reads the counter under install-lock to refuse quiescence if any thread
-   is still inside a load."
+   is still inside a load.
+
+   The increment runs before the try/finally so a throw from swap! itself
+   leaves the counter in its original state rather than triggering a
+   decrement that was never balanced by an increment.
+
+   The increment is performed under install-lock — the same monitor
+   uninstall! uses to read the counter. Without it, a thread that had
+   already dispatched into lang-load (via the var override) but not yet
+   incremented could race against uninstall!: uninstall would observe
+   counter=0, tear down the var overrides, and the in-flight thread would
+   resume into a now-invalid state. Holding the lock only for the single
+   atom swap keeps uninstall!'s quiescence check honest without
+   serializing the bodies of concurrent loads."
   [body-fn]
-  (try
-    (swap! load-counter inc)
-    (body-fn)
-    (finally
-      (swap! load-counter dec))))
+  (locking install-lock
+    (swap! load-counter inc))
+  (try (body-fn)
+       (finally (swap! load-counter dec))))
 
 (defn- lang-load
   "Replacement for clojure.core/load that checks registered lang extensions.
    Wraps run-fn in a binding to save/restore *ns*, matching the behavior of
-   Clojure's Compiler.load() which pushes thread bindings for *ns*."
+   Clojure's Compiler.load() which pushes thread bindings for *ns*.
+
+   Batches consecutive non-lang paths into a single original-load call to
+   preserve Clojure's batched *loaded-libs* semantics — calling original-load
+   per-path defeats its duplicate-load tracking across the batch."
   [& paths]
   (with-load-tracking
     (fn []
-      (doseq [path paths]
-        (if-let [[resource run-fn] (find-lang-resource path)]
-          (binding [*ns* *ns*]
-            (run-fn (slurp resource) {}))
-          ;; No lang file found — delegate to original Clojure load
-          (apply @original-load [path]))))))
+      (let [flush! (fn [pending]
+                     (when (seq pending) (apply @original-load pending)))]
+        (loop [remaining paths
+               pending  []]
+          (if (empty? remaining)
+            (flush! pending)
+            (let [path (first remaining)]
+              (if-let [[resource run-fn] (find-lang-resource path)]
+                (do (flush! pending)
+                    (warn-deprecated-extension! (str resource))
+                    (binding [*ns* *ns*]
+                      (run-fn (slurp resource) {}))
+                    (recur (rest remaining) []))
+                (recur (rest remaining) (conj pending path))))))))))
 
 (defn- lang-load-file
-  "Replacement for clojure.core/load-file that handles .meme files.
+  "Replacement for clojure.core/load-file that handles .m1clj files.
    Delegates to the lang's :run function for registered extensions,
    falls back to original load-file for everything else.
    Wraps run-fn in a binding to save/restore *ns*, matching Compiler/loadFile."
@@ -116,8 +143,9 @@
                              (when (str/ends-with? path ext) run-fn))
                            (ext-fn)))]
         (if run-fn
-          (binding [*ns* *ns*]
-            (run-fn (slurp path) {}))
+          (do (warn-deprecated-extension! path)
+              (binding [*ns* *ns*]
+                (run-fn (slurp path) {})))
           (@original-load-file path))))))
 
 ;; ---------------------------------------------------------------------------
@@ -173,8 +201,14 @@
       (when-let [orig @original-load]
         (alter-var-root #'clojure.core/load (constantly orig)))
       (when-let [orig @original-load-file]
-        (alter-var-root #'clojure.core/load-file (constantly orig)))
-      (reset! original-load nil)
-      (reset! original-load-file nil)
-      (reset! extensions-fn nil)))
+        (alter-var-root #'clojure.core/load-file (constantly orig))))
+    ;; Intentionally do NOT reset original-load, original-load-file, or
+    ;; extensions-fn to nil. In-flight callers hold references to lang-load /
+    ;; lang-load-file and dereference these atoms to delegate to the original
+    ;; or look up registered extensions. Nilling them introduced an NPE
+    ;; window between dispatch and the tracked-section increment; see the
+    ;; note on `with-load-tracking`. A subsequent `install!` re-captures
+    ;; these atoms (the CAS from false→true succeeds and overwrites), so
+    ;; keeping stale references here is harmless.
+    )
   :uninstalled)

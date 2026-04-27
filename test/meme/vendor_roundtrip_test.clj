@@ -1,5 +1,5 @@
 (ns meme.vendor-roundtrip-test
-  "Roundtrip vendor Clojure projects through clj->meme->clj.
+  "Roundtrip vendor Clojure projects through clj->m1clj->clj.
    Each git submodule in test/vendor/ is a real-world Clojure project.
    Every .clj/.cljc file is roundtripped per-form with precise accounting."
   (:require [clojure.test :refer [deftest is]]
@@ -53,7 +53,7 @@
     (when (seq failed)
       (println (format "  ROUNDTRIP-FAIL %s (%d forms)" path (count failed)))
       (doseq [{:keys [name error]} failed]
-        (println (format "    - %s: %s" (or name "?") error))))
+        (println (format "    - %s: %s" name error))))
     (when (seq read-errors)
       (println (format "  READ-ERROR %s (%d forms)" path (count read-errors)))
       (doseq [{:keys [read-error]} read-errors]

@@ -1,7 +1,7 @@
 (ns meme.tools.run-test
   "Tests for meme.tools.run — the generic, language-agnostic eval pipeline.
 
-   The meme-specific wrapper is tested in meme-lang.run-test. These tests
+   The meme-specific wrapper is tested in m1clj-lang.run-test. These tests
    exercise the generic layer directly, covering :pre conditions, eval-fn
    exception propagation, prelude ordering, and run-file dispatch via
    resolve-run-fn."

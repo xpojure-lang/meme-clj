@@ -3,13 +3,14 @@
    lang registration."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.registry :as registry]
-            ;; Explicit require triggers :meme self-registration.
-            [meme-lang.api]
-            [meme-lang.run :as run]))
+            [meme.test-registry :as test-registry]
+            ;; Explicit require triggers :m1clj self-registration.
+            [m1clj-lang.api]
+            [m1clj-lang.run :as run]))
 
 (def all-langs
   (into {} (map (fn [n] [n (registry/resolve-lang n)])
-                [:meme])))
+                [:m1clj])))
 
 (defn- tmp-file
   "Create a uniquely-named temp file with the given extension. Auto-deleted on JVM exit."
@@ -18,7 +19,7 @@
     (.deleteOnExit f)
     (str f)))
 
-(use-fixtures :each (fn [f] (registry/clear-user-langs!) (f) (registry/clear-user-langs!)))
+(use-fixtures :each (fn [f] (test-registry/clear-user-langs!) (f) (test-registry/clear-user-langs!)))
 
 (defn- registry-resolver
   "Test-side glue matching what the CLI wires: :lang opt wins, extension falls
@@ -39,10 +40,10 @@
     (testing (str lang-name " has :to-clj")
       (is (fn? (:to-clj l))))))
 
-(deftest all-langs-have-to-meme
+(deftest all-langs-have-to-m1clj
   (doseq [[lang-name l] all-langs]
-    (testing (str lang-name " has :to-meme")
-      (is (fn? (:to-meme l))))))
+    (testing (str lang-name " has :to-m1clj")
+      (is (fn? (:to-m1clj l))))))
 
 (deftest all-langs-have-format
   (doseq [[lang-name l] all-langs]
@@ -76,11 +77,11 @@
     (testing (str lang-name " :to-clj")
       (is (= "(f x y)" ((:to-clj l) "f(x y)"))))))
 
-(deftest all-langs-to-meme
+(deftest all-langs-to-m1clj
   (doseq [[lang-name l] all-langs
-          :when (:to-meme l)]
-    (testing (str lang-name " :to-meme")
-      (is (= "f(x y)" ((:to-meme l) "(f x y)"))))))
+          :when (:to-m1clj l)]
+    (testing (str lang-name " :to-m1clj")
+      (is (= "f(x y)" ((:to-m1clj l) "(f x y)"))))))
 
 ;; ============================================================
 ;; check-support
@@ -92,8 +93,8 @@
     (registry/check-support l lang-name cmd)))
 
 (deftest check-support-passes-for-repl
-  (testing "meme-classic supports :repl"
-    (is (registry/supports? (:meme all-langs) :repl))))
+  (testing "meme supports :repl"
+    (is (registry/supports? (:m1clj all-langs) :repl))))
 
 ;; ============================================================
 ;; All langs agree on basic to-clj output
@@ -111,20 +112,32 @@
 ;; EDN lang loading
 ;; ============================================================
 
-(deftest load-edn-prefix
-  (testing "prefix lang EDN loads and :run works"
-    (let [l (registry/load-edn "examples/languages/prefix/lang.edn")]
-      (is (fn? (:run l)))
-      (is (= [".pfx"] (:extensions l))))))
+(deftest load-edn-lang
+  (testing "EDN lang file loads and :run resolves to a fn"
+    (let [core-path (tmp-file "test-edn-core" ".m1clj")
+          edn-path  (tmp-file "test-edn-lang" ".edn")]
+      (spit core-path "; empty prelude")
+      (spit edn-path (str "{:extension \".myl\"\n"
+                          " :run \"" core-path "\"\n"
+                          " :format :m1clj}"))
+      (let [l (registry/load-edn edn-path)]
+        (is (fn? (:run l)))
+        (is (= [".myl"] (:extensions l)))))))
 
 (deftest load-edn-format-delegates
-  (testing ":format :meme in EDN resolves to built-in format"
-    (let [l (registry/load-edn "examples/languages/prefix/lang.edn")]
-      (is (= "def( x 42)" ((:format l) "def( x 42)" {}))))))
+  (testing ":format :m1clj in EDN resolves to built-in format"
+    (let [core-path (tmp-file "test-edn-core" ".m1clj")
+          edn-path  (tmp-file "test-edn-lang" ".edn")]
+      (spit core-path "; empty prelude")
+      (spit edn-path (str "{:extension \".myl\"\n"
+                          " :run \"" core-path "\"\n"
+                          " :format :m1clj}"))
+      (let [l (registry/load-edn edn-path)]
+        (is (= "def( x 42)" ((:format l) "def( x 42)" {})))))))
 
 (deftest load-edn-run-evals-core-then-user
-  (testing "EDN :run evals core.meme before user source"
-    (let [core-path (tmp-file "test-edn-core" ".meme")
+  (testing "EDN :run evals core.m1clj before user source"
+    (let [core-path (tmp-file "test-edn-core" ".m1clj")
           edn-path (tmp-file "test-edn-lang" ".edn")]
       (spit core-path "defn(double [x] *(2 x))")
       (spit edn-path (str "{:run \"" core-path "\"}"))
@@ -138,12 +151,13 @@
 (deftest register-and-resolve-by-extension
   (testing "register a user lang and resolve from extension"
     (registry/register! :test-lang {:extension ".tstl"
-                           :run 'meme-lang.run/run-string})
+                           :run 'm1clj-lang.run/run-string})
     (let [[name _lang] (registry/resolve-by-extension "app.tstl")]
       (is (= :test-lang name)))
     (let [[meme-name _] (registry/resolve-by-extension "app.meme")]
-      (is (= :meme meme-name) "built-in meme resolves by extension"))
-    (is (nil? (registry/resolve-by-extension "app.clj"))))
+      (is (= :m1clj meme-name) "built-in m1clj resolves by extension"))
+    (let [[clj-name _] (registry/resolve-by-extension "app.clj")]
+      (is (= :clj clj-name) "built-in :clj resolves by extension")))
   (testing "registered-langs returns names"
     (is (contains? (set (registry/registered-langs)) :test-lang)))
   (testing "resolve-lang finds user langs"
@@ -151,17 +165,19 @@
 
 (deftest register-with-prelude-file
   (testing "registered lang auto-loads prelude from extension via run-file"
-    (registry/register! :pfx {:extension ".pfx"
-                           :run "examples/languages/prefix/core.meme"})
-    (let [f (tmp-file "test-lang-dispatch" ".pfx")]
-      (spit f "+(21 21)")
-      (is (= 42 (run/run-file f {:resolve-lang-for-path registry-resolver}))))))
+    (let [core-path (tmp-file "test-prelude-core" ".m1clj")]
+      (spit core-path "defn(double [x] *(2 x))")
+      (registry/register! :myl {:extension ".myl"
+                                :run core-path})
+      (let [f (tmp-file "test-lang-dispatch" ".myl")]
+        (spit f "double(21)")
+        (is (= 42 (run/run-file f {:resolve-lang-for-path registry-resolver})))))))
 
 (deftest register-with-pre-resolved-fn
   (testing "register! accepts pre-resolved functions"
     (registry/register! :mini {:extension ".mini"
                            :run (fn [source opts]
-                                  (let [run-string @(resolve 'meme-lang.run/run-string)]
+                                  (let [run-string @(resolve 'm1clj-lang.run/run-string)]
                                     (run-string "defn(greet [n] str(\"Hi \" n))" opts)
                                     (run-string source opts)))})
     (let [f (tmp-file "test-mini" ".mini")]
@@ -170,19 +186,20 @@
 
 (deftest run-with-explicit-lang
   (testing ":lang opt overrides extension detection"
-    (registry/register! :pfx {:extension ".pfx"
-                           :run "examples/languages/prefix/core.meme"})
-    ;; Run a .meme file AS pfx (explicit lang, mismatched extension)
-    (let [f (tmp-file "test-explicit" ".meme")]
-      (spit f "+(21 21)")
-      (is (= 42 (run/run-file f {:lang :pfx
-                                 :resolve-lang-for-path registry-resolver}))))))
+    (let [core-path (tmp-file "test-explicit-core" ".m1clj")]
+      (spit core-path "; empty prelude")
+      (registry/register! :myl {:extension ".myl" :run core-path})
+      ;; Run a .m1clj file AS :myl (explicit lang, mismatched extension)
+      (let [f (tmp-file "test-explicit" ".m1clj")]
+        (spit f "+(21 21)")
+        (is (= 42 (run/run-file f {:lang :myl
+                                   :resolve-lang-for-path registry-resolver})))))))
 
 (deftest run-with-unregistered-lang-throws
   (testing ":lang with an unregistered name throws"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Unknown lang"
-                          (run/run-file "/tmp/test.meme"
+                          (run/run-file "/tmp/test.m1clj"
                             {:lang :nonexistent
                              :resolve-lang-for-path registry-resolver})))))
 
@@ -190,7 +207,7 @@
   (testing "clear-user-langs! empties user registry"
     (registry/register! :test {:extension ".tst"})
     (is (seq (registry/registered-langs)))
-    (registry/clear-user-langs!)
+    (test-registry/clear-user-langs!)
     (is (empty? (registry/registered-langs)))))
 
 ;; ---------------------------------------------------------------------------
@@ -198,12 +215,12 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest register-builtin-override-rejected
-  (testing ":meme override is rejected"
+  (testing ":m1clj override is rejected"
     (is (thrown-with-msg? Exception #"(?i)cannot override"
-                          (registry/register! :meme {:to-clj identity}))))
+                          (registry/register! :m1clj {:to-clj identity}))))
   (testing "custom name still works"
     (registry/register! :my-custom-lang {:to-clj identity})
-    (registry/clear-user-langs!)))
+    (test-registry/clear-user-langs!)))
 
 ;; ---------------------------------------------------------------------------
 ;; RT2-H5: EDN :run path with .. traversal should be rejected.
@@ -222,7 +239,7 @@
 (deftest multi-extension-registration
   (testing ":extensions vector — both extensions resolve"
     (registry/register! :multi {:extensions [".aa" ".bb"]
-                                :run 'meme-lang.run/run-string})
+                                :run 'm1clj-lang.run/run-string})
     (let [[n _] (registry/resolve-by-extension "app.aa")]
       (is (= :multi n)))
     (let [[n _] (registry/resolve-by-extension "app.bb")]
@@ -238,20 +255,25 @@
   (testing "mixed :extension + :extensions merged"
     (registry/register! :mixed {:extension ".xx"
                                 :extensions [".yy" ".zz"]
-                                :run 'meme-lang.run/run-string})
+                                :run 'm1clj-lang.run/run-string})
     (is (= [".xx" ".yy" ".zz"] (:extensions (registry/resolve-lang :mixed))))
     (is (some? (registry/resolve-by-extension "app.xx")))
     (is (some? (registry/resolve-by-extension "app.zz")))))
 
-(deftest builtin-meme-extensions-resolve
-  (testing ".meme resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.meme")))))
-  (testing ".memec resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.memec")))))
-  (testing ".memej resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.memej")))))
-  (testing ".memejs resolves to :meme"
-    (is (= :meme (first (registry/resolve-by-extension "app.memejs")))))
+(deftest builtin-m1clj-extensions-resolve
+  (testing ".m1clj resolves to :m1clj"
+    (is (= :m1clj (first (registry/resolve-by-extension "app.m1clj")))))
+  (testing ".m1cljc resolves to :m1clj"
+    (is (= :m1clj (first (registry/resolve-by-extension "app.m1cljc")))))
+  (testing ".m1cljj resolves to :m1clj"
+    (is (= :m1clj (first (registry/resolve-by-extension "app.m1cljj")))))
+  (testing ".m1cljs resolves to :m1clj"
+    (is (= :m1clj (first (registry/resolve-by-extension "app.m1cljs")))))
+  (testing "back-compat: deprecated .meme/.memec/.memej/.memejs still resolve to :m1clj"
+    (is (= :m1clj (first (registry/resolve-by-extension "app.meme"))))
+    (is (= :m1clj (first (registry/resolve-by-extension "app.memec"))))
+    (is (= :m1clj (first (registry/resolve-by-extension "app.memej"))))
+    (is (= :m1clj (first (registry/resolve-by-extension "app.memejs")))))
   (testing "unknown extension returns nil"
     (is (nil? (registry/resolve-by-extension "app.txt")))))
 
@@ -262,18 +284,19 @@
 (deftest concurrent-register-conflict-detection
   (testing "concurrent registrations with same extension — at most one succeeds"
     (let [results (atom [])
-          barrier (java.util.concurrent.CyclicBarrier. 2)]
-      (dotimes [i 2]
-        (.start (Thread. (fn []
-                           (.await barrier)
-                           (try
-                             (registry/register! (keyword (str "conc" i))
-                                                 {:extension ".conflict-test"
-                                                  :run 'meme-lang.run/run-string})
-                             (swap! results conj [:ok i])
-                             (catch Exception _
-                               (swap! results conj [:error i])))))))
-      (Thread/sleep 500)
+          barrier (java.util.concurrent.CyclicBarrier. 2)
+          futures (mapv (fn [i]
+                          (future
+                            (.await barrier)
+                            (try
+                              (registry/register! (keyword (str "conc" i))
+                                                  {:extension ".conflict-test"
+                                                   :run 'm1clj-lang.run/run-string})
+                              (swap! results conj [:ok i])
+                              (catch Exception _
+                                (swap! results conj [:error i])))))
+                        (range 2))]
+      (run! deref futures)
       (let [ok-count (count (filter #(= :ok (first %)) @results))
             error-count (count (filter #(= :error (first %)) @results))]
         (is (<= ok-count 1) "at most one registration should succeed")
@@ -282,7 +305,55 @@
 (deftest multi-extension-conflict-detection
   (testing "conflict when new extension overlaps existing extensions vector"
     (registry/register! :owner {:extensions [".p" ".q"]
-                                :run 'meme-lang.run/run-string})
+                                :run 'm1clj-lang.run/run-string})
     (is (thrown-with-msg? Exception #"already claimed"
                           (registry/register! :thief {:extension ".q"
-                                                      :run 'meme-lang.run/run-string})))))
+                                                      :run 'm1clj-lang.run/run-string})))))
+
+;; ---------------------------------------------------------------------------
+;; Scar tissue: register! used to perform validation inside swap!. Under CAS
+;; retries, that meant conflict checks could re-run redundantly. The observable
+;; guarantee is that after a failing validation, the registry state is exactly
+;; its pre-call state (no partial write, no stray entry for the failing name).
+;; ---------------------------------------------------------------------------
+
+(deftest register-failure-leaves-registry-unchanged
+  (testing "builtin override throws and does not insert the new name"
+    (is (thrown? Exception (registry/register! :m1clj {:to-clj identity})))
+    ;; Mclj's builtin entry is still there, unaltered — :m1clj's lang-map has
+    ;; :to-clj from the real api, not our identity function.
+    (is (not= identity (:to-clj (registry/resolve-lang :m1clj)))))
+  (testing "extension conflict throws and does not insert the new name"
+    (registry/register! :holder {:extension ".reg-scar"
+                                 :run 'm1clj-lang.run/run-string})
+    (is (thrown? Exception (registry/register! :intruder {:extension ".reg-scar"
+                                                          :run 'm1clj-lang.run/run-string})))
+    (is (not (contains? (registry/available-langs) :intruder))
+        "failing registration must not leak a partial entry"))
+  (testing "reserved .m1clj extension throws and does not insert the new name"
+    (is (thrown? Exception (registry/register! :sneaky {:extension ".m1clj"
+                                                        :run 'm1clj-lang.run/run-string})))
+    (is (thrown? Exception (registry/register! :sneakier {:extension ".meme"
+                                                          :run 'm1clj-lang.run/run-string})))
+    (is (not (contains? (registry/available-langs) :sneaky))
+        "reserved-extension rejection must not leak a partial entry")))
+
+;; ============================================================
+;; register-string-handler! is idempotent (first-wins)
+;; ============================================================
+
+(deftest register-string-handler-is-first-wins
+  (testing "second registration for the same command is a no-op"
+    ;; Use a fresh command keyword so we don't collide with :run installed
+    ;; by m1clj/m2clj at ns load. We can't unregister a handler (the
+    ;; string-handlers atom is private), so the test asserts behavior via
+    ;; an EDN config that consults the slot.
+    (let [first-handler  (fn [s] (fn [_source _opts] [:first s]))
+          second-handler (fn [s] (fn [_source _opts] [:second s]))]
+      (registry/register-string-handler! ::scar-cmd first-handler)
+      (registry/register-string-handler! ::scar-cmd second-handler)
+      (let [resolved (registry/register! :scar-lang {:extension  ".scar"
+                                                     ::scar-cmd  "marker"})
+            f        (get resolved ::scar-cmd)]
+        (is (= [:first "marker"] (f "src" {}))
+            "first-registered handler must win over later registrations")))))

@@ -1,9 +1,9 @@
 (ns meme.emit-fixtures-test
-  "Emit fixture tests: verify meme→clj and clj→meme conversion output
+  "Emit fixture tests: verify m1clj→clj and clj→m1clj conversion output
    matches expected fixture files in test/examples/fixtures-emit/.
    Runs against every built-in lang pipeline.
-   Every .meme file must have both .meme.clj and .meme.cljs counterparts.
-   Every .clj source file must have a .clj.meme counterpart.
+   Every .m1clj file must have both .m1clj.clj and .m1clj.cljs counterparts.
+   Every .clj source file must have a .clj.m1clj counterpart.
    Missing files are test errors, not skips."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
@@ -15,20 +15,20 @@
 (defn- resolve-lang-fns
   "Resolve conversion functions for a built-in lang by namespace convention."
   [lang-name]
-  (let [ns-sym 'meme-lang.api]
+  (let [ns-sym 'm1clj-lang.api]
     (require ns-sym)
-    {:meme->clj (ns-resolve (find-ns ns-sym) 'meme->clj)
-     :clj->meme (ns-resolve (find-ns ns-sym) 'clj->meme)}))
+    {:m1clj->clj (ns-resolve (find-ns ns-sym) 'm1clj->clj)
+     :clj->m1clj (ns-resolve (find-ns ns-sym) 'clj->m1clj)}))
 
 (deftest emit-fixture-meme-to-clj
   (let [dir (io/file emit-dir)
-        meme-files (sort (filter #(and (.endsWith (.getName %) ".meme")
+        meme-files (sort (filter #(and (.endsWith (.getName %) ".m1clj")
                                        (not (str/includes? (.getName %) ".clj.")))
                                  (.listFiles dir)))
         builtins (sort-by key (registry/builtin-langs))]
     (doseq [[lang-name _] builtins]
-      (let [{:keys [meme->clj]} (resolve-lang-fns lang-name)]
-        (when meme->clj
+      (let [{:keys [m1clj->clj]} (resolve-lang-fns lang-name)]
+        (when m1clj->clj
           (doseq [meme-file meme-files]
             (let [base (.getName meme-file)
                   clj-file (io/file emit-dir (str base ".clj"))
@@ -37,26 +37,26 @@
                 (is (.exists clj-file) (str "Missing required: " (.getName clj-file)))
                 (when (.exists clj-file)
                   (is (= (str/trim-newline (slurp clj-file))
-                         (meme->clj (str/trim-newline (slurp meme-file))))
+                         (m1clj->clj (str/trim-newline (slurp meme-file))))
                       (str base " meme→clj mismatch"))))
               (testing (str (name lang-name) ": " base " → .cljs (existence)")
                 (is (.exists cljs-file) (str "Missing required: " (.getName cljs-file)))))))))))
 
-(deftest emit-fixture-clj-to-meme
+(deftest emit-fixture-clj-to-m1clj
   (let [dir (io/file emit-dir)
         clj-files (sort (filter #(and (.endsWith (.getName %) ".clj")
-                                      (not (str/includes? (.getName %) ".meme.")))
+                                      (not (str/includes? (.getName %) ".m1clj.")))
                                 (.listFiles dir)))
         builtins (sort-by key (registry/builtin-langs))]
     (doseq [[lang-name _] builtins]
-      (let [{:keys [clj->meme]} (resolve-lang-fns lang-name)]
-        (when clj->meme
+      (let [{:keys [clj->m1clj]} (resolve-lang-fns lang-name)]
+        (when clj->m1clj
           (doseq [clj-file clj-files]
             (let [base (.getName clj-file)
-                  meme-file (io/file emit-dir (str base ".meme"))]
-              (testing (str (name lang-name) ": " base " → .meme")
-                (is (.exists meme-file) (str "Missing required: " base ".meme"))
+                  meme-file (io/file emit-dir (str base ".m1clj"))]
+              (testing (str (name lang-name) ": " base " → .m1clj")
+                (is (.exists meme-file) (str "Missing required: " base ".m1clj"))
                 (when (.exists meme-file)
                   (is (= (str/trim-newline (slurp meme-file))
-                         (clj->meme (str/trim-newline (slurp clj-file))))
-                      (str base " clj→meme mismatch")))))))))))
+                         (clj->m1clj (str/trim-newline (slurp clj-file))))
+                      (str base " clj→m1clj mismatch")))))))))))

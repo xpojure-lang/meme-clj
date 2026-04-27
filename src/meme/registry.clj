@@ -7,14 +7,14 @@
      :repl     (fn [opts] → nil)            — interactive loop
      :format   (fn [source opts] → text)    — format a file
      :to-clj   (fn [source] → clj-text)     — convert meme→clj
-     :to-meme  (fn [source] → meme-text)    — convert clj→meme
+     :to-m1clj  (fn [source] → m1clj-text)    — convert clj→m1clj
 
    Plus optional metadata:
      :extension   \".ext\"           — file extension (string or vector)
      :extensions  [\".ext\" \".e\"]  — file extensions (string or vector)
      :form-shape  registry           — lang-owned decomposer map consumed by
                                        the printer/formatter (see
-                                       `meme-lang.form-shape`)
+                                       `m1clj-lang.form-shape`)
    Both extension forms are accepted and normalized to :extensions [...].
 
    Every key is optional. A lang supports exactly the commands it has keys for.
@@ -22,7 +22,7 @@
    Built-in langs are self-describing: each defines a lang-map in its own namespace.
    User langs can be registered via register! with EDN-style config maps.
 
-   String values in a lang-map (e.g. `:run \"prelude.meme\"` in EDN) are
+   String values in a lang-map (e.g. `:run \"prelude.m1clj\"` in EDN) are
    resolved through handlers installed via `register-string-handler!`. This
    keeps the registry lang-agnostic — langs install their own conventions
    rather than the registry hardcoding meme's."
@@ -45,9 +45,18 @@
 (defn register-string-handler!
   "Install a handler for resolving string values in the given command slot.
    `handler` is (fn [string-value] → command-fn) and is called once per
-   register!/load-edn. Later registrations override earlier ones."
+   register!/load-edn.
+
+   First registration wins; subsequent calls for the same command are no-ops.
+   This makes registration order across multiple Clojure-surface langs (m1clj,
+   m2clj, …) deterministic — whichever lang's api ns loads first owns the
+   convention. Today all Clojure-surface langs install structurally identical
+   :run handlers (slurp prelude, run before user source), so the choice is
+   benign. Once a lang needs a genuinely divergent string convention, scope
+   handlers per-lang here (the post-split shape: `{lang-name {command handler}}`)."
   [command handler]
-  (swap! string-handlers assoc command handler))
+  (swap! string-handlers
+         (fn [m] (if (contains? m command) m (assoc m command handler)))))
 
 (defn- normalize-extensions
   "Normalize :extension/:extensions into a flat vector of dot-prefixed strings.
@@ -70,7 +79,7 @@
   (swap! registry assoc lang-name
          (vary-meta (normalize-extensions lang-map) assoc :builtin? true)))
 
-(def default-lang "The default lang used when none is specified." :meme)
+(def default-lang "The default lang used when none is specified." :m1clj)
 
 ;; ---------------------------------------------------------------------------
 ;; EDN value resolution (for user-defined langs)
@@ -78,10 +87,18 @@
 
 ;; NOTE: resolve-symbol creates invisible runtime dependencies via requiring-resolve.
 (defn- resolve-symbol
-  "Resolve a qualified symbol to a var's value via requiring-resolve."
+  "Resolve a qualified symbol to a var's value via requiring-resolve.
+   Throws a clear error when the symbol cannot be resolved or when the
+   resolved value is not invocable (e.g. the user pointed at a config var
+   instead of a fn)."
   [sym]
   (if-let [v (requiring-resolve sym)]
-    @v
+    (let [val @v]
+      (if (ifn? val)
+        val
+        (throw (ex-info (str "Symbol " sym " resolved to a non-invocable value of type "
+                             (some-> val class .getName) " — expected a function.")
+                        {:symbol sym :resolved-type (some-> val class .getName)}))))
     (throw (ex-info (str "Cannot resolve symbol: " sym) {:symbol sym}))))
 
 (defn- resolve-value
@@ -170,39 +187,50 @@
 ;; User lang registration
 ;; ---------------------------------------------------------------------------
 
+(defn- validate-registration!
+  "Throws if adding `resolved` as `lang-name` would conflict with `snapshot`."
+  [lang-name resolved snapshot]
+  (when-let [existing (get snapshot lang-name)]
+    (when (:builtin? (meta existing))
+      (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
+                           " — choose a different name")
+                      {:lang lang-name}))))
+  (doseq [ext (:extensions resolved)]
+    (when (str/blank? ext)
+      (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                           " — extension must be a non-empty string")
+                      {:lang lang-name})))
+    (when (#{".m1clj" ".meme"} ext)
+      (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                           " — extension " ext " is reserved for built-in langs")
+                      {:lang lang-name :extension ext})))
+    (doseq [[existing-name existing-lang] snapshot]
+      (when (and (not= existing-name lang-name)
+                 (some #{ext} (:extensions existing-lang)))
+        (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
+                             " — extension " ext " already claimed by "
+                             (pr-str existing-name))
+                        {:lang lang-name :extension ext
+                         :existing existing-name}))))))
+
 (defn register!
   "Register a user lang at runtime. config is an EDN-style map — symbols
    are resolved via requiring-resolve, strings and keywords follow the same
    rules as load-edn. Pre-resolved functions are passed through.
    Rejects attempts to override built-in langs.
-   All conflict checks are atomic — performed inside swap!."
+
+   Validation and insertion are atomic via a compare-and-set! retry loop:
+   each iteration re-validates against the current snapshot, so concurrent
+   registrations with conflicting extensions detect the conflict rather
+   than racing through."
   [lang-name config]
   (let [resolved (resolve-edn config)]
-    (swap! registry
-      (fn [reg]
-        (when-let [existing (get reg lang-name)]
-          (when (:builtin? (meta existing))
-            (throw (ex-info (str "Cannot override built-in lang " (pr-str lang-name)
-                                 " — choose a different name")
-                            {:lang lang-name}))))
-        (doseq [ext (:extensions resolved)]
-          (when (str/blank? ext)
-            (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                                 " — extension must be a non-empty string")
-                            {:lang lang-name})))
-          (when (= ext ".meme")
-            (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                                 " — extension .meme is reserved for built-in langs")
-                            {:lang lang-name :extension ext})))
-          (doseq [[existing-name existing-lang] reg]
-            (when (and (not= existing-name lang-name)
-                       (some #{ext} (:extensions existing-lang)))
-              (throw (ex-info (str "Cannot register lang " (pr-str lang-name)
-                                   " — extension " ext " already claimed by "
-                                   (pr-str existing-name))
-                              {:lang lang-name :extension ext
-                               :existing existing-name})))))
-        (assoc reg lang-name resolved)))))
+    (loop []
+      (let [snapshot @registry]
+        (validate-registration! lang-name resolved snapshot)
+        (if (compare-and-set! registry snapshot (assoc snapshot lang-name resolved))
+          resolved
+          (recur))))))
 
 (defn resolve-by-extension
   "Given a file path, find the lang whose :extensions match.
@@ -217,12 +245,6 @@
   "List all registered user language names (excludes built-ins)."
   []
   (keep (fn [[n l]] (when-not (:builtin? (meta l)) n)) @registry))
-
-(defn ^:no-doc clear-user-langs!
-  "Clear all registered user languages, preserving built-ins. Test-only
-   helper — not part of the public API."
-  []
-  (swap! registry (fn [m] (into {} (filter (fn [[_ v]] (:builtin? (meta v)))) m))))
 
 (defn available-langs
   "Return a set of all available lang names (built-in + user-registered)."
@@ -248,23 +270,11 @@
 ;; Resolution
 ;; ---------------------------------------------------------------------------
 
-(def ^:private legacy-names
-  "Backward-compatible aliases from the pre-lang naming."
-  {:classic :meme
-   :meme-classic :meme
-   :meme-experimental :meme})
-
 (defn resolve-lang
   "Resolve a lang by keyword name. Returns the lang map.
-   Deprecated name (:classic) is accepted but emits a warning.
    Throws on unknown name."
   [lang-name]
-  (let [n (or lang-name default-lang)
-        legacy? (contains? legacy-names n)
-        n (get legacy-names n n)
-        _ (when legacy?
-            (binding [*out* *err*]
-              (println (str "WARNING: :" (name lang-name) " is deprecated, use :" (name n)))))]
+  (let [n (or lang-name default-lang)]
     (or (get @registry n)
         (throw (ex-info (str "Unknown lang: " (pr-str n)
                              " — available: " (pr-str (vec (keys @registry))))
