@@ -25,7 +25,7 @@
    Returns {:out :err :exit}. Used to exercise the JVM require path (Babashka's
    SCI bypasses clojure.core/load so it can't be tested via bb-meme)."
   [extra-paths file]
-  (let [paths-edn (str "{:paths [\"src\" \"resources\" "
+  (let [paths-edn (str "{:paths [\"src\" \"m1clj-lang/src\" \"m2clj-lang/src\" \"clj-lang/src\" \"resources\" "
                        (str/join " " (map #(str "\"" % "\"") extra-paths))
                        "]}")
         pb (ProcessBuilder. ^java.util.List
