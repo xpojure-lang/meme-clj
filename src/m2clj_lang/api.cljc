@@ -241,11 +241,9 @@
 
 ;; Install m2clj's string handler for :run — mirrors m1clj's convention:
 ;; a string value is a prelude .m2clj path that runs before user source.
-;; The registry's string-handler slot is shared across langs; later
-;; registrations override earlier ones — but this handler is only
-;; consulted when an EDN-loaded user lang declares :run as a string,
-;; so the override is benign in practice (whichever lang loaded last
-;; wins, and the only built-in that uses this is m1clj/m2clj).
+;; register-string-handler! is first-wins, so when m1clj loads first
+;; this is a no-op; the call is kept so m2clj is self-sufficient when
+;; loaded standalone.
 #?(:clj
    (registry/register-string-handler! :run
      (fn [prelude-path]

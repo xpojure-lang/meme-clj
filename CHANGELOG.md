@@ -14,12 +14,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Post-5.0.0 work, in three threads: an **AST tier** (lossless intermediate
+Post-5.0.0 work, in four threads: an **AST tier** (lossless intermediate
 between CST and Clojure forms), a **native-Clojure parser** registered as
-a sibling guest (`clj-lang`), and a **fuzzing + cross-check parity gate**
-that drove both to convergence with `clojure.core/read-string`.
+a sibling guest (`clj-lang`), a **fuzzing + cross-check parity gate** that
+drove both to convergence with `clojure.core/read-string`, and a **third
+guest language `m2clj`** seeded as a sovereign sibling to `m1clj`.
 
 ### Added
+
+- **`m2clj` language.** A sovereign sibling to `m1clj`: same M-expression
+  call rule, plus one extra — a paren without head adjacency (`(x y z)`)
+  is a list literal that lowers to `(quote (x y z))` instead of being a
+  parse error. Calls still require head adjacency, so call-vs-data
+  remains structural at the reader layer. Full lang implementation under
+  `src/m2clj_lang/*` (api, grammar, parselets, lexlets, form-shape,
+  printer, formatter.flat, formatter.canon, run, repl) — sovereign tree,
+  not a refactor of m1clj. Self-registers as `:m2clj` builtin via
+  `meme.cli` (built-in alongside `:m1clj` and `:clj`). File extension:
+  `.m2clj`.
+
+- **`CljQuote{notation}` field.** The AST tier's `CljQuote` record gained
+  a `:notation` field (`:tick` for `'x` sugar, `:bare` for m2clj's
+  bare-paren list literal, `:call` for `(quote x)`). The printer
+  dispatches on notation to reconstruct the original surface, preserving
+  syntactic transparency across all three guests.
+
+- **`:bare-list` CST node + form-layer cst-reader handling.** The
+  parser's bare-paren branch produces a `:bare-list` CST node which the
+  cst-reader and AST builder both lower to `(quote (…))`. New bare-paren
+  branch in `meme.tools.clj.cst-reader`.
 
 - **AST tier (`meme.tools.clj.ast.*`).** A lossless representation between
   CST and plain Clojure forms. Notation, position, and trivia live on
@@ -135,6 +158,16 @@ that drove both to convergence with `clojure.core/read-string`.
 
 ### Internal
 
+- **`registry/register-string-handler!` is now first-wins.** Previously
+  later registrations silently overrode earlier ones — once `m2clj-lang`
+  registered an identical `:run` string handler, load order across guests
+  determined which won. The slot is now idempotent: the first lang to
+  register wins, subsequent calls for the same command are no-ops.
+  `m1clj-lang` loads first in `meme.cli`, so its handler is authoritative;
+  `m2clj-lang`'s call is a no-op when bundled, but kept so the lang is
+  self-sufficient when loaded standalone. Once a lang needs a genuinely
+  divergent string convention, scope handlers per-lang (post-split
+  shape: `{lang-name {command handler}}`).
 - **`with-m1clj-grammar` triplication lifted into
   `m1clj-lang.grammar/with-grammar`** — single shared definition; all
   three call sites delegate.

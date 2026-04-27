@@ -337,3 +337,23 @@
                                                           :run 'm1clj-lang.run/run-string})))
     (is (not (contains? (registry/available-langs) :sneaky))
         "reserved-extension rejection must not leak a partial entry")))
+
+;; ============================================================
+;; register-string-handler! is idempotent (first-wins)
+;; ============================================================
+
+(deftest register-string-handler-is-first-wins
+  (testing "second registration for the same command is a no-op"
+    ;; Use a fresh command keyword so we don't collide with :run installed
+    ;; by m1clj/m2clj at ns load. We can't unregister a handler (the
+    ;; string-handlers atom is private), so the test asserts behavior via
+    ;; an EDN config that consults the slot.
+    (let [first-handler  (fn [s] (fn [_source _opts] [:first s]))
+          second-handler (fn [s] (fn [_source _opts] [:second s]))]
+      (registry/register-string-handler! ::scar-cmd first-handler)
+      (registry/register-string-handler! ::scar-cmd second-handler)
+      (let [resolved (registry/register! :scar-lang {:extension  ".scar"
+                                                     ::scar-cmd  "marker"})
+            f        (get resolved ::scar-cmd)]
+        (is (= [:first "marker"] (f "src" {}))
+            "first-registered handler must win over later registrations")))))
