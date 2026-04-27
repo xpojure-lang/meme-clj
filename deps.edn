@@ -1,4 +1,4 @@
-{:paths ["src" "resources"]
+{:paths ["src" "toolkit/src" "resources"]
  :deps {}
  :aliases
  {:test {:extra-paths ["test" "test/resources"]

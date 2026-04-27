@@ -48,7 +48,7 @@
 ;; and document the specific failing forms in a comment.
 
 (deftest dogfood-per-form-cst-reader
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/clj/cst_reader.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "toolkit/src/meme/tools/clj/cst_reader.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -64,7 +64,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-resolve
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/clj/resolve.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "toolkit/src/meme/tools/clj/resolve.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -72,7 +72,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-exp-stages
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/clj/stages.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "toolkit/src/meme/tools/clj/stages.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -80,7 +80,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-errors
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/clj/errors.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "toolkit/src/meme/tools/clj/errors.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -88,7 +88,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-parser
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/parser.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "toolkit/src/meme/tools/parser.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -96,7 +96,7 @@
     (is (zero? (count read-errors)) "no read errors in own source")))
 
 (deftest dogfood-per-form-render
-  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "src/meme/tools/render.cljc")]
+  (let [{:keys [total succeeded failed read-errors]} (tu/roundtrip-file-forms "toolkit/src/meme/tools/render.cljc")]
     (is (= total (count succeeded))
         (str "all forms roundtrip; failures: "
              (str/join ", " (map :name failed))))
@@ -155,15 +155,15 @@
 (deftest dogfood-semantic-equivalence
   (doseq [path ["src/m1clj_lang/api.cljc" "src/m1clj_lang/run.clj"
                 "src/m1clj_lang/repl.clj" "test/meme/test_runner.clj"
-                "src/meme/tools/clj/cst_reader.cljc"
+                "toolkit/src/meme/tools/clj/cst_reader.cljc"
                 "src/m1clj_lang/printer.cljc"
-                "src/meme/tools/clj/resolve.cljc"
-                "src/meme/tools/clj/stages.cljc"
-                "src/meme/tools/clj/errors.cljc"
-                "src/meme/registry.clj"
+                "toolkit/src/meme/tools/clj/resolve.cljc"
+                "toolkit/src/meme/tools/clj/stages.cljc"
+                "toolkit/src/meme/tools/clj/errors.cljc"
+                "toolkit/src/meme/registry.clj"
                 "src/meme/cli.clj"
-                "src/meme/tools/parser.cljc"
-                "src/meme/tools/render.cljc"
+                "toolkit/src/meme/tools/parser.cljc"
+                "toolkit/src/meme/tools/render.cljc"
                 "src/m1clj_lang/grammar.cljc"
                 "src/m1clj_lang/form_shape.cljc"
                 "src/m1clj_lang/formatter/canon.cljc"]]
