@@ -4,8 +4,11 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [meme.registry :as registry]
             [meme.test-registry :as test-registry]
-            ;; Explicit require triggers :m1clj self-registration.
+            ;; Explicit requires trigger built-in self-registration so
+            ;; the reserved-extension guard sees every built-in's extensions.
             [m1clj-lang.api]
+            [m2clj-lang.api]
+            [clj-lang.api]
             [m1clj-lang.run :as run]))
 
 (def all-langs
@@ -330,13 +333,15 @@
                                                           :run 'm1clj-lang.run/run-string})))
     (is (not (contains? (registry/available-langs) :intruder))
         "failing registration must not leak a partial entry"))
-  (testing "reserved .m1clj extension throws and does not insert the new name"
-    (is (thrown? Exception (registry/register! :sneaky {:extension ".m1clj"
-                                                        :run 'm1clj-lang.run/run-string})))
-    (is (thrown? Exception (registry/register! :sneakier {:extension ".meme"
-                                                          :run 'm1clj-lang.run/run-string})))
-    (is (not (contains? (registry/available-langs) :sneaky))
-        "reserved-extension rejection must not leak a partial entry")))
+  (testing "every built-in extension is reserved against user registration"
+    (doseq [ext [".m1clj" ".meme" ".m2clj" ".clj"]]
+      (let [user-name (keyword (str "sneaky" ext))]
+        (is (thrown? Exception
+                     (registry/register! user-name {:extension ext
+                                                    :run 'm1clj-lang.run/run-string}))
+            (str ext " must be reserved"))
+        (is (not (contains? (registry/available-langs) user-name))
+            (str "rejected " ext " registration must not leak a partial entry"))))))
 
 ;; ============================================================
 ;; register-string-handler! is idempotent (first-wins)
