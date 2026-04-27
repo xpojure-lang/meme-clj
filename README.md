@@ -42,8 +42,8 @@ on the same toolkit — proving the parser, AST, and printer are
 language-agnostic. More guests are expected; the plural is the point.
 
 > **Naming.** `meme-clj` is the toolkit; `m1clj` is the language. The
-> `meme` binary belongs to the toolkit. See [doc/glossary.md](doc/glossary.md)
-> for the full vocabulary.
+> `meme` binary belongs to the toolkit. See the **Glossary** section in
+> [CLAUDE.md](CLAUDE.md#glossary) for the full vocabulary.
 
 ## Installation
 
@@ -152,7 +152,7 @@ language.)
 Grouped by who the doc is for:
 
 **Orientation**
-- [Glossary](doc/glossary.md) — programme / language / toolkit vocabulary
+- [Glossary](CLAUDE.md#glossary) — programme / language / toolkit vocabulary
 
 **Writing `.m1clj` code**
 - [Language Reference](doc/language-reference.md) — complete m1clj syntax guide
@@ -161,7 +161,7 @@ Grouped by who the doc is for:
 - [API Reference](doc/api.md) — public functions (`m1clj->forms`, `forms->m1clj`, `format-m1clj-forms`, run/repl helpers, registry)
 
 **Extending the formatter or building a sibling lang**
-- [Form-Shape Vocabulary](doc/form-shape.md) — slot names, decomposers, and the three-layer formatter model
+- [Form-Shape Vocabulary](m1clj-lang/CLAUDE.md#form-shape) — slot names, decomposers, and the three-layer formatter model (in m1clj-lang's CLAUDE.md)
 - [Design Decisions](doc/design-decisions.md) — rationale behind each choice
 
 **Project tracking**

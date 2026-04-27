@@ -3,7 +3,7 @@
 Complete syntax reference for writing `.m1clj` code.
 
 > **Naming.** "m1clj" is the language; "meme-clj" is the toolkit it
-> runs on. The CLI binary is `meme`. See `doc/glossary.md`.
+> runs on. The CLI binary is `meme`. See the Glossary section in `CLAUDE.md`.
 
 
 ## The Rule

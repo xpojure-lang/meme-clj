@@ -4,13 +4,14 @@ All notable changes to **meme-clj** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-> **Pre-5.0 history is archived in [CHANGELOG-archive.md](CHANGELOG-archive.md).**
-> The language identifier was renamed twice during 5.0 development
-> (`meme` → `mclj` → `m1clj`); the codebase now uses **m1clj** for the
-> language and keeps **meme** / **meme-clj** for the toolkit, the CLI
-> binary, and the project. Pre-5.0 entries describe an earlier shape of
-> the codebase and are kept for historical reference only. See
-> [doc/glossary.md](doc/glossary.md) for the current vocabulary.
+> **Pre-5.0 history lives in the git log only** — the previous
+> `CHANGELOG-archive.md` was deleted because it described a renamed
+> codebase (`meme` → `mclj` → `m1clj`) whose API names no longer
+> exist; archaeology is better served by `git log` against the
+> 5.0.0 tag. The codebase now uses **m1clj** for the language and
+> keeps **meme** / **meme-clj** for the toolkit, the CLI binary,
+> and the project. See the Glossary section in
+> [CLAUDE.md](CLAUDE.md#glossary) for the current vocabulary.
 
 ## [Unreleased]
 

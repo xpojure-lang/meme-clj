@@ -151,7 +151,7 @@ differ between guests.
 | ID | Requirement | Status |
 |----|-------------|--------|
 | F1 | Three-layer formatter architecture: notation (`m1clj-lang.printer`), form-shape (`m1clj-lang.form-shape`), style (`canon/style` or alternative). Each independently composable via plain-data operations. | Done |
-| F2 | Public slot vocabulary: `:name`, `:doc`, `:params`, `:bindings`, `:dispatch-val`, `:dispatch-fn`, `:test`, `:expr`, `:as-name`, `:clause`, `:default`, `:arity`, `:body`. Documented in `doc/form-shape.md`. | Done |
+| F2 | Public slot vocabulary: `:name`, `:doc`, `:params`, `:bindings`, `:dispatch-val`, `:dispatch-fn`, `:test`, `:expr`, `:as-name`, `:clause`, `:default`, `:arity`, `:body`. Documented in `m1clj-lang/CLAUDE.md`. | Done |
 | F3 | Form-shape registry per lang; exposed under `:form-shape` in `lang-map`. `decompose (registry head args)` takes registry explicitly so langs are sovereign. | Done |
 | F4 | Opt-in structural fallback via `with-structural-fallback` — infers defn-like and let-like shapes for unregistered heads. | Done |
 | F5 | Style's `:slot-renderers` composes over `printer/default-slot-renderers` via plain map merge. Overrides compose independently of other style keys. | Done |
@@ -312,7 +312,7 @@ m1clj rules inside. No opaque regions.
   - `m1clj-lang.form-shape` — language-owned registry of decomposers.
     Each decomposer emits `[slot-name value]` pairs. 13-slot vocabulary
     (`:name`, `:doc`, `:params`, `:bindings`, `:clause`, `:body`, etc.)
-    is public and documented in `doc/form-shape.md`. `with-structural-fallback`
+    is public and documented in `m1clj-lang/CLAUDE.md`. `with-structural-fallback`
     enables opt-in inference for user macros matching defn-like or let-like
     shapes.
   - `m1clj-lang.formatter.canon/style` — slot-keyed opinions

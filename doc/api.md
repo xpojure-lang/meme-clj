@@ -4,7 +4,7 @@ Namespaces are organized in four tiers: `meme.tools.{parser,lexer,render}` (gene
 
 > **Naming.** "meme-clj" is the toolkit; "m1clj" is the language. The
 > public API of the language lives under `m1clj-lang.api`. See
-> `doc/glossary.md` for the full vocabulary.
+> the Glossary section in `CLAUDE.md` for the full vocabulary.
 
 ## m1clj-lang.api
 
@@ -206,7 +206,7 @@ The self-description map the CLI and registry consume. Keys: `:extension`, `:ext
 
 ## m1clj-lang.form-shape
 
-Semantic decomposition of Clojure special forms into named slots. See [doc/form-shape.md](form-shape.md) for the slot vocabulary, extension patterns, and consumer sketches. The three slot layers — notation (printer), form-shape (this namespace), style (formatter) — are independently composable.
+Semantic decomposition of Clojure special forms into named slots. See [`m1clj-lang/CLAUDE.md`](../m1clj-lang/CLAUDE.md#form-shape) for the slot vocabulary, extension patterns, and consumer sketches. The three slot layers — notation (printer), form-shape (this namespace), style (formatter) — are independently composable.
 
 ### registry
 
@@ -317,7 +317,7 @@ Format a single Clojure form as canonical m1clj text. Width-aware — uses inden
 Options:
 - `:width` — target line width (default: 80)
 - `:form-shape` — form-shape registry (default: `m1clj-lang.form-shape/registry`). Override to add user-defined defining macros or to disable decomposition entirely (pass `nil` for plain-call layout). Wrap with `m1clj-lang.form-shape/with-structural-fallback` to enable structural inference for user macros that mirror `defn` (name + params vector) or `let` (leading bindings vector) shapes.
-- `:style` — slot-keyed style map (default: `m1clj-lang.formatter.canon/style`). Override for project-level tweaks — e.g. a narrower `:head-line-slots` set, or a custom `:slot-renderers` map that replaces the printer defaults for `:bindings` or `:clause`. See [form-shape.md](form-shape.md) for the style map schema.
+- `:style` — slot-keyed style map (default: `m1clj-lang.formatter.canon/style`). Override for project-level tweaks — e.g. a narrower `:head-line-slots` set, or a custom `:slot-renderers` map that replaces the printer defaults for `:bindings` or `:clause`. See [`m1clj-lang/CLAUDE.md`](../m1clj-lang/CLAUDE.md#form-shape) for the style map schema.
 
 ### format-forms
 
