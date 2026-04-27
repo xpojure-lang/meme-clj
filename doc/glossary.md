@@ -23,12 +23,22 @@ durable artifact; specific languages are experiments built on top of it.
 Clojure, in the spirit of McCarthy (1960). One rule: `f(x y)` → `(f x y)`.
 Everything else is Clojure. File extension: `.m1clj`. Registry key: `:m1clj`.
 
-**clj** (lang) — the **second** language registered with the toolkit.
-Native Clojure surface (S-expressions). Proves the toolkit is genuinely
+**m2clj** — m1clj plus one rule: a paren without head adjacency
+(`(x y z)`) is a list literal that lowers to `(quote (x y z))` instead of
+being a parse error. Calls still require head adjacency (`f(x y)`), so
+call-vs-data remains structural at the reader layer. File extension:
+`.m2clj`. Registry key: `:m2clj`.
+
+**clj** (lang) — native Clojure surface (S-expressions) registered with the
+toolkit as a sibling guest. Proves the toolkit is genuinely
 language-agnostic: shared AST, shared resolvers, shared printer, different
 grammar. Registry key: `:clj`. File extensions: `.clj` / `.cljc` / `.cljs`.
 
-Future guests are expected. The plural is the whole point.
+Future guests are expected. The plural is the whole point. Each guest is
+**sovereign**: even when two langs look temporally similar (m1clj and
+m2clj share most of their printer and form-shape today), the duplication is
+intentional — langs may diverge, and the architectural direction is one
+Clojars artifact per lang.
 
 
 ## The toolkit (`meme.*`)
@@ -59,11 +69,12 @@ name belongs to the programme.
 | Name | What it is |
 |---|---|
 | `m1clj-lang.*` | The m1clj language: grammar, parselets, printer, formatter, form-shape |
+| `m2clj-lang.*` | The m2clj language: same shape as m1clj-lang, sovereign tree |
 | `src/clj_lang/api.cljc` | The clj language registration shim (parser comes from `meme.tools.clj.parser.*`) |
 
-`m1clj-lang.*` is the language's home and its public name in the source tree.
-The lang-specific parselets, printer, and form-shape live there; the shared
-backbone they sit on lives in `meme.tools.clj.*`.
+Each `<lang>-lang.*` tree is the language's home and its public name in the
+source. The lang-specific parselets, printer, and form-shape live there; the
+shared backbone they sit on lives in `meme.tools.clj.*`.
 
 
 ## Editor packages

@@ -45,9 +45,18 @@
 (defn register-string-handler!
   "Install a handler for resolving string values in the given command slot.
    `handler` is (fn [string-value] → command-fn) and is called once per
-   register!/load-edn. Later registrations override earlier ones."
+   register!/load-edn.
+
+   First registration wins; subsequent calls for the same command are no-ops.
+   This makes registration order across multiple Clojure-surface langs (m1clj,
+   m2clj, …) deterministic — whichever lang's api ns loads first owns the
+   convention. Today all Clojure-surface langs install structurally identical
+   :run handlers (slurp prelude, run before user source), so the choice is
+   benign. Once a lang needs a genuinely divergent string convention, scope
+   handlers per-lang here (the post-split shape: `{lang-name {command handler}}`)."
   [command handler]
-  (swap! string-handlers assoc command handler))
+  (swap! string-handlers
+         (fn [m] (if (contains? m command) m (assoc m command handler)))))
 
 (defn- normalize-extensions
   "Normalize :extension/:extensions into a flat vector of dot-prefixed strings.
