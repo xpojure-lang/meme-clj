@@ -119,4 +119,4 @@ it with one of the patterns on the right.
 | `meme.tools.parser` | unchanged — toolkit namespace |
 | `:m1clj` registry key | unchanged |
 | `.m1clj` file | unchanged |
-| `.meme` file | soft-deprecated, removal scheduled |
+| `.meme` file | soft-deprecated — load-time warning via `warn-deprecated-extension!`; no removal date set |
