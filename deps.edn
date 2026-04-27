@@ -1,7 +1,7 @@
-{:paths ["toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "cli/src" "resources"]
+{:paths ["src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "resources"]
  :deps {}
  :aliases
- {:test {:extra-paths ["test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test" "test/resources"]
+ {:test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "test/resources"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}
                       clj-kondo/clj-kondo
@@ -10,30 +10,29 @@
                       {:mvn/version "1.1.1"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test
-         :exec-args {:dirs ["test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
+         :exec-args {:dirs ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test"]
                      :patterns ["meme\\..*-test"
                                 "m1clj-lang\\..*-test"
                                 "m2clj-lang\\..*-test"]}}
   ;; Alias name kept as :meme — it tracks the CLI binary name, not the
   ;; lang registry key (which is :m1clj). Renaming would break downstream
   ;; `clojure -T:meme ...` invocations in scripts and CI.
-  :meme {:replace-paths ["toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "cli/src"]
+  :meme {:replace-paths ["src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src"]
          :replace-deps {}
          :ns-default meme.cli}
-  :cljs-test {:extra-paths ["test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
+  :cljs-test {:extra-paths ["test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test"]
               :extra-deps {org.clojure/clojurescript {:mvn/version "1.12.134"}
                            olical/cljs-test-runner {:mvn/version "3.8.1"}
                            org.clojure/test.check {:mvn/version "1.1.1"}}
               :main-opts ["-m" "cljs-test-runner.main"
-                          "-d" "test/meme" "-d" "toolkit/test/meme"
-                          "-d" "m1clj-lang/test/m1clj_lang"
+                          "-d" "test/meme" "-d" "m1clj-lang/test/m1clj_lang"
                           "-r" ".*-test$"
                           "-x" "node"]}
-  :e2e {:extra-paths ["test" "cli/test"]
+  :e2e {:extra-paths ["test"]
         :extra-deps {io.github.cognitect-labs/test-runner
                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
         :exec-fn cognitect.test-runner.api/test
-        :exec-args {:dirs ["test" "cli/test"]
+        :exec-args {:dirs ["test"]
                     :patterns ["e2e\\..*-test"]}}
   :fuzzer {:extra-paths ["fuzz" "test"]
            :extra-deps {com.code-intelligence/jazzer {:mvn/version "0.30.0"}

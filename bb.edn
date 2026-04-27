@@ -1,4 +1,4 @@
-{:paths ["toolkit/src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "cli/src" "resources" "test" "toolkit/test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test" "cli/test"]
+{:paths ["src" "m1clj-lang/src" "m2clj-lang/src" "clj-lang/src" "resources" "test" "m1clj-lang/test" "m2clj-lang/test" "clj-lang/test"]
  :tasks {meme {:doc "meme CLI: run, repl, to-clj, to-m1clj, format, inspect, version"
               :task (do (require '[meme.cli])
                         (apply (resolve 'meme.cli/-main) *command-line-args*))}
